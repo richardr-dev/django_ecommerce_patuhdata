@@ -172,6 +172,25 @@ class ProviderIntegrationTests(TestCase):
         self.assertEqual(payload["weight"], 1000)
         self.assertEqual(payload["destination"], "68423")
 
+    @override_settings(RAJAONGKIR_API_KEY="raja-test", RAJAONGKIR_ORIGIN_ID="31555")
+    @patch("apps.integrations.shipping.request_form_json")
+    def test_rajaongkir_tracking_normalizes_history(self, request_form_json):
+        request_form_json.return_value = {"data": {
+            "summary": {"status": "ON PROCESS"},
+            "delivery_status": {"status": "ON PROCESS"},
+            "manifest": [{"manifest_code": "TRANSIT",
+                "manifest_description": "Paket tiba di gateway Jakarta",
+                "manifest_date": "2026-08-27", "manifest_time": "08:00:00",
+                "city_name": "Jakarta"}]}}
+        result = RajaOngkirProvider().track("JNE123", "jne", "081234567890")
+        url = request_form_json.call_args.args[0]
+        self.assertIn("/track/waybill?", url)
+        self.assertIn("awb=JNE123", url)
+        self.assertIn("courier=jne", url)
+        self.assertIn("last_phone_number=67890", url)
+        self.assertEqual(result["status"], "ON PROCESS")
+        self.assertEqual(result["events"][0]["location"], "Jakarta")
+
     @override_settings(SHIPPING_RATE_PROVIDER="rajaongkir", RAJAONGKIR_API_KEY="raja-test",
         RAJAONGKIR_ORIGIN_ID="31555")
     @patch("apps.integrations.shipping.request_form_json")
@@ -240,6 +259,7 @@ class ProviderIntegrationTests(TestCase):
         order = Order.objects.get()
         self.assertEqual(checkout.status_code, 302)
         self.assertEqual(order.destination_area_id, "68424")
+        self.assertEqual(order.courier_code, "jne")
         self.assertEqual(order.shipping_cost, 19000)
 
     @override_settings(BITESHIP_API_KEY="biteship_test.demo", BITESHIP_ORIGIN_POSTAL_CODE="10110")

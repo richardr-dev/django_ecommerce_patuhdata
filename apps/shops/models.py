@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.validators import FileExtensionValidator
 from django.db import models
 
 
@@ -19,6 +20,9 @@ class Store(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="stores",
         null=True, blank=True)
     name = models.CharField(max_length=120)
+    logo = models.FileField(upload_to="stores/logos/%Y/%m/", blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
+        help_text="Logo PNG, JPG, or WebP. Recommended square or horizontal, maximum 5 MB.")
     slug = models.SlugField(unique=True)
     domain = models.CharField(max_length=253, unique=True, null=True, blank=True)
     database_alias = models.SlugField(default="default", help_text="Deployment database alias; credentials remain in environment configuration.")

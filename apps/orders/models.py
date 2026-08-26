@@ -8,6 +8,22 @@ from apps.shops.models import Store
 
 
 class Order(models.Model):
+    FULFILLMENT_METHODS = [
+        ("merchant_pickup", "Kurir pickup dari toko"),
+        ("merchant_dropoff", "Toko antar ke drop point"),
+        ("third_party", "Gudang 3PL"),
+    ]
+    TRACKING_STATUSES = [
+        ("not_ready", "Belum siap dikirim"),
+        ("ready_to_track", "Resi tersimpan"),
+        ("awaiting_pickup", "Menunggu pickup/drop-off"),
+        ("in_transit", "Dalam perjalanan"),
+        ("out_for_delivery", "Sedang diantar"),
+        ("delivered", "Terkirim"),
+        ("returned", "Dikembalikan"),
+        ("exception", "Kendala pengiriman"),
+        ("unknown", "Status belum dikenali"),
+    ]
     STATUS = [("pending", "Pending Payment"), ("payment_failed", "Payment Failed"),
         ("paid", "Paid"), ("confirmed", "Confirmed"), ("allocated", "Allocated"),
         ("picking", "Picking"), ("packed", "Packed"), ("shipped", "Shipped"),
@@ -44,7 +60,15 @@ class Order(models.Model):
     shipping_provider = models.CharField(max_length=40, blank=True)
     shipping_service = models.CharField(max_length=80, blank=True)
     shipping_eta = models.CharField(max_length=80, blank=True)
+    courier_code = models.CharField(max_length=40, blank=True)
+    fulfillment_method = models.CharField(max_length=30, choices=FULFILLMENT_METHODS,
+        default="merchant_pickup")
     tracking_number = models.CharField(max_length=100, blank=True)
+    tracking_status = models.CharField(max_length=30, choices=TRACKING_STATUSES,
+        default="not_ready")
+    tracking_status_detail = models.CharField(max_length=300, blank=True)
+    tracking_last_checked_at = models.DateTimeField(null=True, blank=True)
+    tracking_error = models.CharField(max_length=300, blank=True)
     external_shipping_id = models.CharField(max_length=100, blank=True)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     coupon_code = models.CharField(max_length=50, blank=True)
@@ -217,6 +241,23 @@ class OrderStatusEvent(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class ShipmentTrackingEvent(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="tracking_events")
+    fingerprint = models.CharField(max_length=64)
+    provider = models.CharField(max_length=40, default="rajaongkir")
+    status = models.CharField(max_length=80, blank=True)
+    description = models.CharField(max_length=500)
+    location = models.CharField(max_length=160, blank=True)
+    occurred_at = models.CharField(max_length=80, blank=True)
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["occurred_at", "id"]
+        constraints = [models.UniqueConstraint(fields=["order", "fingerprint"],
+            name="unique_order_tracking_event")]
 
 
 class ReturnRequest(models.Model):

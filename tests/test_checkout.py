@@ -1,4 +1,5 @@
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -6,9 +7,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 
 from apps.catalog.models import InventoryLevel, Product, ProductImage, ProductVariant, Warehouse
-from apps.orders.models import Coupon, InventoryMovement, Order, ShippingMethod
+from apps.orders.models import Coupon, InventoryMovement, Order, ShipmentTrackingEvent, ShippingMethod
 from apps.orders.pricing import calculate_price
 from apps.orders.services import InvalidOrderTransition, transition_order
+from apps.orders.tracking import sync_order_tracking
 from apps.shops.models import Store
 
 
@@ -174,6 +176,28 @@ class CheckoutTests(TestCase):
         self.assertTrue(ProductImage.objects.filter(product=self.product,
             alt_text="Foto Item").exists())
 
+    def test_merchant_can_upload_store_logo_and_storefront_uses_it(self):
+        self.client.force_login(self.owner)
+        logo = SimpleUploadedFile("brand.png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89",
+            content_type="image/png")
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            response = self.client.post("/merchant/settings/", {
+                "name": self.store.name, "logo": logo, "domain": "",
+                "description": "Toko uji", "theme": "modern", "primary_color": "#155eef",
+                "currency": "IDR", "tax_rate": "0", "support_phone": "",
+                "support_email": "", "terms_url": "", "privacy_url": "",
+                "return_policy": "",
+            })
+            self.assertRedirects(response, "/merchant/settings/")
+            self.store.refresh_from_db()
+            self.assertTrue(self.store.logo.name.startswith("stores/logos/"))
+            storefront = self.client.get("/")
+            self.assertContains(storefront, self.store.logo.url, count=2)
+            settings_page = self.client.get("/merchant/settings/")
+            self.assertContains(settings_page, "Identitas toko")
+            self.assertContains(settings_page, self.store.logo.url)
+
     def test_merchant_can_adjust_stock_without_editing_reservations(self):
         self.level.reserved = 1
         self.level.save(update_fields=["reserved"])
@@ -281,3 +305,38 @@ class CheckoutTests(TestCase):
         self.assertEqual(self.level.on_hand, 0)
         self.assertEqual(self.level.reserved, 0)
         self.assertEqual(order.status_events.values_list("status", flat=True).last(), "completed")
+
+    def test_merchant_can_add_resi_and_fulfillment_method_self_service(self):
+        order = Order.objects.create(store=self.store, customer_user=self.buyer, status="paid",
+            customer_name="Ayu", phone="081234567890", shipping_address="Jakarta",
+            subtotal=10000, total=10000, idempotency_key="manual-resi")
+        self.client.force_login(self.owner)
+        response = self.client.post(f"/merchant/orders/{order.id}/tracking/", {
+            "fulfillment_method": "merchant_dropoff", "courier_code": "jne",
+            "tracking_number": "JNE-SELF-123"})
+        self.assertRedirects(response, "/merchant/orders/")
+        order.refresh_from_db()
+        self.assertEqual(order.fulfillment_method, "merchant_dropoff")
+        self.assertEqual(order.courier_code, "jne")
+        self.assertEqual(order.tracking_number, "JNE-SELF-123")
+        self.assertEqual(order.tracking_status, "ready_to_track")
+        page = self.client.get("/merchant/orders/")
+        self.assertContains(page, "JNE-SELF-123")
+        self.assertContains(page, "Toko antar ke drop point")
+
+    @patch("apps.orders.tracking.RajaOngkirProvider.track")
+    def test_courier_tracking_sync_updates_timeline_and_order_status(self, track):
+        order = Order.objects.create(store=self.store, customer_user=self.buyer, status="packed",
+            customer_name="Ayu", phone="081234567890", shipping_address="Jakarta",
+            subtotal=10000, total=10000, idempotency_key="tracking-sync",
+            courier_code="jne", tracking_number="JNE123", tracking_status="ready_to_track")
+        track.return_value = {"status": "ON PROCESS", "detail": "Paket di gateway Jakarta",
+            "events": [{"status": "TRANSIT", "description": "Paket di gateway Jakarta",
+                "location": "Jakarta", "occurred_at": "2026-08-27 08:00:00",
+                "payload": {"manifest_code": "TRANSIT", "manifest_date": "2026-08-27"}}],
+            "payload": {}}
+        sync_order_tracking(order)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "shipped")
+        self.assertEqual(order.tracking_status, "in_transit")
+        self.assertEqual(ShipmentTrackingEvent.objects.get(order=order).location, "Jakarta")

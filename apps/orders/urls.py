@@ -35,6 +35,8 @@ urlpatterns = [
     path("merchant/stock/", views.merchant_stock, name="merchant-stock"),
     path("merchant/orders.csv", views.merchant_orders_csv, name="merchant-orders-csv"),
     path("merchant/orders/<uuid:order_id>/update/", views.merchant_order_update, name="merchant-order-update"),
+    path("merchant/orders/<uuid:order_id>/tracking/", views.merchant_order_tracking,
+        name="merchant-order-tracking"),
     path("merchant/orders/<uuid:order_id>/refund/", views.merchant_order_refund,
         name="merchant-order-refund"),
     path("merchant/settings/", views.merchant_settings, name="merchant-settings"),

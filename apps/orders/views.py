@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -65,6 +66,7 @@ from .services import (
     normalize_indonesian_phone,
     transition_order,
 )
+from .tracking import sync_order_tracking
 
 
 def _cart_signature(lines):
@@ -291,6 +293,7 @@ def checkout(request):
                         request.POST.get("destination_area_id", "").strip()),
                     payment_provider=settings.PAYMENT_PROVIDER, payment_method=request.POST.get("payment_method", "qris"),
                     shipping_provider=live_quote["provider"] if live_quote else selected_shipping.provider,
+                    courier_code=live_quote["courier_code"] if live_quote else selected_shipping.code,
                     shipping_service=live_quote["name"] if live_quote else selected_shipping.name,
                     shipping_eta=live_quote["eta"] if live_quote else selected_shipping.eta,
                     coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key)
@@ -388,7 +391,8 @@ def account_orders(request):
 def order_detail(request, order_id):
     if not request.store: raise Http404
     order = get_customer_order_or_404(
-        request, order_id, queryset=Order.objects.prefetch_related("items", "status_events")
+        request, order_id, queryset=Order.objects.prefetch_related(
+            "items", "status_events", "tracking_events")
     )
     return render(request, "storefront/order.html", {"order": order})
 
@@ -513,14 +517,15 @@ def merchant_dashboard(request):
 @login_required(login_url="/merchant/login/")
 def merchant_orders(request):
     store = _staff_store(request)
-    orders = Order.objects.filter(store=store).prefetch_related("items").order_by("-created_at")
+    orders = Order.objects.filter(store=store).prefetch_related(
+        "items", "tracking_events").order_by("-created_at")
     status = request.GET.get("status")
     if status: orders = orders.filter(status=status)
     orders = list(orders)
     for order in orders:
         order.available_statuses = allowed_order_transitions(order)
     return render(request, "merchant/orders.html", _merchant_context(request, store,
-        orders=orders, statuses=Order.STATUS))
+        orders=orders, statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS))
 
 
 @login_required(login_url="/merchant/login/")
@@ -600,7 +605,9 @@ def merchant_order_update(request, order_id):
     with transaction.atomic():
         order = get_object_or_404(Order.objects.select_for_update(), id=order_id, store=store)
         old_status = order.status
-        tracking_number = request.POST.get("tracking_number", "").strip()
+        posted_tracking = request.POST.get("tracking_number")
+        tracking_number = (posted_tracking.strip() if posted_tracking is not None
+            else order.tracking_number)
         if new_status == "shipped" and not tracking_number:
             messages.error(request, "Nomor resi wajib diisi sebelum pesanan dikirim.")
             return redirect("merchant-orders")
@@ -610,12 +617,67 @@ def merchant_order_update(request, order_id):
         except InvalidOrderTransition as error:
             messages.error(request, str(error))
             return redirect("merchant-orders")
-        if tracking_number != order.tracking_number:
+        if posted_tracking is not None and tracking_number != order.tracking_number:
             order.tracking_number = tracking_number
-            order.save(update_fields=["tracking_number"])
+            order.tracking_status = "ready_to_track" if tracking_number else "not_ready"
+            order.save(update_fields=["tracking_number", "tracking_status"])
         AuditLog.objects.create(store=store, actor=request.user, action="order.status_updated",
             object_type="Order", object_id=str(order.id), details={"from": old_status, "to": new_status})
     messages.success(request, "Pesanan diperbarui.")
+    return redirect("merchant-orders")
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_order_tracking(request, order_id):
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
+    order = get_object_or_404(Order, id=order_id, store=store)
+    if order.status in {"pending", "payment_failed", "cancelled", "refunded"}:
+        messages.error(request, "Pengiriman belum dapat diatur untuk status pesanan ini.")
+        return redirect("merchant-orders")
+    tracking_number = request.POST.get("tracking_number", "").strip()[:100]
+    courier_code = request.POST.get("courier_code", "").strip().lower()[:40]
+    method = request.POST.get("fulfillment_method", "merchant_pickup")
+    if method not in dict(Order.FULFILLMENT_METHODS):
+        messages.error(request, "Metode fulfillment tidak valid.")
+        return redirect("merchant-orders")
+    if not tracking_number or not re.fullmatch(r"[A-Za-z0-9._/-]+", tracking_number):
+        messages.error(request, "Masukkan nomor resi yang valid.")
+        return redirect("merchant-orders")
+    if not courier_code or not re.fullmatch(r"[a-z0-9_-]+", courier_code):
+        messages.error(request, "Masukkan kode kurir, misalnya jne, jnt, sicepat, atau anteraja.")
+        return redirect("merchant-orders")
+    old_tracking = order.tracking_number
+    order.tracking_number = tracking_number
+    order.courier_code = courier_code
+    order.fulfillment_method = method
+    order.tracking_status = "ready_to_track"
+    order.tracking_status_detail = "Nomor resi tersimpan dan siap disinkronkan."
+    order.tracking_error = ""
+    order.tracking_last_checked_at = None
+    order.save(update_fields=["tracking_number", "courier_code", "fulfillment_method",
+        "tracking_status", "tracking_status_detail", "tracking_error",
+        "tracking_last_checked_at"])
+    if old_tracking and old_tracking != tracking_number:
+        order.tracking_events.all().delete()
+    AuditLog.objects.create(store=store, actor=request.user, action="order.tracking_updated",
+        object_type="Order", object_id=str(order.id), details={"tracking_number": tracking_number,
+            "courier_code": courier_code, "fulfillment_method": method})
+    if request.POST.get("sync_now"):
+        try:
+            sync_order_tracking(order)
+        except ProviderError as error:
+            order.tracking_error = str(error)[:300]
+            order.tracking_last_checked_at = timezone.now()
+            order.save(update_fields=["tracking_error", "tracking_last_checked_at"])
+            messages.warning(request,
+                "Resi tersimpan, tetapi status kurir belum dapat disinkronkan: " + str(error))
+        else:
+            messages.success(request, "Resi tersimpan dan status kurir berhasil disinkronkan.")
+    else:
+        messages.success(request, "Nomor resi dan metode fulfillment berhasil disimpan.")
     return redirect("merchant-orders")
 
 
@@ -728,7 +790,8 @@ def merchant_entity_edit(request, section, object_id=None):
 def merchant_settings(request):
     store = _staff_store(request)
     _require_editor(request, store)
-    form = StoreSettingsForm(request.POST or None, instance=store, store=store)
+    form = StoreSettingsForm(request.POST or None, request.FILES or None,
+        instance=store, store=store)
     if request.method == "POST" and form.is_valid():
         form.save()
         AuditLog.objects.create(store=store, actor=request.user, action="store.settings_updated",

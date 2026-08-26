@@ -130,6 +130,16 @@ class CouponForm(StyledModelForm):
 class StoreSettingsForm(StyledModelForm):
     class Meta:
         model = Store
-        fields = ("name", "domain", "description", "theme", "primary_color", "currency", "tax_rate",
+        fields = ("name", "logo", "domain", "description", "theme", "primary_color", "currency", "tax_rate",
             "support_phone", "support_email", "terms_url", "privacy_url", "return_policy")
         widgets = {"description": forms.Textarea(attrs={"rows": 3}), "return_policy": forms.Textarea(attrs={"rows": 4})}
+
+    def clean_logo(self):
+        logo = self.cleaned_data.get("logo")
+        if not logo or not hasattr(logo, "content_type"):
+            return logo
+        if logo.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("Ukuran logo maksimal 5 MB.")
+        if logo.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+            raise forms.ValidationError("Format logo harus PNG, JPG, atau WebP.")
+        return logo

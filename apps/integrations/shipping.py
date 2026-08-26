@@ -121,3 +121,38 @@ class RajaOngkirProvider:
             price=int(rate.get("cost", 0)), eta=str(rate.get("etd", ""))) for rate in (data.get("data") or [])]
         if not quotes: raise ProviderError(data.get("meta", {}).get("message", "Tidak ada layanan RajaOngkir untuk tujuan ini."))
         return quotes
+
+    def track(self, airway_bill, courier_code, recipient_phone=""):
+        params = {"awb": airway_bill.strip(), "courier": courier_code.strip().lower()}
+        phone_digits = "".join(character for character in recipient_phone if character.isdigit())
+        if phone_digits:
+            params["last_phone_number"] = phone_digits[-5:]
+        data = request_form_json(
+            f"{settings.RAJAONGKIR_API_URL}/track/waybill?{urlencode(params)}", {},
+            headers=self.headers)
+        tracking = data.get("data") or (data.get("rajaongkir") or {}).get("result") or {}
+        summary = tracking.get("summary") or {}
+        delivery = tracking.get("delivery_status") or {}
+        raw_history = (tracking.get("manifest") or tracking.get("history") or
+            tracking.get("tracking_history") or [])
+        events = []
+        for item in raw_history:
+            occurred_at = str(item.get("manifest_date") or item.get("date") or
+                item.get("time") or item.get("updated_at") or "")
+            extra_time = str(item.get("manifest_time") or "")
+            if extra_time and extra_time not in occurred_at:
+                occurred_at = f"{occurred_at} {extra_time}".strip()
+            events.append({
+                "status": str(item.get("manifest_code") or item.get("status") or
+                    item.get("code") or ""),
+                "description": str(item.get("manifest_description") or
+                    item.get("description") or item.get("status") or "Pembaruan pengiriman"),
+                "location": str(item.get("city_name") or item.get("location") or ""),
+                "occurred_at": occurred_at,
+                "payload": item,
+            })
+        latest_status = str(delivery.get("status") or tracking.get("last_status") or
+            summary.get("status") or (events[-1]["description"] if events else "UNKNOWN"))
+        detail = str(delivery.get("pod_receiver") or delivery.get("description") or
+            (events[-1]["description"] if events else latest_status))
+        return {"status": latest_status, "detail": detail, "events": events, "payload": tracking}
