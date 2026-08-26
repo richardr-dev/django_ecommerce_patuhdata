@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,6 +27,8 @@ _load_local_environment()
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-local-development-key")
 DEBUG = os.getenv("DEBUG", "1") == "1"
 ALLOWED_HOSTS = [x.strip() for x in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")]
+if not DEBUG and SECRET_KEY == "unsafe-local-development-key":
+    raise ImproperlyConfigured("SECRET_KEY must be explicitly configured in production.")
 
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
@@ -58,7 +61,12 @@ DATABASES = {"default": dj_database_url.config(
     default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}", conn_max_age=60,
     conn_health_checks=True,
 )}
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 LANGUAGE_CODE = "id"
 TIME_ZONE = "Asia/Jakarta"
 USE_I18N = True
@@ -69,6 +77,8 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+LOGIN_URL = "/account/login/"
+LOGIN_REDIRECT_URL = "/account/orders/"
 STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": (
     "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG
@@ -86,9 +96,26 @@ if USE_S3:
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "0" if DEBUG else "1") == "1"
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "orders@example.com")
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "0") == "1"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
 
-PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "xendit" if os.getenv("XENDIT_SECRET_KEY") else "demo")
+PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+DOKU_CLIENT_ID = os.getenv("DOKU_CLIENT_ID", "")
+DOKU_API_KEY = os.getenv("DOKU_API_KEY", "")
+DOKU_SECRET_KEY = os.getenv("DOKU_SECRET_KEY", "")
+DOKU_API_URL = os.getenv("DOKU_API_URL", "https://api-sandbox.doku.com").rstrip("/")
+DOKU_PAYMENT_DUE_MINUTES = int(os.getenv("DOKU_PAYMENT_DUE_MINUTES", "60"))
 XENDIT_SECRET_KEY = os.getenv("XENDIT_SECRET_KEY", "")
 XENDIT_WEBHOOK_VERIFICATION_TOKEN = os.getenv("XENDIT_WEBHOOK_VERIFICATION_TOKEN", "")
 XENDIT_API_URL = os.getenv("XENDIT_API_URL", "https://api.xendit.co").rstrip("/")
@@ -101,4 +128,5 @@ SHIPPING_RATE_PROVIDER = os.getenv("SHIPPING_RATE_PROVIDER", "biteship")
 RAJAONGKIR_API_KEY = os.getenv("RAJAONGKIR_API_KEY", "")
 RAJAONGKIR_API_URL = os.getenv("RAJAONGKIR_API_URL", "https://rajaongkir.komerce.id/api/v1").rstrip("/")
 RAJAONGKIR_ORIGIN_ID = os.getenv("RAJAONGKIR_ORIGIN_ID", "")
+RAJAONGKIR_ORIGIN_POSTAL_CODE = os.getenv("RAJAONGKIR_ORIGIN_POSTAL_CODE", "")
 RAJAONGKIR_COURIERS = os.getenv("RAJAONGKIR_COURIERS", "jne:sicepat:jnt:ninja:tiki:anteraja:pos")

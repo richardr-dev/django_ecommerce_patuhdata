@@ -21,6 +21,13 @@ def home(request):
 
 def product_detail(request, slug):
     if not request.store: raise Http404
-    product = get_object_or_404(Product.objects.prefetch_related("inventory_levels", "variants"),
+    product = get_object_or_404(Product.objects.prefetch_related(
+        "inventory_levels", "variants", "images"),
         store=request.store, slug=slug, is_active=True)
     return render(request, "storefront/product_detail.html", {"product": product})
+
+
+def privacy_policy(request):
+    if not request.store:
+        raise Http404
+    return render(request, "storefront/privacy.html")

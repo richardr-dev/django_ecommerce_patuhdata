@@ -36,6 +36,31 @@ are omitted, so Xendit shows its default result page. Configure this callback in
 https://YOUR_DOMAIN/integrations/webhooks/xendit/
 ```
 
+## DOKU Checkout
+
+Set `PAYMENT_PROVIDER=doku`, `DOKU_CLIENT_ID`, and `DOKU_SECRET_KEY`. A separately issued
+`DOKU_API_KEY` may be stored for other DOKU services but is not used for Checkout HMAC signing.
+Sandbox is the default;
+set `DOKU_API_URL=https://api.doku.com` only after certification. Checkout signs the exact JSON
+request body and redirects customers to the hosted DOKU Checkout URL. Configure this public HTTPS
+notification URL for every enabled DOKU payment channel:
+
+```text
+https://YOUR_DOMAIN/integrations/webhooks/doku/
+```
+
+`PUBLIC_BASE_URL=http://localhost:8000` is suitable only for local browser testing. DOKU cannot
+deliver notifications to localhost, an authenticated URL, a VPN-only host, or an unusual port.
+For sandbox notification testing, expose the application through a stable public HTTPS domain
+(DOKU currently prohibits ngrok domains), set that domain as `PUBLIC_BASE_URL`, and configure the
+URL above in DOKU Back Office for every enabled payment channel.
+
+Notifications are signature-verified, deduplicated by DOKU request ID, and checked against the
+order amount and currency before fulfilment. For DOKU Checkout, `FAILED` events are acknowledged
+without cancelling the order so the customer can retry with another channel. DOKU refunds are
+channel-specific and remain disabled until the merchant's activated channels and refund endpoints
+have been certified.
+
 The handler compares `x-callback-token`, reference, session ID, amount, and IDR currency; stores a
 deduplicated `PaymentEvent`; and treats the browser return URL as display-only. Completed sessions
 mark orders paid. Expired sessions cancel the order and release reserved inventory.
@@ -52,10 +77,14 @@ requires a rotated live token and `BITESHIP_ALLOW_LIVE=1`.
 
 ## RajaOngkir checkout rates
 
-Set `SHIPPING_RATE_PROVIDER=rajaongkir`, `RAJAONGKIR_API_KEY`, `RAJAONGKIR_ORIGIN_ID`, and
-`RAJAONGKIR_COURIERS`. Checkout searches `/destination/domestic-destination`, submits the selected
-location ID and total cart weight to `/calculate/domestic-cost`, and stores the returned service,
-ETA, and price using the same server-bound quote protection as Biteship.
+Set `SHIPPING_RATE_PROVIDER=rajaongkir`, `RAJAONGKIR_API_KEY`, and either
+`RAJAONGKIR_ORIGIN_ID` or `RAJAONGKIR_ORIGIN_POSTAL_CODE`. Set `RAJAONGKIR_COURIERS` to the enabled
+couriers. Checkout searches `/destination/domestic-destination` and submits a destination ID plus
+total cart weight to `/calculate/domestic-cost`. Customers may select an address result or enter an
+exact five-digit postcode; the server resolves exact origin/destination postcodes to RajaOngkir IDs
+and caches the normalized result for one day. Ambiguous postcodes require selecting a district result.
+The resolved destination, postal code, cart signature, service, ETA, and price are bound to the server
+session and persisted on the order.
 
 These are live RajaOngkir endpoints. When RajaOngkir is selected, provider errors are shown to the
 checkout and the application does not silently substitute manually configured/demo prices.

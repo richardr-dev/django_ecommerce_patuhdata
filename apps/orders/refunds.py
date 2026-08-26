@@ -30,7 +30,7 @@ def create_refund_request(*, order, amount, reason, actor, note=""):
         raise RefundError("Total refund tidak boleh melebihi pembayaran terverifikasi.")
     refund = Refund.objects.create(order=order, payment=payment, amount=amount, reason=reason,
         note=note, actor=actor)
-    if order.status != "refund_requested":
+    if order.status not in {"refund_requested", "partially_refunded"}:
         try:
             transition_order(order, "refund_requested", note=f"Refund diajukan: {note}")
         except InvalidOrderTransition as error:
@@ -62,11 +62,14 @@ def apply_refund_result(refund, *, status, reference, payload):
                 "provider_payment_id": refund.payment.provider_payment_id, "status": status,
                 "amount": refund.amount, "currency": refund.payment.currency,
                 "reconciled": status == "succeeded", "payload": payload})
-        if status == "succeeded" and refund.order.status == "refund_requested":
+        if status == "succeeded" and refund.order.status in {
+            "refund_requested", "partially_refunded"
+        }:
             total = Refund.objects.filter(order=refund.order, status="succeeded").aggregate(
                 value=Sum("amount"))["value"] or Decimal(0)
             target = "refunded" if total >= refund.payment.amount else "partially_refunded"
-            transition_order(refund.order, target, note=f"Refund {refund.amount} berhasil")
+            if target != refund.order.status:
+                transition_order(refund.order, target, note=f"Refund {refund.amount} berhasil")
             OutboxEvent.objects.create(store=refund.order.store, topic="order.refunded",
                 aggregate_id=str(refund.order_id), payload={"order_id": str(refund.order_id),
                     "refund_id": str(refund.id), "amount": str(refund.amount)})

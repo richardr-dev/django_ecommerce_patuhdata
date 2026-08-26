@@ -1,6 +1,10 @@
 import base64
+import hashlib
+import hmac
+import json
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from django.conf import settings
 from django.urls import reverse
@@ -51,7 +55,8 @@ class XenditPaymentProvider:
             "description": f"Pesanan {order.store.name} #{str(order.id)[:8]}",
             "metadata": {"store_id": str(order.store_id), "order_id": str(order.id)}}
         if settings.PUBLIC_BASE_URL.startswith("https://"):
-            return_url = f"{settings.PUBLIC_BASE_URL}{reverse('order-detail', args=[order.id])}"
+            return_url = (f"{settings.PUBLIC_BASE_URL}{reverse('order-detail', args=[order.id])}"
+                f"?token={order.access_token}")
             payload.update({"success_return_url": return_url, "cancel_return_url": return_url})
         data = request_json(f"{settings.XENDIT_API_URL}/sessions", method="POST",
             headers={"Authorization": f"Basic {auth}", "api-version": "2024-11-11",
@@ -74,7 +79,53 @@ class XenditPaymentProvider:
         return RefundResult(reference=data.get("id", ""), status=status, payload=data)
 
 
-PROVIDERS = {"demo": DemoPaymentProvider, "xendit": XenditPaymentProvider}
+def doku_signature(client_id, request_id, timestamp, target, body, secret_key):
+    digest = base64.b64encode(hashlib.sha256(body).digest()).decode()
+    component = (f"Client-Id:{client_id}\nRequest-Id:{request_id}\n"
+        f"Request-Timestamp:{timestamp}\nRequest-Target:{target}\nDigest:{digest}")
+    signature = base64.b64encode(hmac.new(secret_key.encode(), component.encode(), hashlib.sha256).digest()).decode()
+    return f"HMACSHA256={signature}"
+
+
+class DokuPaymentProvider:
+    target = "/checkout/v1/payment"
+
+    def __init__(self):
+        if not settings.DOKU_CLIENT_ID or not settings.DOKU_SECRET_KEY:
+            raise ProviderError("DOKU client ID and secret key are not configured.")
+
+    def create_payment(self, order):
+        invoice = f"NK{order.id.hex[:26]}"
+        payload = {"order": {"amount": int(order.total), "invoice_number": invoice,
+            "currency": "IDR"},
+            "payment": {"payment_due_date": settings.DOKU_PAYMENT_DUE_MINUTES},
+            "customer": {"name": order.customer_name, "phone": order.phone}}
+        if order.email:
+            payload["customer"]["email"] = order.email
+        if settings.PUBLIC_BASE_URL.startswith("https://"):
+            payload["callbacks"] = {"url": (f"{settings.PUBLIC_BASE_URL}"
+                f"{reverse('order-detail', args=[order.id])}?token={order.access_token}")}
+        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        request_id = order.idempotency_key[:128]
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        headers = {"Client-Id": settings.DOKU_CLIENT_ID, "Request-Id": request_id,
+            "Request-Timestamp": timestamp, "Signature": doku_signature(settings.DOKU_CLIENT_ID,
+                request_id, timestamp, self.target, body, settings.DOKU_SECRET_KEY)}
+        data = request_json(f"{settings.DOKU_API_URL}{self.target}", method="POST", headers=headers,
+            encoded_payload=body)
+        payment = (data.get("response") or {}).get("payment") or {}
+        if not payment.get("url"):
+            raise ProviderError("DOKU returned an incomplete payment session.")
+        return PaymentSession(reference=invoice, checkout_url=payment["url"])
+
+    def refund(self, payment, refund):
+        raise ProviderError(
+            "Refund DOKU harus dikonfigurasi sesuai channel pembayaran yang diaktifkan."
+        )
+
+
+PROVIDERS = {"demo": DemoPaymentProvider, "xendit": XenditPaymentProvider,
+    "doku": DokuPaymentProvider}
 
 
 def get_payment_provider(name):

@@ -1,1 +1,22 @@
-{% extends "storefront/base.html" %}{% block content %}<section class="narrow"><h1>Keranjang</h1>{% if lines %}<div class="line-list">{% for line in lines %}<div class="line"><div><strong>{{ line.product.name }}</strong>{% if line.variant %}<small>{{ line.variant.name }}</small>{% endif %}<small>Rp{{ line.unit_price|floatformat:"0g" }} per item</small></div><form class="quantity" method="post" action="{% url 'cart-update' line.key %}">{% csrf_token %}<input type="number" name="quantity" min="0" max="{{ line.available_stock }}" value="{{ line.quantity }}" aria-label="Jumlah {{ line.product.name }}"><button>Ubah</button></form><strong>Rp{{ line.total|floatformat:"0g" }}</strong></div>{% endfor %}</div><div class="total"><span>Subtotal</span><strong>Rp{{ subtotal|floatformat:"0g" }}</strong></div><p class="muted">Ongkir dan diskon dihitung saat checkout.</p><a class="button" href="{% url 'checkout' %}">Lanjut checkout</a>{% else %}<div class="empty">Keranjang masih kosong. <a href="/">Mulai belanja</a></div>{% endif %}</section>{% endblock %}
+{% extends "storefront/base.html" %}{% block title %}Keranjang · {{ store.name }}{% endblock %}{% block content %}
+<section class="cart-page">
+  <div class="cart-heading"><div><span class="eyebrow">KERANJANG BELANJA</span><h1>Keranjang</h1></div>{% if lines %}<span>{{ lines|length }} produk</span>{% endif %}</div>
+  {% if lines %}
+    <div class="cart-list">
+      {% for line in lines %}
+        <article class="cart-line">
+          <a class="cart-photo" href="{% url 'product-detail' line.product.slug %}" aria-label="Lihat {{ line.product.name }}">
+            {% if line.product.primary_image_url %}<img src="{{ line.product.primary_image_url }}" alt="{{ line.product.name }}">{% else %}<span class="cart-photo-placeholder">{{ line.product.name|slice:":1" }}</span>{% endif %}
+          </a>
+          <div class="cart-product-info"><a href="{% url 'product-detail' line.product.slug %}"><strong>{{ line.product.name }}</strong></a>{% if line.variant %}<span class="cart-variant">{{ line.variant.name }}</span>{% endif %}<small>SKU {{ line.variant.sku|default:line.product.sku }}</small><small>Rp{{ line.unit_price|floatformat:"0g" }} per item</small></div>
+          <form class="cart-quantity" method="post" action="{% url 'cart-update' line.key %}">{% csrf_token %}<label>Jumlah<input type="number" name="quantity" min="0" max="{{ line.available_stock }}" value="{{ line.quantity }}" aria-label="Jumlah {{ line.product.name }}"></label><button>Perbarui</button><small>Isi 0 untuk menghapus</small></form>
+          <div class="cart-line-total"><small>Total</small><strong>Rp{{ line.total|floatformat:"0g" }}</strong></div>
+        </article>
+      {% endfor %}
+    </div>
+    <aside class="cart-summary"><div><span>Subtotal</span><strong>Rp{{ subtotal|floatformat:"0g" }}</strong></div><p>Ongkir, voucher, dan pajak dihitung secara aman saat checkout.</p><a class="button" href="{% url 'checkout' %}">Lanjut ke checkout</a><a href="/">← Lanjut belanja</a></aside>
+  {% else %}
+    <div class="empty cart-empty"><h2>Keranjang masih kosong</h2><p>Pilih produk yang Anda suka dan tambahkan ke keranjang.</p><a class="button" href="/">Mulai belanja</a></div>
+  {% endif %}
+</section>
+{% endblock %}

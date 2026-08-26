@@ -1,0 +1,5 @@
+{% extends "storefront/base.html" %}{% block title %}Masuk · {{ store.name }}{% endblock %}{% block content %}
+<section class="auth-card"><span class="eyebrow">CHECKOUT AMAN</span><h1>Masuk untuk melanjutkan</h1><p class="muted">Keranjang Anda tetap tersimpan. Masuk untuk melanjutkan pembelian dan melihat riwayat pesanan.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<button>Masuk</button></form>
+<div class="auth-links"><a class="signup-link" href="{% url 'register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Belum punya akun? Daftar</a><a href="{% url 'password-reset' %}">Lupa kata sandi?</a></div></section>
+{% endblock %}

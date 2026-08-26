@@ -1,7 +1,123 @@
-{% extends "storefront/base.html" %}{% block title %}{{ product.name }} · {{ store.name }}{% endblock %}{% block content %}
-<div class="product-detail"><div>{% if product.primary_image_url %}<img src="{{ product.primary_image_url }}" alt="{{ product.name }}">{% else %}<div class="placeholder large">{{ product.name|slice:":1" }}</div>{% endif %}</div>
-<div><a class="back" href="/">← Semua produk</a><h1>{{ product.name }}</h1><p class="price">Rp{{ product.price|floatformat:"0g" }}</p><p>{{ product.description }}</p><p class="stock">{% if product.available_stock %}Tersedia · {{ product.available_stock }} unit{% else %}Stok habis{% endif %}</p>
-<form action="{% url 'cart-add' product.id %}" method="post">{% csrf_token %}
-{% if product.variants.all %}<label for="variant">Pilihan</label><select id="variant" name="variant_id" required>{% for variant in product.variants.all %}{% if variant.is_active %}<option value="{{ variant.id }}" {% if not variant.stock %}disabled{% endif %}>{{ variant.name }} · Rp{{ variant.effective_price|floatformat:"0g" }} ({{ variant.stock }} tersedia)</option>{% endif %}{% endfor %}</select>{% endif %}
-<label for="quantity">Jumlah</label><input id="quantity" type="number" name="quantity" min="1" value="1">
-<button {% if not product.available_stock and not product.variants.all %}disabled{% endif %}>Tambah ke keranjang</button></form></div></div>{% endblock %}
+{% extends "storefront/base.html" %}
+{% block title %}{{ product.name }} · {{ store.name }}{% endblock %}
+{% block content %}
+<nav class="product-breadcrumb" aria-label="Breadcrumb">
+  <a href="/">Produk</a><span>/</span>
+  {% if product.category %}<a href="/?category={{ product.category.slug }}">{{ product.category.name }}</a><span>/</span>{% endif %}
+  <span>{{ product.name }}</span>
+</nav>
+
+<article class="market-product">
+  <section class="product-media" aria-label="Galeri produk">
+    <div class="product-main-image">
+      {% if product.primary_image_url %}
+        <img id="product-main-image" src="{{ product.primary_image_url }}" alt="{{ product.name }}">
+      {% else %}
+        <div class="placeholder product-main-placeholder">{{ product.name|slice:":1" }}</div>
+      {% endif %}
+    </div>
+
+    {% if product.primary_image_url or product.images.all %}
+      <div class="product-thumbnails" aria-label="Pilih gambar">
+        {% if product.primary_image_url %}
+          <button type="button" class="product-thumb active" data-image="{{ product.primary_image_url }}" aria-label="Gambar utama">
+            <img src="{{ product.primary_image_url }}" alt="{{ product.name }}">
+          </button>
+        {% endif %}
+        {% for image in product.images.all %}{% if image.image_url %}
+          <button type="button" class="product-thumb" data-image="{{ image.image_url }}" aria-label="{{ image.alt_text|default:product.name }}">
+            <img src="{{ image.image_url }}" alt="{{ image.alt_text|default:product.name }}" loading="lazy">
+          </button>
+        {% endif %}{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="gallery-caption"><span>Foto produk</span><small>Klik thumbnail untuk memperbesar</small></div>
+  </section>
+
+  <section class="product-purchase">
+    <div class="product-overline"><span>{{ product.category.name|default:"Koleksi pilihan" }}</span><span class="availability-dot">Siap dikirim</span></div>
+    <h1>{{ product.name }}</h1>
+    <div class="product-rating-row">
+      <strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>
+      <span class="divider"></span><span>SKU {{ product.sku }}</span>
+    </div>
+
+    <div class="product-price-panel">
+      {% if product.compare_at_price %}<del>Rp{{ product.compare_at_price|floatformat:"0g" }}</del>{% endif %}
+      <strong id="product-price">Rp{{ product.price|floatformat:"0g" }}</strong>
+      {% if product.compare_at_price %}<span class="discount-pill">Harga spesial</span>{% endif %}
+    </div>
+
+    <div class="product-benefits">
+      <div><span class="benefit-icon">%</span><span><strong>Voucher toko</strong><small>Voucher yang memenuhi syarat diterapkan saat checkout</small></span></div>
+      <div><span class="benefit-icon">→</span><span><strong>Pengiriman seluruh Indonesia</strong><small>Pilihan layanan dan tarif real-time dari RajaOngkir</small></span></div>
+      <div><span class="benefit-icon">✓</span><span><strong>Transaksi terlindungi</strong><small>Konfirmasi pembayaran aman melalui DOKU</small></span></div>
+    </div>
+
+    <form action="{% url 'cart-add' product.id %}" method="post" class="product-buy-form" id="product-buy-form">
+      {% csrf_token %}
+      {% if product.variants.all %}
+        <fieldset class="variant-fieldset">
+          <legend>Pilihan</legend>
+          <div class="variant-options">
+            {% for variant in product.variants.all %}{% if variant.is_active %}
+              <label class="variant-option {% if not variant.available_stock %}sold-out{% endif %}">
+                <input type="radio" name="variant_id" value="{{ variant.id }}"
+                  data-price="{{ variant.effective_price|floatformat:'0' }}"
+                  data-stock="{{ variant.available_stock }}"
+                  {% if not variant.available_stock %}disabled{% elif forloop.first %}checked{% endif %} required>
+                <span>{{ variant.name }}</span>
+              </label>
+            {% endif %}{% endfor %}
+          </div>
+        </fieldset>
+      {% endif %}
+
+      <div class="quantity-row">
+        <span>Jumlah</span>
+        <div class="quantity-stepper">
+          <button type="button" data-quantity="minus" aria-label="Kurangi jumlah">−</button>
+          <input id="quantity" type="number" name="quantity" min="1" max="{{ product.available_stock }}" value="1" aria-label="Jumlah produk">
+          <button type="button" data-quantity="plus" aria-label="Tambah jumlah">+</button>
+        </div>
+        <small id="stock-label">{{ product.available_stock }} tersedia</small>
+      </div>
+
+      <div class="product-actions">
+        <button class="cart-outline" type="submit" {% if not product.available_stock %}disabled{% endif %}>
+          <span>＋</span> Masukkan Keranjang
+        </button>
+        <button type="submit" name="next" value="checkout" {% if not product.available_stock %}disabled{% endif %}>Beli Sekarang</button>
+      </div>
+      <p class="purchase-note">Stok baru dikunci setelah checkout berhasil dibuat. Harga dan ongkir diverifikasi oleh server.</p>
+    </form>
+  </section>
+</article>
+
+<section class="seller-card"><div class="seller-mark">{{ store.name|slice:":1" }}</div><div><span class="eyebrow">DIJUAL OLEH</span><h2>{{ store.name }}</h2><p>{{ store.description|default:"Toko resmi dengan pemrosesan pesanan terintegrasi." }}</p></div><a class="button secondary" href="/">Kunjungi toko</a></section>
+
+<section class="product-description-card">
+  <div class="description-copy"><span class="eyebrow">INFORMASI PRODUK</span><h2>Deskripsi Produk</h2>
+  <p>{{ product.description|linebreaksbr|default:"Informasi produk akan segera tersedia." }}</p></div>
+  <dl class="product-specs">
+    <h3>Spesifikasi</h3>
+    <div><dt>Berat</dt><dd>{{ product.weight_grams }} gram</dd></div>
+    <div><dt>Kategori</dt><dd>{{ product.category.name|default:"Produk" }}</dd></div>
+    <div><dt>Dikirim dari</dt><dd>Gudang {{ store.name }}</dd></div>
+  </dl>
+</section>
+
+<script>
+document.querySelectorAll('.product-thumb').forEach((thumb)=>thumb.addEventListener('click',()=>{
+  const main=document.getElementById('product-main-image');if(!main)return;
+  main.src=thumb.dataset.image;document.querySelectorAll('.product-thumb').forEach((item)=>item.classList.remove('active'));thumb.classList.add('active');
+}));
+const quantity=document.getElementById('quantity'),stockLabel=document.getElementById('stock-label'),price=document.getElementById('product-price');
+function selectedStock(){const selected=document.querySelector('[name=variant_id]:checked');return selected?Number(selected.dataset.stock):Number(quantity.max)}
+function syncVariant(){const selected=document.querySelector('[name=variant_id]:checked');if(!selected)return;quantity.max=selected.dataset.stock;quantity.value=Math.min(Number(quantity.value)||1,Number(quantity.max));stockLabel.textContent=`${selected.dataset.stock} tersedia`;price.textContent=new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(selected.dataset.price))}
+const firstAvailable=document.querySelector('[name=variant_id]:not(:disabled)');if(firstAvailable&&!document.querySelector('[name=variant_id]:checked'))firstAvailable.checked=true;
+document.querySelectorAll('[name=variant_id]').forEach((input)=>input.addEventListener('change',syncVariant));syncVariant();
+document.querySelectorAll('[data-quantity]').forEach((button)=>button.addEventListener('click',()=>{const change=button.dataset.quantity==='plus'?1:-1;quantity.value=Math.max(1,Math.min(selectedStock(),(Number(quantity.value)||1)+change))}));
+</script>
+{% endblock %}

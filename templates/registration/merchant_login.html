@@ -1,0 +1,4 @@
+{% extends "storefront/base.html" %}{% block title %}Masuk Back Office{% endblock %}{% block content %}
+<section class="auth-card"><h1>Masuk Back Office</h1><p class="muted">Kelola produk, foto, stok, pesanan, dan pengaturan toko.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next|default:'/merchant/' }}"><button>Masuk ke Dashboard</button></form></section>
+{% endblock %}

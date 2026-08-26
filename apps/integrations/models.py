@@ -31,7 +31,6 @@ class OutboxEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def schedule_retry(self, error):
-        self.attempts += 1
         self.status = "failed"
         self.last_error = str(error)[:2000]
         self.last_attempt_at = timezone.now()

@@ -8,6 +8,7 @@ from .models import (
     OrderStatusEvent,
     PaymentEvent,
     PaymentTransaction,
+    Refund,
     ReturnRequest,
     ShippingMethod,
 )
@@ -22,6 +23,7 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
 admin.site.register(PaymentEvent)
 admin.site.register(PaymentTransaction)
+admin.site.register(Refund)
 admin.site.register(InventoryAllocation)
 admin.site.register(ShippingMethod)
 admin.site.register(Coupon)

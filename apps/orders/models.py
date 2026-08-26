@@ -15,7 +15,10 @@ class Order(models.Model):
         ("refund_requested", "Refund Requested"), ("partially_refunded", "Partially Refunded"),
         ("refunded", "Refunded"), ("returned", "Returned")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    access_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="orders")
+    customer_user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="customer_orders")
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
     customer_name = models.CharField(max_length=120)
     email = models.EmailField()
@@ -48,6 +51,15 @@ class Order(models.Model):
     idempotency_key = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(subtotal__gte=0), name="order_subtotal_nonnegative"),
+            models.CheckConstraint(condition=models.Q(discount__gte=0), name="order_discount_nonnegative"),
+            models.CheckConstraint(condition=models.Q(shipping_cost__gte=0), name="order_shipping_nonnegative"),
+            models.CheckConstraint(condition=models.Q(tax__gte=0), name="order_tax_nonnegative"),
+            models.CheckConstraint(condition=models.Q(total__gte=0), name="order_total_nonnegative"),
+        ]
+
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
@@ -58,6 +70,13 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     quantity = models.PositiveIntegerField()
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="order_item_quantity_positive"),
+            models.CheckConstraint(condition=models.Q(unit_price__gte=0), name="order_item_price_nonnegative"),
+            models.CheckConstraint(condition=models.Q(line_total__gte=0), name="order_item_total_nonnegative"),
+        ]
 
 class InventoryAllocation(models.Model):
     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="allocations")
@@ -122,8 +141,11 @@ class PaymentTransaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["provider", "external_id", "kind"],
-            name="unique_provider_transaction")]
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "external_id", "kind"],
+                name="unique_provider_transaction"),
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="payment_amount_positive"),
+        ]
 
 
 class Refund(models.Model):

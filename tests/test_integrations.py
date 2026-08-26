@@ -7,15 +7,24 @@ from django.test import Client, TestCase, override_settings
 
 from apps.catalog.models import InventoryLevel, Product, Warehouse
 from apps.integrations.http import ProviderError
-from apps.integrations.payments import XenditPaymentProvider
+from apps.integrations.payments import DokuPaymentProvider, XenditPaymentProvider, doku_signature
 from apps.integrations.shipping import RajaOngkirProvider
-from apps.orders.models import Order, PaymentEvent, PaymentTransaction, ShippingMethod
+from apps.orders.models import (
+    InventoryAllocation,
+    Order,
+    OrderItem,
+    PaymentEvent,
+    PaymentTransaction,
+    ShippingMethod,
+)
 from apps.shops.models import Store
 
 
+@override_settings(PAYMENT_PROVIDER="demo", SHIPPING_RATE_PROVIDER="biteship")
 class ProviderIntegrationTests(TestCase):
     def setUp(self):
         owner = User.objects.create_user("integration-owner")
+        self.buyer = User.objects.create_user("integration-buyer")
         self.store = Store.objects.create(owner=owner, name="Integration Shop", slug="integration-shop")
         self.product = Product.objects.create(store=self.store, name="Sepatu", slug="sepatu", sku="SP-1",
             price=200000, weight_grams=500, length_cm=30, width_cm=20, height_cm=12)
@@ -50,6 +59,80 @@ class ProviderIntegrationTests(TestCase):
         self.assertEqual(session.reference, "ps-local")
         self.assertNotIn("success_return_url", payload)
         self.assertNotIn("cancel_return_url", payload)
+
+    @override_settings(DOKU_CLIENT_ID="MCH-TEST", DOKU_SECRET_KEY="doku-secret",
+        DOKU_API_URL="https://api-sandbox.doku.com", PUBLIC_BASE_URL="https://shop.example.com")
+    @patch("apps.integrations.payments.request_json")
+    def test_doku_creates_signed_checkout_session(self, request_json):
+        request_json.return_value = {"response": {"payment": {
+            "url": "https://sandbox.doku.com/checkout-link-v2/test"}}}
+        order = Order.objects.create(store=self.store, customer_name="Ayu", email="ayu@example.com",
+            phone="081234567890", shipping_address="Jakarta", subtotal=Decimal(200000),
+            total=Decimal(218000), payment_provider="doku", idempotency_key="doku-test")
+
+        session = DokuPaymentProvider().create_payment(order)
+
+        call = request_json.call_args
+        payload = json.loads(call.kwargs["encoded_payload"])
+        headers = call.kwargs["headers"]
+        self.assertEqual(session.reference, f"NK{order.id.hex[:26]}")
+        self.assertEqual(payload["order"]["amount"], 218000)
+        self.assertEqual(payload["order"]["currency"], "IDR")
+        self.assertEqual(payload["callbacks"]["url"],
+            f"https://shop.example.com/orders/{order.id}/?token={order.access_token}")
+        self.assertTrue(headers["Signature"].startswith("HMACSHA256="))
+        self.assertNotIn("doku-secret", json.dumps(payload))
+
+    @override_settings(DOKU_CLIENT_ID="MCH-TEST", DOKU_SECRET_KEY="doku-secret")
+    def test_doku_webhook_verifies_and_marks_paid_once(self):
+        order = Order.objects.create(store=self.store, customer_name="Ayu", phone="081234567890",
+            shipping_address="Jakarta", subtotal=Decimal(200000), total=Decimal(218000),
+            payment_provider="doku", payment_reference="NKTEST", idempotency_key="doku-webhook")
+        payload = {"order": {"invoice_number": "NKTEST", "amount": 218000,
+            "currency": "IDR"}, "transaction": {"status": "SUCCESS",
+            "original_request_id": "original-doku-request"}}
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        timestamp = "2026-08-26T12:00:00Z"
+        signature = doku_signature("MCH-TEST", "notification-1", timestamp,
+            "/integrations/webhooks/doku/", body, "doku-secret")
+        headers = {"HTTP_CLIENT_ID": "MCH-TEST", "HTTP_REQUEST_ID": "notification-1",
+            "HTTP_REQUEST_TIMESTAMP": timestamp, "HTTP_SIGNATURE": signature}
+
+        denied = Client().post("/integrations/webhooks/doku/", data=body,
+            content_type="application/json", **{**headers, "HTTP_SIGNATURE": "wrong"})
+        client = Client()
+        accepted = client.post("/integrations/webhooks/doku/", data=body,
+            content_type="application/json", **headers)
+        duplicate = client.post("/integrations/webhooks/doku/", data=body,
+            content_type="application/json", **headers)
+
+        order.refresh_from_db()
+        self.assertEqual(denied.status_code, 401)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertTrue(duplicate.json()["duplicate"])
+        self.assertEqual(order.status, "paid")
+        self.assertTrue(PaymentTransaction.objects.get().reconciled)
+
+    @override_settings(DOKU_CLIENT_ID="MCH-TEST", DOKU_SECRET_KEY="doku-secret")
+    def test_doku_checkout_failed_notification_does_not_cancel_order(self):
+        order = Order.objects.create(store=self.store, customer_name="Ayu", phone="081234567890",
+            shipping_address="Jakarta", subtotal=Decimal(200000), total=Decimal(218000),
+            payment_provider="doku", payment_reference="NKRETRY", idempotency_key="doku-retry")
+        payload = {"order": {"invoice_number": "NKRETRY", "amount": 218000},
+            "transaction": {"status": "FAILED", "original_request_id": "attempt-one"}}
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        timestamp = "2026-08-26T12:00:00Z"
+        signature = doku_signature("MCH-TEST", "failed-notification", timestamp,
+            "/integrations/webhooks/doku/", body, "doku-secret")
+        response = Client().post("/integrations/webhooks/doku/", data=body,
+            content_type="application/json", HTTP_CLIENT_ID="MCH-TEST",
+            HTTP_REQUEST_ID="failed-notification", HTTP_REQUEST_TIMESTAMP=timestamp,
+            HTTP_SIGNATURE=signature)
+        order.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ignored"])
+        self.assertEqual(order.status, "pending")
+        self.assertFalse(PaymentTransaction.objects.filter(order=order).exists())
 
     @override_settings(BITESHIP_API_KEY="biteship_test.demo", BITESHIP_ORIGIN_POSTAL_CODE="10110")
     @patch("apps.integrations.shipping.request_json")
@@ -96,11 +179,68 @@ class ProviderIntegrationTests(TestCase):
         request_form_json.return_value = {"data": [{"name": "J&T Express", "code": "jnt",
             "service": "EZ", "cost": 55000, "etd": ""}]}
         client = Client()
+        client.force_login(self.buyer)
         client.post(f"/cart/add/{self.product.id}/")
         response = client.post("/checkout/shipping-rates/", {"destination_area_id": "17620"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["provider_name"], "RajaOngkir")
         self.assertEqual(response.json()["quotes"][0]["price"], 55000)
+
+    @override_settings(SHIPPING_RATE_PROVIDER="rajaongkir", RAJAONGKIR_API_KEY="raja-test",
+        RAJAONGKIR_ORIGIN_POSTAL_CODE="10110", RAJAONGKIR_ORIGIN_ID="")
+    @patch("apps.integrations.shipping.request_form_json")
+    @patch("apps.integrations.shipping.request_json")
+    def test_rajaongkir_resolves_origin_and_destination_postcodes(self, request_json,
+            request_form_json):
+        def destinations(url, **kwargs):
+            if "10110" in url:
+                return {"data": [{"id": 100, "label": "Gambir, Jakarta 10110",
+                    "zip_code": "10110"}]}
+            return {"data": [{"id": 200, "label": "Wonokromo, Surabaya 60242",
+                "zip_code": "60242", "province_name": "Jawa Timur",
+                "city_name": "Surabaya", "district_name": "Wonokromo"}]}
+        request_json.side_effect = destinations
+        request_form_json.return_value = {"data": [{"name": "JNE", "code": "jne",
+            "service": "REG", "cost": 21000, "etd": "2-3 day"}]}
+        client = Client()
+        client.force_login(self.buyer)
+        client.post(f"/cart/add/{self.product.id}/")
+
+        response = client.post("/checkout/shipping-rates/", {"postal_code": "60242"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["destination_area_id"], "200")
+        payload = request_form_json.call_args.args[1]
+        self.assertEqual(payload["origin"], "100")
+        self.assertEqual(payload["destination"], "200")
+
+    @override_settings(SHIPPING_RATE_PROVIDER="rajaongkir", RAJAONGKIR_API_KEY="raja-test",
+        RAJAONGKIR_ORIGIN_ID="31555")
+    @patch("apps.integrations.shipping.request_form_json")
+    @patch("apps.integrations.shipping.request_json")
+    def test_rajaongkir_postcode_quote_can_complete_checkout(self, request_json,
+            request_form_json):
+        request_json.return_value = {"data": [{"id": 68424,
+            "label": "Wonokromo, Surabaya 60243", "zip_code": "60243",
+            "province_name": "Jawa Timur", "city_name": "Surabaya",
+            "district_name": "Wonokromo"}]}
+        request_form_json.return_value = {"data": [{"name": "JNE", "code": "jne",
+            "service": "REG", "cost": 19000, "etd": "2-3 day"}]}
+        client = Client()
+        client.force_login(self.buyer)
+        client.post(f"/cart/add/{self.product.id}/")
+        quote_response = client.post("/checkout/shipping-rates/", {"postal_code": "60243"})
+        token = quote_response.json()["quotes"][0]["token"]
+
+        checkout = client.post("/checkout/", {"customer_name": "Ayu",
+            "phone": "081234567890", "shipping_address": "Jl. Surabaya 1",
+            "province": "Jawa Timur", "city": "Surabaya", "district": "Wonokromo",
+            "postal_code": "60243", "shipping_method": token})
+
+        order = Order.objects.get()
+        self.assertEqual(checkout.status_code, 302)
+        self.assertEqual(order.destination_area_id, "68424")
+        self.assertEqual(order.shipping_cost, 19000)
 
     @override_settings(BITESHIP_API_KEY="biteship_test.demo", BITESHIP_ORIGIN_POSTAL_CODE="10110")
     @patch("apps.integrations.shipping.request_json")
@@ -109,6 +249,7 @@ class ProviderIntegrationTests(TestCase):
             "courier_service_code": "reg", "courier_service_name": "Reguler", "price": 23000,
             "duration": "2 - 3 days"}]}
         client = Client()
+        client.force_login(self.buyer)
         client.post(f"/cart/add/{self.product.id}/")
         response = client.post("/checkout/shipping-rates/", {"postal_code": "60241"})
         quote = response.json()["quotes"][0]
@@ -179,3 +320,44 @@ class ProviderIntegrationTests(TestCase):
         self.assertEqual(order.status, "pending")
         self.assertFalse(payment.reconciled)
         self.assertEqual(payment.status, "failed")
+
+    @override_settings(XENDIT_WEBHOOK_VERIFICATION_TOKEN="webhook-secret")
+    def test_failed_payment_releases_inventory_reservation(self):
+        order = Order.objects.create(store=self.store, customer_name="Ayu", phone="0812",
+            shipping_address="Jakarta", subtotal=Decimal(200000), total=Decimal(200000),
+            payment_provider="xendit", payment_reference="ps-failed", idempotency_key="failed")
+        item = OrderItem.objects.create(order=order, product=self.product, name=self.product.name,
+            sku=self.product.sku, unit_price=self.product.price, quantity=1,
+            line_total=self.product.price)
+        level = InventoryLevel.objects.get(product=self.product)
+        level.reserved = 1
+        level.save(update_fields=["reserved"])
+        InventoryAllocation.objects.create(order_item=item, inventory_level=level, quantity=1)
+        payload = {"event": "payment_session.failed", "data": {"reference_id": str(order.id),
+            "payment_session_id": "ps-failed"}}
+        response = Client().post("/integrations/webhooks/xendit/", data=json.dumps(payload),
+            content_type="application/json", HTTP_X_CALLBACK_TOKEN="webhook-secret")
+        order.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(order.status, "payment_failed")
+        self.assertEqual(PaymentTransaction.objects.get().status, "failed")
+        level.refresh_from_db()
+        self.assertEqual(level.reserved, 0)
+
+    @override_settings(XENDIT_WEBHOOK_VERIFICATION_TOKEN="webhook-secret")
+    def test_late_payment_after_cancellation_requires_reconciliation(self):
+        order = Order.objects.create(store=self.store, customer_name="Ayu", phone="0812",
+            shipping_address="Jakarta", subtotal=Decimal(200000), total=Decimal(200000),
+            status="cancelled", payment_provider="xendit", payment_reference="ps-late",
+            idempotency_key="late")
+        payload = {"event": "payment_session.completed", "data": {"reference_id": str(order.id),
+            "payment_session_id": "ps-late", "payment_request_id": "pr-late",
+            "amount": 200000, "currency": "IDR"}}
+        response = Client().post("/integrations/webhooks/xendit/", data=json.dumps(payload),
+            content_type="application/json", HTTP_X_CALLBACK_TOKEN="webhook-secret")
+        payment = PaymentTransaction.objects.get()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payment.status, "succeeded")
+        self.assertFalse(payment.reconciled)
+        self.assertEqual(payment.provider_payment_id, "pr-late")
+        self.assertIn("cancelled", payment.mismatch_reason)

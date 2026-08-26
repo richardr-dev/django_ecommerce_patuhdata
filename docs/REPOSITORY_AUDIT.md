@@ -1,56 +1,100 @@
-# Commerce reliability audit
+# Commerce reliability audit and implementation plan
 
-Date: 2026-08-26
+Audit date: 2026-08-26
 
-## Current architecture
+## Repository map
 
-| Area | Implementation |
-|---|---|
-| Shops / tenancy | `apps.shops`: organization, store/brand, staff roles, customers and audit records. Host/slug middleware resolves a store. |
-| Catalogue | `apps.catalog`: categories, products, variants, images, warehouses and inventory levels. Store-scoped uniqueness exists for product slug/SKU. |
-| Cart / checkout | Session cart in `apps.orders.cart`; server-rendered checkout reserves stock inside a database transaction. |
-| Orders | `apps.orders`: immutable order lines, status history, allocations, shipping methods, coupons, returns and payment records. |
-| Payments | Adapter interface with demo and Xendit Payment Sessions. Xendit callback token, amount, currency, reference and duplicate event are checked. Browser redirect does not mark paid. |
-| Shipping | Adapter interface for real RajaOngkir and Biteship rates. Quotes are server-bound to destination and cart signature. |
-| Back office | Authenticated merchant dashboard, fulfilment list, catalogue/inventory/configuration CRUD, Customer 360 and integration failures. Django admin remains the platform console. |
-| Async / integrations | Durable database outbox exists, but the initial repository has no worker command that claims and retries events. |
-| Database | PostgreSQL in Docker; SQLite for local development. Transaction locking is used at checkout and webhook handling. |
-| Deployment | Docker/Gunicorn configuration. S3-compatible Django storage is configurable. No checked-in AWS IaC. |
-| Tests | Checkout, tenancy, variants, inventory reservation, provider mapping, webhook authentication/idempotency and state transition tests. |
-| Observability | Integration failure fields and dashboard alerts exist. Structured request logging, health probes and error monitoring are incomplete. |
+1. **Apps:** `shops` owns organizations, stores, staff, customers and audits; `catalog` owns
+   products, variants, images, warehouses and stock; `orders` owns cart, pricing, checkout, orders,
+   inventory movements, promotions, fulfilment, returns and refunds; `integrations` owns adapters,
+   webhooks, credentials and the outbox.
+2. **Relationships:** Organization has Stores. Store-scoped commerce resources attach to Store.
+   Products have Category, images, variants and warehouse InventoryLevels. Orders have immutable
+   items, allocations, movements, status events, payment transactions, refunds and returns.
+3. **Catalogue:** active product list/detail, store-scoped slugs/product SKUs, variant price/weight/
+   stock, images, dimensions and SEO fields. Store is the brand boundary; tax is store-wide.
+4. **Cart:** anonymous session cart supports variants, update/remove, stock caps and server-side
+   recalculation. Durable expiry and logged-in merge are absent.
+5. **Checkout:** validates cart/contact/address/shipping/promotion/provider, locks stock, snapshots
+   totals and lines, reserves inventory, creates payment/outbox records, and uses a unique idempotency
+   key. Shipping quotes are bound to destination and cart signature.
+6. **Orders:** explicit transition graph from pending through completion/cancellation/refund. Each
+   transition locks current state, applies inventory changes, appends history and emits an event.
+7. **Payments/refunds:** PaymentTransaction records provider IDs, type/status, amount/currency,
+   payload and reconciliation. Refund records amount/reason/operator/provider result. Demo and Xendit
+   adapters exist; cumulative refunds are locked and capped at verified paid amount.
+8. **Inventory:** base products use prioritized warehouse allocations; variants use stock/reserved.
+   Checkout locks rows; reserve/commit/release are ledgered; packing commits; cancellation, failure and
+   expiry release. PostgreSQL is required to exercise real row-lock concurrency.
+9. **Customers/users:** Django User authenticates staff. Store Customer is unique by store+phone and
+   holds contact/consent. Address history/tags are not normalized; metrics derive from scoped orders.
+10. **Shipping:** manual methods plus Biteship/RajaOngkir quote adapters. Orders snapshot service,
+    charge, ETA and tracking. Multi-shipment, booking and tracking sync are absent.
+11. **Back office:** scoped dashboard, fulfilment transitions, required tracking, finance refund, CSV,
+    customer view, commerce CRUD and integration/reconciliation failures. Django admin is the platform
+    console.
+12. **APIs:** no public commerce API. JSON endpoints provide shipping search/rates; Xendit has a
+    provider webhook. Other flows are server-rendered.
+13. **Webhooks:** constant-time token verification; JSON/provider/reference/amount/currency validation;
+    payload deduplication and order locking. Late paid events after cancellation become reconciliation
+    mismatches rather than changing the order.
+14. **Workers:** a database outbox worker claims with `skip_locked`, sends email, retries with bounded
+    backoff, and expires unpaid orders. Compose runs it separately. No Celery/RQ dependency.
+15. **Database:** SQLite is local/test convenience; Docker uses PostgreSQL 17. Constraints protect
+    tenant identifiers, reserved stock, refunds/payments/items and persisted financial totals.
+16. **Deployment:** Docker/Gunicorn, optional S3 and an RDS-oriented design exist. No AWS IaC or
+    automated staging/production deployment is checked in.
+17. **Tests:** pricing, checkout, variants, inventory lifecycle, idempotency, transitions, providers,
+    webhook auth/duplicate/mismatch/failure/late events, refunds, authorization, outbox/expiry,
+    tracking and full happy path. SQLite cannot prove `select_for_update` behavior.
+18. **Observability:** Django logs, integration/reconciliation screens and DB/outbox-aware `/healthz/`.
+    Structured correlation, metrics/tracing and external exception monitoring remain absent.
+19. **Auth/RBAC:** Django sessions/CSRF protect merchant writes. Scoped querysets and role checks cover
+    store objects. Customer order detail requires its browser session or per-order access token.
+20. **Tenancy:** host/slug middleware resolves Store; commerce lookups are store-scoped. Organization
+    supports multiple brands. First-store fallback is restricted to localhost/testserver demos.
 
-## Risks found
+## P0 — resolved in this pass
 
-### P0 — money, inventory and access
+- Restored missing payment/refund migration that had made checkout crash.
+- Replaced UUID-only customer order access with a session/per-order-token boundary.
+- Made transitions lock current state; blocked manual financial states; required shipment tracking.
+- Released stock on payment failure/expiry and retained late paid events for reconciliation.
+- Fixed successive partial refunds and added database checks for invalid financial values.
+- Added the outbox notification/expiry worker and removed a nonexistent Compose env file.
+- Added CI, readiness health, production secret/TLS guards and backup/restore guidance.
 
-1. Checkout idempotency key is random per submitted request; repeated POSTs can create multiple orders.
-2. Pricing calculations live inside the checkout view and are therefore difficult to reuse or prove consistent.
-3. Base products reserve inventory, while variants immediately decrement stock. There is no consistent reserve/commit/release lifecycle or inventory ledger.
-4. Coupon usage is validated outside the locking transaction, allowing limited-use voucher races.
-5. Refund records and provider execution are incomplete; no database constraint prevents over-refunding.
-6. Status rules exist, but inventory side effects are not coupled atomically to fulfilment transitions.
-7. The customer order UUID is a bearer secret. It is difficult to guess, but it is not a substitute for an explicit access token/customer verification boundary.
-8. Store resolution falls back to the first active store on localhost. This is acceptable for demo only and must never be enabled for unknown production hosts.
+## P0 — remaining before real provider money
 
-### P1 — operations and recovery
+- Run last-item checkout with two independent PostgreSQL connections; SQLite ignores row locks.
+- Certify current Xendit events/refunds/token rotation and courier quotes in provider sandboxes.
+- Implement/certify courier shipment booking and tracking; current adapters quote only.
+- Enforce SKU uniqueness across Product and ProductVariant together at Store scope. Current constraints
+  cover products per store and variants per product, not cross-table collisions.
+- Move payment-session HTTP creation outside the stock-lock transaction using a durable post-commit
+  state while preserving idempotency and reservation recovery.
 
-1. Outbox records have retry metadata but no claiming worker, dead-letter state or notification adapters.
-2. Audit records do not yet contain before/after snapshots, organization or request IP.
-3. Customer addresses and promotion per-customer usage are not normalized.
-4. Shipment is embedded on the order rather than represented as a separate lifecycle record.
-5. Dashboard metrics are lifetime-oriented and do not yet include all requested today/net/refund metrics.
-6. No health endpoint, request correlation logging or production error-monitoring integration.
-7. No executable backup/restore commands or verified restore record.
+## P1 — operational readiness
 
-### P2 — after the core acceptance suite
+- PostgreSQL concurrency tests for stock, coupon use and simultaneous refunds.
+- Dead-letter state and idempotent provider notification keys.
+- CustomerAddress and CouponRedemption models for history/per-customer limits.
+- Append-only before/after/IP/organization audit context and DB/admin mutation protection.
+- Structured request IDs, metrics and external error monitoring/alerting.
+- Shipment lifecycle/exceptions/carrier callbacks and measured provider health.
+- Correct today/net/refund/repeat-customer dashboard metrics.
+- AWS IaC, private networking, Secrets Manager, RDS PITR alarms, staging promotion and a recorded restore
+  drill using `OPERATIONS.md`.
 
-1. ERP/CRM/WhatsApp provider implementations.
-2. Product/category-specific promotions and customer segmentation.
-3. Abandoned cart and repeat-purchase automation.
-4. AWS IaC, staging promotion workflow and automated production deployment.
+## P2
 
-## Implementation order
+ERP/CRM/WhatsApp adapters, segmentation, advanced promotions/analytics/themes/loyalty and all other
+features outside the core transaction.
 
-P0 is fixed first: centralized pricing and idempotent checkout; consistent inventory ledger; payment,
-refund and reconciliation rules; deterministic fulfilment; tenant/RBAC regression tests. P1 then adds
-the outbox worker, health/logging, backup/restore and CI. P2 remains explicitly out of the core path.
+## Acceptance status
+
+Automated: catalogue/variant/cart/pricing, reservation, idempotent order creation, demo payment,
+verified/idempotent webhook behavior, fulfilment, single inventory commit, tracking shipment,
+delivery/completion, failure/expiry release, partial/full refund rules, durable email events, RBAC and
+tenant/customer-order isolation. Provider certification, PostgreSQL concurrency, real shipment booking,
+AWS deployment and a recorded restore drill remain external production gates.

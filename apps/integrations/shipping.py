@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from django.conf import settings
+from django.core.cache import cache
 
 from .http import ProviderError, request_form_json, request_json
 
@@ -65,8 +66,10 @@ class BiteshipProvider:
 
 class RajaOngkirProvider:
     def __init__(self):
-        if not settings.RAJAONGKIR_API_KEY or not settings.RAJAONGKIR_ORIGIN_ID:
-            raise ProviderError("RajaOngkir API key and origin ID are not configured.")
+        if not settings.RAJAONGKIR_API_KEY or not (
+            settings.RAJAONGKIR_ORIGIN_ID or settings.RAJAONGKIR_ORIGIN_POSTAL_CODE
+        ):
+            raise ProviderError("RajaOngkir API key and origin ID/postcode are not configured.")
 
     @property
     def headers(self):
@@ -81,10 +84,36 @@ class RajaOngkirProvider:
             "district": area.get("district_name", ""), "village": area.get("subdistrict_name", "")}
             for area in data.get("data", []) if area.get("id")]
 
+    def resolve_postal_code(self, postal_code):
+        postal_code = str(postal_code).strip()
+        if not postal_code.isdigit() or len(postal_code) != 5:
+            raise ProviderError("Kode pos RajaOngkir harus terdiri dari 5 digit.")
+        cache_key = f"rajaongkir:postcode:{postal_code}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        exact = [area for area in self.search_areas(postal_code)
+            if area["postal_code"] == postal_code]
+        if not exact:
+            raise ProviderError(
+                f"Kode pos {postal_code} tidak ditemukan oleh RajaOngkir. Cari dan pilih alamat."
+            )
+        if len({area["id"] for area in exact}) > 1:
+            raise ProviderError(
+                f"Kode pos {postal_code} memiliki beberapa tujuan. Cari kecamatan lalu pilih alamat."
+            )
+        cache.set(cache_key, exact[0], timeout=86400)
+        return exact[0]
+
+    def origin_id(self):
+        if settings.RAJAONGKIR_ORIGIN_ID:
+            return settings.RAJAONGKIR_ORIGIN_ID
+        return self.resolve_postal_code(settings.RAJAONGKIR_ORIGIN_POSTAL_CODE)["id"]
+
     def rates(self, destination_area_id, lines):
         weight = sum(max(1, _line_weight(line)) * line["quantity"] for line in lines)
         data = request_form_json(f"{settings.RAJAONGKIR_API_URL}/calculate/domestic-cost",
-            {"origin": settings.RAJAONGKIR_ORIGIN_ID, "destination": destination_area_id,
+            {"origin": self.origin_id(), "destination": destination_area_id,
                 "weight": weight, "courier": settings.RAJAONGKIR_COURIERS, "price": "lowest"},
             headers=self.headers)
         quotes = [ShippingQuote(provider="rajaongkir", courier_code=rate.get("code", ""),

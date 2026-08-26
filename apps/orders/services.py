@@ -1,12 +1,13 @@
 from decimal import Decimal
 
+from django.db import transaction
 from django.utils import timezone
 
 from .models import Coupon
 
 ORDER_TRANSITIONS = {
     "pending": {"paid", "payment_failed", "cancelled"},
-    "payment_failed": {"pending", "cancelled"},
+    "payment_failed": {"cancelled"},
     "paid": {"confirmed", "refund_requested", "refunded"},
     "confirmed": {"allocated", "refund_requested", "cancelled"},
     "allocated": {"picking", "cancelled"},
@@ -31,28 +32,33 @@ def allowed_order_transitions(order):
     return [(status, labels[status]) for status in ORDER_TRANSITIONS.get(order.status, set())]
 
 
-def transition_order(order, new_status, *, note="", release_inventory=False):
+@transaction.atomic
+def transition_order(order, new_status, *, note="", release_inventory=False, actor=None):
     from apps.integrations.models import OutboxEvent
 
-    from .models import OrderStatusEvent
+    from .models import Order, OrderStatusEvent
 
-    if new_status == order.status:
+    locked_order = Order.objects.select_for_update().get(pk=order.pk)
+    if new_status == locked_order.status:
         return False
-    if new_status not in ORDER_TRANSITIONS.get(order.status, set()):
-        raise InvalidOrderTransition(f"Transisi {order.status} → {new_status} tidak diizinkan.")
-    old_status = order.status
+    if new_status not in ORDER_TRANSITIONS.get(locked_order.status, set()):
+        raise InvalidOrderTransition(
+            f"Transisi {locked_order.status} → {new_status} tidak diizinkan."
+        )
+    old_status = locked_order.status
     if release_inventory or new_status == "cancelled":
         from .inventory import release_order_inventory
-        release_order_inventory(order)
+        release_order_inventory(locked_order, actor=actor)
     if new_status == "packed":
         from .inventory import commit_order_inventory
-        commit_order_inventory(order)
+        commit_order_inventory(locked_order, actor=actor)
+    locked_order.status = new_status
+    locked_order.save(update_fields=["status"])
+    OrderStatusEvent.objects.create(order=locked_order, status=new_status, note=note)
+    OutboxEvent.objects.create(store=locked_order.store, topic="order.status_changed",
+        aggregate_id=str(locked_order.id), payload={"order_id": str(locked_order.id),
+            "from": old_status, "status": new_status, "phone": locked_order.phone})
     order.status = new_status
-    order.save(update_fields=["status"])
-    OrderStatusEvent.objects.create(order=order, status=new_status, note=note)
-    OutboxEvent.objects.create(store=order.store, topic="order.status_changed",
-        aggregate_id=str(order.id), payload={"order_id": str(order.id), "from": old_status,
-            "status": new_status, "phone": order.phone})
     return True
 
 
@@ -92,3 +98,20 @@ def calculate_discount(coupon, subtotal, shipping_cost):
         discount, shipping_cost = Decimal(0), Decimal(0)
     return discount, shipping_cost
 
+
+def expire_pending_orders(*, now=None, limit=100):
+    """Cancel expired unpaid orders in small, independently recoverable transactions."""
+    from .models import Order
+
+    now = now or timezone.now()
+    order_ids = list(Order.objects.filter(status="pending", payment_expires_at__lte=now)
+        .order_by("payment_expires_at").values_list("id", flat=True)[:limit])
+    expired = 0
+    for order_id in order_ids:
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(id=order_id)
+            if order.status != "pending" or not order.payment_expires_at or order.payment_expires_at > now:
+                continue
+            if transition_order(order, "cancelled", note="Sesi pembayaran kedaluwarsa"):
+                expired += 1
+    return expired

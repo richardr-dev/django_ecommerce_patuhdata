@@ -33,7 +33,7 @@ Local commands load `.env` and use `db.sqlite3` by default. Docker Compose overr
 - Two starter storefront themes, responsive catalog and product pages.
 - PostgreSQL-backed multi-warehouse inventory with priority allocation, safety stock, transactional
   reservation, allocation traceability, and immutable order lines.
-- Xendit Payment Sessions with hosted checkout, authenticated idempotent webhooks, amount/currency
+- DOKU Checkout with hosted checkout, authenticated idempotent webhooks, amount/currency
   verification, expiry handling, and a local demo fallback.
 - Django admin for platform/store operations, integration credentials, and durable outbox events.
 - PostgreSQL/Docker production parity, static assets, migrations, seed data, and checkout tests.
@@ -66,7 +66,7 @@ The seeded store includes regular and express delivery plus voucher `HEMAT10`. W
 credentials and an origin postal code are configured, checkout replaces those seeded prices with
 server-verified Biteship courier rates based on destination and actual cart measurements.
 
-Production secrets must stay in a secret manager. Complete Xendit refund/reconciliation and
+Production secrets must stay in a secret manager. Complete DOKU refund/reconciliation and
 Biteship shipment-booking certification before launch. Never store card numbers or CVV.
 
 ## Architecture

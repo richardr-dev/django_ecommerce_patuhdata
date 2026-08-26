@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e '.[dev]'
+      - run: ruff check .
+      - run: python manage.py makemigrations --check --dry-run
+      - run: pytest -q
+      - run: DEBUG=0 SECRET_KEY='ci-only-long-random-secret-key-with-more-than-fifty-characters-123' ALLOWED_HOSTS=testserver python manage.py check --deploy

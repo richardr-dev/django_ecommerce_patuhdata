@@ -1,0 +1,4 @@
+{% extends "storefront/base.html" %}{% block title %}Pesanan Saya · {{ store.name }}{% endblock %}{% block content %}
+<section class="narrow"><h1>Pesanan Saya</h1><p class="muted">Riwayat pembelian yang dibuat saat Anda masuk.</p>
+{% for order in orders %}<a class="account-order" href="{% url 'order-detail' order.id %}"><span><strong>#{{ order.id|stringformat:'s'|slice:':8' }}</strong><small>{{ order.created_at|date:"d M Y H:i" }} · Rp{{ order.total|floatformat:"0g" }}</small></span><span class="status">{{ order.get_status_display }}</span><span class="account-order-items">{% for item in order.items.all %}{{ item.quantity }} × {{ item.name }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</span></a>{% empty %}<div class="empty"><h2>Belum ada pembelian</h2><p>Pesanan baru akan muncul di sini setelah Anda checkout dalam keadaan masuk.</p><a class="button" href="/">Mulai belanja</a></div>{% endfor %}</section>
+{% endblock %}
