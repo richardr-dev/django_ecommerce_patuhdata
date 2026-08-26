@@ -1,0 +1,7 @@
+{% extends "storefront/base.html" %}{% block title %}{{ product.name }} · {{ store.name }}{% endblock %}{% block content %}
+<div class="product-detail"><div>{% if product.primary_image_url %}<img src="{{ product.primary_image_url }}" alt="{{ product.name }}">{% else %}<div class="placeholder large">{{ product.name|slice:":1" }}</div>{% endif %}</div>
+<div><a class="back" href="/">← Semua produk</a><h1>{{ product.name }}</h1><p class="price">Rp{{ product.price|floatformat:"0g" }}</p><p>{{ product.description }}</p><p class="stock">{% if product.available_stock %}Tersedia · {{ product.available_stock }} unit{% else %}Stok habis{% endif %}</p>
+<form action="{% url 'cart-add' product.id %}" method="post">{% csrf_token %}
+{% if product.variants.all %}<label for="variant">Pilihan</label><select id="variant" name="variant_id" required>{% for variant in product.variants.all %}{% if variant.is_active %}<option value="{{ variant.id }}" {% if not variant.stock %}disabled{% endif %}>{{ variant.name }} · Rp{{ variant.effective_price|floatformat:"0g" }} ({{ variant.stock }} tersedia)</option>{% endif %}{% endfor %}</select>{% endif %}
+<label for="quantity">Jumlah</label><input id="quantity" type="number" name="quantity" min="1" value="1">
+<button {% if not product.available_stock and not product.variants.all %}disabled{% endif %}>Tambah ke keranjang</button></form></div></div>{% endblock %}

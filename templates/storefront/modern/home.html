@@ -1,0 +1,6 @@
+{% extends "storefront/base.html" %}{% block content %}
+<section class="hero"><span class="eyebrow">TOKO RESMI</span><h1>{{ store.name }}</h1><p>{{ store.description|default:"Produk pilihan, transaksi mudah, langsung dari kami." }}</p></section>
+<form class="catalog-tools" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Cari produk atau SKU"><select name="category"><option value="">Semua kategori</option>{% for category in categories %}<option value="{{ category.slug }}" {% if request.GET.category == category.slug %}selected{% endif %}>{{ category.name }}</option>{% endfor %}</select><select name="sort"><option value="">Terbaru</option><option value="price">Harga terendah</option><option value="-price">Harga tertinggi</option><option value="name">Nama A–Z</option></select><button>Cari</button></form>
+<section><div class="section-heading"><h2>Produk terbaru</h2><span>{{ products|length }} produk</span></div><div class="grid">
+{% for product in products %}{% include "storefront/product_card.html" %}{% empty %}<div class="empty">Belum ada produk.</div>{% endfor %}</div></section>
+{% endblock %}

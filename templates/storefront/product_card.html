@@ -1,0 +1,3 @@
+<article class="card"><a href="{% url 'product-detail' product.slug %}">
+{% if product.primary_image_url %}<img src="{{ product.primary_image_url }}" alt="{{ product.name }}" loading="lazy">{% else %}<div class="placeholder">{{ product.name|slice:":1" }}</div>{% endif %}
+<div class="card-body"><small>{{ product.category.name|default:"Pilihan" }}</small><h3>{{ product.name }}</h3><strong>Rp{{ product.price|floatformat:"0g" }}</strong></div></a></article>

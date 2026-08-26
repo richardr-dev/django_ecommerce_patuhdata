@@ -1,0 +1,7 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{{ store.name|default:"NiagaKit" }}{% endblock %}</title>
+<link rel="stylesheet" href="{% static 'css/store.css' %}"><link rel="stylesheet" href="{% static 'css/commerce.css' %}"><link rel="stylesheet" href="{% static 'css/address.css' %}"><style>:root{--brand:{{ store.primary_color|default:'#155eef' }}}</style></head>
+<body><header><a class="brand" href="/">{{ store.name|default:"NiagaKit" }}</a><nav><a href="/">Produk</a><a href="{% url 'cart' %}">Keranjang</a></nav></header>
+{% if messages %}<div class="messages">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+<main>{% block content %}{% endblock %}</main><footer>Belanja aman di {{ store.name }} · Didukung NiagaKit</footer></body></html>
