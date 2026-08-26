@@ -63,9 +63,35 @@ class InventoryAllocation(models.Model):
     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="allocations")
     inventory_level = models.ForeignKey("catalog.InventoryLevel", on_delete=models.PROTECT, related_name="allocations")
     quantity = models.PositiveIntegerField()
+    committed_at = models.DateTimeField(null=True, blank=True)
     fulfilled_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["order_item", "inventory_level"], name="unique_item_inventory_allocation")]
+
+
+class InventoryMovement(models.Model):
+    KIND = [("reserve", "Reserve"), ("release", "Release"), ("commit", "Commit"),
+        ("adjust", "Adjust"), ("return", "Return")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="inventory_movements")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="inventory_movements",
+        null=True, blank=True)
+    inventory_level = models.ForeignKey("catalog.InventoryLevel", on_delete=models.PROTECT,
+        related_name="movements", null=True, blank=True)
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT,
+        related_name="inventory_movements", null=True, blank=True)
+    kind = models.CharField(max_length=20, choices=KIND)
+    quantity = models.PositiveIntegerField()
+    reason = models.CharField(max_length=200)
+    actor = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    previous_on_hand = models.PositiveIntegerField()
+    new_on_hand = models.PositiveIntegerField()
+    previous_reserved = models.PositiveIntegerField()
+    new_reserved = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=(models.Q(inventory_level__isnull=False) |
+            models.Q(variant__isnull=False)), name="movement_has_stock_target")]
 
 class PaymentEvent(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
@@ -84,6 +110,7 @@ class PaymentTransaction(models.Model):
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payment_transactions")
     provider = models.CharField(max_length=40)
     external_id = models.CharField(max_length=160)
+    provider_payment_id = models.CharField(max_length=160, blank=True)
     kind = models.CharField(max_length=20, choices=KIND, default="payment")
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -97,6 +124,27 @@ class PaymentTransaction(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["provider", "external_id", "kind"],
             name="unique_provider_transaction")]
+
+
+class Refund(models.Model):
+    STATUS = [("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed")]
+    REASONS = [("REQUESTED_BY_CUSTOMER", "Requested by customer"), ("CANCELLATION", "Cancellation"),
+        ("DUPLICATE", "Duplicate"), ("FRAUDULENT", "Fraudulent"), ("OTHERS", "Other")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="refunds")
+    payment = models.ForeignKey(PaymentTransaction, on_delete=models.PROTECT, related_name="refunds")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    reason = models.CharField(max_length=40, choices=REASONS)
+    note = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    provider_reference = models.CharField(max_length=160, blank=True)
+    actor = models.ForeignKey("auth.User", on_delete=models.PROTECT)
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="refund_amount_positive")]
 
 
 class ShippingMethod(models.Model):

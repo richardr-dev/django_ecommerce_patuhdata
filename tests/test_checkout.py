@@ -2,7 +2,8 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase
 
 from apps.catalog.models import InventoryLevel, Product, ProductVariant, Warehouse
-from apps.orders.models import Coupon, Order, ShippingMethod
+from apps.orders.models import Coupon, InventoryMovement, Order, ShippingMethod
+from apps.orders.pricing import calculate_price
 from apps.orders.services import InvalidOrderTransition, transition_order
 from apps.shops.models import Store
 
@@ -69,7 +70,9 @@ class CheckoutTests(TestCase):
         self.assertEqual(item.sku, "SKU-RED-L")
         self.assertEqual(item.variant_name, "Merah / L")
         self.assertEqual(item.unit_price, 12500)
-        self.assertEqual(variant.stock, 0)
+        self.assertEqual(variant.stock, 2)
+        self.assertEqual(variant.reserved, 2)
+        self.assertEqual(variant.available_stock, 0)
         self.assertEqual(self.level.reserved, 0)
 
     def test_variant_stock_is_restored_when_order_is_cancelled(self):
@@ -83,6 +86,7 @@ class CheckoutTests(TestCase):
         self.client.post(f"/merchant/orders/{order.id}/update/", {"status": "cancelled"})
         variant.refresh_from_db()
         self.assertEqual(variant.stock, 1)
+        self.assertEqual(variant.reserved, 0)
 
     def test_merchant_dashboard_and_product_setup_are_store_scoped(self):
         other = Store.objects.create(owner=self.owner, name="Other", slug="other-dashboard")
@@ -112,3 +116,41 @@ class CheckoutTests(TestCase):
         transition_order(order, "shipped")
         order.refresh_from_db()
         self.assertEqual(order.status, "shipped")
+
+    def test_checkout_submission_is_idempotent(self):
+        self.client.post(f"/cart/add/{self.product.id}/")
+        self.client.get("/checkout/")
+        key = self.client.session["checkout_key"]
+        payload = {"idempotency_key": key, "customer_name": "Ayu", "phone": "081234567890",
+            "shipping_address": "Jakarta", "province": "DKI Jakarta", "city": "Jakarta",
+            "district": "Menteng", "postal_code": "10310"}
+        first = self.client.post("/checkout/", payload)
+        second = self.client.post("/checkout/", payload)
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_inventory_is_committed_once_when_order_is_packed(self):
+        self.client.post(f"/cart/add/{self.product.id}/")
+        self.client.post("/checkout/", {"customer_name": "Ayu", "phone": "081234567890",
+            "shipping_address": "Jakarta", "province": "DKI Jakarta", "city": "Jakarta",
+            "district": "Menteng", "postal_code": "10310"})
+        order = Order.objects.get()
+        for status in ("paid", "confirmed", "allocated", "picking", "packed"):
+            transition_order(order, status)
+            order.refresh_from_db()
+        self.level.refresh_from_db()
+        self.assertEqual(self.level.on_hand, 1)
+        self.assertEqual(self.level.reserved, 0)
+        self.assertEqual(list(InventoryMovement.objects.values_list("kind", flat=True)),
+            ["reserve", "commit"])
+
+    def test_pricing_is_server_authoritative_and_discount_reduces_tax_base(self):
+        self.store.tax_rate = 11
+        coupon = Coupon.objects.create(store=self.store, code="FIXED", kind="fixed", value=1000)
+        breakdown = calculate_price(store=self.store,
+            lines=[{"unit_price": self.product.price, "quantity": 1}], shipping_cost=500, coupon=coupon)
+        self.assertEqual(breakdown.subtotal, 10000)
+        self.assertEqual(breakdown.discount, 1000)
+        self.assertEqual(breakdown.tax, 990)
+        self.assertEqual(breakdown.total, 10490)

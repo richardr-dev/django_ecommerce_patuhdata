@@ -43,7 +43,7 @@ class InventoryForm(StyledModelForm):
 
 
 class VariantForm(StyledModelForm):
-    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "attributes", "price", "weight_grams", "stock", "is_active")
+    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "barcode", "attributes", "price", "weight_grams", "stock", "is_active")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

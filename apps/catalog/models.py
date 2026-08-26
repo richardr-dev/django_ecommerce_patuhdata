@@ -46,7 +46,7 @@ class Product(models.Model):
     def available_stock(self):
         variants = [variant for variant in self.variants.all() if variant.is_active]
         if variants:
-            return sum(variant.stock for variant in variants)
+            return sum(variant.available_stock for variant in variants)
         return sum(level.available for level in self.inventory_levels.all())
 
 class Warehouse(models.Model):
@@ -108,14 +108,24 @@ class ProductVariant(models.Model):
     price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     weight_grams = models.PositiveIntegerField(null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
+    reserved = models.PositiveIntegerField(default=0)
+    barcode = models.CharField(max_length=80, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["product", "sku"], name="unique_product_variant_sku")]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "sku"], name="unique_product_variant_sku"),
+            models.CheckConstraint(condition=models.Q(stock__gte=models.F("reserved")),
+                name="variant_reserved_lte_stock"),
+        ]
 
     @property
     def effective_price(self):
         return self.price if self.price is not None else self.product.price
+
+    @property
+    def available_stock(self):
+        return max(0, self.stock - self.reserved)
 
     def __str__(self):
         return f"{self.product.name} / {self.name}"

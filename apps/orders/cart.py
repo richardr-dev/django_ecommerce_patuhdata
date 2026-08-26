@@ -30,7 +30,7 @@ def get_cart(request):
         product = variant.product if variant else products.get(product_id)
         if not product:
             continue
-        available = variant.stock if variant else product.available_stock
+        available = variant.available_stock if variant else product.available_stock
         try:
             quantity = max(0, min(int(raw_quantity), available))
         except (TypeError, ValueError):

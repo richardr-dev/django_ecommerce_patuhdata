@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.db import models
 from django.utils import timezone
 
 from .models import Coupon
@@ -43,7 +42,11 @@ def transition_order(order, new_status, *, note="", release_inventory=False):
         raise InvalidOrderTransition(f"Transisi {order.status} → {new_status} tidak diizinkan.")
     old_status = order.status
     if release_inventory or new_status == "cancelled":
+        from .inventory import release_order_inventory
         release_order_inventory(order)
+    if new_status == "packed":
+        from .inventory import commit_order_inventory
+        commit_order_inventory(order)
     order.status = new_status
     order.save(update_fields=["status"])
     OrderStatusEvent.objects.create(order=order, status=new_status, note=note)
@@ -89,17 +92,3 @@ def calculate_discount(coupon, subtotal, shipping_cost):
         discount, shipping_cost = Decimal(0), Decimal(0)
     return discount, shipping_cost
 
-
-def release_order_inventory(order):
-    from apps.catalog.models import ProductVariant
-
-    from .models import InventoryAllocation
-
-    for allocation in InventoryAllocation.objects.select_for_update().filter(
-        order_item__order=order
-    ).select_related("inventory_level"):
-        level = allocation.inventory_level
-        level.reserved = max(0, level.reserved - allocation.quantity)
-        level.save(update_fields=["reserved", "updated_at"])
-    for item in order.items.select_for_update().exclude(variant_id=None):
-        ProductVariant.objects.filter(id=item.variant_id).update(stock=models.F("stock") + item.quantity)

@@ -15,11 +15,22 @@ class PaymentSession:
     expires_at: str | None = None
 
 
+@dataclass(frozen=True)
+class RefundResult:
+    reference: str
+    status: str
+    payload: dict
+
+
 class DemoPaymentProvider:
     """Local adapter used only when PAYMENT_PROVIDER=demo."""
 
     def create_payment(self, order):
         return PaymentSession(reference=f"demo-{order.id}", checkout_url=reverse("demo-payment", args=[order.id]))
+
+    def refund(self, payment, refund):
+        return RefundResult(reference=f"demo-refund-{refund.id}", status="succeeded",
+            payload={"id": f"demo-refund-{refund.id}", "status": "SUCCEEDED"})
 
 
 class XenditPaymentProvider:
@@ -43,11 +54,24 @@ class XenditPaymentProvider:
             return_url = f"{settings.PUBLIC_BASE_URL}{reverse('order-detail', args=[order.id])}"
             payload.update({"success_return_url": return_url, "cancel_return_url": return_url})
         data = request_json(f"{settings.XENDIT_API_URL}/sessions", method="POST",
-            headers={"Authorization": f"Basic {auth}", "api-version": "2024-11-11"}, payload=payload)
+            headers={"Authorization": f"Basic {auth}", "api-version": "2024-11-11",
+                "Idempotency-Key": order.idempotency_key}, payload=payload)
         if not data.get("payment_session_id") or not data.get("payment_link_url"):
             raise ProviderError("Xendit returned an incomplete payment session.")
         return PaymentSession(reference=data["payment_session_id"], checkout_url=data["payment_link_url"],
             expires_at=data.get("expires_at"))
+
+    def refund(self, payment, refund):
+        if not payment.provider_payment_id:
+            raise ProviderError("Xendit payment request ID is unavailable; reconcile the payment first.")
+        auth = base64.b64encode(f"{settings.XENDIT_SECRET_KEY}:".encode()).decode()
+        payload = {"reference_id": str(refund.id), "payment_request_id": payment.provider_payment_id,
+            "currency": payment.currency, "amount": int(refund.amount), "reason": refund.reason,
+            "metadata": {"order_id": str(refund.order_id), "store_id": str(refund.order.store_id)}}
+        data = request_json(f"{settings.XENDIT_API_URL}/refunds", method="POST",
+            headers={"Authorization": f"Basic {auth}", "Idempotency-Key": str(refund.id)}, payload=payload)
+        status = {"SUCCEEDED": "succeeded", "FAILED": "failed"}.get(data.get("status"), "pending")
+        return RefundResult(reference=data.get("id", ""), status=status, payload=data)
 
 
 PROVIDERS = {"demo": DemoPaymentProvider, "xendit": XenditPaymentProvider}

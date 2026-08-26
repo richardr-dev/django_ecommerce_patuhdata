@@ -32,6 +32,7 @@ from .forms import (
     VariantForm,
     WarehouseForm,
 )
+from .inventory import record_level_reservation, reserve_variant
 from .models import (
     Coupon,
     InventoryAllocation,
@@ -42,10 +43,10 @@ from .models import (
     ReturnRequest,
     ShippingMethod,
 )
+from .pricing import calculate_price
 from .services import (
     InvalidOrderTransition,
     allowed_order_transitions,
-    calculate_discount,
     get_coupon,
     normalize_indonesian_phone,
     transition_order,
@@ -146,7 +147,7 @@ def cart_add(request, product_id):
     if product.variants.filter(is_active=True).exists():
         variant = get_object_or_404(ProductVariant, id=variant_id, product=product, is_active=True)
     key = f"v:{variant.id}" if variant else f"p:{product.id}"
-    available = variant.stock if variant else product.available_stock
+    available = variant.available_stock if variant else product.available_stock
     try: requested = max(1, int(request.POST.get("quantity", 1)))
     except ValueError: requested = 1
     cart[key] = min(int(cart.get(key, 0)) + requested, available)
@@ -161,7 +162,7 @@ def cart_update(request, item_key):
     if kind == "v":
         variant = get_object_or_404(ProductVariant.objects.select_related("product"), id=raw_id,
             product__store=request.store, product__is_active=True, is_active=True)
-        available = variant.stock
+        available = variant.available_stock
     else:
         product = get_object_or_404(Product.objects.prefetch_related("inventory_levels"), id=raw_id, store=request.store)
         available = product.available_stock
@@ -180,6 +181,16 @@ def cart_view(request):
 
 def checkout(request):
     if not request.store: raise Http404
+    checkout_key = request.POST.get("idempotency_key") or request.session.get("checkout_key")
+    if not checkout_key:
+        checkout_key = uuid.uuid4().hex
+        request.session["checkout_key"] = checkout_key
+    if request.method == "POST":
+        existing = Order.objects.filter(store=request.store, idempotency_key=checkout_key).first()
+        if existing:
+            if existing.payment_checkout_url:
+                return redirect(existing.payment_checkout_url)
+            return redirect("order-detail", order_id=existing.id)
     lines, subtotal = get_cart(request)
     if not lines: return redirect("cart")
     biteship_enabled = _shipping_provider_enabled()
@@ -194,7 +205,8 @@ def checkout(request):
         shipping_methods = [selected_shipping]
     shipping_cost = Decimal(live_quote["price"]) if live_quote else (selected_shipping.quote(subtotal) if selected_shipping else Decimal(0))
     coupon = get_coupon(request.store, request.POST.get("coupon_code", ""), subtotal) if request.method == "POST" else None
-    discount, shipping_cost = calculate_discount(coupon, subtotal, shipping_cost)
+    price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon)
+    discount, shipping_cost = price.discount, price.shipping
     if request.method == "POST":
         required = ["customer_name", "phone", "shipping_address"]
         if any(not request.POST.get(field, "").strip() for field in required):
@@ -215,6 +227,14 @@ def checkout(request):
                 messages.error(request, str(error))
                 return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal, "shipping_methods": shipping_methods})
             with transaction.atomic():
+                if coupon:
+                    coupon = Coupon.objects.select_for_update().get(id=coupon.id, store=request.store)
+                    if (not coupon.is_active or (coupon.usage_limit is not None and
+                            coupon.used_count >= coupon.usage_limit)):
+                        messages.error(request, "Voucher sudah tidak tersedia.")
+                        return redirect("checkout")
+                price = calculate_price(store=request.store, lines=lines,
+                    shipping_cost=shipping_cost, coupon=coupon)
                 product_ids = [x["product"].id for x in lines if not x["variant"]]
                 variant_ids = [x["variant"].id for x in lines if x["variant"]]
                 locked = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
@@ -227,17 +247,15 @@ def checkout(request):
                 by_product = {product_id: [] for product_id in product_ids}
                 for level in levels: by_product[level.product_id].append(level)
                 insufficient = any(
-                    (locked_variants.get(x["variant"].id).stock if locked_variants.get(x["variant"].id) else 0) < x["quantity"]
+                    (locked_variants.get(x["variant"].id).available_stock if locked_variants.get(x["variant"].id) else 0) < x["quantity"]
                     if x["variant"] else sum(level.available for level in by_product[x["product"].id]) < x["quantity"]
                     for x in lines
                 )
                 if insufficient:
                     messages.error(request, "Stok berubah. Silakan periksa keranjang.")
                     return redirect("cart")
-                tax = (subtotal * request.store.tax_rate / Decimal(100)).quantize(Decimal("0.01"))
-                total = subtotal - discount + shipping_cost + tax
-                order = Order.objects.create(store=request.store, subtotal=subtotal, tax=tax,
-                    shipping_cost=shipping_cost, discount=discount, total=total,
+                order = Order.objects.create(store=request.store, subtotal=price.subtotal, tax=price.tax,
+                    shipping_cost=price.shipping, discount=price.discount, total=price.total,
                     customer_name=request.POST["customer_name"].strip(), email=request.POST.get("email", "").strip(),
                     phone=phone, shipping_address=request.POST["shipping_address"].strip(),
                     province=request.POST.get("province", "").strip(), city=request.POST.get("city", "").strip(),
@@ -248,7 +266,7 @@ def checkout(request):
                     shipping_provider=live_quote["provider"] if live_quote else selected_shipping.provider,
                     shipping_service=live_quote["name"] if live_quote else selected_shipping.name,
                     shipping_eta=live_quote["eta"] if live_quote else selected_shipping.eta,
-                    coupon_code=coupon.code if coupon else "", idempotency_key=uuid.uuid4().hex)
+                    coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key)
                 for line in lines:
                     variant = locked_variants.get(line["variant"].id) if line["variant"] else None
                     product = variant.product if variant else locked[line["product"].id]
@@ -257,16 +275,17 @@ def checkout(request):
                         variant_name=variant.name if variant else "", unit_price=line["unit_price"],
                         quantity=line["quantity"], line_total=line["total"])
                     if variant:
-                        variant.stock -= line["quantity"]
-                        variant.save(update_fields=["stock"])
+                        reserve_variant(item, variant, line["quantity"])
                         continue
                     remaining = line["quantity"]
                     for level in by_product[product.id]:
                         allocated = min(remaining, level.available)
                         if not allocated: continue
+                        previous_reserved = level.reserved
                         level.reserved += allocated
                         level.save(update_fields=["reserved", "updated_at"])
                         InventoryAllocation.objects.create(order_item=item, inventory_level=level, quantity=allocated)
+                        record_level_reservation(item, level, allocated, previous_reserved)
                         remaining -= allocated
                         if remaining == 0: break
                 try:
@@ -284,6 +303,7 @@ def checkout(request):
                 PaymentTransaction.objects.create(order=order, provider=order.payment_provider,
                     external_id=payment.reference, status="pending", amount=order.total, currency="IDR")
                 request.session["cart"] = {}
+                request.session["checkout_key"] = uuid.uuid4().hex
                 Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
                     "email": order.email, "accepts_marketing": request.POST.get("accepts_marketing") == "on"})
                 OrderStatusEvent.objects.create(order=order, status="pending", note="Pesanan dibuat")
@@ -296,6 +316,7 @@ def checkout(request):
             return redirect(payment.checkout_url)
     return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal,
         "shipping_methods": shipping_methods, "shipping_cost": shipping_cost, "discount": discount,
+        "idempotency_key": checkout_key,
         "biteship_enabled": biteship_enabled,
         "biteship_configured": biteship_enabled,
         "shipping_provider_name": _shipping_provider_name()})
