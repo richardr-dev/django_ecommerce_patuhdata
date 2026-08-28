@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.integrations.models import OutboxEvent
+from apps.orders.engagement import send_abandoned_cart_recoveries
 from apps.orders.models import Order
 from apps.orders.services import expire_pending_orders
 from apps.orders.tracking import sync_active_shipments
@@ -72,13 +73,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         while True:
             expire_pending_orders(limit=options["batch_size"])
+            recoveries = send_abandoned_cart_recoveries(limit=options["batch_size"])
             synced_shipments = sync_active_shipments(limit=min(options["batch_size"], 25))
             processed = 0
             while processed < options["batch_size"] and process_one_event():
                 processed += 1
             if not options["loop"]:
                 self.stdout.write(
-                    f"Processed {processed} outbox event(s); synced {synced_shipments} shipment(s).")
+                    f"Processed {processed} outbox event(s); synced {synced_shipments} shipment(s); "
+                    f"sent {recoveries} cart recovery email(s).")
                 return
             if not processed:
                 time.sleep(options["poll_seconds"])

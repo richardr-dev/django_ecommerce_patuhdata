@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from apps.catalog.models import Product, ProductVariant
 
+from .sales import active_sale_offers, offer_remaining
+
 
 def get_cart(request):
     raw = request.session.get("cart", {})
@@ -21,6 +23,7 @@ def get_cart(request):
     variants = {v.id: v for v in ProductVariant.objects.filter(
         id__in=variant_ids, product__store=request.store, product__is_active=True, is_active=True,
     ).select_related("product")}
+    offers = active_sale_offers(request.store, [*products, *(variant.product_id for variant in variants.values())])
     lines, subtotal = [], Decimal(0)
     for raw_key, raw_quantity in raw.items():
         key = str(raw_key)
@@ -30,17 +33,24 @@ def get_cart(request):
         product = variant.product if variant else products.get(product_id)
         if not product:
             continue
+        regular_price = variant.effective_price if variant else product.price
+        offer = offers.get(product.id)
+        if offer and offer.sale_price >= regular_price:
+            offer = None
         available = variant.available_stock if variant else product.available_stock
+        campaign_remaining = offer_remaining(offer) if offer else None
+        if campaign_remaining is not None:
+            available = min(available, campaign_remaining)
         try:
             quantity = max(0, min(int(raw_quantity), available))
         except (TypeError, ValueError):
             quantity = 0
         if not quantity:
             continue
-        unit_price = variant.effective_price if variant else product.price
+        unit_price = offer.sale_price if offer else regular_price
         total = unit_price * quantity
         lines.append({"key": key, "product": product, "variant": variant,
-            "unit_price": unit_price, "available_stock": available,
+            "unit_price": unit_price, "available_stock": available, "sale_offer": offer,
             "quantity": quantity, "total": total})
         subtotal += total
     return lines, subtotal

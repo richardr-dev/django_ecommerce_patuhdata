@@ -44,9 +44,9 @@
     </div>
 
     <div class="product-price-panel">
-      {% if product.compare_at_price %}<del>Rp{{ product.compare_at_price|floatformat:"0g" }}</del>{% endif %}
-      <strong id="product-price">Rp{{ product.price|floatformat:"0g" }}</strong>
-      {% if product.compare_at_price %}<span class="discount-pill">Harga spesial</span>{% endif %}
+      {% if product.display_has_discount %}<del>Rp{{ product.display_compare_at|floatformat:"0g" }}</del>{% endif %}
+      <strong id="product-price">Rp{{ product.display_price|floatformat:"0g" }}</strong>
+      {% if product.display_has_discount %}<span class="discount-pill">Hemat {{ product.display_discount_percent }}%</span>{% endif %}
     </div>
 
     <div class="product-benefits">
@@ -64,7 +64,7 @@
             {% for variant in product.variants.all %}{% if variant.is_active %}
               <label class="variant-option {% if not variant.available_stock %}sold-out{% endif %}">
                 <input type="radio" name="variant_id" value="{{ variant.id }}"
-                  data-price="{{ variant.effective_price|floatformat:'0' }}"
+                  data-price="{{ variant.display_price|floatformat:'0' }}"
                   data-stock="{{ variant.available_stock }}"
                   {% if not variant.available_stock %}disabled{% elif forloop.first %}checked{% endif %} required>
                 <span>{{ variant.name }}</span>

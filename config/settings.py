@@ -109,6 +109,8 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "0") == "1"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
 
+MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
+
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 DOKU_CLIENT_ID = os.getenv("DOKU_CLIENT_ID", "")

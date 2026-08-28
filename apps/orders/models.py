@@ -71,6 +71,9 @@ class Order(models.Model):
     tracking_error = models.CharField(max_length=300, blank=True)
     external_shipping_id = models.CharField(max_length=100, blank=True)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    loyalty_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    loyalty_points_redeemed = models.PositiveIntegerField(default=0)
+    loyalty_points_earned = models.PositiveIntegerField(default=0)
     coupon_code = models.CharField(max_length=50, blank=True)
     idempotency_key = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -79,15 +82,128 @@ class Order(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(subtotal__gte=0), name="order_subtotal_nonnegative"),
             models.CheckConstraint(condition=models.Q(discount__gte=0), name="order_discount_nonnegative"),
+            models.CheckConstraint(condition=models.Q(loyalty_discount__gte=0),
+                name="order_loyalty_discount_nonnegative"),
             models.CheckConstraint(condition=models.Q(shipping_cost__gte=0), name="order_shipping_nonnegative"),
             models.CheckConstraint(condition=models.Q(tax__gte=0), name="order_tax_nonnegative"),
             models.CheckConstraint(condition=models.Q(total__gte=0), name="order_total_nonnegative"),
         ]
 
+
+class MobileCartItem(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="mobile_cart_items")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="mobile_cart_items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="mobile_cart_items")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="mobile_cart_items")
+    quantity = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="mobile_cart_quantity_positive"),
+            models.UniqueConstraint(fields=["store", "user", "product"],
+                condition=models.Q(variant__isnull=True), name="unique_mobile_cart_product"),
+            models.UniqueConstraint(fields=["store", "user", "variant"],
+                condition=models.Q(variant__isnull=False), name="unique_mobile_cart_variant"),
+        ]
+
+
+class MobileAccessToken(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="mobile_access_tokens")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="mobile_access_tokens")
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["store", "user", "expires_at"],
+            name="orders_mobile_store_u_idx")]
+
+
+class LoyaltyAccount(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="loyalty_accounts")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="loyalty_accounts")
+    balance = models.IntegerField(default=0)
+    lifetime_earned = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "user"],
+            name="unique_store_user_loyalty")]
+
+
+class LoyaltyTransaction(models.Model):
+    KINDS = [("earn", "Earn"), ("redeem", "Redeem"), ("restore", "Restore"),
+        ("reversal", "Earn reversal"), ("adjust", "Manual adjustment")]
+    account = models.ForeignKey(LoyaltyAccount, on_delete=models.CASCADE, related_name="transactions")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="loyalty_transactions",
+        null=True, blank=True)
+    kind = models.CharField(max_length=20, choices=KINDS)
+    points = models.IntegerField(help_text="Positive credits the balance; negative debits it.")
+    balance_after = models.IntegerField()
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=~models.Q(points=0), name="loyalty_points_nonzero"),
+            models.UniqueConstraint(fields=["order", "kind"], condition=models.Q(order__isnull=False),
+                name="unique_order_loyalty_kind"),
+        ]
+
+
+class CommerceSession(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="commerce_sessions")
+    visitor_id = models.UUIDField(default=uuid.uuid4)
+    user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="commerce_sessions")
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    last_path = models.CharField(max_length=300, blank=True)
+    product_view_count = models.PositiveIntegerField(default=0)
+    checkout_started_count = models.PositiveIntegerField(default=0)
+    cart_item_count = models.PositiveIntegerField(default=0)
+    cart_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    cart_snapshot = models.JSONField(default=list)
+    converted_at = models.DateTimeField(null=True, blank=True)
+    recovery_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    recovery_email = models.EmailField(blank=True)
+    recovery_consent_at = models.DateTimeField(null=True, blank=True)
+    recovery_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "visitor_id"],
+            name="unique_store_visitor_session")]
+        indexes = [models.Index(fields=["store", "last_seen_at"], name="orders_comm_store_i_d65ad6_idx"),
+            models.Index(fields=["store", "converted_at"], name="orders_comm_store_i_4944ac_idx")]
+
+
+class JourneyEvent(models.Model):
+    KINDS = [("home_view", "Home view"), ("search", "Search"),
+        ("product_view", "Product view"), ("cart_add", "Cart add"),
+        ("cart_update", "Cart update"), ("checkout_started", "Checkout started"),
+        ("converted", "Converted")]
+    session = models.ForeignKey(CommerceSession, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=30, choices=KINDS)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["session", "kind", "created_at"], name="orders_jour_session_73a50d_idx")]
+
+
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, null=True, blank=True)
+    flash_sale_offer = models.ForeignKey("catalog.FlashSaleProduct", on_delete=models.PROTECT,
+        related_name="order_items", null=True, blank=True)
     name = models.CharField(max_length=160)
     sku = models.CharField(max_length=80)
     variant_name = models.CharField(max_length=160, blank=True)

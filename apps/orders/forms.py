@@ -4,13 +4,14 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 from apps.catalog.models import (
     Category,
+    FlashSaleProduct,
     InventoryLevel,
     Product,
     ProductImage,
     ProductVariant,
     Warehouse,
 )
-from apps.shops.models import Store
+from apps.shops.models import MarketingCampaign, Store, StorefrontSlide
 
 from .models import Coupon, ShippingMethod
 
@@ -41,6 +42,28 @@ class ProductForm(StyledModelForm):
         if self.instance.pk:
             self.fields.pop("warehouse")
             self.fields.pop("initial_stock")
+
+
+class FlashSaleProductForm(StyledModelForm):
+    class Meta:
+        model = FlashSaleProduct
+        fields = ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["campaign"].queryset = MarketingCampaign.objects.filter(store=self.store)
+        self.fields["product"].queryset = Product.objects.filter(store=self.store)
+
+    def clean(self):
+        cleaned = super().clean()
+        product, sale_price = cleaned.get("product"), cleaned.get("sale_price")
+        if product and sale_price:
+            regular_prices = [product.price, *(variant.effective_price for variant in
+                product.variants.filter(is_active=True))]
+            if sale_price >= min(regular_prices):
+                self.add_error("sale_price",
+                    "Harga flash sale harus lebih rendah dari harga normal produk dan semua varian aktif.")
+        return cleaned
 
 
 class ProductImageForm(StyledModelForm):
@@ -119,6 +142,44 @@ class VariantForm(StyledModelForm):
         self.fields["product"].queryset = Product.objects.filter(store=self.store)
 
 
+class MarketingCampaignForm(StyledModelForm):
+    class Meta:
+        model = MarketingCampaign
+        exclude = ("store",)
+        widgets = {"starts_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "ends_at": forms.DateTimeInput(attrs={"type": "datetime-local"})}
+
+    def clean(self):
+        cleaned = super().clean()
+        starts_at, ends_at = cleaned.get("starts_at"), cleaned.get("ends_at")
+        if starts_at and ends_at and ends_at <= starts_at:
+            self.add_error("ends_at", "Waktu selesai harus setelah waktu mulai.")
+        link = cleaned.get("link_url", "").strip()
+        if link and not link.startswith(("/", "#", "https://", "http://")):
+            self.add_error("link_url", "Gunakan path /..., anchor #..., atau URL http(s) lengkap.")
+        image = cleaned.get("popup_image")
+        if image and hasattr(image, "size") and image.size > 5 * 1024 * 1024:
+            self.add_error("popup_image", "Ukuran gambar maksimal 5 MB.")
+        return cleaned
+
+
+class StorefrontSlideForm(StyledModelForm):
+    class Meta:
+        model = StorefrontSlide
+        exclude = ("store",)
+
+    def clean(self):
+        cleaned = super().clean()
+        for name in ("image", "mobile_image"):
+            image = cleaned.get(name)
+            if image and hasattr(image, "size") and image.size > 5 * 1024 * 1024:
+                self.add_error(name, "Ukuran gambar maksimal 5 MB.")
+        link = cleaned.get("link_url", "").strip()
+        if link and not (link.startswith(("/", "https://", "http://"))):
+            self.add_error("link_url", "Gunakan path /... atau URL http(s) lengkap.")
+        return cleaned
+
+
 class ShippingMethodForm(StyledModelForm):
     class Meta: model = ShippingMethod; exclude = ("store",)
 
@@ -130,9 +191,52 @@ class CouponForm(StyledModelForm):
 class StoreSettingsForm(StyledModelForm):
     class Meta:
         model = Store
-        fields = ("name", "logo", "domain", "description", "theme", "primary_color", "currency", "tax_rate",
+        fields = ("name", "logo", "domain", "description", "theme", "primary_color",
+            "hero_eyebrow", "hero_title", "hero_text", "hero_button_label", "catalog_eyebrow",
+            "catalog_title", "trust_title_1", "trust_text_1", "trust_title_2", "trust_text_2",
+            "trust_title_3", "trust_text_3", "announcement_text", "announcement_link_label",
+            "announcement_link_url", "campaign_eyebrow", "campaign_title", "campaign_text",
+            "campaign_button_label", "campaign_link_url", "currency", "tax_rate",
             "support_phone", "support_email", "terms_url", "privacy_url", "return_policy")
-        widgets = {"description": forms.Textarea(attrs={"rows": 3}), "return_policy": forms.Textarea(attrs={"rows": 4})}
+        fields = fields + ("loyalty_enabled", "loyalty_points_per_step", "loyalty_spend_step",
+            "loyalty_point_value", "loyalty_min_redeem")
+        widgets = {"description": forms.Textarea(attrs={"rows": 3}),
+            "hero_text": forms.Textarea(attrs={"rows": 3}),
+            "return_policy": forms.Textarea(attrs={"rows": 4}),
+            "primary_color": forms.TextInput(attrs={"type": "color"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.is_bound:
+            for name in ("loyalty_points_per_step", "loyalty_spend_step", "loyalty_point_value",
+                    "loyalty_min_redeem"):
+                if name not in self.data:
+                    self.fields.pop(name)
+        labels = {
+            "hero_eyebrow": "Label kecil hero", "hero_title": "Judul utama",
+            "hero_text": "Deskripsi hero", "hero_button_label": "Teks tombol utama",
+            "catalog_eyebrow": "Label katalog", "catalog_title": "Judul katalog",
+            "trust_title_1": "Keunggulan 1", "trust_text_1": "Penjelasan 1",
+            "trust_title_2": "Keunggulan 2", "trust_text_2": "Penjelasan 2",
+            "trust_title_3": "Keunggulan 3", "trust_text_3": "Penjelasan 3",
+            "announcement_text": "Teks pengumuman", "announcement_link_label": "Teks tautan pengumuman",
+            "announcement_link_url": "Tujuan pengumuman", "campaign_eyebrow": "Label kampanye",
+            "campaign_title": "Judul kampanye", "campaign_text": "Deskripsi kampanye",
+            "campaign_button_label": "Teks tombol kampanye", "campaign_link_url": "Tujuan kampanye"}
+        for name, label in labels.items(): self.fields[name].label = label
+        self.fields["domain"].help_text = "Kosongkan saat lokal. Isi tanpa https://, misalnya tokoanda.id."
+        self.fields["primary_color"].help_text = "Warna tombol, tautan, dan aksen toko."
+
+    def clean(self):
+        cleaned = super().clean()
+        for name in ("announcement_link_url", "campaign_link_url"):
+            link = cleaned.get(name, "").strip()
+            if link and not link.startswith(("/", "https://", "http://", "#")):
+                self.add_error(name, "Gunakan path /..., anchor #..., atau URL http(s) lengkap.")
+        for name in ("loyalty_points_per_step", "loyalty_spend_step", "loyalty_point_value"):
+            if cleaned.get(name) is not None and cleaned[name] <= 0:
+                self.add_error(name, "Nilai harus lebih besar dari nol.")
+        return cleaned
 
     def clean_logo(self):
         logo = self.cleaned_data.get("logo")

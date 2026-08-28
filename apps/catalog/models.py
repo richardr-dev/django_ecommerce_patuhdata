@@ -30,6 +30,8 @@ class Product(models.Model):
     seo_title = models.CharField(max_length=160, blank=True)
     seo_description = models.CharField(max_length=320, blank=True)
     is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False,
+        help_text="Show this product in the featured section on the homepage.")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [
@@ -37,6 +39,16 @@ class Product(models.Model):
             models.UniqueConstraint(fields=["store", "sku"], name="unique_product_sku"),
         ]
     def __str__(self): return self.name
+
+    @property
+    def has_discount(self):
+        return bool(self.compare_at_price and self.compare_at_price > self.price)
+
+    @property
+    def discount_percent(self):
+        if not self.has_discount:
+            return 0
+        return round((self.compare_at_price - self.price) / self.compare_at_price * 100)
 
     @property
     def primary_image_url(self):
@@ -48,6 +60,26 @@ class Product(models.Model):
         if variants:
             return sum(variant.available_stock for variant in variants)
         return sum(level.available for level in self.inventory_levels.all())
+
+
+class FlashSaleProduct(models.Model):
+    campaign = models.ForeignKey("shops.MarketingCampaign", on_delete=models.CASCADE, related_name="product_offers")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="flash_sale_offers")
+    sale_price = models.DecimalField(max_digits=14, decimal_places=2)
+    stock_limit = models.PositiveIntegerField(null=True, blank=True,
+        help_text="Optional maximum units sold during this campaign.")
+    per_customer_limit = models.PositiveIntegerField(null=True, blank=True,
+        help_text="Optional maximum units per customer phone number.")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["campaign", "product"], name="unique_campaign_product_offer"),
+            models.CheckConstraint(condition=models.Q(sale_price__gt=0), name="flash_sale_price_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.campaign.name} / {self.product.name}"
+
 
 class Warehouse(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="warehouses")

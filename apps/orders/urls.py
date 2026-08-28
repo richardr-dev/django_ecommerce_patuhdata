@@ -1,10 +1,13 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import views
+from . import setup_views, views
 from .forms import CustomerLoginForm
 
 urlpatterns = [
+    path("merchant/quick-defaults/", setup_views.merchant_quick_defaults, name="merchant-quick-defaults"),
+    path("merchant/products/import/", setup_views.merchant_product_import, name="merchant-product-import"),
+    path("merchant/products/import/template/", setup_views.merchant_product_import_template, name="merchant-product-import-template"),
     path("account/login/", auth_views.LoginView.as_view(
         template_name="registration/login.html", authentication_form=CustomerLoginForm), name="login"),
     path("account/logout/", auth_views.LogoutView.as_view(next_page="/"), name="logout"),
@@ -26,7 +29,9 @@ urlpatterns = [
         template_name="registration/merchant_login.html"), name="merchant-login"),
     path("checkout/shipping-rates/", views.shipping_rates, name="shipping-rates"),
     path("checkout/shipping-areas/", views.shipping_areas, name="shipping-areas"),
-    path("cart/", views.cart_view, name="cart"), path("cart/add/<int:product_id>/", views.cart_add, name="cart-add"),
+    path("cart/", views.cart_view, name="cart"),
+    path("cart/recovery/", views.cart_recovery_opt_in, name="cart-recovery-opt-in"),
+    path("cart/recover/<uuid:token>/", views.cart_recover, name="cart-recover"), path("cart/add/<int:product_id>/", views.cart_add, name="cart-add"),
     path("cart/update/<str:item_key>/", views.cart_update, name="cart-update"),
     path("checkout/", views.checkout, name="checkout"), path("orders/<uuid:order_id>/", views.order_detail, name="order-detail"),
     path("orders/<uuid:order_id>/return/", views.request_return, name="request-return"),
@@ -43,6 +48,7 @@ urlpatterns = [
     path("merchant/customers/", views.merchant_customers, name="merchant-customers"),
     path("merchant/customers/<int:customer_id>/", views.merchant_customer_detail, name="merchant-customer-detail"),
     path("merchant/integrations/", views.merchant_integrations, name="merchant-integrations"),
+    path("merchant/engagement/", views.merchant_engagement, name="merchant-engagement"),
     path("merchant/integrations/<int:event_id>/retry/", views.merchant_integration_retry, name="merchant-integration-retry"),
     path("merchant/setup/<slug:section>/", views.merchant_entity_list, name="merchant-entity-list"),
     path("merchant/setup/<slug:section>/new/", views.merchant_entity_edit, name="merchant-entity-new"),

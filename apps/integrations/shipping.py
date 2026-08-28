@@ -65,14 +65,10 @@ class BiteshipProvider:
 
 
 class RajaOngkirProvider:
-    def __init__(self):
-        if not settings.RAJAONGKIR_API_KEY or not (
-            settings.RAJAONGKIR_ORIGIN_ID or settings.RAJAONGKIR_ORIGIN_POSTAL_CODE
-        ):
-            raise ProviderError("RajaOngkir API key and origin ID/postcode are not configured.")
-
     @property
     def headers(self):
+        if not settings.RAJAONGKIR_API_KEY:
+            raise ProviderError("RajaOngkir API key is not configured.")
         return {"key": settings.RAJAONGKIR_API_KEY}
 
     def search_areas(self, query):
@@ -111,6 +107,8 @@ class RajaOngkirProvider:
         return self.resolve_postal_code(settings.RAJAONGKIR_ORIGIN_POSTAL_CODE)["id"]
 
     def rates(self, destination_area_id, lines):
+        if not (settings.RAJAONGKIR_ORIGIN_ID or settings.RAJAONGKIR_ORIGIN_POSTAL_CODE):
+            raise ProviderError("RajaOngkir origin ID/postcode is not configured.")
         weight = sum(max(1, _line_weight(line)) * line["quantity"] for line in lines)
         data = request_form_json(f"{settings.RAJAONGKIR_API_URL}/calculate/domestic-cost",
             {"origin": self.origin_id(), "destination": destination_area_id,

@@ -9,6 +9,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import models, transaction
 from django.db.models import Count, Min, Sum
 from django.db.models.functions import TruncDate
@@ -19,6 +21,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.catalog.models import (
     Category,
+    FlashSaleProduct,
     InventoryLevel,
     Product,
     ProductImage,
@@ -29,26 +32,33 @@ from apps.integrations.http import ProviderError
 from apps.integrations.models import OutboxEvent
 from apps.integrations.payments import get_payment_provider
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
-from apps.shops.models import AuditLog, Customer, Store
+from apps.shops.models import AuditLog, Customer, MarketingCampaign, Store, StorefrontSlide
 
 from .access import get_customer_order_or_404, remember_customer_order
 from .cart import get_cart
+from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
     CategoryForm,
     CouponForm,
     CustomerRegistrationForm,
+    FlashSaleProductForm,
     InventoryForm,
+    MarketingCampaignForm,
     ProductForm,
     ProductImageForm,
     ShippingMethodForm,
+    StorefrontSlideForm,
     StoreSettingsForm,
     VariantForm,
     WarehouseForm,
 )
 from .inventory import record_level_reservation, record_movement, reserve_variant
+from .loyalty import loyalty_account, redeem_for_order, redemption_quote
 from .models import (
+    CommerceSession,
     Coupon,
     InventoryAllocation,
+    LoyaltyAccount,
     Order,
     OrderItem,
     OrderStatusEvent,
@@ -59,6 +69,7 @@ from .models import (
 )
 from .pricing import calculate_price
 from .refunds import RefundError, create_refund_request, execute_refund
+from .sales import active_sale_offers, offer_sold_quantity
 from .services import (
     InvalidOrderTransition,
     allowed_order_transitions,
@@ -172,6 +183,9 @@ def cart_add(request, product_id):
     except ValueError: requested = 1
     cart[key] = min(int(cart.get(key, 0)) + requested, available)
     request.session["cart"] = cart
+    lines, subtotal = get_cart(request)
+    update_cart_snapshot(request, lines, subtotal)
+    record_event(request, "cart_add", product=product, metadata={"quantity": requested}, always=True)
     messages.success(request, f"{product.name} ditambahkan ke keranjang.")
     return redirect("checkout" if request.POST.get("next") == "checkout" else "cart")
 
@@ -183,6 +197,7 @@ def cart_update(request, item_key):
         variant = get_object_or_404(ProductVariant.objects.select_related("product"), id=raw_id,
             product__store=request.store, product__is_active=True, is_active=True)
         available = variant.available_stock
+        product = variant.product
     else:
         product = get_object_or_404(Product.objects.prefetch_related("inventory_levels"), id=raw_id, store=request.store)
         available = product.available_stock
@@ -192,12 +207,57 @@ def cart_update(request, item_key):
     if quantity: cart[item_key] = quantity
     else: cart.pop(item_key, None)
     request.session["cart"] = cart
+    lines, subtotal = get_cart(request)
+    update_cart_snapshot(request, lines, subtotal)
+    record_event(request, "cart_update", product=product, metadata={"quantity": quantity}, always=True)
     return redirect("cart")
+
+def cart_recovery_opt_in(request):
+    if request.method != "POST" or not request.store:
+        raise Http404
+    session = commerce_session(request)
+    if request.POST.get("recovery_consent") != "on":
+        CommerceSession.objects.filter(id=session.id).update(recovery_email="",
+            recovery_consent_at=None, recovery_sent_at=None)
+        messages.success(request, "Pengingat keranjang dinonaktifkan.")
+        return redirect("cart")
+    email = request.POST.get("recovery_email", "").strip().lower()
+    try:
+        validate_email(email)
+    except ValidationError:
+        messages.error(request, "Masukkan email yang valid untuk pengingat keranjang.")
+        return redirect("cart")
+    CommerceSession.objects.filter(id=session.id).update(recovery_email=email,
+        recovery_consent_at=timezone.now(), recovery_sent_at=None)
+    messages.success(request, "Pengingat satu kali akan dikirim jika keranjang ditinggalkan.")
+    return redirect("cart")
+
+
+def cart_recover(request, token):
+    session = get_object_or_404(CommerceSession, recovery_token=token,
+        converted_at__isnull=True, cart_item_count__gt=0)
+    cart = {}
+    for item in session.cart_snapshot:
+        key = str(item.get("key", ""))
+        try:
+            quantity = max(1, int(item.get("quantity", 1)))
+        except (TypeError, ValueError):
+            continue
+        if key.startswith(("p:", "v:")):
+            cart[key] = quantity
+    request.session["cart"] = cart
+    request.session["store_slug"] = session.store.slug
+    request.session["commerce_visitor_id"] = str(session.visitor_id)
+    messages.success(request, "Keranjang Anda dipulihkan. Harga dan stok telah diperiksa kembali.")
+    return redirect(f"/cart/?store={session.store.slug}")
+
 
 def cart_view(request):
     if not request.store: raise Http404
     lines, subtotal = get_cart(request)
-    return render(request, "storefront/cart.html", {"lines": lines, "subtotal": subtotal})
+    update_cart_snapshot(request, lines, subtotal)
+    return render(request, "storefront/cart.html", {"lines": lines, "subtotal": subtotal,
+        "recovery_session": commerce_session(request)})
 
 @login_required(login_url="/account/login/")
 def checkout(request):
@@ -214,6 +274,7 @@ def checkout(request):
             return redirect("order-detail", order_id=existing.id)
     lines, subtotal = get_cart(request)
     if not lines: return redirect("cart")
+    record_event(request, "checkout_started", metadata={"cart_value": str(subtotal)}, always=True)
     biteship_enabled = _shipping_provider_enabled()
     shipping_methods = [] if biteship_enabled else list(ShippingMethod.objects.filter(store=request.store, is_active=True))
     requested_shipping = request.POST.get("shipping_method", "")
@@ -226,7 +287,11 @@ def checkout(request):
         shipping_methods = [selected_shipping]
     shipping_cost = Decimal(live_quote["price"]) if live_quote else (selected_shipping.quote(subtotal) if selected_shipping else Decimal(0))
     coupon = get_coupon(request.store, request.POST.get("coupon_code", ""), subtotal) if request.method == "POST" else None
-    price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon)
+    base_price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon)
+    loyalty_points, loyalty_discount = redemption_quote(request.store, request.user,
+        request.POST.get("loyalty_points", ""), base_price.subtotal - base_price.discount)
+    price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon,
+        additional_discount=loyalty_discount)
     discount, shipping_cost = price.discount, price.shipping
     if request.method == "POST":
         required = ["customer_name", "phone", "shipping_address"]
@@ -253,14 +318,43 @@ def checkout(request):
                 messages.error(request, str(error))
                 return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal, "shipping_methods": shipping_methods})
             with transaction.atomic():
+                offer_lines = [line for line in lines if line["sale_offer"]]
+                locked_offers = active_sale_offers(store=request.store,
+                    product_ids=[line["product"].id for line in offer_lines], lock=True)
+                for offer in {line["sale_offer"].id: line["sale_offer"] for line in offer_lines}.values():
+                    locked = locked_offers.get(offer.product_id)
+                    requested_units = sum(line["quantity"] for line in offer_lines
+                        if line["sale_offer"].id == offer.id)
+                    if not locked or locked.id != offer.id or locked.sale_price != offer.sale_price:
+                        messages.error(request, "Flash sale telah berubah atau berakhir. Harga keranjang diperbarui.")
+                        return redirect("checkout")
+                    if locked.stock_limit is not None and (
+                            offer_sold_quantity(locked) + requested_units > locked.stock_limit):
+                        messages.error(request, "Kuota stok flash sale tidak mencukupi.")
+                        return redirect("cart")
+                    if locked.per_customer_limit is not None and (offer_sold_quantity(
+                            locked, phone=phone) + requested_units > locked.per_customer_limit):
+                        messages.error(request, "Batas pembelian flash sale per pelanggan telah tercapai.")
+                        return redirect("cart")
+                    for line in offer_lines:
+                        if line["sale_offer"].id == locked.id:
+                            line["sale_offer"] = locked
+                            line["unit_price"] = locked.sale_price
+                            line["total"] = locked.sale_price * line["quantity"]
                 if coupon:
                     coupon = Coupon.objects.select_for_update().get(id=coupon.id, store=request.store)
                     if (not coupon.is_active or (coupon.usage_limit is not None and
                             coupon.used_count >= coupon.usage_limit)):
                         messages.error(request, "Voucher sudah tidak tersedia.")
                         return redirect("checkout")
-                price = calculate_price(store=request.store, lines=lines,
+                base_price = calculate_price(store=request.store, lines=lines,
                     shipping_cost=shipping_cost, coupon=coupon)
+                locked_loyalty = loyalty_account(request.store, request.user, lock=True)
+                loyalty_points, loyalty_discount = redemption_quote(request.store, request.user,
+                    request.POST.get("loyalty_points", ""), base_price.subtotal - base_price.discount,
+                    account=locked_loyalty)
+                price = calculate_price(store=request.store, lines=lines,
+                    shipping_cost=shipping_cost, coupon=coupon, additional_discount=loyalty_discount)
                 product_ids = [x["product"].id for x in lines if not x["variant"]]
                 variant_ids = [x["variant"].id for x in lines if x["variant"]]
                 locked = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
@@ -284,6 +378,7 @@ def checkout(request):
                     customer_user=request.user if request.user.is_authenticated else None,
                     subtotal=price.subtotal, tax=price.tax,
                     shipping_cost=price.shipping, discount=price.discount, total=price.total,
+                    loyalty_discount=loyalty_discount, loyalty_points_redeemed=loyalty_points,
                     customer_name=request.POST["customer_name"].strip(), email=request.POST.get("email", "").strip(),
                     phone=phone, shipping_address=request.POST["shipping_address"].strip(),
                     province=request.POST.get("province", "").strip(), city=request.POST.get("city", "").strip(),
@@ -297,12 +392,14 @@ def checkout(request):
                     shipping_service=live_quote["name"] if live_quote else selected_shipping.name,
                     shipping_eta=live_quote["eta"] if live_quote else selected_shipping.eta,
                     coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key)
+                redeem_for_order(order, loyalty_points)
                 for line in lines:
                     variant = locked_variants.get(line["variant"].id) if line["variant"] else None
                     product = variant.product if variant else locked[line["product"].id]
                     item = OrderItem.objects.create(order=order, product=product, variant=variant,
                         name=product.name, sku=variant.sku if variant else product.sku,
-                        variant_name=variant.name if variant else "", unit_price=line["unit_price"],
+                        variant_name=variant.name if variant else "", flash_sale_offer=line["sale_offer"],
+                        unit_price=line["unit_price"],
                         quantity=line["quantity"], line_total=line["total"])
                     if variant:
                         reserve_variant(item, variant, line["quantity"])
@@ -351,7 +448,11 @@ def checkout(request):
                     coupon.used_count += 1
                     coupon.save(update_fields=["used_count"])
                 remember_customer_order(request, order)
+            record_event(request, "converted", metadata={"order_id": str(order.id),
+                "total": str(order.total)}, always=True)
+            update_cart_snapshot(request, [], 0)
             return redirect(payment.checkout_url)
+    loyalty = loyalty_account(request.store, request.user) if request.store.loyalty_enabled else None
     account_name = request.user.get_full_name() if request.user.is_authenticated else ""
     account_email = request.user.email if request.user.is_authenticated else ""
     return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal,
@@ -360,7 +461,8 @@ def checkout(request):
         "biteship_enabled": biteship_enabled,
         "biteship_configured": biteship_enabled,
         "shipping_provider_name": _shipping_provider_name(), "account_name": account_name,
-        "account_email": account_email})
+        "account_email": account_email, "loyalty_account": loyalty,
+        "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points})
 
 
 def customer_register(request):
@@ -386,7 +488,9 @@ def account_orders(request):
         raise Http404
     orders = Order.objects.filter(store=request.store, customer_user=request.user).prefetch_related(
         "items").order_by("-created_at")
-    return render(request, "storefront/account_orders.html", {"orders": orders})
+    loyalty = LoyaltyAccount.objects.filter(store=request.store, user=request.user).prefetch_related(
+        "transactions").first()
+    return render(request, "storefront/account_orders.html", {"orders": orders, "loyalty_account": loyalty})
 
 def order_detail(request, order_id):
     if not request.store: raise Http404
@@ -501,6 +605,9 @@ def merchant_dashboard(request):
         {"name": "Queue", "state": "issue" if queue_backlogged else "healthy",
             "label": "Backlogged" if queue_backlogged else "Healthy"},
     ]
+    engagement = engagement_summary(store)
+    loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
+        members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
         revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
@@ -512,7 +619,8 @@ def merchant_dashboard(request):
         today_repeat_customers=repeat_customers, today_refunds=today_refunds,
         payment_errors=payment_errors, shipping_problems=shipping_problems,
         notification_failures=notification_failures, queue_pending=pending_events.count(),
-        queue_backlogged=queue_backlogged, operational_health=operational_health))
+        queue_backlogged=queue_backlogged, operational_health=operational_health,
+        engagement=engagement, loyalty=loyalty))
 
 @login_required(login_url="/merchant/login/")
 def merchant_orders(request):
@@ -713,6 +821,9 @@ def merchant_orders_csv(request):
 
 
 BACKOFFICE = {
+    "flash-sales": (FlashSaleProduct, FlashSaleProductForm, "Produk flash sale", ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")),
+    "campaigns": (MarketingCampaign, MarketingCampaignForm, "Flash sale & popup", ("name", "headline", "starts_at", "ends_at", "is_active")),
+    "slides": (StorefrontSlide, StorefrontSlideForm, "Banner carousel", ("headline", "button_label", "position", "is_active")),
     "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "available_stock", "is_active")),
     "images": (ProductImage, ProductImageForm, "Foto produk", ("product", "alt_text", "position")),
     "variants": (ProductVariant, VariantForm, "Varian", ("product", "name", "sku", "price", "stock", "is_active")),
@@ -725,8 +836,10 @@ BACKOFFICE = {
 
 
 def _entity_queryset(entity, store):
-    if entity in {Product, Category, Warehouse, ShippingMethod, Coupon}:
+    if entity in {Product, Category, Warehouse, ShippingMethod, Coupon, StorefrontSlide, MarketingCampaign}:
         return entity.objects.filter(store=store)
+    if entity is FlashSaleProduct:
+        return entity.objects.filter(product__store=store, campaign__store=store).select_related("product", "campaign")
     if entity is ProductVariant:
         return entity.objects.filter(product__store=store).select_related("product")
     if entity is ProductImage:
@@ -798,8 +911,8 @@ def merchant_settings(request):
             object_type="Store", object_id=str(store.id), details={"fields": list(form.changed_data)})
         messages.success(request, "Pengaturan toko berhasil disimpan.")
         return redirect("merchant-settings")
-    return render(request, "merchant/entity_form.html", _merchant_context(request, store,
-        title="Pengaturan toko", form=form, editing=True, section="settings"))
+    return render(request, "merchant/settings.html", _merchant_context(request, store,
+        title="Setup cepat", form=form, editing=True, section="settings"))
 
 
 @login_required(login_url="/merchant/login/")
@@ -826,6 +939,17 @@ def merchant_customer_detail(request, customer_id):
     return render(request, "merchant/customer_detail.html", _merchant_context(request, store,
         customer=customer, orders=orders, lifetime_spend=stats["lifetime_spend"] or 0,
         order_count=count, average_order=((stats["lifetime_spend"] or 0) / count if count else 0)))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_engagement(request):
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
+    summary = engagement_summary(store)
+    summary["abandoned_sessions"] = summary["abandoned_sessions"][:50]
+    summary["engaged_sessions"] = summary["engaged_sessions"][:50]
+    return render(request, "merchant/engagement.html",
+        _merchant_context(request, store, **summary))
 
 
 @login_required(login_url="/merchant/login/")

@@ -1,0 +1,9 @@
+Halo,
+
+Produk pilihan Anda di {{ store.name }} masih tersimpan:
+{% for item in cart_snapshot %}- {{ item.name }} × {{ item.quantity }}
+{% endfor %}
+Lanjutkan belanja melalui tautan aman ini:
+{{ recovery_url }}
+
+Harga, promosi, dan stok akan diperiksa kembali ketika keranjang dibuka. Email ini dikirim satu kali karena Anda meminta pengingat keranjang.

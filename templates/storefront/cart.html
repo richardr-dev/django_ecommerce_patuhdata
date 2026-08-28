@@ -14,7 +14,7 @@
         </article>
       {% endfor %}
     </div>
-    <aside class="cart-summary"><div><span>Subtotal</span><strong>Rp{{ subtotal|floatformat:"0g" }}</strong></div><p>Ongkir, voucher, dan pajak dihitung secara aman saat checkout.</p><a class="button" href="{% url 'checkout' %}">Lanjut ke checkout</a><a href="/">← Lanjut belanja</a></aside>
+    <aside class="cart-summary"><div><span>Subtotal</span><strong>Rp{{ subtotal|floatformat:"0g" }}</strong></div><p>Ongkir, voucher, dan pajak dihitung secara aman saat checkout.</p><a class="button" href="{% url 'checkout' %}">Lanjut ke checkout</a><a href="/">← Lanjut belanja</a></aside>{% include "storefront/cart_recovery.html" %}
   {% else %}
     <div class="empty cart-empty"><h2>Keranjang masih kosong</h2><p>Pilih produk yang Anda suka dan tambahkan ke keranjang.</p><a class="button" href="/">Mulai belanja</a></div>
   {% endif %}
