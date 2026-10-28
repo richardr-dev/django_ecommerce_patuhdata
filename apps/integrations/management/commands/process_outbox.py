@@ -1,4 +1,6 @@
+import logging
 import time
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -7,11 +9,16 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.integrations.models import OutboxEvent
+from apps.integrations.models import OutboxEvent, WorkerHeartbeat
 from apps.orders.engagement import send_abandoned_cart_recoveries
 from apps.orders.models import Order
 from apps.orders.services import expire_pending_orders
 from apps.orders.tracking import sync_active_shipments
+
+logger = logging.getLogger("niagakit.worker")
+
+# A claimed event whose worker died is picked up again after this long.
+STALE_CLAIM = timedelta(minutes=10)
 
 
 def _notification(event):
@@ -21,6 +28,8 @@ def _notification(event):
     order = Order.objects.filter(id=order_id, store=event.store).first()
     if not order or not order.email:
         return {"skipped": "customer has no email"}
+    if order.status == "cancelled" and not order.payment_checkout_url:
+        return {"skipped": "payment session was never shown to the customer"}
     status = order.get_status_display()
     subject = f"{order.store.name}: pesanan {status.lower()}"
     url = f"{settings.PUBLIC_BASE_URL}/orders/{order.id}/?token={order.access_token}"
@@ -36,9 +45,11 @@ HANDLED_TOPICS = {"order.created", "payment.received", "order.status_changed", "
 def process_one_event():
     now = timezone.now()
     with transaction.atomic():
+        due = (Q(status__in={"pending", "failed"}) &
+            (Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now)))
+        abandoned = Q(status="processing", last_attempt_at__lte=now - STALE_CLAIM)
         event = (OutboxEvent.objects.select_for_update(skip_locked=True)
-            .filter(status__in={"pending", "failed"}, attempts__lt=8)
-            .filter(Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now))
+            .filter(due | abandoned, attempts__lt=OutboxEvent.MAX_ATTEMPTS)
             .order_by("created_at").first())
         if not event:
             return False
@@ -52,6 +63,9 @@ def process_one_event():
         }
     except Exception as error:  # noqa: BLE001 - worker boundary must persist every delivery failure
         event.schedule_retry(error)
+        log = logger.error if event.status == "dead" else logger.warning
+        log("outbox event %s (%s) failed on attempt %s: %s", event.id, event.topic,
+            event.attempts, error)
         return True
     event.status = "succeeded"
     event.response = response
@@ -72,16 +86,43 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         while True:
-            expire_pending_orders(limit=options["batch_size"])
-            recoveries = send_abandoned_cart_recoveries(limit=options["batch_size"])
-            synced_shipments = sync_active_shipments(limit=min(options["batch_size"], 25))
-            processed = 0
-            while processed < options["batch_size"] and process_one_event():
-                processed += 1
+            try:
+                summary = run_cycle(options["batch_size"])
+            except Exception:  # e.g. database unreachable; keep the loop alive
+                if not options["loop"]:
+                    raise
+                logger.exception("worker cycle failed; retrying in %ss", options["poll_seconds"] * 5)
+                time.sleep(options["poll_seconds"] * 5)
+                continue
             if not options["loop"]:
                 self.stdout.write(
-                    f"Processed {processed} outbox event(s); synced {synced_shipments} shipment(s); "
-                    f"sent {recoveries} cart recovery email(s).")
+                    f"Processed {summary['processed']} outbox event(s); synced "
+                    f"{summary['synced_shipments']} shipment(s); sent {summary['recoveries']} cart "
+                    "recovery email(s).")
                 return
-            if not processed:
+            if not summary["processed"]:
                 time.sleep(options["poll_seconds"])
+
+
+def _run_task(name, task, errors):
+    """Run one periodic task so its failure cannot stop the others or the loop."""
+    try:
+        return task()
+    except Exception as error:  # isolate periodic tasks from each other
+        logger.exception("worker task %s failed", name)
+        errors.append(f"{name}: {error}")
+        return 0
+
+
+def run_cycle(batch_size):
+    errors = []
+    _run_task("expire_pending_orders", lambda: expire_pending_orders(limit=batch_size), errors)
+    recoveries = _run_task("cart_recovery",
+        lambda: send_abandoned_cart_recoveries(limit=batch_size), errors)
+    synced_shipments = _run_task("shipment_sync",
+        lambda: sync_active_shipments(limit=min(batch_size, 25)), errors)
+    processed = 0
+    while processed < batch_size and process_one_event():
+        processed += 1
+    WorkerHeartbeat.beat("process_outbox", error="; ".join(errors))
+    return {"processed": processed, "recoveries": recoveries, "synced_shipments": synced_shipments}

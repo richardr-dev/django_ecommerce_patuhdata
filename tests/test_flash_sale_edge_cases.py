@@ -51,7 +51,7 @@ class FlashSaleEdgeCaseTests(TestCase):
         ProductVariant.objects.create(product=self.product, name="Small", sku="EDGE-S",
             price=65000, stock=2)
         form = FlashSaleProductForm(data={"campaign": self.campaign.id,
-            "product": self.product.id, "sale_price": "70000", "stock_limit": "",
+            "product": self.product.sku, "sale_price": "70000", "stock_limit": "",
             "per_customer_limit": ""}, store=self.store)
         self.assertFalse(form.is_valid())
         self.assertIn("sale_price", form.errors)

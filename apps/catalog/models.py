@@ -1,7 +1,28 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Case, Exists, F, OuterRef, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce, Greatest
 
 from apps.shops.models import Store
+
+
+def ensure_store_sku_available(store_id, sku, *, product_id=None, variant_id=None):
+    """SKUs identify order lines and stock, so they must be unique per store across both
+    products and variants. Callers that write must hold the store row lock (see save())."""
+    if not store_id or not sku:
+        return
+    products = Product.objects.filter(store_id=store_id, sku=sku)
+    variants = ProductVariant.objects.filter(product__store_id=store_id, sku=sku)
+    if product_id:
+        products = products.exclude(id=product_id)
+    if variant_id:
+        variants = variants.exclude(id=variant_id)
+    if products.exists() or variants.exists():
+        raise ValidationError({"sku": f"SKU {sku} sudah dipakai produk atau varian lain di toko ini."})
+
+
+def _lock_store(store_id):
+    Store.objects.select_for_update().filter(id=store_id).exists()
 
 
 class Category(models.Model):
@@ -38,7 +59,29 @@ class Product(models.Model):
             models.UniqueConstraint(fields=["store", "slug"], name="unique_product_slug"),
             models.UniqueConstraint(fields=["store", "sku"], name="unique_product_sku"),
         ]
+        # Storefront browsing filters on store + is_active and sorts by one of these columns;
+        # composite indexes keep paginated catalog pages fast at 10,000+ SKUs per store.
+        indexes = [
+            models.Index(fields=["store", "is_active", "-created_at", "-id"], name="product_newest_idx"),
+            models.Index(fields=["store", "is_active", "price"], name="product_price_idx"),
+            models.Index(fields=["store", "is_active", "name"], name="product_name_idx"),
+            models.Index(fields=["store", "category", "is_active"], name="product_category_idx"),
+            models.Index(fields=["store", "is_featured", "is_active"], name="product_featured_idx"),
+        ]
     def __str__(self): return self.name
+
+    def clean(self):
+        super().clean()
+        ensure_store_sku_available(self.store_id, self.sku, product_id=self.pk)
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "sku" not in update_fields:
+            return super().save(*args, **kwargs)
+        with transaction.atomic():
+            _lock_store(self.store_id)
+            ensure_store_sku_available(self.store_id, self.sku, product_id=self.pk)
+            return super().save(*args, **kwargs)
 
     @property
     def has_discount(self):
@@ -60,6 +103,21 @@ class Product(models.Model):
         if variants:
             return sum(variant.available_stock for variant in variants)
         return sum(level.available for level in self.inventory_levels.all())
+
+
+def annotate_available_stock(queryset):
+    """Annotate `stock_available` in SQL, matching Product.available_stock, so stock filters
+    and sorts over large catalogs never load every product and inventory row into Python."""
+    levels = (InventoryLevel.objects.filter(product=OuterRef("pk")).values("product")
+        .annotate(total=Sum(Greatest(F("on_hand") - F("reserved") - F("safety_stock"), Value(0))))
+        .values("total"))
+    active_variants = ProductVariant.objects.filter(product=OuterRef("pk"), is_active=True)
+    variants = (active_variants.values("product")
+        .annotate(total=Sum(Greatest(F("stock") - F("reserved"), Value(0)))).values("total"))
+    return queryset.annotate(stock_available=Case(
+        When(Exists(active_variants), then=Coalesce(Subquery(variants), Value(0))),
+        default=Coalesce(Subquery(levels), Value(0)),
+        output_field=models.IntegerField()))
 
 
 class FlashSaleProduct(models.Model):
@@ -150,6 +208,22 @@ class ProductVariant(models.Model):
             models.CheckConstraint(condition=models.Q(stock__gte=models.F("reserved")),
                 name="variant_reserved_lte_stock"),
         ]
+        indexes = [models.Index(fields=["sku"], name="variant_sku_idx")]
+
+    def clean(self):
+        super().clean()
+        if self.product_id:
+            ensure_store_sku_available(self.product.store_id, self.sku, variant_id=self.pk)
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "sku" not in update_fields:
+            return super().save(*args, **kwargs)
+        with transaction.atomic():
+            store_id = Product.objects.values_list("store_id", flat=True).get(id=self.product_id)
+            _lock_store(store_id)
+            ensure_store_sku_available(store_id, self.sku, variant_id=self.pk)
+            return super().save(*args, **kwargs)
 
     @property
     def effective_price(self):

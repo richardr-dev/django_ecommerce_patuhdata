@@ -12,8 +12,10 @@ def get_cart(request):
     for key in raw:
         kind, _, value = str(key).partition(":")
         if not value:  # Backwards compatibility with carts created before variant support.
-            product_ids.append(kind)
-        elif kind == "p":
+            kind, value = "p", kind
+        if not value.isdigit():
+            continue
+        if kind == "p":
             product_ids.append(value)
         elif kind == "v":
             variant_ids.append(value)

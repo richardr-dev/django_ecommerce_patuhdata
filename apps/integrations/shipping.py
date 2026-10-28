@@ -64,6 +64,71 @@ class BiteshipProvider:
         return quotes
 
 
+# Biteship order statuses mapped onto Order.TRACKING_STATUSES.
+BITESHIP_TRACKING_STATUS = {
+    "confirmed": "awaiting_pickup", "scheduled": "awaiting_pickup", "allocated": "awaiting_pickup",
+    "picking_up": "awaiting_pickup", "picked": "in_transit", "dropping_off": "out_for_delivery",
+    "delivered": "delivered", "return_in_transit": "returned", "returned": "returned",
+    "rejected": "exception", "courier_not_found": "exception", "on_hold": "exception",
+    "cancelled": "exception", "disposed": "exception",
+}
+
+
+def _biteship_booking_payload(order, origin):
+    items = []
+    for item in order.items.select_related("product", "variant"):
+        weight = (item.variant.weight_grams if item.variant and item.variant.weight_grams is not None
+            else item.product.weight_grams)
+        items.append({"name": item.name[:100], "sku": item.sku, "value": int(item.unit_price),
+            "quantity": item.quantity, "weight": max(1, weight), "length": item.product.length_cm,
+            "width": item.product.width_cm, "height": item.product.height_cm})
+    destination = {"destination_contact_name": order.customer_name,
+        "destination_contact_phone": order.phone, "destination_address": order.shipping_address,
+        "destination_note": order.delivery_notes}
+    if order.destination_area_id:
+        destination["destination_area_id"] = order.destination_area_id
+    if order.postal_code.isdigit():
+        destination["destination_postal_code"] = int(order.postal_code)
+    if order.email:
+        destination["destination_contact_email"] = order.email
+    return {"shipper_contact_name": origin["name"], "shipper_contact_phone": origin["phone"],
+        "shipper_organization": order.store.name[:100],
+        "origin_contact_name": origin["name"], "origin_contact_phone": origin["phone"],
+        "origin_address": origin["address"], "origin_postal_code": int(origin["postal_code"]),
+        **destination, "courier_company": order.courier_code, "courier_type": order.courier_service_code,
+        "delivery_type": "now", "order_note": f"Pesanan #{str(order.id)[:8]}",
+        "reference_id": str(order.id), "metadata": {"order_id": str(order.id),
+            "store_id": str(order.store_id)}, "items": items}
+
+
+class BiteshipShipmentProvider(BiteshipProvider):
+    """Books the courier chosen at checkout and reads its status back."""
+
+    def create_order(self, order, origin):
+        # Biteship has no idempotency key, so a timed-out booking must never be resent blindly.
+        data = request_json(f"{settings.BITESHIP_API_URL}/v1/orders", method="POST",
+            headers=self.headers, payload=_biteship_booking_payload(order, origin), attempts=1)
+        if not data.get("id"):
+            raise ProviderError(data.get("error") or "Biteship tidak mengembalikan ID pengiriman.")
+        courier = data.get("courier") or {}
+        return {"id": data["id"], "waybill_id": courier.get("waybill_id") or "",
+            "tracking_id": courier.get("tracking_id") or "", "status": data.get("status", ""),
+            "price": data.get("price"), "payload": data}
+
+    def track_order(self, shipment_id):
+        data = request_json(f"{settings.BITESHIP_API_URL}/v1/orders/{shipment_id}",
+            headers=self.headers)
+        courier = data.get("courier") or {}
+        status = str(data.get("status") or "").lower()
+        events = [{"status": str(item.get("status", "")),
+            "description": str(item.get("note") or item.get("status") or "Pembaruan pengiriman"),
+            "location": "", "occurred_at": str(item.get("updated_at") or ""), "payload": item}
+            for item in (data.get("history") or courier.get("history") or [])]
+        return {"status": status, "normalized": BITESHIP_TRACKING_STATUS.get(status, "unknown"),
+            "detail": events[-1]["description"] if events else status,
+            "waybill_id": courier.get("waybill_id") or "", "events": events, "payload": data}
+
+
 class RajaOngkirProvider:
     @property
     def headers(self):

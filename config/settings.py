@@ -36,6 +36,8 @@ INSTALLED_APPS = [
     "apps.shops", "apps.catalog", "apps.orders", "apps.integrations",
 ]
 MIDDLEWARE = [
+    "config.request_id.RequestIDMiddleware",
+    "config.views.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -108,6 +110,36 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "0") == "1"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# "Name:email,Name:email" — receives an email with the traceback for every unhandled server
+# error when DEBUG=0. Leave empty when a log-based alert (e.g. CloudWatch) covers this.
+ADMINS = [tuple(entry.split(":", 1)) for entry in os.getenv("ADMINS", "").split(",") if ":" in entry]
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {"()": "config.request_id.RequestIDFilter"},
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+    },
+    "formatters": {
+        "standard": {"format": "%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard",
+            "filters": ["request_id"]},
+        "mail_admins": {"class": "django.utils.log.AdminEmailHandler", "level": "ERROR",
+            "filters": ["require_debug_false"]},
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "loggers": {
+        "django.request": {"handlers": ["console", "mail_admins"], "level": "WARNING",
+            "propagate": False},
+        "niagakit": {"handlers": ["console", "mail_admins"], "level": LOG_LEVEL,
+            "propagate": False},
+    },
+}
 
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 
@@ -126,6 +158,11 @@ BITESHIP_API_URL = os.getenv("BITESHIP_API_URL", "https://api.biteship.com").rst
 BITESHIP_ORIGIN_POSTAL_CODE = os.getenv("BITESHIP_ORIGIN_POSTAL_CODE", "")
 BITESHIP_COURIERS = os.getenv("BITESHIP_COURIERS", "jne,jnt,sicepat,anteraja")
 BITESHIP_ALLOW_LIVE = os.getenv("BITESHIP_ALLOW_LIVE", "0") == "1"
+# Pickup contact for courier bookings; falls back to the store name/support phone and the
+# highest-priority warehouse address when empty.
+BITESHIP_ORIGIN_CONTACT_NAME = os.getenv("BITESHIP_ORIGIN_CONTACT_NAME", "")
+BITESHIP_ORIGIN_CONTACT_PHONE = os.getenv("BITESHIP_ORIGIN_CONTACT_PHONE", "")
+BITESHIP_ORIGIN_ADDRESS = os.getenv("BITESHIP_ORIGIN_ADDRESS", "")
 SHIPPING_RATE_PROVIDER = os.getenv("SHIPPING_RATE_PROVIDER", "biteship")
 RAJAONGKIR_API_KEY = os.getenv("RAJAONGKIR_API_KEY", "")
 RAJAONGKIR_API_URL = os.getenv("RAJAONGKIR_API_URL", "https://rajaongkir.komerce.id/api/v1").rstrip("/")

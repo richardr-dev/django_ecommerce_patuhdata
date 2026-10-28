@@ -24,6 +24,44 @@ class StyledModelForm(forms.ModelForm):
             field.widget.attrs.setdefault("class", "control")
 
 
+class ProductSkuField(forms.CharField):
+    """Pick a product by typing its SKU. A <select> listing every product becomes unusable,
+    and multi-megabyte, once a store carries thousands of SKUs."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("label", "SKU produk")
+        kwargs.setdefault("help_text", "Ketik SKU produk induk, misalnya SKU-001.")
+        super().__init__(max_length=80, **kwargs)
+        self.store = None
+
+    def prepare_value(self, value):
+        if isinstance(value, Product):
+            return value.sku
+        if isinstance(value, int):
+            return Product.objects.filter(id=value).values_list("sku", flat=True).first() or ""
+        return value
+
+    def clean(self, value):
+        products = Product.objects.filter(store=self.store)
+        if isinstance(value, Product):
+            value = value.id
+        if isinstance(value, int):
+            # Disabled fields are cleaned from their initial value, which is the product id.
+            product = products.filter(id=value).first()
+        else:
+            sku = super().clean(value).strip()
+            product = products.filter(sku=sku).first() if sku else None
+        if product is None:
+            raise forms.ValidationError("Produk dengan SKU ini tidak ditemukan di toko ini.")
+        return product
+
+
+class ProductSkuFormMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["product"].store = self.store
+
+
 class ProductForm(StyledModelForm):
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.none(), required=False,
         label="Gudang awal", help_text="Lokasi stok awal produk ini.")
@@ -37,6 +75,8 @@ class ProductForm(StyledModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.store and not self.instance.store_id:
+            self.instance.store = self.store
         self.fields["category"].queryset = Category.objects.filter(store=self.store)
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store, is_active=True)
         if self.instance.pk:
@@ -44,7 +84,9 @@ class ProductForm(StyledModelForm):
             self.fields.pop("initial_stock")
 
 
-class FlashSaleProductForm(StyledModelForm):
+class FlashSaleProductForm(ProductSkuFormMixin, StyledModelForm):
+    product = ProductSkuField()
+
     class Meta:
         model = FlashSaleProduct
         fields = ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")
@@ -52,7 +94,6 @@ class FlashSaleProductForm(StyledModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["campaign"].queryset = MarketingCampaign.objects.filter(store=self.store)
-        self.fields["product"].queryset = Product.objects.filter(store=self.store)
 
     def clean(self):
         cleaned = super().clean()
@@ -66,14 +107,12 @@ class FlashSaleProductForm(StyledModelForm):
         return cleaned
 
 
-class ProductImageForm(StyledModelForm):
+class ProductImageForm(ProductSkuFormMixin, StyledModelForm):
+    product = ProductSkuField()
+
     class Meta:
         model = ProductImage
         fields = ("product", "file", "url", "alt_text", "position")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["product"].queryset = Product.objects.filter(store=self.store)
 
     def clean(self):
         cleaned = super().clean()
@@ -120,13 +159,14 @@ class WarehouseForm(StyledModelForm):
     class Meta: model = Warehouse; exclude = ("store",)
 
 
-class InventoryForm(StyledModelForm):
+class InventoryForm(ProductSkuFormMixin, StyledModelForm):
+    product = ProductSkuField()
+
     class Meta: model = InventoryLevel; fields = ("warehouse", "product", "on_hand", "safety_stock")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store)
-        self.fields["product"].queryset = Product.objects.filter(store=self.store)
         self.fields["on_hand"].help_text = "Jumlah fisik di gudang. Stok yang sedang dipesan tetap terlindungi."
         self.fields["safety_stock"].help_text = "Jumlah minimum yang tidak ditawarkan ke pelanggan."
         if self.instance.pk:
@@ -134,12 +174,10 @@ class InventoryForm(StyledModelForm):
             self.fields["product"].disabled = True
 
 
-class VariantForm(StyledModelForm):
-    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "barcode", "attributes", "price", "weight_grams", "stock", "is_active")
+class VariantForm(ProductSkuFormMixin, StyledModelForm):
+    product = ProductSkuField()
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["product"].queryset = Product.objects.filter(store=self.store)
+    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "barcode", "attributes", "price", "weight_grams", "stock", "is_active")
 
 
 class MarketingCampaignForm(StyledModelForm):
@@ -191,7 +229,9 @@ class CouponForm(StyledModelForm):
 class StoreSettingsForm(StyledModelForm):
     class Meta:
         model = Store
-        fields = ("name", "logo", "domain", "description", "theme", "primary_color",
+        fields = ("name", "logo", "logo_size", "show_store_name", "domain", "description", "theme",
+            "primary_color", "background_color", "font_family", "cover_layout", "cover_image",
+            "cover_overlay",
             "hero_eyebrow", "hero_title", "hero_text", "hero_button_label", "catalog_eyebrow",
             "catalog_title", "trust_title_1", "trust_text_1", "trust_title_2", "trust_text_2",
             "trust_title_3", "trust_text_3", "announcement_text", "announcement_link_label",
@@ -203,13 +243,16 @@ class StoreSettingsForm(StyledModelForm):
         widgets = {"description": forms.Textarea(attrs={"rows": 3}),
             "hero_text": forms.Textarea(attrs={"rows": 3}),
             "return_policy": forms.Textarea(attrs={"rows": 4}),
-            "primary_color": forms.TextInput(attrs={"type": "color"})}
+            "primary_color": forms.TextInput(attrs={"type": "color"}),
+            "background_color": forms.TextInput(attrs={"type": "color"}),
+            "cover_overlay": forms.NumberInput(attrs={"min": 0, "max": 90, "step": 5})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.is_bound:
             for name in ("loyalty_points_per_step", "loyalty_spend_step", "loyalty_point_value",
-                    "loyalty_min_redeem"):
+                    "loyalty_min_redeem", "logo_size", "background_color", "font_family",
+                    "cover_layout", "cover_overlay"):
                 if name not in self.data:
                     self.fields.pop(name)
         labels = {
@@ -226,6 +269,13 @@ class StoreSettingsForm(StyledModelForm):
         for name, label in labels.items(): self.fields[name].label = label
         self.fields["domain"].help_text = "Kosongkan saat lokal. Isi tanpa https://, misalnya tokoanda.id."
         self.fields["primary_color"].help_text = "Warna tombol, tautan, dan aksen toko."
+        extra_labels = {"logo_size": "Ukuran logo", "show_store_name": "Tampilkan nama di samping logo",
+            "theme": "Gaya warna sampul", "background_color": "Warna latar halaman",
+            "font_family": "Jenis huruf", "cover_layout": "Tata letak sampul",
+            "cover_image": "Foto sampul", "cover_overlay": "Kegelapan foto sampul (%)"}
+        for name, label in extra_labels.items():
+            if name in self.fields:
+                self.fields[name].label = label
 
     def clean(self):
         cleaned = super().clean()
@@ -238,12 +288,18 @@ class StoreSettingsForm(StyledModelForm):
                 self.add_error(name, "Nilai harus lebih besar dari nol.")
         return cleaned
 
+    def _clean_image(self, name, label):
+        image = self.cleaned_data.get(name)
+        if not image or not hasattr(image, "content_type"):
+            return image
+        if image.size > 5 * 1024 * 1024:
+            raise forms.ValidationError(f"Ukuran {label} maksimal 5 MB.")
+        if image.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+            raise forms.ValidationError(f"Format {label} harus PNG, JPG, atau WebP.")
+        return image
+
     def clean_logo(self):
-        logo = self.cleaned_data.get("logo")
-        if not logo or not hasattr(logo, "content_type"):
-            return logo
-        if logo.size > 5 * 1024 * 1024:
-            raise forms.ValidationError("Ukuran logo maksimal 5 MB.")
-        if logo.content_type not in {"image/png", "image/jpeg", "image/webp"}:
-            raise forms.ValidationError("Format logo harus PNG, JPG, atau WebP.")
-        return logo
+        return self._clean_image("logo", "logo")
+
+    def clean_cover_image(self):
+        return self._clean_image("cover_image", "foto sampul")

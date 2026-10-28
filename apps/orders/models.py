@@ -61,6 +61,7 @@ class Order(models.Model):
     shipping_service = models.CharField(max_length=80, blank=True)
     shipping_eta = models.CharField(max_length=80, blank=True)
     courier_code = models.CharField(max_length=40, blank=True)
+    courier_service_code = models.CharField(max_length=40, blank=True)
     fulfillment_method = models.CharField(max_length=30, choices=FULFILLMENT_METHODS,
         default="merchant_pickup")
     tracking_number = models.CharField(max_length=100, blank=True)
@@ -290,6 +291,7 @@ class PaymentTransaction(models.Model):
 
 class Refund(models.Model):
     STATUS = [("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed")]
+    METHODS = [("gateway", "Payment gateway"), ("manual_transfer", "Manual bank transfer")]
     REASONS = [("REQUESTED_BY_CUSTOMER", "Requested by customer"), ("CANCELLATION", "Cancellation"),
         ("DUPLICATE", "Duplicate"), ("FRAUDULENT", "Fraudulent"), ("OTHERS", "Other")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -299,6 +301,7 @@ class Refund(models.Model):
     reason = models.CharField(max_length=40, choices=REASONS)
     note = models.CharField(max_length=300, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    method = models.CharField(max_length=20, choices=METHODS, default="gateway")
     provider_reference = models.CharField(max_length=160, blank=True)
     actor = models.ForeignKey("auth.User", on_delete=models.PROTECT)
     payload = models.JSONField(default=dict)

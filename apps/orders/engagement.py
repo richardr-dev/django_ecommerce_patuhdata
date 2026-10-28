@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import timedelta
 
@@ -10,6 +11,7 @@ from django.utils import timezone
 from .models import CommerceSession, JourneyEvent
 
 ANALYTICS_EVENTS = {"home_view", "search", "product_view"}
+logger = logging.getLogger("niagakit.engagement")
 
 
 def _visitor_id(request):
@@ -89,10 +91,11 @@ def send_abandoned_cart_recoveries(*, limit=50, minimum_idle_minutes=30):
         try:
             send_mail(f"Keranjang Anda di {session.store.name} masih tersimpan", body,
                 settings.DEFAULT_FROM_EMAIL, [session.recovery_email], fail_silently=False)
-        except Exception:
+        except Exception:  # release the claim so the next cycle retries this session
             CommerceSession.objects.filter(id=session.id, recovery_sent_at=claimed_at).update(
                 recovery_sent_at=None)
-            raise
+            logger.exception("cart recovery email failed for session %s", session.id)
+            continue
         sent += 1
     return sent
 

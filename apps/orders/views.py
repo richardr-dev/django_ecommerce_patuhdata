@@ -12,11 +12,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import models, transaction
-from django.db.models import Count, Min, Sum
+from django.db.models import Count, F, Min, Sum
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.catalog.models import (
@@ -27,12 +28,15 @@ from apps.catalog.models import (
     ProductImage,
     ProductVariant,
     Warehouse,
+    annotate_available_stock,
 )
+from apps.catalog.views import paginate
 from apps.integrations.http import ProviderError
 from apps.integrations.models import OutboxEvent
-from apps.integrations.payments import get_payment_provider
+from apps.integrations.payments import get_payment_provider, reserved_reference
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
 from apps.shops.models import AuditLog, Customer, MarketingCampaign, Store, StorefrontSlide
+from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 
 from .access import get_customer_order_or_404, remember_customer_order
 from .cart import get_cart
@@ -68,7 +72,7 @@ from .models import (
     ShippingMethod,
 )
 from .pricing import calculate_price
-from .refunds import RefundError, create_refund_request, execute_refund
+from .refunds import RefundError, create_refund_request, execute_refund, record_manual_refund
 from .sales import active_sale_offers, offer_sold_quantity
 from .services import (
     InvalidOrderTransition,
@@ -77,7 +81,22 @@ from .services import (
     normalize_indonesian_phone,
     transition_order,
 )
+from .shipments import ShipmentBookingError, book_shipment, can_book_shipment, is_booking_pending
 from .tracking import sync_order_tracking
+
+# How long a new order may hold stock while its gateway session is being created.
+PAYMENT_SESSION_CREATION_WINDOW = timedelta(minutes=15)
+
+
+def _abandon_unpaid_order(order, coupon):
+    """Undo a reservation whose payment session could not be created."""
+    with transaction.atomic():
+        locked = Order.objects.select_for_update().get(id=order.id)
+        if locked.status != "pending":
+            return
+        transition_order(locked, "cancelled", note="Sesi pembayaran gagal dibuat")
+        if coupon:
+            Coupon.objects.filter(id=coupon.id, used_count__gt=0).update(used_count=F("used_count") - 1)
 
 
 def _cart_signature(lines):
@@ -176,12 +195,21 @@ def cart_add(request, product_id):
     variant = None
     variant_id = request.POST.get("variant_id", "").strip()
     if product.variants.filter(is_active=True).exists():
-        variant = get_object_or_404(ProductVariant, id=variant_id, product=product, is_active=True)
+        variant = (ProductVariant.objects.filter(id=variant_id, product=product, is_active=True).first()
+            if variant_id.isdigit() else None)
+        if not variant:
+            messages.error(request, "Pilih varian produk terlebih dahulu.")
+            return redirect("product-detail", slug=product.slug)
     key = f"v:{variant.id}" if variant else f"p:{product.id}"
     available = variant.available_stock if variant else product.available_stock
+    if available <= 0:
+        messages.error(request, f"Stok {product.name} sedang habis.")
+        return redirect("product-detail", slug=product.slug)
     try: requested = max(1, int(request.POST.get("quantity", 1)))
     except ValueError: requested = 1
-    cart[key] = min(int(cart.get(key, 0)) + requested, available)
+    try: in_cart = max(0, int(cart.get(key, 0)))
+    except (TypeError, ValueError): in_cart = 0
+    cart[key] = min(in_cart + requested, available)
     request.session["cart"] = cart
     lines, subtotal = get_cart(request)
     update_cart_snapshot(request, lines, subtotal)
@@ -389,6 +417,8 @@ def checkout(request):
                     payment_provider=settings.PAYMENT_PROVIDER, payment_method=request.POST.get("payment_method", "qris"),
                     shipping_provider=live_quote["provider"] if live_quote else selected_shipping.provider,
                     courier_code=live_quote["courier_code"] if live_quote else selected_shipping.code,
+                    courier_service_code=live_quote["service_code"] if live_quote else "",
+                    payment_expires_at=timezone.now() + PAYMENT_SESSION_CREATION_WINDOW,
                     shipping_service=live_quote["name"] if live_quote else selected_shipping.name,
                     shipping_eta=live_quote["eta"] if live_quote else selected_shipping.eta,
                     coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key)
@@ -415,39 +445,46 @@ def checkout(request):
                         record_level_reservation(item, level, allocated, previous_reserved)
                         remaining -= allocated
                         if remaining == 0: break
-                try:
-                    payment = get_payment_provider(order.payment_provider).create_payment(order)
-                except ProviderError as error:
-                    transaction.set_rollback(True)
-                    if (order.payment_provider == "doku" and
-                            "PLEASE USE ANOTHER PAYMENT METHOD" in str(error)):
-                        messages.error(request,
-                            "Metode pembayaran DOKU belum tersedia. Silakan coba kembali atau "
-                            "hubungi toko untuk pilihan pembayaran lain.")
-                    else:
-                        messages.error(request,
-                            "Pembayaran belum dapat dibuat. Silakan coba beberapa saat lagi.")
-                    return redirect("checkout")
+                provider = get_payment_provider(order.payment_provider)
+                order.payment_reference = reserved_reference(provider, order)
+                order.save(update_fields=["payment_reference"])
+                Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
+                    "email": order.email, "accepts_marketing": request.POST.get("accepts_marketing") == "on"})
+                OrderStatusEvent.objects.create(order=order, status="pending", note="Pesanan dibuat")
+                if coupon:
+                    coupon.used_count += 1
+                    coupon.save(update_fields=["used_count"])
+            # Stock, coupon and loyalty locks are released before the gateway call. If the process
+            # dies here, the creation window above lets the expiry worker release the reservation.
+            remember_customer_order(request, order)
+            try:
+                payment = provider.create_payment(order)
+            except ProviderError as error:
+                _abandon_unpaid_order(order, coupon)
+                request.session["checkout_key"] = uuid.uuid4().hex
+                if (order.payment_provider == "doku" and
+                        "PLEASE USE ANOTHER PAYMENT METHOD" in str(error)):
+                    messages.error(request,
+                        "Metode pembayaran DOKU belum tersedia. Silakan coba kembali atau "
+                        "hubungi toko untuk pilihan pembayaran lain.")
+                else:
+                    messages.error(request,
+                        "Pembayaran belum dapat dibuat. Silakan coba beberapa saat lagi.")
+                return redirect("checkout")
+            with transaction.atomic():
+                order = Order.objects.select_for_update().get(id=order.id)
                 order.payment_reference = payment.reference
                 order.payment_checkout_url = payment.checkout_url
                 if payment.expires_at:
-                    from django.utils.dateparse import parse_datetime
                     order.payment_expires_at = parse_datetime(payment.expires_at)
                 order.save(update_fields=["payment_reference", "payment_checkout_url", "payment_expires_at"])
                 PaymentTransaction.objects.create(order=order, provider=order.payment_provider,
                     external_id=payment.reference, status="pending", amount=order.total, currency="IDR")
-                request.session["cart"] = {}
-                request.session["checkout_key"] = uuid.uuid4().hex
-                Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
-                    "email": order.email, "accepts_marketing": request.POST.get("accepts_marketing") == "on"})
-                OrderStatusEvent.objects.create(order=order, status="pending", note="Pesanan dibuat")
                 OutboxEvent.objects.create(store=request.store, topic="order.created", aggregate_id=str(order.id),
                     payload={"order_id": str(order.id), "phone": order.phone, "email": order.email,
                         "total": str(order.total), "payment_method": order.payment_method})
-                if coupon:
-                    coupon.used_count += 1
-                    coupon.save(update_fields=["used_count"])
-                remember_customer_order(request, order)
+            request.session["cart"] = {}
+            request.session["checkout_key"] = uuid.uuid4().hex
             record_event(request, "converted", metadata={"order_id": str(order.id),
                 "total": str(order.total)}, always=True)
             update_cart_snapshot(request, [], 0)
@@ -545,6 +582,9 @@ def _require_roles(request, store, roles):
         raise Http404
 
 
+MERCHANT_PAGE_SIZE = 50
+
+
 @login_required(login_url="/merchant/login/")
 def merchant_dashboard(request):
     store = _staff_store(request)
@@ -562,8 +602,10 @@ def merchant_dashboard(request):
         row["percent"] = round((row["revenue"] / peak * 100), 1) if peak else 0
     top_products = (OrderItem.objects.filter(order__in=realized).values("name").annotate(
         units=Sum("quantity"), revenue=Sum("line_total")).order_by("-revenue")[:5])
-    low_stock = [product for product in Product.objects.filter(store=store, is_active=True).prefetch_related(
-        "inventory_levels", "variants") if product.available_stock <= 5]
+    low_stock_products = annotate_available_stock(Product.objects.filter(store=store, is_active=True)
+        ).filter(stock_available__lte=5)
+    low_stock_count = low_stock_products.count()
+    low_stock = list(low_stock_products.order_by("stock_available", "name")[:8])
     recent = Order.objects.filter(store=store).order_by("-created_at")[:8]
     fulfillment = {status: store.orders.filter(status=status).count() for status in
         ("paid", "confirmed", "allocated", "picking", "packed", "shipped")}
@@ -611,7 +653,8 @@ def merchant_dashboard(request):
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
         revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
-        daily_sales=daily, top_products=top_products, low_stock=low_stock[:8], recent_orders=recent,
+        daily_sales=daily, top_products=top_products, low_stock=low_stock,
+        low_stock_count=low_stock_count, recent_orders=recent,
         fulfillment=fulfillment, failed_integrations=failed_integrations,
         reconciliation_mismatches=reconciliation_mismatches, today_gross=today_gross,
         today_net=today_gross - today_refunds, today_orders=today_totals["orders"] or 0,
@@ -632,6 +675,8 @@ def merchant_orders(request):
     orders = list(orders)
     for order in orders:
         order.available_statuses = allowed_order_transitions(order)
+        order.can_book_shipment = can_book_shipment(order)
+        order.booking_pending = is_booking_pending(order)
     return render(request, "merchant/orders.html", _merchant_context(request, store,
         orders=orders, statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS))
 
@@ -640,6 +685,7 @@ def merchant_orders(request):
 def merchant_stock(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
+    back = request.get_full_path()
     if request.method == "POST":
         target_type = request.POST.get("target_type")
         try:
@@ -649,7 +695,7 @@ def merchant_stock(request):
                 raise ValueError
         except ValueError:
             messages.error(request, "Stok harus berupa angka nol atau lebih.")
-            return redirect("merchant-stock")
+            return redirect(back)
         reason = request.POST.get("reason", "Penyesuaian stok dashboard").strip()[:200]
         with transaction.atomic():
             if target_type == "level":
@@ -658,7 +704,7 @@ def merchant_stock(request):
                 if new_stock < level.reserved:
                     messages.error(request,
                         f"Stok tidak boleh kurang dari {level.reserved} unit yang sedang direservasi.")
-                    return redirect("merchant-stock")
+                    return redirect(back)
                 previous = level.on_hand
                 level.on_hand, level.safety_stock = new_stock, safety_stock
                 level.save(update_fields=["on_hand", "safety_stock", "updated_at"])
@@ -674,7 +720,7 @@ def merchant_stock(request):
                 if new_stock < variant.reserved:
                     messages.error(request,
                         f"Stok tidak boleh kurang dari {variant.reserved} unit yang sedang direservasi.")
-                    return redirect("merchant-stock")
+                    return redirect(back)
                 previous = variant.stock
                 variant.stock = new_stock
                 variant.save(update_fields=["stock"])
@@ -690,13 +736,23 @@ def merchant_stock(request):
                 object_type=target_type, object_id=request.POST.get("target_id", ""),
                 details={"label": label, "new_stock": new_stock, "reason": reason})
         messages.success(request, f"Stok {label} berhasil diperbarui.")
-        return redirect("merchant-stock")
+        return redirect(back)
     levels = InventoryLevel.objects.filter(warehouse__store=store).select_related(
-        "product", "warehouse").order_by("product__name", "warehouse__priority")
+        "product", "warehouse").order_by("product__name", "warehouse__priority", "id")
     variants = ProductVariant.objects.filter(product__store=store, is_active=True).select_related(
-        "product").order_by("product__name", "name")
+        "product").order_by("product__name", "name", "id")
+    query = request.GET.get("q", "").strip()
+    if query:
+        levels = levels.filter(models.Q(product__name__icontains=query) |
+            models.Q(product__sku__icontains=query))
+        variants = variants.filter(models.Q(product__name__icontains=query) |
+            models.Q(name__icontains=query) | models.Q(sku__icontains=query))
+    levels, level_range, level_query = paginate(request, levels, MERCHANT_PAGE_SIZE)
+    variants, variant_range, variant_query = paginate(request, variants, MERCHANT_PAGE_SIZE,
+        param="vpage")
     return render(request, "merchant/stock.html", _merchant_context(request, store,
-        levels=levels, variants=variants))
+        levels=levels, level_range=level_range, level_query=level_query, variants=variants,
+        variant_range=variant_range, variant_query=variant_query, query=query))
 
 @login_required(login_url="/merchant/login/")
 def merchant_order_update(request, order_id):
@@ -790,17 +846,43 @@ def merchant_order_tracking(request, order_id):
 
 
 @login_required(login_url="/merchant/login/")
+def merchant_order_book_shipment(request, order_id):
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
+    order = get_object_or_404(Order, id=order_id, store=store)
+    try:
+        result = book_shipment(order, actor=request.user)
+    except (ShipmentBookingError, ProviderError) as error:
+        messages.error(request, f"Kurir belum dapat dipesan: {error}")
+    else:
+        waybill = result["waybill_id"] or "menyusul setelah pickup"
+        messages.success(request, f"Kurir dipesan. Nomor resi: {waybill}.")
+    return redirect("merchant-orders")
+
+
+@login_required(login_url="/merchant/login/")
 def merchant_order_refund(request, order_id):
     if request.method != "POST":
         raise Http404
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "finance"})
     order = get_object_or_404(Order, id=order_id, store=store)
+    manual = request.POST.get("method") == "manual_transfer"
+    transfer_reference = request.POST.get("transfer_reference", "").strip()
+    if manual and not transfer_reference:
+        messages.error(request, "Nomor referensi transfer wajib diisi untuk refund manual.")
+        return redirect("merchant-orders")
     try:
         refund = create_refund_request(order=order, amount=request.POST.get("amount", ""),
             reason=request.POST.get("reason", "OTHERS"), actor=request.user,
-            note=request.POST.get("note", "").strip())
-        execute_refund(refund)
+            note=request.POST.get("note", "").strip(),
+            method="manual_transfer" if manual else "gateway")
+        if manual:
+            record_manual_refund(refund, transfer_reference=transfer_reference, actor=request.user)
+        else:
+            execute_refund(refund)
     except (RefundError, ProviderError, ValueError) as error:
         messages.error(request, str(error))
     else:
@@ -824,7 +906,7 @@ BACKOFFICE = {
     "flash-sales": (FlashSaleProduct, FlashSaleProductForm, "Produk flash sale", ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")),
     "campaigns": (MarketingCampaign, MarketingCampaignForm, "Flash sale & popup", ("name", "headline", "starts_at", "ends_at", "is_active")),
     "slides": (StorefrontSlide, StorefrontSlideForm, "Banner carousel", ("headline", "button_label", "position", "is_active")),
-    "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "available_stock", "is_active")),
+    "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "stock_available", "is_active")),
     "images": (ProductImage, ProductImageForm, "Foto produk", ("product", "alt_text", "position")),
     "variants": (ProductVariant, VariantForm, "Varian", ("product", "name", "sku", "price", "stock", "is_active")),
     "categories": (Category, CategoryForm, "Kategori", ("name", "slug")),
@@ -855,15 +937,20 @@ def merchant_entity_list(request, section):
     if section not in BACKOFFICE:
         raise Http404
     entity, _, title, columns = BACKOFFICE[section]
-    rows = _entity_queryset(entity, store).order_by("id")
+    rows = _entity_queryset(entity, store).order_by("-id")
+    if entity is Product:
+        rows = annotate_available_stock(rows)
     query = request.GET.get("q", "").strip()
     if query:
         if entity is Product or entity is ProductVariant: rows = rows.filter(models.Q(name__icontains=query) | models.Q(sku__icontains=query))
         elif entity is Coupon: rows = rows.filter(code__icontains=query)
         elif hasattr(entity, "name"): rows = rows.filter(name__icontains=query)
-    table_rows = [{"object": row, "values": [getattr(row, column) for column in columns]} for row in rows]
+    page, page_range, page_query = paginate(request, rows, MERCHANT_PAGE_SIZE)
+    table_rows = [{"object": row, "values": [getattr(row, column) for column in columns]}
+        for row in page.object_list]
     return render(request, "merchant/entity_list.html", _merchant_context(request, store,
-        section=section, title=title, columns=columns, table_rows=table_rows))
+        section=section, title=title, columns=columns, table_rows=table_rows, page_obj=page,
+        page_range=page_range, page_query=page_query))
 
 
 @login_required(login_url="/merchant/login/")
@@ -912,7 +999,26 @@ def merchant_settings(request):
         messages.success(request, "Pengaturan toko berhasil disimpan.")
         return redirect("merchant-settings")
     return render(request, "merchant/settings.html", _merchant_context(request, store,
-        title="Setup cepat", form=form, editing=True, section="settings"))
+        title="Setup cepat", form=form, editing=True, section="settings",
+        storefront_templates=STOREFRONT_TEMPLATES))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_apply_template(request):
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_editor(request, store)
+    key = request.POST.get("template", "")
+    if key not in STOREFRONT_TEMPLATES:
+        messages.error(request, "Template tidak dikenal.")
+        return redirect("merchant-settings")
+    preset = apply_storefront_template(store, key)
+    AuditLog.objects.create(store=store, actor=request.user, action="store.template_applied",
+        object_type="Store", object_id=str(store.id), details={"template": key})
+    messages.success(request, f"Template {preset['label']} diterapkan. Logo, foto sampul, dan teks "
+        "Anda tidak berubah.")
+    return redirect("merchant-settings")
 
 
 @login_required(login_url="/merchant/login/")
@@ -970,8 +1076,7 @@ def merchant_integration_retry(request, event_id):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "finance"})
     event = get_object_or_404(OutboxEvent, id=event_id, store=store)
-    event.status, event.next_retry_at, event.last_error = "pending", timezone.now(), ""
-    event.save(update_fields=["status", "next_retry_at", "last_error"])
+    event.requeue()
     AuditLog.objects.create(store=store, actor=request.user, action="integration.retry_requested",
         object_type="OutboxEvent", object_id=str(event.id), details={"topic": event.topic})
     messages.success(request, "Integrasi dijadwalkan untuk dicoba ulang.")

@@ -48,7 +48,8 @@ Audit date: 2026-08-26
     webhook auth/duplicate/mismatch/failure/late events, refunds, authorization, outbox/expiry,
     tracking and full happy path. SQLite cannot prove `select_for_update` behavior.
 18. **Observability:** Django logs, integration/reconciliation screens and DB/outbox-aware `/healthz/`.
-    Structured correlation, metrics/tracing and external exception monitoring remain absent.
+    Request IDs, a worker heartbeat and ADMINS error email exist; metrics/tracing and a hosted
+    error tracker remain absent.
 19. **Auth/RBAC:** Django sessions/CSRF protect merchant writes. Scoped querysets and role checks cover
     store objects. Customer order detail requires its browser session or per-order access token.
 20. **Tenancy:** host/slug middleware resolves Store; commerce lookups are store-scoped. Organization
@@ -64,23 +65,34 @@ Audit date: 2026-08-26
 - Added the outbox notification/expiry worker and removed a nonexistent Compose env file.
 - Added CI, readiness health, production secret/TLS guards and backup/restore guidance.
 
+## P0 — resolved 2026-10-15
+
+- DOKU is the primary gateway. DOKU orders now expire (`DOKU_PAYMENT_DUE_MINUTES + 5`); previously
+  they never did and held stock indefinitely. The worker checks DOKU's status API before cancelling,
+  so a missed notification cannot cancel a paid order.
+- Payment-session HTTP creation runs after the stock/coupon/loyalty transaction commits. The DOKU
+  invoice is stored before the call and a 15-minute creation window lets the worker recover a
+  crashed request. A failed session cancels the order and releases everything.
+- SKU uniqueness is enforced per store across products and variants, under a store row lock.
+- Biteship shipment booking and booked-shipment tracking sync are implemented.
+- Manual-transfer refunds close the refund loop for DOKU channels without API refunds.
+- PostgreSQL concurrency tests (last unit for warehouse stock and variants, single-use coupon,
+  concurrent refunds) run in CI against PostgreSQL 17. Removing the checkout row locks makes them fail.
+
 ## P0 — remaining before real provider money
 
-- Run last-item checkout with two independent PostgreSQL connections; SQLite ignores row locks.
-- Certify current Xendit events/refunds/token rotation and courier quotes in provider sandboxes.
-- Implement/certify courier shipment booking and tracking; current adapters quote only.
-- Enforce SKU uniqueness across Product and ProductVariant together at Store scope. Current constraints
-  cover products per store and variants per product, not cross-table collisions.
-- Move payment-session HTTP creation outside the stock-lock transaction using a durable post-commit
-  state while preserving idempotency and reservation recovery.
+- Certify DOKU notifications, the status API response shape and each enabled channel in the DOKU
+  sandbox; certify Biteship booking/tracking per courier (checklists in `INTEGRATIONS.md`).
+- Move production DOKU/Biteship credentials into Secrets Manager; `.env` is for local use only.
+- AWS IaC, staging promotion and a recorded restore drill (P1 below) before onboarding paying merchants.
 
 ## P1 — operational readiness
 
-- PostgreSQL concurrency tests for stock, coupon use and simultaneous refunds.
-- Dead-letter state and idempotent provider notification keys.
+- Idempotent provider notification keys.
 - CustomerAddress and CouponRedemption models for history/per-customer limits.
 - Append-only before/after/IP/organization audit context and DB/admin mutation protection.
-- Structured request IDs, metrics and external error monitoring/alerting.
+- Metrics/tracing and a hosted error tracker (request IDs, ADMINS error email, worker heartbeat
+  and dead-letter state are done).
 - Shipment lifecycle/exceptions/carrier callbacks and measured provider health.
 - Correct today/net/refund/repeat-customer dashboard metrics.
 - AWS IaC, private networking, Secrets Manager, RDS PITR alarms, staging promotion and a recorded restore

@@ -27,14 +27,35 @@ python3.13 -m venv .venv
 Local commands load `.env` and use `db.sqlite3` by default. Docker Compose overrides
 `DATABASE_URL` with its PostgreSQL service connection.
 
+## Storefront design and catalog scale
+
+- **Templates:** `/merchant/settings/` offers one-click storefront templates (Retail, Minimalis,
+  Butik, Segar, Elektronik) that set brand colour, page background, font, cover layout, and logo
+  size. Logo, cover photo, and copy are never overwritten, and every value stays editable.
+  Presets live in `apps/shops/storefront_templates.py`.
+- **Cover page:** upload a cover photo, choose a layout (text + info panel, full photo, centred),
+  and set the photo darkness so headlines stay readable. Active carousel slides take precedence.
+- **Logo:** small/medium/large sizing, optional store name beside it, and it doubles as favicon.
+- **10,000+ SKUs:** the storefront catalog (24/page), merchant product list and stock pages
+  (50/page) are paginated with stable ordering and composite indexes; low-stock figures are
+  computed in SQL; product pickers take a SKU instead of listing every product; CSV import accepts
+  10,000 rows / 10 MB per file using bulk writes. Load-test locally with
+  `python manage.py seed_catalog --count 10000`.
+
 ## Implemented MVP
 
 - Tenant resolution by custom domain or store slug; all catalog/order lookups are store-scoped.
 - Two starter storefront themes, responsive catalog and product pages.
 - PostgreSQL-backed multi-warehouse inventory with priority allocation, safety stock, transactional
   reservation, allocation traceability, and immutable order lines.
-- DOKU Checkout with hosted checkout, authenticated idempotent webhooks, amount/currency
-  verification, expiry handling, and a local demo fallback.
+- DOKU Checkout as the primary gateway: hosted checkout, signed idempotent notifications,
+  amount/currency verification, a status check before expiring unpaid orders, manual-transfer
+  refunds, and a local demo fallback. Xendit remains available as a secondary adapter.
+- Gateway sessions are created after the stock/coupon transaction commits, so a slow gateway never
+  holds inventory locks; a failed session cancels the order and releases its reservation.
+- Biteship courier booking from the merchant order screen, with waybill capture and automatic
+  tracking sync that moves orders to shipped/delivered.
+- SKUs are unique per store across products and variants.
 - Django admin for platform/store operations, integration credentials, and durable outbox events.
 - PostgreSQL/Docker production parity, static assets, migrations, seed data, and checkout tests.
 - Indonesian checkout with normalized WhatsApp numbers, structured regional addresses, delivery
@@ -66,8 +87,9 @@ The seeded store includes regular and express delivery plus voucher `HEMAT10`. W
 credentials and an origin postal code are configured, checkout replaces those seeded prices with
 server-verified Biteship courier rates based on destination and actual cart measurements.
 
-Production secrets must stay in a secret manager. Complete DOKU refund/reconciliation and
-Biteship shipment-booking certification before launch. Never store card numbers or CVV.
+Production secrets must stay in a secret manager. Certify DOKU notifications, status checks and
+each enabled channel, and Biteship booking/tracking, in their sandboxes before launch (see
+`docs/INTEGRATIONS.md`). Never store card numbers or CVV.
 
 ## Architecture
 
@@ -141,4 +163,12 @@ quarterly restore exercise. Maintain cost per store and gross margin dashboards 
 .venv/bin/ruff check .
 .venv/bin/pytest -q
 .venv/bin/python manage.py check --deploy
+```
+
+Race-condition tests in `tests/test_postgres_concurrency.py` are skipped on SQLite. Run them against
+PostgreSQL (CI does this on every push):
+
+```bash
+docker compose up -d db
+DATABASE_URL=postgresql://commerce:commerce@localhost:5433/commerce .venv/bin/pytest -q
 ```

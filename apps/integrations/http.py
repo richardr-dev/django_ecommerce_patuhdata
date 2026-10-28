@@ -12,9 +12,9 @@ DEFAULT_HEADERS = {
 }
 
 
-def _request(url, *, method, headers, timeout, **kwargs):
+def _request(url, *, method, headers, timeout, attempts=2, **kwargs):
     last_error = None
-    for _attempt in range(2):
+    for _attempt in range(attempts):
         try:
             response = requests.request(method, url, headers={**DEFAULT_HEADERS, **(headers or {})},
                 timeout=(10, timeout), **kwargs)
@@ -28,10 +28,12 @@ def _request(url, *, method, headers, timeout, **kwargs):
     raise ProviderError("Provider is temporarily unavailable after retry.") from last_error
 
 
-def request_json(url, *, method="GET", headers=None, payload=None, encoded_payload=None, timeout=20):
+def request_json(url, *, method="GET", headers=None, payload=None, encoded_payload=None, timeout=20,
+        attempts=2):
+    """Pass attempts=1 for non-idempotent calls the provider cannot deduplicate."""
     kwargs = {"data": encoded_payload} if encoded_payload is not None else {"json": payload}
     return _request(url, method=method, headers={"Content-Type": "application/json", **(headers or {})},
-        timeout=timeout, **kwargs)
+        timeout=timeout, attempts=attempts, **kwargs)
 
 
 def request_form_json(url, payload, *, headers=None, timeout=20):

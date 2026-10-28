@@ -3,8 +3,10 @@ import hashlib
 import hmac
 import json
 import re
+import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.urls import reverse
@@ -29,8 +31,13 @@ class RefundResult:
 class DemoPaymentProvider:
     """Local adapter used only when PAYMENT_PROVIDER=demo."""
 
+    @staticmethod
+    def reference_for(order):
+        return f"demo-{order.id}"
+
     def create_payment(self, order):
-        return PaymentSession(reference=f"demo-{order.id}", checkout_url=reverse("demo-payment", args=[order.id]))
+        return PaymentSession(reference=self.reference_for(order),
+            checkout_url=reverse("demo-payment", args=[order.id]))
 
     def refund(self, payment, refund):
         return RefundResult(reference=f"demo-refund-{refund.id}", status="succeeded",
@@ -80,22 +87,46 @@ class XenditPaymentProvider:
 
 
 def doku_signature(client_id, request_id, timestamp, target, body, secret_key):
-    digest = base64.b64encode(hashlib.sha256(body).digest()).decode()
+    """DOKU HMAC signature; GET requests (body=None) omit the Digest component."""
     component = (f"Client-Id:{client_id}\nRequest-Id:{request_id}\n"
-        f"Request-Timestamp:{timestamp}\nRequest-Target:{target}\nDigest:{digest}")
+        f"Request-Timestamp:{timestamp}\nRequest-Target:{target}")
+    if body is not None:
+        digest = base64.b64encode(hashlib.sha256(body).digest()).decode()
+        component += f"\nDigest:{digest}"
     signature = base64.b64encode(hmac.new(secret_key.encode(), component.encode(), hashlib.sha256).digest()).decode()
     return f"HMACSHA256={signature}"
 
 
+@dataclass(frozen=True)
+class PaymentStatus:
+    """Normalized gateway status: paid, unpaid (safe to cancel) or pending (unknown yet)."""
+    state: str
+    amount: Decimal | None = None
+    currency: str = "IDR"
+    external_id: str = ""
+    payload: dict | None = None
+
+
 class DokuPaymentProvider:
     target = "/checkout/v1/payment"
+    status_target = "/orders/v1/status/{invoice}"
 
     def __init__(self):
         if not settings.DOKU_CLIENT_ID or not settings.DOKU_SECRET_KEY:
             raise ProviderError("DOKU client ID and secret key are not configured.")
 
+    @staticmethod
+    def reference_for(order):
+        return f"NK{order.id.hex[:26]}"
+
+    def _headers(self, request_id, target, body):
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return {"Client-Id": settings.DOKU_CLIENT_ID, "Request-Id": request_id,
+            "Request-Timestamp": timestamp, "Signature": doku_signature(settings.DOKU_CLIENT_ID,
+                request_id, timestamp, target, body, settings.DOKU_SECRET_KEY)}
+
     def create_payment(self, order):
-        invoice = f"NK{order.id.hex[:26]}"
+        invoice = self.reference_for(order)
         payload = {"order": {"amount": int(order.total), "invoice_number": invoice,
             "currency": "IDR"},
             "payment": {"payment_due_date": settings.DOKU_PAYMENT_DUE_MINUTES},
@@ -106,26 +137,53 @@ class DokuPaymentProvider:
             payload["callbacks"] = {"url": (f"{settings.PUBLIC_BASE_URL}"
                 f"{reverse('order-detail', args=[order.id])}?token={order.access_token}")}
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
-        request_id = order.idempotency_key[:128]
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        headers = {"Client-Id": settings.DOKU_CLIENT_ID, "Request-Id": request_id,
-            "Request-Timestamp": timestamp, "Signature": doku_signature(settings.DOKU_CLIENT_ID,
-                request_id, timestamp, self.target, body, settings.DOKU_SECRET_KEY)}
-        data = request_json(f"{settings.DOKU_API_URL}{self.target}", method="POST", headers=headers,
-            encoded_payload=body)
+        data = request_json(f"{settings.DOKU_API_URL}{self.target}", method="POST",
+            headers=self._headers(order.idempotency_key[:128], self.target, body), encoded_payload=body)
         payment = (data.get("response") or {}).get("payment") or {}
         if not payment.get("url"):
             raise ProviderError("DOKU returned an incomplete payment session.")
-        return PaymentSession(reference=invoice, checkout_url=payment["url"])
+        # DOKU does not return an expiry; reserve stock for the due date plus a short grace
+        # period so a late notification still finds the order pending.
+        expires_at = datetime.now(UTC) + timedelta(minutes=settings.DOKU_PAYMENT_DUE_MINUTES + 5)
+        return PaymentSession(reference=invoice, checkout_url=payment["url"],
+            expires_at=expires_at.isoformat())
+
+    def fetch_status(self, order):
+        target = self.status_target.format(invoice=order.payment_reference)
+        try:
+            data = request_json(f"{settings.DOKU_API_URL}{target}",
+                headers=self._headers(uuid.uuid4().hex, target, None))
+        except ProviderError as error:
+            # DOKU answers 404 when the customer never selected a payment channel.
+            if "HTTP 404" in str(error):
+                return PaymentStatus(state="unpaid", payload={"error": str(error)})
+            raise
+        transaction_data = data.get("transaction") or {}
+        status = str(transaction_data.get("status", "")).upper()
+        order_data = data.get("order") or {}
+        if status == "SUCCESS":
+            return PaymentStatus(state="paid", amount=Decimal(str(order_data.get("amount", -1))),
+                currency=order_data.get("currency", "IDR"),
+                external_id=transaction_data.get("original_request_id") or order.payment_reference,
+                payload=data)
+        if status in {"FAILED", "EXPIRED"}:
+            return PaymentStatus(state="unpaid", payload=data)
+        return PaymentStatus(state="pending", payload=data)
 
     def refund(self, payment, refund):
         raise ProviderError(
-            "Refund DOKU harus dikonfigurasi sesuai channel pembayaran yang diaktifkan."
+            "Refund DOKU untuk channel ini belum tersedia via API. Gunakan refund transfer manual."
         )
 
 
 PROVIDERS = {"demo": DemoPaymentProvider, "xendit": XenditPaymentProvider,
     "doku": DokuPaymentProvider}
+
+
+def reserved_reference(provider, order):
+    """Reference known before the gateway call, so a lost response can still be reconciled."""
+    reference_for = getattr(provider, "reference_for", None)
+    return reference_for(order) if reference_for else ""
 
 
 def get_payment_provider(name):

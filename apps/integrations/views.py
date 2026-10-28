@@ -15,6 +15,7 @@ from apps.orders.services import InvalidOrderTransition, transition_order
 
 from .models import OutboxEvent
 from .payments import doku_signature
+from .reconciliation import confirm_payment
 
 
 def demo_payment(request, order_id):
@@ -125,23 +126,13 @@ def doku_webhook(request):
             external_id=request_id, defaults={"event_type": status, "payload": payload})
         if not created: return JsonResponse({"received": True, "duplicate": True})
         external_id = transaction_data.get("original_request_id") or request_id
-        if status == "SUCCESS":
-            amount = Decimal(str((payload.get("order") or {}).get("amount", -1)))
-            currency = (payload.get("order") or {}).get("currency", "IDR")
-            mismatch = "" if amount == order.total and currency == "IDR" else "Amount or currency mismatch"
-            state_mismatch = order.status not in {"pending", "paid"}
-            if state_mismatch and not mismatch:
-                mismatch = f"Order status {order.status} cannot accept payment"
-            PaymentTransaction.objects.update_or_create(provider="doku", external_id=external_id,
-                kind="payment", defaults={"order": order, "status": "failed" if mismatch and not state_mismatch else "succeeded",
-                    "provider_payment_id": external_id, "amount": amount, "currency": currency,
-                    "reconciled": not mismatch, "mismatch_reason": mismatch, "payload": payload})
-            if mismatch:
-                return JsonResponse({"error": mismatch, "received": state_mismatch},
-                    status=200 if state_mismatch else 400)
-            if order.status == "pending":
-                transition_order(order, "paid", note="Pembayaran DOKU diterima")
-                OutboxEvent.objects.create(store=order.store, topic="payment.received",
-                    aggregate_id=str(order.id), payload={"order_id": str(order.id),
-                        "phone": order.phone, "total": str(order.total)})
+        order_data = payload.get("order") or {}
+        mismatch = confirm_payment(order, provider="doku", external_id=external_id,
+            provider_payment_id=external_id, amount=order_data.get("amount", -1),
+            currency=order_data.get("currency", "IDR"), payload=payload,
+            note="Pembayaran DOKU diterima")
+        if mismatch:
+            received = mismatch.startswith("Order status")
+            return JsonResponse({"error": mismatch, "received": received},
+                status=200 if received else 400)
     return JsonResponse({"received": True})

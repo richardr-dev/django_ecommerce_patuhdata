@@ -17,7 +17,7 @@ class RefundError(ValueError):
 
 
 @transaction.atomic
-def create_refund_request(*, order, amount, reason, actor, note=""):
+def create_refund_request(*, order, amount, reason, actor, note="", method="gateway"):
     order = Order.objects.select_for_update().get(id=order.id)
     payment = PaymentTransaction.objects.select_for_update().filter(order=order, kind="payment",
         status="succeeded", reconciled=True).order_by("created_at").first()
@@ -29,7 +29,7 @@ def create_refund_request(*, order, amount, reason, actor, note=""):
     if amount <= 0 or committed + amount > payment.amount:
         raise RefundError("Total refund tidak boleh melebihi pembayaran terverifikasi.")
     refund = Refund.objects.create(order=order, payment=payment, amount=amount, reason=reason,
-        note=note, actor=actor)
+        note=note, actor=actor, method=method)
     if order.status not in {"refund_requested", "partially_refunded"}:
         try:
             transition_order(order, "refund_requested", note=f"Refund diajukan: {note}")
@@ -50,6 +50,16 @@ def execute_refund(refund):
         raise
     return apply_refund_result(refund, status=result.status, reference=result.reference,
         payload=result.payload)
+
+
+def record_manual_refund(refund, *, transfer_reference, actor):
+    """Record a refund that finance paid by bank transfer outside the gateway."""
+    transfer_reference = transfer_reference.strip()[:120]
+    if not transfer_reference:
+        raise RefundError("Nomor referensi transfer wajib diisi untuk refund manual.")
+    return apply_refund_result(refund, status="succeeded", reference=f"manual-{refund.id}",
+        payload={"method": "manual_transfer", "transfer_reference": transfer_reference,
+            "recorded_by": actor.get_username()})
 
 
 @transaction.atomic

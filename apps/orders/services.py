@@ -1,9 +1,13 @@
+import logging
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 
 from .models import Coupon
+
+logger = logging.getLogger("niagakit.orders")
 
 ORDER_TRANSITIONS = {
     "pending": {"paid", "payment_failed", "cancelled"},
@@ -101,19 +105,68 @@ def calculate_discount(coupon, subtotal, shipping_cost):
     return discount, shipping_cost
 
 
+# After this long past expiry an order is cancelled even if the gateway cannot be reached; a
+# payment that still arrives later is kept as an unreconciled transaction for finance to refund.
+GATEWAY_STATUS_GRACE = timedelta(hours=6)
+
+
+def _gateway_status(order, now):
+    """Ask the gateway whether an expired order was paid; None means cancel without asking."""
+    from apps.integrations.http import ProviderError
+    from apps.integrations.payments import get_payment_provider
+
+    if not order.payment_reference:
+        return None
+    try:
+        provider = get_payment_provider(order.payment_provider)
+    except (ProviderError, ValueError):
+        return None
+    if not hasattr(provider, "fetch_status"):
+        return None
+    try:
+        return provider.fetch_status(order)
+    except ProviderError:
+        if now - order.payment_expires_at >= GATEWAY_STATUS_GRACE:
+            return None
+        return "retry"
+
+
 def expire_pending_orders(*, now=None, limit=100):
-    """Cancel expired unpaid orders in small, independently recoverable transactions."""
+    """Cancel expired unpaid orders in small, independently recoverable transactions.
+
+    Gateways with a status API are asked first (outside any lock), so a paid order whose
+    notification was lost is marked paid instead of being cancelled.
+    """
+    from apps.integrations.reconciliation import confirm_payment
+
     from .models import Order
 
     now = now or timezone.now()
-    order_ids = list(Order.objects.filter(status="pending", payment_expires_at__lte=now)
-        .order_by("payment_expires_at").values_list("id", flat=True)[:limit])
+    orders = list(Order.objects.filter(status="pending", payment_expires_at__lte=now)
+        .order_by("payment_expires_at")[:limit])
     expired = 0
-    for order_id in order_ids:
-        with transaction.atomic():
-            order = Order.objects.select_for_update().get(id=order_id)
-            if order.status != "pending" or not order.payment_expires_at or order.payment_expires_at > now:
-                continue
-            if transition_order(order, "cancelled", note="Sesi pembayaran kedaluwarsa"):
-                expired += 1
+    for candidate in orders:
+        try:
+            expired += _expire_one(candidate, now, confirm_payment)
+        except Exception:  # one bad order must not keep every other reservation locked
+            logger.exception("could not expire order %s", candidate.id)
     return expired
+
+
+def _expire_one(candidate, now, confirm_payment):
+    from .models import Order
+
+    status = _gateway_status(candidate, now)
+    if status == "retry" or getattr(status, "state", None) == "pending":
+        return 0
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(id=candidate.id)
+        if order.status != "pending" or not order.payment_expires_at or order.payment_expires_at > now:
+            return 0
+        if getattr(status, "state", None) == "paid":
+            confirm_payment(order, provider=order.payment_provider,
+                external_id=status.external_id, provider_payment_id=status.external_id,
+                amount=status.amount, currency=status.currency, payload=status.payload or {},
+                note="Pembayaran terverifikasi lewat cek status gateway")
+            return 0
+        return int(transition_order(order, "cancelled", note="Sesi pembayaran kedaluwarsa"))

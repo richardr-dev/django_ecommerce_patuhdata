@@ -7,7 +7,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 
 from apps.catalog.models import InventoryLevel, Product, ProductImage, ProductVariant, Warehouse
-from apps.orders.models import Coupon, InventoryMovement, Order, ShipmentTrackingEvent, ShippingMethod
+from apps.orders.models import (
+    Coupon,
+    InventoryMovement,
+    Order,
+    ShipmentTrackingEvent,
+    ShippingMethod,
+)
 from apps.orders.pricing import calculate_price
 from apps.orders.services import InvalidOrderTransition, transition_order
 from apps.orders.tracking import sync_order_tracking
@@ -170,7 +176,7 @@ class CheckoutTests(TestCase):
             b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;",
             content_type="image/gif")
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
-            response = self.client.post("/merchant/setup/images/new/", {"product": self.product.id,
+            response = self.client.post("/merchant/setup/images/new/", {"product": self.product.sku,
                 "file": image, "url": "", "alt_text": "Foto Item", "position": 1})
         self.assertRedirects(response, "/merchant/setup/images/")
         self.assertTrue(ProductImage.objects.filter(product=self.product,
@@ -193,7 +199,7 @@ class CheckoutTests(TestCase):
             self.store.refresh_from_db()
             self.assertTrue(self.store.logo.name.startswith("stores/logos/"))
             storefront = self.client.get("/")
-            self.assertContains(storefront, self.store.logo.url, count=2)
+            self.assertContains(storefront, self.store.logo.url, count=3)
             settings_page = self.client.get("/merchant/settings/")
             self.assertContains(settings_page, "Identitas toko")
             self.assertContains(settings_page, self.store.logo.url)

@@ -1,5 +1,9 @@
 from django.contrib.auth.models import User
-from django.core.validators import FileExtensionValidator
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    RegexValidator,
+)
 from django.db import models
 
 
@@ -14,8 +18,20 @@ class Organization(models.Model):
         return self.name
 
 
+hex_color = RegexValidator(r"^#[0-9a-fA-F]{6}$", "Gunakan warna heksadesimal, misalnya #f97316.")
+
+
 class Store(models.Model):
     THEME_CHOICES = [("modern", "Modern"), ("warm", "Warm")]
+    FONT_CHOICES = [("sans", "Sans modern"), ("serif", "Serif elegan"), ("rounded", "Rounded ramah")]
+    FONT_STACKS = {
+        "sans": "Inter,ui-sans-serif,system-ui,sans-serif",
+        "serif": "ui-serif,Georgia,Cambria,'Times New Roman',serif",
+        "rounded": "ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif",
+    }
+    LOGO_SIZES = [("small", "Kecil"), ("medium", "Sedang"), ("large", "Besar")]
+    COVER_LAYOUTS = [("split", "Teks + panel info"), ("image", "Foto latar penuh"),
+        ("centered", "Teks di tengah")]
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="stores")
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="stores",
         null=True, blank=True)
@@ -23,12 +39,25 @@ class Store(models.Model):
     logo = models.FileField(upload_to="stores/logos/%Y/%m/", blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Logo PNG, JPG, or WebP. Recommended square or horizontal, maximum 5 MB.")
+    logo_size = models.CharField(max_length=10, choices=LOGO_SIZES, default="medium")
+    show_store_name = models.BooleanField(default=True,
+        help_text="Matikan jika logo sudah memuat nama toko.")
     slug = models.SlugField(unique=True)
     domain = models.CharField(max_length=253, unique=True, null=True, blank=True)
     database_alias = models.SlugField(default="default", help_text="Deployment database alias; credentials remain in environment configuration.")
     description = models.TextField(blank=True)
     theme = models.CharField(max_length=30, choices=THEME_CHOICES, default="modern")
-    primary_color = models.CharField(max_length=7, default="#f97316")
+    storefront_template = models.CharField(max_length=30, blank=True,
+        help_text="Preset tampilan terakhir yang diterapkan.")
+    primary_color = models.CharField(max_length=7, default="#f97316", validators=[hex_color])
+    background_color = models.CharField(max_length=7, default="#fffaf5", validators=[hex_color])
+    font_family = models.CharField(max_length=10, choices=FONT_CHOICES, default="sans")
+    cover_layout = models.CharField(max_length=10, choices=COVER_LAYOUTS, default="split")
+    cover_image = models.FileField(upload_to="stores/covers/%Y/%m/", blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
+        help_text="Foto sampul beranda. Disarankan 1920 × 900 px, maksimal 5 MB.")
+    cover_overlay = models.PositiveSmallIntegerField(default=45, validators=[MaxValueValidator(90)],
+        help_text="Kegelapan lapisan di atas foto sampul (0–90%) agar teks tetap terbaca.")
     hero_eyebrow = models.CharField(max_length=100, blank=True)
     hero_title = models.CharField(max_length=180, blank=True)
     hero_text = models.TextField(blank=True)
@@ -78,6 +107,10 @@ class Store(models.Model):
         ]
 
     def __str__(self): return self.name
+
+    @property
+    def font_stack(self):
+        return self.FONT_STACKS.get(self.font_family, self.FONT_STACKS["sans"])
 
 
 
