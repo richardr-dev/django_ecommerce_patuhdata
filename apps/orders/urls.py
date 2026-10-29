@@ -39,6 +39,7 @@ urlpatterns = [
     path("merchant/orders/", views.merchant_orders, name="merchant-orders"),
     path("merchant/stock/", views.merchant_stock, name="merchant-stock"),
     path("merchant/orders.csv", views.merchant_orders_csv, name="merchant-orders-csv"),
+    path("merchant/subscribers.csv", views.merchant_subscribers_csv, name="merchant-subscribers-csv"),
     path("merchant/orders/<uuid:order_id>/update/", views.merchant_order_update, name="merchant-order-update"),
     path("merchant/orders/<uuid:order_id>/tracking/", views.merchant_order_tracking,
         name="merchant-order-tracking"),

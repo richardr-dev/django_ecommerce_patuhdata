@@ -1,0 +1,5 @@
+{% extends "storefront/base.html" %}{% block title %}Wishlist · {{ store.name }}{% endblock %}{% block content %}
+<section class="featured-showcase wishlist-page"><div class="featured-heading"><div><span class="eyebrow">AKUN SAYA</span><h2>Wishlist</h2></div><a href="{% url 'account-orders' %}">Pesanan saya →</a></div>
+{% if products %}<div class="grid professional-grid">{% for product in products %}<div class="wishlist-card">{% include "storefront/product_card.html" %}<form method="post" action="{% url 'wishlist-toggle' product.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="wishlist-remove" type="submit">Hapus</button></form></div>{% endfor %}</div>
+{% else %}<div class="empty"><h2>Wishlist masih kosong</h2><p>Tekan “Simpan ke wishlist” di halaman produk untuk menyimpannya di sini.</p><a class="button" href="/">Mulai belanja</a></div>{% endif %}</section>
+{% endblock %}

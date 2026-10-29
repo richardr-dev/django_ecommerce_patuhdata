@@ -11,21 +11,46 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:8000`. The seed command creates a demo merchant (`merchant` /
-`merchant123`) and products. Platform operations are available at `/platform-admin/`.
+Open `http://localhost:8000`. This starts PostgreSQL 17, the web app (live code reload) and the
+outbox worker. On a database with no stores, start-up seeds a demo merchant (`merchant` /
+`merchant123`) and products; later restarts never reseed, so merchant edits are kept. Platform
+operations are available at `/platform-admin/`. `docker compose ps` shows each service's health.
 
-Without Docker:
+## Run in production with Docker
+
+`compose.prod.yaml` runs the built image with `DEBUG=0`, gunicorn, the worker, a private
+PostgreSQL, and [Caddy](https://caddyserver.com) in front for automatic HTTPS certificates.
+
+```bash
+cp .env.production.example .env.production   # fill in SECRET_KEY, POSTGRES_PASSWORD, domains
+docker compose -f compose.prod.yaml --env-file .env.production up -d --build
+```
+
+- **Domains:** list every brand domain in both `SITE_ADDRESS` (Caddy) and `ALLOWED_HOSTS`
+  (Django), and point their DNS at the server. `SITE_ADDRESS=localhost` gives a local HTTPS trial.
+- **Data:** PostgreSQL and uploaded media live in the `postgres_data` and `media` volumes; Caddy
+  serves `/media/` directly. Back up both (see `docs/OPERATIONS.md`).
+- **Updates:** `git pull` then rerun the `up -d --build` command; `web` applies migrations on start
+  and the worker waits for it.
+- **Security:** the image never contains `.env*`, `.git` or local databases (`.dockerignore`), runs
+  as a non-root user, and the database port is not published. Raise `SECURE_HSTS_SECONDS` once
+  every domain is HTTPS-only.
+
+Without Docker for the app (PostgreSQL still runs in Docker):
 
 ```bash
 python3.13 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
+docker compose up -d db
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py seed_demo
 .venv/bin/python manage.py runserver
 ```
 
-Local commands load `.env` and use `db.sqlite3` by default. Docker Compose overrides
-`DATABASE_URL` with its PostgreSQL service connection.
+Local commands load `.env`, whose `DATABASE_URL` points at the Compose PostgreSQL 17 service on
+`localhost:5433`, so local runs match production. Inside Compose, the web and worker containers
+override it with `db:5432`. If `DATABASE_URL` is unset, settings fall back to `db.sqlite3`; that
+fallback exists only for the quick CI job and should not be used for development.
 
 ## Storefront design and catalog scale
 
@@ -41,6 +66,24 @@ Local commands load `.env` and use `db.sqlite3` by default. Docker Compose overr
   computed in SQL; product pickers take a SKU instead of listing every product; CSV import accepts
   10,000 rows / 10 MB per file using bulk writes. Load-test locally with
   `python manage.py seed_catalog --count 10000`.
+
+## Brand storefront
+
+Everything a brand's own DTC website needs beyond checkout, managed per store from `/merchant/`:
+
+- **Product reviews:** only signed-in customers with a delivered/completed order for the product can
+  rate it (1–5★, one review per customer, editable). Names show as "Ayu S.". The back office
+  (*Ulasan produk*) can hide reviews and post a public reply, but never create or edit one.
+  Ratings show on the product page and in its structured data.
+- **Wishlist:** customers save products from the product page; see `/account/wishlist/`.
+- **Brand pages:** About, FAQ, size/brew guides and similar at `/pages/<slug>/` (*Halaman brand*),
+  linked from the header and/or footer. Bodies are plain text, so merchant input cannot inject HTML.
+- **Newsletter:** a footer signup with explicit marketing consent, deduplicated per store, with
+  POST-only unsubscribe links (`/newsletter/unsubscribe/<token>/`) and CSV export of active
+  subscribers (*Newsletter*). Sending campaigns is left to the merchant's email tool.
+- **Discovery & SEO:** related products from the same category, per-store `/robots.txt` and
+  `/sitemap.xml`, canonical URLs, Open Graph tags, product `seo_title`/`seo_description`, and
+  schema.org `Product` JSON-LD with offer and aggregate rating.
 
 ## Implemented MVP
 
@@ -165,10 +208,6 @@ quarterly restore exercise. Maintain cost per store and gross margin dashboards 
 .venv/bin/python manage.py check --deploy
 ```
 
-Race-condition tests in `tests/test_postgres_concurrency.py` are skipped on SQLite. Run them against
-PostgreSQL (CI does this on every push):
-
-```bash
-docker compose up -d db
-DATABASE_URL=postgresql://commerce:commerce@localhost:5433/commerce .venv/bin/pytest -q
-```
+With the default `.env`, `pytest` runs against PostgreSQL (start it with `docker compose up -d db`),
+including the race-condition tests in `tests/test_postgres_concurrency.py`, which are skipped on
+SQLite. CI runs the suite on both databases on every push.

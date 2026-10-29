@@ -26,6 +26,7 @@ from apps.catalog.models import (
     InventoryLevel,
     Product,
     ProductImage,
+    ProductReview,
     ProductVariant,
     Warehouse,
     annotate_available_stock,
@@ -35,7 +36,15 @@ from apps.integrations.http import ProviderError
 from apps.integrations.models import OutboxEvent
 from apps.integrations.payments import get_payment_provider, reserved_reference
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
-from apps.shops.models import AuditLog, Customer, MarketingCampaign, Store, StorefrontSlide
+from apps.shops.models import (
+    AuditLog,
+    Customer,
+    MarketingCampaign,
+    NewsletterSubscriber,
+    Store,
+    StorefrontSlide,
+    StorePage,
+)
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 
 from .access import get_customer_order_or_404, remember_customer_order
@@ -48,10 +57,12 @@ from .forms import (
     FlashSaleProductForm,
     InventoryForm,
     MarketingCampaignForm,
+    MerchantReviewForm,
     ProductForm,
     ProductImageForm,
     ShippingMethodForm,
     StorefrontSlideForm,
+    StorePageForm,
     StoreSettingsForm,
     VariantForm,
     WarehouseForm,
@@ -902,6 +913,19 @@ def merchant_orders_csv(request):
     return response
 
 
+@login_required(login_url="/merchant/login/")
+def merchant_subscribers_csv(request):
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops"})
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="newsletter-subscribers.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["email", "source", "subscribed_at"])
+    for subscriber in store.newsletter_subscribers.filter(unsubscribed_at__isnull=True).order_by("id"):
+        writer.writerow([subscriber.email, subscriber.source, subscriber.subscribed_at.isoformat()])
+    return response
+
+
 BACKOFFICE = {
     "flash-sales": (FlashSaleProduct, FlashSaleProductForm, "Produk flash sale", ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")),
     "campaigns": (MarketingCampaign, MarketingCampaignForm, "Flash sale & popup", ("name", "headline", "starts_at", "ends_at", "is_active")),
@@ -914,12 +938,22 @@ BACKOFFICE = {
     "inventory": (InventoryLevel, InventoryForm, "Persediaan", ("warehouse", "product", "on_hand", "reserved", "safety_stock", "available")),
     "shipping": (ShippingMethod, ShippingMethodForm, "Pengiriman", ("name", "provider", "flat_rate", "free_above", "is_active")),
     "coupons": (Coupon, CouponForm, "Voucher", ("code", "kind", "value", "minimum_spend", "used_count", "is_active")),
+    "pages": (StorePage, StorePageForm, "Halaman brand", ("title", "slug", "show_in_header", "show_in_footer", "is_published")),
+    "reviews": (ProductReview, MerchantReviewForm, "Ulasan produk", ("product", "rating", "display_name", "title", "is_published")),
+    "subscribers": (NewsletterSubscriber, None, "Pelanggan newsletter", ("email", "source", "subscribed_at", "is_subscribed")),
 }
+# Reviews come only from verified buyers and subscribers only from their own consent, so the
+# back office may moderate or export them but never create them.
+NO_CREATE_SECTIONS = {"reviews", "subscribers"}
+READ_ONLY_SECTIONS = {"subscribers"}
 
 
 def _entity_queryset(entity, store):
-    if entity in {Product, Category, Warehouse, ShippingMethod, Coupon, StorefrontSlide, MarketingCampaign}:
+    if entity in {Product, Category, Warehouse, ShippingMethod, Coupon, StorefrontSlide,
+            MarketingCampaign, StorePage, NewsletterSubscriber}:
         return entity.objects.filter(store=store)
+    if entity is ProductReview:
+        return entity.objects.filter(store=store, product__store=store).select_related("product")
     if entity is FlashSaleProduct:
         return entity.objects.filter(product__store=store, campaign__store=store).select_related("product", "campaign")
     if entity is ProductVariant:
@@ -944,13 +978,17 @@ def merchant_entity_list(request, section):
     if query:
         if entity is Product or entity is ProductVariant: rows = rows.filter(models.Q(name__icontains=query) | models.Q(sku__icontains=query))
         elif entity is Coupon: rows = rows.filter(code__icontains=query)
+        elif entity is NewsletterSubscriber: rows = rows.filter(email__icontains=query)
+        elif entity is StorePage: rows = rows.filter(title__icontains=query)
+        elif entity is ProductReview: rows = rows.filter(models.Q(product__name__icontains=query) | models.Q(body__icontains=query))
         elif hasattr(entity, "name"): rows = rows.filter(name__icontains=query)
     page, page_range, page_query = paginate(request, rows, MERCHANT_PAGE_SIZE)
     table_rows = [{"object": row, "values": [getattr(row, column) for column in columns]}
         for row in page.object_list]
     return render(request, "merchant/entity_list.html", _merchant_context(request, store,
         section=section, title=title, columns=columns, table_rows=table_rows, page_obj=page,
-        page_range=page_range, page_query=page_query))
+        page_range=page_range, page_query=page_query,
+        can_create=section not in NO_CREATE_SECTIONS, can_edit=section not in READ_ONLY_SECTIONS))
 
 
 @login_required(login_url="/merchant/login/")
@@ -963,6 +1001,8 @@ def merchant_entity_edit(request, section, object_id=None):
     else:
         _require_editor(request, store)
     entity, form_class, title, _ = BACKOFFICE[section]
+    if section in READ_ONLY_SECTIONS or (section in NO_CREATE_SECTIONS and not object_id):
+        raise Http404
     instance = get_object_or_404(_entity_queryset(entity, store), id=object_id) if object_id else None
     form = form_class(request.POST or None, request.FILES or None, instance=instance, store=store)
     if request.method == "POST" and form.is_valid():

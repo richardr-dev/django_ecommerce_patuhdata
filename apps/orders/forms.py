@@ -8,10 +8,11 @@ from apps.catalog.models import (
     InventoryLevel,
     Product,
     ProductImage,
+    ProductReview,
     ProductVariant,
     Warehouse,
 )
-from apps.shops.models import MarketingCampaign, Store, StorefrontSlide
+from apps.shops.models import MarketingCampaign, Store, StorefrontSlide, StorePage
 
 from .models import Coupon, ShippingMethod
 
@@ -303,3 +304,44 @@ class StoreSettingsForm(StyledModelForm):
 
     def clean_cover_image(self):
         return self._clean_image("cover_image", "foto sampul")
+
+
+class ProductReviewForm(StyledModelForm):
+    rating = forms.TypedChoiceField(choices=[(n, f"{n} bintang") for n in range(5, 0, -1)],
+        coerce=int, label="Penilaian")
+
+    class Meta:
+        model = ProductReview
+        fields = ("rating", "title", "body")
+        labels = {"title": "Judul ulasan", "body": "Ulasan Anda"}
+        widgets = {"body": forms.Textarea(attrs={"rows": 4, "maxlength": 2000})}
+
+
+class MerchantReviewForm(StyledModelForm):
+    class Meta:
+        model = ProductReview
+        fields = ("is_published", "merchant_reply")
+        labels = {"is_published": "Tampilkan di toko", "merchant_reply": "Balasan toko"}
+        widgets = {"merchant_reply": forms.Textarea(attrs={"rows": 4})}
+
+
+class StorePageForm(StyledModelForm):
+    class Meta:
+        model = StorePage
+        exclude = ("store", "updated_at")
+        help_texts = {"slug": "Alamat halaman, misalnya tentang-kami → /pages/tentang-kami/.",
+            "body": "Teks biasa; baris kosong menjadi paragraf baru."}
+        widgets = {"body": forms.Textarea(attrs={"rows": 12}),
+            "seo_description": forms.Textarea(attrs={"rows": 3})}
+
+    def clean_slug(self):
+        slug = self.cleaned_data["slug"]
+        pages = StorePage.objects.filter(store=self.store, slug=slug).exclude(id=self.instance.id)
+        if pages.exists():
+            raise forms.ValidationError("Slug ini sudah dipakai halaman lain.")
+        return slug
+
+
+class NewsletterForm(forms.Form):
+    email = forms.EmailField(max_length=254)
+    consent = forms.BooleanField(error_messages={"required": "Centang persetujuan untuk berlangganan."})

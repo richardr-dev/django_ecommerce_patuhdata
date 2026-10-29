@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import User
 from django.core.validators import (
     FileExtensionValidator,
@@ -194,3 +196,44 @@ class AuditLog(models.Model):
     object_id = models.CharField(max_length=100)
     details = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class StorePage(models.Model):
+    """Brand content such as About, FAQ, size guide or shipping info, served at /pages/<slug>/.
+    The body is plain text rendered with line breaks, so merchant input can never inject HTML."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="pages")
+    title = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=80)
+    body = models.TextField()
+    seo_description = models.CharField(max_length=320, blank=True)
+    show_in_header = models.BooleanField(default=False)
+    show_in_footer = models.BooleanField(default=True)
+    position = models.PositiveSmallIntegerField(default=0)
+    is_published = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [models.UniqueConstraint(fields=["store", "slug"], name="unique_store_page_slug")]
+
+    def __str__(self):
+        return self.title
+
+
+class NewsletterSubscriber(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="newsletter_subscribers")
+    email = models.EmailField()
+    source = models.CharField(max_length=40, default="footer")
+    unsubscribe_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    subscribed_at = models.DateTimeField(auto_now_add=True)
+    unsubscribed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "email"], name="unique_store_subscriber")]
+
+    def __str__(self):
+        return self.email
+
+    @property
+    def is_subscribed(self):
+        return self.unsubscribed_at is None

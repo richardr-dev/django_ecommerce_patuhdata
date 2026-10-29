@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models import Case, Exists, F, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Greatest
@@ -235,3 +236,43 @@ class ProductVariant(models.Model):
 
     def __str__(self):
         return f"{self.product.name} / {self.name}"
+
+
+class ProductReview(models.Model):
+    """A rating left by a signed-in customer who received the product. Merchants can hide a
+    review or reply to it, but never author or edit one, so ratings stay genuine."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="product_reviews")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="product_reviews")
+    order = models.ForeignKey("orders.Order", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="product_reviews", help_text="Delivered order that verifies the purchase.")
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    title = models.CharField(max_length=120, blank=True)
+    body = models.TextField(max_length=2000)
+    display_name = models.CharField(max_length=60)
+    is_published = models.BooleanField(default=True)
+    merchant_reply = models.TextField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["product", "user"], name="unique_product_review_per_user"),
+            models.CheckConstraint(condition=models.Q(rating__gte=1, rating__lte=5),
+                name="product_review_rating_range"),
+        ]
+        indexes = [models.Index(fields=["product", "is_published", "-created_at"],
+            name="review_product_published_idx")]
+
+    def __str__(self):
+        return f"{self.product.name} · {self.rating}★"
+
+
+class WishlistItem(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="wishlist_items")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="wishlist_items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="wishlist_items")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "product"], name="unique_wishlist_item")]

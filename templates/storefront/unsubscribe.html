@@ -1,0 +1,3 @@
+{% extends "storefront/base.html" %}{% block title %}Berhenti berlangganan · {{ store.name }}{% endblock %}{% block content %}
+<section class="payment-box">{% if subscriber.is_subscribed %}<h1>Berhenti berlangganan?</h1><p class="muted">{{ subscriber.email }} tidak akan lagi menerima email promosi dari {{ store.name }}. Email transaksi pesanan tetap dikirim.</p><form method="post">{% csrf_token %}<button type="submit">Ya, berhenti berlangganan</button></form>{% else %}<h1>Anda sudah berhenti berlangganan</h1><p class="muted">{{ subscriber.email }} tidak lagi menerima email promosi dari {{ store.name }}.</p><a class="button" href="/">Kembali ke toko</a>{% endif %}</section>
+{% endblock %}

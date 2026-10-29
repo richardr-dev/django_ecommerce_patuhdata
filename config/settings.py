@@ -9,9 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _load_local_environment():
-    """Load simple KEY=VALUE entries for local runserver; deployed env always wins."""
-    if "pytest" in Path(sys.argv[0]).name:
-        return
+    """Load simple KEY=VALUE entries for local runserver; deployed env always wins.
+
+    Tests take only DATABASE_URL, so they run on the local PostgreSQL while provider
+    credentials in .env never reach the test suite."""
+    only = {"DATABASE_URL"} if "pytest" in Path(sys.argv[0]).name else None
     env_file = BASE_DIR / ".env"
     if not env_file.exists():
         return
@@ -20,7 +22,8 @@ def _load_local_environment():
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        if only is None or key.strip() in only:
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 _load_local_environment()

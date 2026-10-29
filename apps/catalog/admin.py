@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import Category, InventoryLevel, Product, ProductImage, ProductVariant, Warehouse
+from .models import (
+    Category,
+    InventoryLevel,
+    Product,
+    ProductImage,
+    ProductReview,
+    ProductVariant,
+    Warehouse,
+    WishlistItem,
+)
 
 admin.site.register(Category)
 admin.site.register(Warehouse)
@@ -38,3 +47,17 @@ class ProductVariantAdmin(admin.ModelAdmin):
     search_fields = ("name", "sku", "product__name", "product__sku")
     list_select_related = ("product",)
     raw_id_fields = ("product",)
+
+
+@admin.register(ProductReview)
+class ProductReviewAdmin(admin.ModelAdmin):
+    list_display = ("product", "rating", "display_name", "store", "is_published", "created_at")
+    list_filter = ("store", "is_published", "rating")
+    search_fields = ("product__name", "body")
+    raw_id_fields = ("product", "user", "order")
+
+
+@admin.register(WishlistItem)
+class WishlistItemAdmin(admin.ModelAdmin):
+    list_display = ("product", "user", "store", "created_at")
+    raw_id_fields = ("product", "user")

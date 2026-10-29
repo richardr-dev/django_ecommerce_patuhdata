@@ -1,5 +1,7 @@
 {% extends "storefront/base.html" %}
-{% block title %}{{ product.name }} · {{ store.name }}{% endblock %}
+{% block title %}{{ product.seo_title|default:product.name }} · {{ store.name }}{% endblock %}
+{% block meta_description %}{{ product.seo_description|default:product.description|default:store.description|truncatechars:160 }}{% endblock %}
+{% block head_extra %}<meta property="og:type" content="product"><meta property="og:title" content="{{ product.seo_title|default:product.name }}">{% if product.primary_image_url %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ product.primary_image_url }}">{% endif %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
 {% block content %}
 <nav class="product-breadcrumb" aria-label="Breadcrumb">
   <a href="/">Produk</a><span>/</span>
@@ -38,6 +40,7 @@
   <section class="product-purchase">
     <div class="product-overline"><span>{{ product.category.name|default:"Koleksi pilihan" }}</span><span class="availability-dot">Siap dikirim</span></div>
     <h1>{{ product.name }}</h1>
+    {% if rating.count %}<a class="rating-summary" href="#ulasan"><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-hidden="true"></span><strong>{{ rating.average }}</strong><span>({{ rating.count }} ulasan)</span></a>{% endif %}
     <div class="product-rating-row">
       <strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>
       <span class="divider"></span><span>SKU {{ product.sku }}</span>
@@ -92,6 +95,9 @@
       </div>
       <p class="purchase-note">Stok baru dikunci setelah checkout berhasil dibuat. Harga dan ongkir diverifikasi oleh server.</p>
     </form>
+    <form method="post" action="{% url 'wishlist-toggle' product.id %}" class="wishlist-form">{% csrf_token %}
+      <button type="submit" class="wishlist-button {% if in_wishlist %}active{% endif %}" aria-pressed="{% if in_wishlist %}true{% else %}false{% endif %}">{% if in_wishlist %}♥ Tersimpan di wishlist{% else %}♡ Simpan ke wishlist{% endif %}</button>
+    </form>
   </section>
 </article>
 
@@ -107,6 +113,43 @@
     <div><dt>Dikirim dari</dt><dd>Gudang {{ store.name }}</dd></div>
   </dl>
 </section>
+
+<section class="product-reviews" id="ulasan" aria-labelledby="reviews-title">
+  <div class="reviews-summary">
+    <span class="eyebrow">ULASAN PEMBELI</span><h2 id="reviews-title">Kata mereka</h2>
+    {% if rating.count %}
+      <p class="reviews-average"><strong>{{ rating.average }}</strong><span>/ 5</span></p>
+      <span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-label="Rata-rata {{ rating.average }} dari 5"></span>
+      <p class="muted">Dari {{ rating.count }} pembeli terverifikasi</p>
+      <ul class="rating-bars">{% for row in rating.distribution %}<li><span>{{ row.stars }}★</span><span class="bar"><span style="width:{{ row.percent }}%"></span></span><span>{{ row.count }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted">Belum ada ulasan. Jadilah yang pertama setelah pesanan Anda diterima.</p>{% endif %}
+    {% if review_form %}
+      <form method="post" action="{% url 'product-review' product.slug %}" class="review-form">{% csrf_token %}
+        <h3>{% if own_review %}Ubah ulasan Anda{% else %}Tulis ulasan{% endif %}</h3>
+        {% for field in review_form %}<label>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}
+        <button type="submit">Kirim ulasan</button>
+      </form>
+    {% elif not request.user.is_authenticated %}<p class="muted"><a href="{% url 'login' %}?next={{ request.path }}">Masuk</a> untuk menulis ulasan setelah pesanan diterima.</p>{% endif %}
+  </div>
+  <div class="reviews-list">
+    {% for review in reviews %}
+      <article class="review">
+        <header><span class="stars" style="--rating:{{ review.rating }}" aria-label="{{ review.rating }} dari 5"></span>{% if review.order_id %}<span class="verified">✓ Pembelian terverifikasi</span>{% endif %}</header>
+        {% if review.title %}<h3>{{ review.title }}</h3>{% endif %}
+        <p>{{ review.body|linebreaksbr }}</p>
+        <small>{{ review.display_name }} · {{ review.created_at|date:"d M Y" }}</small>
+        {% if review.merchant_reply %}<blockquote class="merchant-reply"><strong>Balasan {{ store.name }}</strong>{{ review.merchant_reply|linebreaksbr }}</blockquote>{% endif %}
+      </article>
+    {% endfor %}
+  </div>
+</section>
+
+{% if related_products %}
+<section class="featured-showcase related-products" aria-labelledby="related-title">
+  <div class="featured-heading"><div><span class="eyebrow">LENGKAPI PILIHAN ANDA</span><h2 id="related-title">Produk serupa</h2></div>{% if product.category %}<a href="/?category={{ product.category.slug }}">Lihat semua →</a>{% endif %}</div>
+  <div class="grid professional-grid">{% for product in related_products %}{% include "storefront/product_card.html" %}{% endfor %}</div>
+</section>
+{% endif %}
 
 <script>
 document.querySelectorAll('.product-thumb').forEach((thumb)=>thumb.addEventListener('click',()=>{

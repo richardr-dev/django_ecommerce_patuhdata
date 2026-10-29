@@ -33,4 +33,6 @@ class SalePresentationTests(TestCase):
         self.assertFalse(product.has_discount)
         response = self.client.get("/products/not-sale/")
         self.assertNotContains(response, "Harga spesial")
-        self.assertNotContains(response, "<del>")
+        # Only the product's own price panel; related-product cards may show other sales.
+        price_panel = response.content.decode().split('class="product-price-panel"')[1].split("</div>")[0]
+        self.assertNotIn("<del>", price_panel)

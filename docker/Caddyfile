@@ -1,0 +1,16 @@
+# SITE_ADDRESS is one or more comma-separated brand domains, e.g. "kopikita.id, www.kopikita.id".
+# Caddy obtains and renews their TLS certificates automatically; "localhost" uses a local CA.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Product photos, logos and banners are public uploads; serve them without Django.
+	handle_path /media/* {
+		root * /srv/media
+		header Cache-Control "public, max-age=604800"
+		file_server
+	}
+
+	handle {
+		reverse_proxy web:8000
+	}
+}

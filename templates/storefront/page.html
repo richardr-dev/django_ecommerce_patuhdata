@@ -1,0 +1,6 @@
+{% extends "storefront/base.html" %}{% block title %}{{ page.title }} · {{ store.name }}{% endblock %}
+{% block meta_description %}{{ page.seo_description|default:page.body|truncatechars:160 }}{% endblock %}
+{% block content %}
+<article class="policy-page store-content-page"><header><span class="eyebrow">{{ store.name|upper }}</span><h1>{{ page.title }}</h1><p>Terakhir diperbarui: {{ page.updated_at|date:"d F Y" }}</p></header>
+<section>{{ page.body|linebreaks }}</section></article>
+{% endblock %}

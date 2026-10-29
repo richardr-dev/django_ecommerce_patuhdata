@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.production.example
 config/public.env
 .venv/
 __pycache__/

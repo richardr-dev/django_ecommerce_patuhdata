@@ -1,0 +1,57 @@
+# Production: built image (no source mount), DEBUG off, HTTPS via Caddy, persistent data.
+#   cp .env.production.example .env.production   # then fill in every value
+#   docker compose -f compose.prod.yaml --env-file .env.production up -d --build
+name: niagakit-prod
+
+x-app: &app
+  build: .
+  image: niagakit:latest
+  restart: always
+  env_file: [.env.production]
+  environment: &app-env
+    DEBUG: "0"
+    DATABASE_URL: postgresql://commerce:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/commerce
+  volumes: ["media:/app/media"]
+  depends_on: {db: {condition: service_healthy}}
+
+services:
+  web:
+    <<: *app
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "1"
+      SEED_DEMO: ${SEED_DEMO:-0}
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout 60 --access-logfile -
+  worker:
+    <<: *app
+    command: python manage.py process_outbox --loop
+    depends_on: {web: {condition: service_healthy}}
+    healthcheck:
+      test: ["CMD", "python", "docker/worker_healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+  db:
+    image: postgres:17-alpine
+    restart: always
+    # No published port: only the app containers can reach the database.
+    environment:
+      POSTGRES_DB: commerce
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U commerce"], interval: 5s, timeout: 3s, retries: 10}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+  caddy:
+    image: caddy:2.8-alpine
+    restart: always
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - media:/srv/media:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: {web: {condition: service_healthy}}
+
+volumes: {postgres_data: {}, media: {}, caddy_data: {}, caddy_config: {}}

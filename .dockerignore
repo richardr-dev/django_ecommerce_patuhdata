@@ -1,0 +1,19 @@
+# Secrets and local state must never be baked into an image.
+.env
+.env.*
+!.env.example
+config/public.env
+*.sqlite3
+media/
+staticfiles/
+
+.git/
+.github/
+.venv/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+tests/js/node_modules/
