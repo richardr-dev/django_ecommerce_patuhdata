@@ -10,6 +10,7 @@ dependencies = [
   "gunicorn>=23,<24",
   "psycopg[binary]>=3.2,<4",
   "requests>=2.32,<3",
+  "sentry-sdk[django]>=2.40,<3",
   "whitenoise>=6.8,<7",
 ]
 

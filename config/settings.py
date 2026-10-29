@@ -144,6 +144,25 @@ LOGGING = {
     },
 }
 
+# "db" shares cache entries (rate-limit counters) across every worker and container; the
+# per-process memory cache suits tests and single-process runserver only.
+CACHE_BACKEND = os.getenv("CACHE_BACKEND", "locmem")
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache",
+    "LOCATION": "niagakit_cache"} if CACHE_BACKEND == "db" else
+    {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "1") == "1"
+# Reverse proxies in front of Django that append X-Forwarded-For (Caddy in compose.prod.yaml = 1).
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+
+# Hosted error tracking. Empty disables it; no request bodies or personal data are sent.
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(dsn=SENTRY_DSN, environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
+        send_default_pii=False, max_request_body_size="never")
+
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")

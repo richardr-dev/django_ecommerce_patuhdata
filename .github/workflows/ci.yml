@@ -45,3 +45,32 @@ jobs:
           cache: pip
       - run: pip install -e '.[dev]'
       - run: pytest -q
+
+  docker:
+    # Build the production image and boot it against PostgreSQL, so a broken Dockerfile,
+    # entrypoint or migration fails here instead of on the server.
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env: {POSTGRES_DB: commerce, POSTGRES_USER: commerce, POSTGRES_PASSWORD: commerce}
+        options: >-
+          --health-cmd "pg_isready -U commerce" --health-interval 3s --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t niagakit:ci .
+      - name: Boot image, migrate, seed and pass the health check
+        run: |
+          docker run -d --name app --network ${{ job.services.db.network }} \
+            -e DEBUG=0 -e SECRET_KEY=ci-only-long-random-secret-key-with-more-than-fifty-characters-123 \
+            -e ALLOWED_HOSTS=localhost -e SECURE_SSL_REDIRECT=0 -e CACHE_BACKEND=db \
+            -e DATABASE_URL=postgresql://commerce:commerce@db:5432/commerce \
+            -e RUN_MIGRATIONS=1 -e SEED_DEMO=1 niagakit:ci
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' app)" = healthy ] && break
+            sleep 3
+          done
+          docker logs app
+          [ "$(docker inspect -f '{{.State.Health.Status}}' app)" = healthy ]
+          docker exec app python -c "import urllib.request as u; r=u.urlopen(u.Request('http://127.0.0.1:8000/', headers={'Host': 'localhost'})); assert r.status == 200"

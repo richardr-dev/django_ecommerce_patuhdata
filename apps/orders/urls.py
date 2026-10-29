@@ -1,23 +1,30 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
+from config.ratelimit import rate_limit
+
 from . import setup_views, views
 from .forms import CustomerLoginForm
+
+# Per IP and per submitted username/email; see config/ratelimit.py.
+login_limit = rate_limit("login", limit=10, window=900, field="username")
 
 urlpatterns = [
     path("merchant/quick-defaults/", setup_views.merchant_quick_defaults, name="merchant-quick-defaults"),
     path("merchant/products/import/", setup_views.merchant_product_import, name="merchant-product-import"),
     path("merchant/products/import/template/", setup_views.merchant_product_import_template, name="merchant-product-import-template"),
-    path("account/login/", auth_views.LoginView.as_view(
-        template_name="registration/login.html", authentication_form=CustomerLoginForm), name="login"),
+    path("account/login/", login_limit(auth_views.LoginView.as_view(
+        template_name="registration/login.html", authentication_form=CustomerLoginForm)), name="login"),
     path("account/logout/", auth_views.LogoutView.as_view(next_page="/"), name="logout"),
-    path("account/register/", views.customer_register, name="register"),
+    path("account/register/", rate_limit("register", limit=5, window=3600)(views.customer_register),
+        name="register"),
     path("account/orders/", views.account_orders, name="account-orders"),
-    path("account/password-reset/", auth_views.PasswordResetView.as_view(
+    path("account/password-reset/", rate_limit("password-reset", limit=5, window=3600, field="email")(
+        auth_views.PasswordResetView.as_view(
         template_name="registration/password_reset_form.html",
         email_template_name="registration/password_reset_email.txt",
         subject_template_name="registration/password_reset_subject.txt",
-        success_url=reverse_lazy("password-reset-done")), name="password-reset"),
+        success_url=reverse_lazy("password-reset-done"))), name="password-reset"),
     path("account/password-reset/done/", auth_views.PasswordResetDoneView.as_view(
         template_name="registration/password_reset_done.html"), name="password-reset-done"),
     path("account/reset/<uidb64>/<token>/", auth_views.PasswordResetConfirmView.as_view(
@@ -25,15 +32,16 @@ urlpatterns = [
         success_url=reverse_lazy("password-reset-complete")), name="password-reset-confirm"),
     path("account/reset/complete/", auth_views.PasswordResetCompleteView.as_view(
         template_name="registration/password_reset_complete.html"), name="password-reset-complete"),
-    path("merchant/login/", auth_views.LoginView.as_view(
-        template_name="registration/merchant_login.html"), name="merchant-login"),
+    path("merchant/login/", login_limit(auth_views.LoginView.as_view(
+        template_name="registration/merchant_login.html")), name="merchant-login"),
     path("checkout/shipping-rates/", views.shipping_rates, name="shipping-rates"),
     path("checkout/shipping-areas/", views.shipping_areas, name="shipping-areas"),
     path("cart/", views.cart_view, name="cart"),
-    path("cart/recovery/", views.cart_recovery_opt_in, name="cart-recovery-opt-in"),
+    path("cart/recovery/", rate_limit("cart-recovery", limit=10, window=3600)(
+        views.cart_recovery_opt_in), name="cart-recovery-opt-in"),
     path("cart/recover/<uuid:token>/", views.cart_recover, name="cart-recover"), path("cart/add/<int:product_id>/", views.cart_add, name="cart-add"),
     path("cart/update/<str:item_key>/", views.cart_update, name="cart-update"),
-    path("checkout/", views.checkout, name="checkout"), path("orders/<uuid:order_id>/", views.order_detail, name="order-detail"),
+    path("checkout/", rate_limit("checkout", limit=30, window=600)(views.checkout), name="checkout"), path("orders/<uuid:order_id>/", views.order_detail, name="order-detail"),
     path("orders/<uuid:order_id>/return/", views.request_return, name="request-return"),
     path("merchant/", views.merchant_dashboard, name="merchant-dashboard"),
     path("merchant/orders/", views.merchant_orders, name="merchant-orders"),

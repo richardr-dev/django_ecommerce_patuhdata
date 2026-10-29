@@ -271,3 +271,18 @@ class DiscoveryTests(BrandStorefrontTestCase):
         self.assertContains(response, "<title>Kopi Gayo Wine 250g · Kopi Brand</title>", html=False)
         self.assertContains(response, '<meta name="description" content="Biji kopi fermentasi.">')
         self.assertContains(response, '<link rel="canonical" href="http://testserver/products/gayo/">')
+
+
+class TermsPageTests(BrandStorefrontTestCase):
+    def test_builtin_terms_render_and_are_linked_from_checkout_flow(self):
+        response = self.client.get("/terms/")
+        self.assertContains(response, "Syarat & Ketentuan")
+        self.assertContains(response, "tidak menyimpan nomor kartu")
+        self.assertContains(self.client.get("/"), 'href="/terms/"')
+        self.assertContains(self.client.get("/account/register/"), 'href="/terms/"')
+
+    def test_store_terms_url_takes_precedence(self):
+        self.store.terms_url = "https://kopi.example/terms"
+        self.store.save()
+        response = self.client.get("/terms/")
+        self.assertRedirects(response, "https://kopi.example/terms", fetch_redirect_response=False)

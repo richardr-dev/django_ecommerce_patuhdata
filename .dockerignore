@@ -17,3 +17,6 @@ staticfiles/
 .ruff_cache/
 .DS_Store
 tests/js/node_modules/
+
+# Database and media backups from docker/backup.sh
+backups/

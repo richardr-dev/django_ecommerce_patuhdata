@@ -11,6 +11,9 @@ x-app: &app
   environment: &app-env
     DEBUG: "0"
     DATABASE_URL: postgresql://commerce:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/commerce
+    CACHE_BACKEND: db
+    # Caddy is the one proxy in front of Django; it appends the client IP to X-Forwarded-For.
+    TRUSTED_PROXY_HOPS: "1"
   volumes: ["media:/app/media"]
   depends_on: {db: {condition: service_healthy}}
 
@@ -41,6 +44,24 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U commerce"], interval: 5s, timeout: 3s, retries: 10}
     volumes: ["postgres_data:/var/lib/postgresql/data"]
+  backup:
+    image: postgres:17-alpine
+    restart: always
+    entrypoint: ["/scripts/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: commerce
+      PGDATABASE: commerce
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./docker/backup.sh:/scripts/backup.sh:ro
+      - ./docker/restore.sh:/scripts/restore.sh:ro
+      - media:/media
+      # Host folder, so backups survive "docker compose down -v". Copy it off the server too.
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on: {db: {condition: service_healthy}}
   caddy:
     image: caddy:2.8-alpine
     restart: always

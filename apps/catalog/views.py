@@ -260,3 +260,11 @@ def privacy_policy(request):
     if not request.store:
         raise Http404
     return render(request, "storefront/privacy.html")
+
+
+def terms_of_service(request):
+    if not request.store:
+        raise Http404
+    if request.store.terms_url:
+        return redirect(request.store.terms_url)
+    return render(request, "storefront/terms.html")

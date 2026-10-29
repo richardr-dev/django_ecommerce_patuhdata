@@ -13,3 +13,4 @@ media/
 *.egg-info/
 .ruff_cache/
 .DS_Store
+backups/

@@ -1,5 +1,5 @@
 {% extends "storefront/base.html" %}{% block title %}Daftar · {{ store.name }}{% endblock %}{% block content %}
 <section class="auth-card"><span class="eyebrow">AKUN PELANGGAN</span><h1>Buat akun</h1><p class="muted">Daftar agar pembelian tersimpan otomatis dan status pesanan dapat dipantau kapan saja.</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<button>Daftar dan lanjutkan</button></form>
+<form method="post">{% csrf_token %}{{ form.as_p }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<p class="muted">Dengan mendaftar, Anda menyetujui <a href="{% url 'terms-of-service' %}">Syarat & Ketentuan</a> dan <a href="{% url 'privacy-policy' %}">Kebijakan Privasi</a>.</p><button>Daftar dan lanjutkan</button></form>
 <div class="auth-links"><span>Sudah punya akun?</span><a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Masuk</a></div></section>
 {% endblock %}

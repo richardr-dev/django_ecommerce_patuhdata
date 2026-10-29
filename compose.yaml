@@ -7,6 +7,9 @@ x-app: &app
   env_file:
     - path: .env
       required: false
+  environment: &app-env
+    DATABASE_URL: postgresql://commerce:commerce@db:5432/commerce
+    CACHE_BACKEND: db
   # Same live code in web and worker; without the mount they run whatever the image was built with.
   volumes: [".:/app"]
   depends_on: {db: {condition: service_healthy}}
@@ -17,15 +20,13 @@ services:
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --reload --access-logfile -
     ports: ["8000:8000"]
     environment:
-      DATABASE_URL: postgresql://commerce:commerce@db:5432/commerce
+      <<: *app-env
       RUN_MIGRATIONS: "1"
       # Seeds only an empty database, so restarts never reset merchant edits.
       SEED_DEMO: "1"
   worker:
     <<: *app
     command: python manage.py process_outbox --loop
-    environment:
-      DATABASE_URL: postgresql://commerce:commerce@db:5432/commerce
     # Start after web has migrated the database.
     depends_on: {web: {condition: service_healthy}}
     healthcheck:
