@@ -11,6 +11,7 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase, override_settings
 from django.urls import URLPattern, URLResolver, get_resolver, reverse
 
+from apps.billing.models import Plan, SubscriptionInvoice
 from apps.catalog.models import Category, InventoryLevel, Product, ProductVariant, Warehouse
 from apps.integrations.models import OutboxEvent
 from apps.orders.models import Coupon, Order, OrderItem, PaymentTransaction, ShippingMethod
@@ -79,13 +80,15 @@ class SmokeUrlTests(TestCase):
         transition_order(cls.order, "paid")
         cls.event = OutboxEvent.objects.create(store=cls.store, topic="order.created",
             aggregate_id=str(cls.order.id), payload={"order_id": str(cls.order.id)})
+        cls.invoice = SubscriptionInvoice.objects.create(store=cls.store,
+            plan=Plan.objects.get(code="pro"), amount=Decimal(99000), provider="demo")
 
     def url_kwargs(self):
         return {"order_id": self.order.id, "product_id": self.product.id, "slug": self.product.slug,
             "item_key": f"p:{self.product.id}", "token": self.order.access_token,
             "customer_id": self.customer_record.id, "event_id": self.event.id,
             "section": "products", "object_id": self.product.id, "uidb64": "MQ",
-            "address_id": 1, "action": "default"}
+            "address_id": 1, "action": "default", "invoice_id": self.invoice.id}
 
     def _clients(self):
         anonymous = Client(raise_request_exception=False)

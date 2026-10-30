@@ -36,7 +36,11 @@ def paginate(request, queryset, per_page, *, param="page"):
 
 
 def home(request):
-    if not request.store: return render(request, "storefront/no_store.html", status=503)
+    if not request.store:
+        if getattr(request, "is_platform", False):
+            from apps.shops.views import platform_home
+            return platform_home(request)
+        return render(request, "storefront/no_store.html", status=503)
     products = _storefront_products(request.store)
     query = request.GET.get("q", "").strip()
     record_event(request, "search" if query else "home_view", metadata={"query": query} if query else {})
@@ -258,12 +262,16 @@ def sitemap_xml(request):
 
 def privacy_policy(request):
     if not request.store:
+        if getattr(request, "is_platform", False):
+            return render(request, "platform/privacy.html")
         raise Http404
     return render(request, "storefront/privacy.html")
 
 
 def terms_of_service(request):
     if not request.store:
+        if getattr(request, "is_platform", False):
+            return render(request, "platform/terms.html")
         raise Http404
     if request.store.terms_url:
         return redirect(request.store.terms_url)

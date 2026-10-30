@@ -1,5 +1,6 @@
 # Local development: live code reload, demo data on first start, PostgreSQL on localhost:5433.
-#   docker compose up --build        then open http://localhost:8000
+#   docker compose up --build        then open http://localhost:8000 (platform landing page)
+#   The demo store is at http://kopi-kita.localhost:8000, its back office at /merchant/.
 # Production lives in compose.prod.yaml.
 x-app: &app
   build: .
@@ -10,6 +11,9 @@ x-app: &app
   environment: &app-env
     DATABASE_URL: postgresql://commerce:commerce@db:5432/commerce
     CACHE_BACKEND: db
+    # Platform mode: http://localhost:8000 is the landing page, http://<slug>.localhost:8000 a store.
+    PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+    PLATFORM_BASE_URL: ${PLATFORM_BASE_URL:-http://localhost:8000}
   # Same live code in web and worker; without the mount they run whatever the image was built with.
   volumes: [".:/app"]
   depends_on: {db: {condition: service_healthy}}

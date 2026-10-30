@@ -13,7 +13,8 @@ def _load_local_environment():
 
     Tests take only DATABASE_URL, so they run on the local PostgreSQL while provider
     credentials in .env never reach the test suite."""
-    only = {"DATABASE_URL"} if "pytest" in Path(sys.argv[0]).name else None
+    # sys.modules, not argv: "python -m pytest" runs with argv[0] ending in __main__.py.
+    only = {"DATABASE_URL"} if "pytest" in sys.modules else None
     env_file = BASE_DIR / ".env"
     if not env_file.exists():
         return
@@ -29,18 +30,21 @@ def _load_local_environment():
 _load_local_environment()
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-local-development-key")
 DEBUG = os.getenv("DEBUG", "1") == "1"
-ALLOWED_HOSTS = [x.strip() for x in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")]
+ALLOWED_HOSTS = [x.strip() for x in os.getenv("ALLOWED_HOSTS",
+    "localhost,127.0.0.1,.localhost,testserver").split(",")]
 if not DEBUG and SECRET_KEY == "unsafe-local-development-key":
     raise ImproperlyConfigured("SECRET_KEY must be explicitly configured in production.")
 
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
-    "apps.shops", "apps.catalog", "apps.orders", "apps.integrations",
+    "apps.shops", "apps.catalog", "apps.orders", "apps.integrations", "apps.billing",
 ]
 MIDDLEWARE = [
     "config.request_id.RequestIDMiddleware",
     "config.views.HealthCheckMiddleware",
+    # Caddy's on-demand TLS check (http://web:8000/internal/tls-ask/), before host validation.
+    "apps.shops.views.TLSAskMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -59,6 +63,7 @@ TEMPLATES = [{
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request", "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages", "apps.shops.context.store_context",
+        "apps.shops.context.platform_context",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -163,9 +168,28 @@ if SENTRY_DSN:
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
         send_default_pii=False, max_request_body_size="never")
 
+# Self-serve platform: sellers sign up at PLATFORM_DOMAIN and get <slug>.PLATFORM_DOMAIN.
+# Empty keeps single-host mode (store chosen by custom domain or ?store=slug).
+PLATFORM_DOMAIN = os.getenv("PLATFORM_DOMAIN", "").strip().lower()
+# The store-address suffix shown to sellers; lets a local copy show "lakuin.store" while its
+# real links stay on PLATFORM_DOMAIN (localhost).
+PLATFORM_DISPLAY_DOMAIN = os.getenv("PLATFORM_DISPLAY_DOMAIN", "").strip().lower()
+PLATFORM_NAME = os.getenv("PLATFORM_NAME", "Lakuin")
+PLATFORM_TAGLINE = os.getenv("PLATFORM_TAGLINE", "Biar Jualan Makin Laku")
+# Scheme and port for links to the platform and store subdomains. Defaults to PUBLIC_BASE_URL;
+# set it when PUBLIC_BASE_URL is a tunnel for webhooks (e.g. ngrok) but people browse localhost.
+PLATFORM_BASE_URL = os.getenv("PLATFORM_BASE_URL", "").rstrip("/")
+# The company operating the platform: copyright, legal pages and the platform footer.
+PLATFORM_COMPANY_NAME = os.getenv("PLATFORM_COMPANY_NAME", "PT Patuhdata Solusi Nusantara")
+PLATFORM_COMPANY_URL = os.getenv("PLATFORM_COMPANY_URL", "https://patuhdata.id")
+PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
+
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
+# The demo provider marks orders paid without money changing hands, so it only works in
+# development unless a production trial opts in explicitly.
+ALLOW_DEMO_PAYMENTS = os.getenv("ALLOW_DEMO_PAYMENTS", "1" if DEBUG else "0") == "1"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 DOKU_CLIENT_ID = os.getenv("DOKU_CLIENT_ID", "")
 DOKU_API_KEY = os.getenv("DOKU_API_KEY", "")

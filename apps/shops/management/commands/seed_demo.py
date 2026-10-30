@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from apps.catalog.models import Category, InventoryLevel, Product, Warehouse
 from apps.orders.models import Coupon, ShippingMethod
 from apps.shops.models import Organization, Store, StorePage
+from apps.shops.tenancy import platform_url, store_url
 
 
 class Command(BaseCommand):
@@ -39,3 +40,4 @@ class Command(BaseCommand):
         ]):
             StorePage.objects.update_or_create(store=store, slug=slug, defaults={"title": title, "body": body, "show_in_header": in_header, "position": position})
         self.stdout.write(self.style.SUCCESS("Demo ready: merchant / merchant123"))
+        self.stdout.write(f"Platform: {platform_url('/')}  ·  Demo store: {store_url(store)}")

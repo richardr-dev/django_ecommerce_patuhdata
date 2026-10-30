@@ -9,6 +9,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
+from apps.billing.services import SUBSCRIPTION_PREFIX, handle_doku_notification
 from apps.orders.access import get_customer_order_or_404
 from apps.orders.models import Order, PaymentEvent, PaymentTransaction
 from apps.orders.services import InvalidOrderTransition, transition_order
@@ -19,7 +20,7 @@ from .reconciliation import confirm_payment
 
 
 def demo_payment(request, order_id):
-    if not request.store: raise Http404
+    if not request.store or not settings.ALLOW_DEMO_PAYMENTS: raise Http404
     order = get_customer_order_or_404(request, order_id)
     if request.method == "POST":
         with transaction.atomic():
@@ -118,6 +119,9 @@ def doku_webhook(request):
     # A FAILED notification is therefore acknowledged but must not fail the order.
     if status == "FAILED":
         return JsonResponse({"received": True, "ignored": True})
+    if invoice.startswith(SUBSCRIPTION_PREFIX):
+        body, status_code = handle_doku_notification(invoice, request_id, payload)
+        return JsonResponse(body, status=status_code)
     with transaction.atomic():
         try: order = Order.objects.select_for_update().get(
             payment_reference=invoice, payment_provider="doku")

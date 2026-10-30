@@ -10,6 +10,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.billing.plans import product_limit_error
 from apps.catalog.models import (
     Category,
     InventoryLevel,
@@ -19,6 +20,7 @@ from apps.catalog.models import (
     _lock_store,
 )
 from apps.shops.models import AuditLog, Store
+from apps.shops.tenancy import store_url
 
 from .models import ShippingMethod
 
@@ -76,9 +78,14 @@ def import_products(store, parsed):
     """Upsert products by SKU with a fixed number of queries per batch rather than per row.
     The store row lock serialises this with Product.save()'s SKU uniqueness check."""
     _lock_store(store.id)
+    skus = [row["sku"] for row in parsed]
+    # Imported rows are saved active, so they all count toward the plan's product limit.
+    limit_error = product_limit_error(store, len(skus) + Product.objects.filter(
+        store=store, is_active=True).exclude(sku__in=skus).count())
+    if limit_error:
+        raise ValueError(limit_error)
     warehouse, _ = Warehouse.objects.get_or_create(store=store, code="MAIN",
         defaults={"name": "Gudang Utama", "priority": 10})
-    skus = [row["sku"] for row in parsed]
     variant_skus = set(ProductVariant.objects.filter(product__store=store, sku__in=skus)
         .values_list("sku", flat=True))
     if variant_skus:
@@ -138,17 +145,23 @@ def import_products(store, parsed):
     return len(to_create), len(to_update)
 
 
+def create_store_defaults(store):
+    """The main warehouse and a flat-rate shipping method a store needs before its first sale."""
+    _warehouse, warehouse_created = Warehouse.objects.get_or_create(store=store, code="MAIN",
+        defaults={"name": "Gudang Utama", "priority": 10, "is_active": True})
+    _shipping, shipping_created = ShippingMethod.objects.get_or_create(store=store, code="reguler",
+        defaults={"name": "Pengiriman Reguler", "provider": "manual", "flat_rate": 15000,
+            "eta": "2–4 hari kerja", "is_active": True})
+    return warehouse_created, shipping_created
+
+
 @login_required(login_url="/merchant/login/")
 def merchant_quick_defaults(request):
     if request.method != "POST":
         raise Http404
     store, _, _ = _setup_store(request)
     with transaction.atomic():
-        _warehouse, warehouse_created = Warehouse.objects.get_or_create(store=store, code="MAIN",
-            defaults={"name": "Gudang Utama", "priority": 10, "is_active": True})
-        _shipping, shipping_created = ShippingMethod.objects.get_or_create(store=store, code="reguler",
-            defaults={"name": "Pengiriman Reguler", "provider": "manual", "flat_rate": 15000,
-                "eta": "2–4 hari kerja", "is_active": True})
+        warehouse_created, shipping_created = create_store_defaults(store)
         AuditLog.objects.create(store=store, actor=request.user, action="store.quick_defaults_created",
             object_type="Store", object_id=str(store.id), details={"warehouse": warehouse_created,
                 "shipping": shipping_created})
@@ -199,5 +212,6 @@ def merchant_product_import(request):
                 return redirect("merchant-entity-list", section="products")
             except (UnicodeDecodeError, csv.Error, ValueError) as error:
                 messages.error(request, str(error))
-    context = {"merchant_store": store, "merchant_stores": stores, "merchant_role": role}
+    context = {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "merchant_store_url": store_url(store)}
     return render(request, "merchant/product_import.html", context)

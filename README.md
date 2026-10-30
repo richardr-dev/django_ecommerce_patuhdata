@@ -11,8 +11,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:8000`. This starts PostgreSQL 17, the web app (live code reload) and the
-outbox worker. On a database with no stores, start-up seeds a demo merchant (`merchant` /
+Open `http://localhost:8000` for the platform landing page; the demo store lives at
+`http://kopi-kita.localhost:8000` and every new store at `http://<slug>.localhost:8000`
+(browsers resolve `*.localhost` to your machine, so no DNS or hosts-file setup). Rebuild with
+`--build` after pulling changes, or Compose reuses stale containers. This starts PostgreSQL 17,
+the web app (live code reload) and the outbox worker. On a database with no stores, start-up seeds a demo merchant (`merchant` /
 `merchant123`) and products; later restarts never reseed, so merchant edits are kept. Platform
 operations are available at `/platform-admin/`. `docker compose ps` shows each service's health.
 
@@ -51,6 +54,51 @@ Local commands load `.env`, whose `DATABASE_URL` points at the Compose PostgreSQ
 `localhost:5433`, so local runs match production. Inside Compose, the web and worker containers
 override it with `db:5432`. If `DATABASE_URL` is unset, settings fall back to `db.sqlite3`; that
 fallback exists only for the quick CI job and should not be used for development.
+
+## Self-serve platform (sellers open their own stores)
+
+Set `PLATFORM_DOMAIN` (e.g. `niagakit.id`) to run NiagaKit as a store builder:
+
+- **Hosts:** `niagakit.id` is the platform (marketing home with plans, `/stores/` directory,
+  `/start/` signup, `/merchant/` back office); `<slug>.niagakit.id` is each store; a store on a
+  plan with custom domains is also served on its own domain. Any other host gets a 404 before a
+  view runs, so platform mode can use `ALLOWED_HOSTS=*`. Leaving `PLATFORM_DOMAIN` empty keeps
+  single-host mode (custom domain or `?store=slug`).
+- **Signup:** one form creates the owner account, organization, store, a subscription on the
+  default plan, the main warehouse and a flat-rate shipping method, then opens the back office.
+  Signed-in owners use the same form to add another brand. Subdomains are 3–40 characters and
+  reserved names (`www`, `admin`, `api`, …; `apps/shops/tenancy.py`) are refused.
+- **Plans:** `Free` (50 active products, subdomain only) and `Pro` (Rp99.000/month or
+  Rp990.000/year, unlimited products, custom domain) are seeded; edit or add plans in
+  `/platform-admin/billing/plan/`. Limits are enforced in the product form and CSV import.
+  Stores created by the operator without a subscription have no limits.
+- **Subscription billing:** *Langganan* in the back office pays through DOKU into the
+  platform's own account (invoice numbers `SB…`; storefront orders use `NK…`). The signed
+  webhook activates or extends the plan once per invoice; *Cek pembayaran* asks DOKU directly
+  when a notification was lost. With `PAYMENT_PROVIDER=demo` a local page simulates payment;
+  it is refused once a real provider is configured. A lapsed paid plan falls back to the
+  default plan: existing products stay, new ones are blocked past the limit, and the custom
+  domain redirects to the subdomain.
+- **HTTPS:** `docker/Caddyfile` gets certificates for `SITE_ADDRESS` at start-up and on demand for
+  store hosts, only after `/internal/tls-ask/` approves the name. Point a wildcard DNS record
+  `*.niagakit.id` at the server; sellers point their own domain at it (CNAME for `www`, A
+  record for the apex). Let's Encrypt allows about 50 new certificates per week per registered
+  domain; past that many new stores a week, switch to one wildcard certificate (DNS challenge,
+  which needs a Caddy build with your DNS provider's plugin).
+- **Locally:** platform mode is the default in `compose.yaml` and `.env.example`
+  (`PLATFORM_DOMAIN=localhost`, `PLATFORM_BASE_URL=http://localhost:8000`). `PUBLIC_BASE_URL`
+  may stay an ngrok tunnel for DOKU webhooks: its host is treated as a platform host, while
+  `PLATFORM_BASE_URL` sets the links people click.
+- **Brand:** `PLATFORM_NAME` (default **Lakuin**) and `PLATFORM_TAGLINE` (default *Biar Jualan
+  Makin Laku*) name the platform in page titles, the landing page, and every store's footer.
+- **Store contact:** each store's WhatsApp number (asked at signup) and optional Instagram
+  handle show as icons in the storefront footer, plus a floating "Chat penjual" WhatsApp button.
+- **Production (lakuin.store):** `.env.production.example` is filled in for `lakuin.store`;
+  `www.lakuin.store` redirects to the apex. Demo payments mark orders paid for free, so with
+  `DEBUG=0` they are refused unless `ALLOW_DEMO_PAYMENTS=1`; configure DOKU before launch.
+- **Operator & legal:** `PLATFORM_COMPANY_NAME` (default PT Patuhdata Solusi Nusantara),
+  `PLATFORM_COMPANY_URL` and `PLATFORM_SUPPORT_EMAIL` appear in the copyright, footer, and the
+  platform's `/terms/` and `/privacy/`; storefronts credit the platform in their footer.
 
 ## Storefront design and catalog scale
 

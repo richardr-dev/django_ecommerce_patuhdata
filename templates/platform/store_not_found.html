@@ -1,0 +1,3 @@
+{% extends "platform/base.html" %}{% block title %}Toko tidak ditemukan · {{ platform_name }}{% endblock %}{% block content %}
+<section class="pf-hero pf-hero-sm"><h1>Toko tidak ditemukan</h1><p>Alamat ini belum dipakai toko mana pun atau tokonya sedang tidak aktif.</p><div class="pf-actions"><a class="pf-button" href="{% url 'store-signup' %}">Pakai alamat ini untuk toko Anda</a><a class="pf-link" href="{{ platform_home_url }}">Ke beranda {{ platform_name }} →</a></div></section>
+{% endblock %}

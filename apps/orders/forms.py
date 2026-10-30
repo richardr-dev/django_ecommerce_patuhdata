@@ -1,7 +1,11 @@
+import re
+
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
+from apps.billing.plans import product_limit_error
 from apps.catalog.models import (
     Category,
     FlashSaleProduct,
@@ -12,9 +16,13 @@ from apps.catalog.models import (
     ProductVariant,
     Warehouse,
 )
+from apps.shops.forms import clean_instagram_handle
 from apps.shops.models import MarketingCampaign, Store, StorefrontSlide, StorePage
+from apps.shops.tenancy import custom_domain_allowed
 
 from .models import Coupon, CustomerAddress, ShippingMethod
+
+DOMAIN_PATTERN = re.compile(r"(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 
 
 class StyledModelForm(forms.ModelForm):
@@ -83,6 +91,16 @@ class ProductForm(StyledModelForm):
         if self.instance.pk:
             self.fields.pop("warehouse")
             self.fields.pop("initial_stock")
+
+    def clean(self):
+        cleaned = super().clean()
+        # self.instance still holds the saved values here; the form copies onto it afterwards.
+        if self.store and cleaned.get("is_active") and not (self.instance.pk and self.instance.is_active):
+            error = product_limit_error(self.store,
+                Product.objects.filter(store=self.store, is_active=True).count() + 1)
+            if error:
+                raise forms.ValidationError(error)
+        return cleaned
 
 
 class FlashSaleProductForm(ProductSkuFormMixin, StyledModelForm):
@@ -238,7 +256,8 @@ class StoreSettingsForm(StyledModelForm):
             "trust_title_3", "trust_text_3", "announcement_text", "announcement_link_label",
             "announcement_link_url", "campaign_eyebrow", "campaign_title", "campaign_text",
             "campaign_button_label", "campaign_link_url", "currency", "tax_rate",
-            "support_phone", "support_email", "terms_url", "privacy_url", "return_policy")
+            "support_phone", "instagram", "support_email", "terms_url", "privacy_url", "return_policy",
+            "listed_in_directory")
         fields = fields + ("loyalty_enabled", "loyalty_points_per_step", "loyalty_spend_step",
             "loyalty_point_value", "loyalty_min_redeem")
         widgets = {"description": forms.Textarea(attrs={"rows": 3}),
@@ -268,6 +287,32 @@ class StoreSettingsForm(StyledModelForm):
             "campaign_title": "Judul kampanye", "campaign_text": "Deskripsi kampanye",
             "campaign_button_label": "Teks tombol kampanye", "campaign_link_url": "Tujuan kampanye"}
         for name, label in labels.items(): self.fields[name].label = label
+        if "domain" in self.fields:
+            domain_field = self.fields["domain"]
+            domain_field.label = "Domain sendiri"
+            if custom_domain_allowed(self.instance):
+                target = settings.PLATFORM_DOMAIN or "alamat IP server"
+                domain_field.help_text = (f"Contoh: tokoanda.com. Arahkan DNS domain ke {target} "
+                    "(CNAME untuk subdomain seperti www, A record untuk domain utama); "
+                    "HTTPS aktif otomatis setelah DNS tersambung.")
+            else:
+                domain_field.disabled = True
+                domain_field.help_text = "Domain sendiri tersedia di paket berbayar (menu Langganan)."
+
+    def clean_instagram(self):
+        return clean_instagram_handle(self.cleaned_data.get("instagram"))
+
+    def clean_domain(self):
+        domain = (self.cleaned_data.get("domain") or "").strip().lower().rstrip(".")
+        if not domain:
+            return None
+        domain = domain.removeprefix("https://").removeprefix("http://").split("/")[0]
+        platform = settings.PLATFORM_DOMAIN
+        if platform and (domain == platform or domain.endswith(f".{platform}")):
+            raise forms.ValidationError(f"Alamat {platform} sudah otomatis tersedia; isi domain milik Anda sendiri.")
+        if not DOMAIN_PATTERN.fullmatch(domain):
+            raise forms.ValidationError("Masukkan nama domain yang valid, misalnya tokoanda.com.")
+        return domain
         self.fields["domain"].help_text = "Kosongkan saat lokal. Isi tanpa https://, misalnya tokoanda.id."
         self.fields["primary_color"].help_text = "Warna tombol, tautan, dan aksen toko."
         extra_labels = {"logo_size": "Ukuran logo", "show_store_name": "Tampilkan nama di samping logo",

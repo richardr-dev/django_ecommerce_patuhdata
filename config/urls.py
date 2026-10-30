@@ -14,6 +14,8 @@ urlpatterns = [
     path("platform-admin/", admin.site.urls),
     path("integrations/", include("apps.integrations.urls")),
     path("api/v1/", include("apps.orders.api_urls")),
+    path("", include("apps.billing.urls")),
+    path("", include("apps.shops.urls")),
     path("", include("apps.orders.urls")),
     path("", include("apps.catalog.urls")),
 ]

@@ -1,0 +1,4 @@
+{% extends "platform/base.html" %}{% block title %}Direktori toko · {{ platform_name }}{% endblock %}{% block content %}
+<section class="pf-section"><h1>Direktori toko</h1><form method="get" class="pf-search" role="search"><label class="sr-only" for="store-search">Cari toko</label><input id="store-search" name="q" value="{{ query }}" placeholder="Cari nama toko atau produk unggulan"><button class="pf-button">Cari</button></form>
+{% if stores %}<div class="pf-store-grid">{% for item in stores %}{% include "platform/store_card.html" %}{% endfor %}</div>{% include "storefront/pagination.html" with label="Halaman direktori" %}{% else %}<p class="pf-muted">{% if query %}Tidak ada toko yang cocok dengan “{{ query }}”.{% else %}Belum ada toko yang tampil di direktori.{% endif %}</p>{% endif %}</section>
+{% endblock %}

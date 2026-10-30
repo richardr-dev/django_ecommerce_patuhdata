@@ -84,6 +84,8 @@ class Store(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     support_phone = models.CharField(max_length=30, blank=True)
     support_email = models.EmailField(blank=True)
+    instagram = models.CharField(max_length=30, blank=True,
+        help_text="Nama pengguna Instagram toko, tanpa @. Tampil sebagai ikon di toko.")
     terms_url = models.URLField(blank=True)
     privacy_url = models.URLField(blank=True)
     return_policy = models.TextField(blank=True)
@@ -95,6 +97,8 @@ class Store(models.Model):
     loyalty_point_value = models.PositiveIntegerField(default=100,
         help_text="IDR discount value of one point.")
     loyalty_min_redeem = models.PositiveIntegerField(default=10)
+    listed_in_directory = models.BooleanField(default=True,
+        help_text="Tampilkan toko ini di direktori toko platform.")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -109,6 +113,18 @@ class Store(models.Model):
         ]
 
     def __str__(self): return self.name
+
+    @property
+    def whatsapp_url(self):
+        """wa.me chat link for the store's support number (Indonesian 08… becomes 628…)."""
+        digits = "".join(character for character in self.support_phone if character.isdigit())
+        if digits.startswith("0"):
+            digits = "62" + digits[1:]
+        return f"https://wa.me/{digits}" if len(digits) >= 9 else ""
+
+    @property
+    def instagram_url(self):
+        return f"https://www.instagram.com/{self.instagram}/" if self.instagram else ""
 
     @property
     def font_stack(self):

@@ -46,6 +46,7 @@ from apps.shops.models import (
     StorePage,
 )
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
+from apps.shops.tenancy import store_url
 
 from .access import get_customer_order_or_404, remember_customer_order
 from .addresses import checkout_prefill, save_checkout_address, saved_addresses
@@ -625,7 +626,8 @@ def _merchant_context(request, store, **context):
     stores = (Store.objects.filter(owner=request.user) |
         Store.objects.filter(staff_members__user=request.user)).distinct().order_by("name")
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
-    return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role, **context}
+    return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "merchant_store_url": store_url(store), **context}
 
 
 def _require_editor(request, store):

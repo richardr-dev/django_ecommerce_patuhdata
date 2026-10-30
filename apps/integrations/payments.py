@@ -11,6 +11,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.urls import reverse
 
+from apps.shops.tenancy import store_origin
+
 from .http import ProviderError, request_json
 
 
@@ -28,6 +30,12 @@ class RefundResult:
     payload: dict
 
 
+def _order_return_url(order):
+    """Where the gateway sends the customer back: the order page on the store's own host."""
+    return (f"{store_origin(order.store)}{reverse('order-detail', args=[order.id])}"
+        f"?token={order.access_token}")
+
+
 class DemoPaymentProvider:
     """Local adapter used only when PAYMENT_PROVIDER=demo."""
 
@@ -36,6 +44,8 @@ class DemoPaymentProvider:
         return f"demo-{order.id}"
 
     def create_payment(self, order):
+        if not settings.ALLOW_DEMO_PAYMENTS:
+            raise ProviderError("Demo payments are disabled; configure DOKU for production.")
         return PaymentSession(reference=self.reference_for(order),
             checkout_url=reverse("demo-payment", args=[order.id]))
 
@@ -61,9 +71,8 @@ class XenditPaymentProvider:
             "capture_method": "AUTOMATIC", "allow_save_payment_method": "DISABLED", "customer": customer,
             "description": f"Pesanan {order.store.name} #{str(order.id)[:8]}",
             "metadata": {"store_id": str(order.store_id), "order_id": str(order.id)}}
-        if settings.PUBLIC_BASE_URL.startswith("https://"):
-            return_url = (f"{settings.PUBLIC_BASE_URL}{reverse('order-detail', args=[order.id])}"
-                f"?token={order.access_token}")
+        return_url = _order_return_url(order)
+        if return_url.startswith("https://"):
             payload.update({"success_return_url": return_url, "cancel_return_url": return_url})
         data = request_json(f"{settings.XENDIT_API_URL}/sessions", method="POST",
             headers={"Authorization": f"Basic {auth}", "api-version": "2024-11-11",
@@ -125,27 +134,33 @@ class DokuPaymentProvider:
             "Request-Timestamp": timestamp, "Signature": doku_signature(settings.DOKU_CLIENT_ID,
                 request_id, timestamp, target, body, settings.DOKU_SECRET_KEY)}
 
-    def create_payment(self, order):
-        invoice = self.reference_for(order)
-        payload = {"order": {"amount": int(order.total), "invoice_number": invoice,
-            "currency": "IDR"},
+    def create_checkout(self, *, invoice_number, amount, customer, request_id, callback_url=""):
+        """Create a hosted checkout page and return its URL."""
+        payload = {"order": {"amount": amount, "invoice_number": invoice_number, "currency": "IDR"},
             "payment": {"payment_due_date": settings.DOKU_PAYMENT_DUE_MINUTES},
-            "customer": {"name": order.customer_name, "phone": order.phone}}
-        if order.email:
-            payload["customer"]["email"] = order.email
-        if settings.PUBLIC_BASE_URL.startswith("https://"):
-            payload["callbacks"] = {"url": (f"{settings.PUBLIC_BASE_URL}"
-                f"{reverse('order-detail', args=[order.id])}?token={order.access_token}")}
+            "customer": customer}
+        if callback_url.startswith("https://"):
+            payload["callbacks"] = {"url": callback_url}
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
         data = request_json(f"{settings.DOKU_API_URL}{self.target}", method="POST",
-            headers=self._headers(order.idempotency_key[:128], self.target, body), encoded_payload=body)
+            headers=self._headers(request_id, self.target, body), encoded_payload=body)
         payment = (data.get("response") or {}).get("payment") or {}
         if not payment.get("url"):
             raise ProviderError("DOKU returned an incomplete payment session.")
+        return payment["url"]
+
+    def create_payment(self, order):
+        invoice = self.reference_for(order)
+        customer = {"name": order.customer_name, "phone": order.phone}
+        if order.email:
+            customer["email"] = order.email
+        checkout_url = self.create_checkout(invoice_number=invoice, amount=int(order.total),
+            customer=customer, request_id=order.idempotency_key[:128],
+            callback_url=_order_return_url(order))
         # DOKU does not return an expiry; reserve stock for the due date plus a short grace
         # period so a late notification still finds the order pending.
         expires_at = datetime.now(UTC) + timedelta(minutes=settings.DOKU_PAYMENT_DUE_MINUTES + 5)
-        return PaymentSession(reference=invoice, checkout_url=payment["url"],
+        return PaymentSession(reference=invoice, checkout_url=checkout_url,
             expires_at=expires_at.isoformat())
 
     def fetch_status(self, order):
