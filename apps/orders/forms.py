@@ -14,7 +14,7 @@ from apps.catalog.models import (
 )
 from apps.shops.models import MarketingCampaign, Store, StorefrontSlide, StorePage
 
-from .models import Coupon, ShippingMethod
+from .models import Coupon, CustomerAddress, ShippingMethod
 
 
 class StyledModelForm(forms.ModelForm):
@@ -345,3 +345,29 @@ class StorePageForm(StyledModelForm):
 class NewsletterForm(forms.Form):
     email = forms.EmailField(max_length=254)
     consent = forms.BooleanField(error_messages={"required": "Centang persetujuan untuk berlangganan."})
+
+
+class CustomerAddressForm(StyledModelForm):
+    class Meta:
+        model = CustomerAddress
+        fields = ("label", "customer_name", "phone", "province", "city", "district", "village",
+            "postal_code", "shipping_address", "delivery_notes", "is_default")
+        labels = {"label": "Label (Rumah, Kantor…)", "customer_name": "Nama penerima",
+            "phone": "Nomor WhatsApp", "province": "Provinsi", "city": "Kota/Kabupaten",
+            "district": "Kecamatan", "village": "Kelurahan/Desa", "postal_code": "Kode pos",
+            "shipping_address": "Jalan, nomor rumah, RT/RW", "delivery_notes": "Catatan kurir",
+            "is_default": "Jadikan alamat utama"}
+        widgets = {"shipping_address": forms.Textarea(attrs={"rows": 3})}
+
+    def clean_phone(self):
+        from .services import normalize_indonesian_phone
+        try:
+            return normalize_indonesian_phone(self.cleaned_data["phone"])
+        except ValueError as error:
+            raise forms.ValidationError(str(error)) from error
+
+    def clean_postal_code(self):
+        code = self.cleaned_data["postal_code"].strip()
+        if not (len(code) == 5 and code.isdigit()):
+            raise forms.ValidationError("Kode pos harus 5 digit.")
+        return code

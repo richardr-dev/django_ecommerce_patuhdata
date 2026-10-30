@@ -93,6 +93,23 @@ def get_coupon(store, code, subtotal):
     return coupon
 
 
+# Orders that never completed payment give their voucher use back.
+COUPON_RELEASED_STATUSES = {"cancelled", "payment_failed"}
+
+
+def coupon_uses_by_customer(coupon, *, user, phone):
+    """How often this customer (signed-in account or WhatsApp number) already used the voucher."""
+    from django.db.models import Q
+
+    from .models import Order
+
+    who = Q(phone=phone)
+    if user is not None and user.is_authenticated:
+        who |= Q(customer_user=user)
+    return (Order.objects.filter(who, store_id=coupon.store_id, coupon_code__iexact=coupon.code)
+        .exclude(status__in=COUPON_RELEASED_STATUSES).count())
+
+
 def calculate_discount(coupon, subtotal, shipping_cost):
     if not coupon:
         return Decimal(0), shipping_cost

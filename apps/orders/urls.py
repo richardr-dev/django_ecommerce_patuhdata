@@ -19,6 +19,10 @@ urlpatterns = [
     path("account/register/", rate_limit("register", limit=5, window=3600)(views.customer_register),
         name="register"),
     path("account/orders/", views.account_orders, name="account-orders"),
+    path("account/addresses/", views.account_addresses, name="account-addresses"),
+    path("account/addresses/<int:address_id>/", views.account_addresses, name="account-address-edit"),
+    path("account/addresses/<int:address_id>/<slug:action>/", views.account_address_action,
+        name="account-address-action"),
     path("account/password-reset/", rate_limit("password-reset", limit=5, window=3600, field="email")(
         auth_views.PasswordResetView.as_view(
         template_name="registration/password_reset_form.html",

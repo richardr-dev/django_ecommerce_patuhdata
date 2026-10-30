@@ -48,11 +48,13 @@ from apps.shops.models import (
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 
 from .access import get_customer_order_or_404, remember_customer_order
+from .addresses import checkout_prefill, save_checkout_address, saved_addresses
 from .cart import get_cart
 from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
     CategoryForm,
     CouponForm,
+    CustomerAddressForm,
     CustomerRegistrationForm,
     FlashSaleProductForm,
     InventoryForm,
@@ -72,6 +74,7 @@ from .loyalty import loyalty_account, redeem_for_order, redemption_quote
 from .models import (
     CommerceSession,
     Coupon,
+    CustomerAddress,
     InventoryAllocation,
     LoyaltyAccount,
     Order,
@@ -88,6 +91,7 @@ from .sales import active_sale_offers, offer_sold_quantity
 from .services import (
     InvalidOrderTransition,
     allowed_order_transitions,
+    coupon_uses_by_customer,
     get_coupon,
     normalize_indonesian_phone,
     transition_order,
@@ -386,6 +390,11 @@ def checkout(request):
                             coupon.used_count >= coupon.usage_limit)):
                         messages.error(request, "Voucher sudah tidak tersedia.")
                         return redirect("checkout")
+                    # The coupon row lock serializes this count against concurrent checkouts.
+                    if coupon.per_customer_limit is not None and coupon_uses_by_customer(
+                            coupon, user=request.user, phone=phone) >= coupon.per_customer_limit:
+                        messages.error(request, "Voucher ini sudah mencapai batas pemakaian untuk akun Anda.")
+                        return redirect("checkout")
                 base_price = calculate_price(store=request.store, lines=lines,
                     shipping_cost=shipping_cost, coupon=coupon)
                 locked_loyalty = loyalty_account(request.store, request.user, lock=True)
@@ -462,6 +471,8 @@ def checkout(request):
                 Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
                     "email": order.email, "accepts_marketing": request.POST.get("accepts_marketing") == "on"})
                 OrderStatusEvent.objects.create(order=order, status="pending", note="Pesanan dibuat")
+                if request.POST.get("save_address") == "on":
+                    save_checkout_address(request.store, request.user, request.POST, phone)
                 if coupon:
                     coupon.used_count += 1
                     coupon.save(update_fields=["used_count"])
@@ -503,6 +514,7 @@ def checkout(request):
     loyalty = loyalty_account(request.store, request.user) if request.store.loyalty_enabled else None
     account_name = request.user.get_full_name() if request.user.is_authenticated else ""
     account_email = request.user.email if request.user.is_authenticated else ""
+    addresses = saved_addresses(request.store, request.user)
     return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal,
         "shipping_methods": shipping_methods, "shipping_cost": shipping_cost, "discount": discount,
         "idempotency_key": checkout_key,
@@ -510,7 +522,8 @@ def checkout(request):
         "biteship_configured": biteship_enabled,
         "shipping_provider_name": _shipping_provider_name(), "account_name": account_name,
         "account_email": account_email, "loyalty_account": loyalty,
-        "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points})
+        "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points,
+        "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST")})
 
 
 def customer_register(request):
@@ -539,6 +552,43 @@ def account_orders(request):
     loyalty = LoyaltyAccount.objects.filter(store=request.store, user=request.user).prefetch_related(
         "transactions").first()
     return render(request, "storefront/account_orders.html", {"orders": orders, "loyalty_account": loyalty})
+
+@login_required(login_url="/account/login/")
+def account_addresses(request, address_id=None):
+    if not request.store:
+        raise Http404
+    addresses = CustomerAddress.objects.filter(store=request.store, user=request.user)
+    instance = get_object_or_404(addresses, id=address_id) if address_id else None
+    form = CustomerAddressForm(request.POST or None, instance=instance)
+    if request.method == "POST" and form.is_valid():
+        address = form.save(commit=False)
+        address.store, address.user = request.store, request.user
+        make_default = address.is_default or not addresses.exclude(id=address.id).exists()
+        address.is_default = False
+        address.save()
+        if make_default:
+            address.make_default()
+        messages.success(request, "Alamat tersimpan.")
+        return redirect("account-addresses")
+    return render(request, "storefront/addresses.html", {"addresses": addresses, "form": form,
+        "editing": instance})
+
+
+@login_required(login_url="/account/login/")
+def account_address_action(request, address_id, action):
+    if request.method != "POST" or not request.store or action not in {"delete", "default"}:
+        raise Http404
+    address = get_object_or_404(CustomerAddress, id=address_id, store=request.store, user=request.user)
+    if action == "default":
+        address.make_default()
+    else:
+        was_default = address.is_default
+        address.delete()
+        replacement = CustomerAddress.objects.filter(store=request.store, user=request.user).first()
+        if was_default and replacement:
+            replacement.make_default()
+    return redirect("account-addresses")
+
 
 def order_detail(request, order_id):
     if not request.store: raise Http404

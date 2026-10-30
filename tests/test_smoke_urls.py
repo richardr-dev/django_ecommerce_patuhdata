@@ -84,7 +84,8 @@ class SmokeUrlTests(TestCase):
         return {"order_id": self.order.id, "product_id": self.product.id, "slug": self.product.slug,
             "item_key": f"p:{self.product.id}", "token": self.order.access_token,
             "customer_id": self.customer_record.id, "event_id": self.event.id,
-            "section": "products", "object_id": self.product.id, "uidb64": "MQ"}
+            "section": "products", "object_id": self.product.id, "uidb64": "MQ",
+            "address_id": 1, "action": "default"}
 
     def _clients(self):
         anonymous = Client(raise_request_exception=False)

@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from django.db import models
+from django.db import models, transaction
 
 from apps.catalog.models import Product, ProductVariant
 from apps.shops.models import Store
@@ -343,6 +343,8 @@ class Coupon(models.Model):
     value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     minimum_spend = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     usage_limit = models.PositiveIntegerField(null=True, blank=True)
+    per_customer_limit = models.PositiveIntegerField(null=True, blank=True,
+        help_text="Maksimal pemakaian per pelanggan (akun atau nomor WhatsApp). Kosongkan jika tanpa batas.")
     used_count = models.PositiveIntegerField(default=0)
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
@@ -385,3 +387,41 @@ class ReturnRequest(models.Model):
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS, default="requested")
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CustomerAddress(models.Model):
+    """A signed-in customer's saved delivery address. Field names match the checkout form, so a
+    saved address can pre-fill it directly."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="customer_addresses")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="addresses")
+    label = models.CharField(max_length=40, default="Rumah")
+    customer_name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=30)
+    province = models.CharField(max_length=80)
+    city = models.CharField(max_length=80)
+    district = models.CharField(max_length=80)
+    village = models.CharField(max_length=80, blank=True)
+    postal_code = models.CharField(max_length=5)
+    shipping_address = models.TextField()
+    delivery_notes = models.CharField(max_length=200, blank=True)
+    destination_area_id = models.CharField(max_length=120, blank=True)
+    is_default = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_default", "-updated_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "user"], condition=models.Q(is_default=True),
+            name="one_default_address_per_customer")]
+
+    CHECKOUT_FIELDS = ("customer_name", "phone", "province", "city", "district", "village",
+        "postal_code", "shipping_address", "delivery_notes", "destination_area_id")
+
+    def __str__(self):
+        return f"{self.label} · {self.city}"
+
+    def make_default(self):
+        with transaction.atomic():
+            CustomerAddress.objects.filter(store=self.store, user=self.user, is_default=True).exclude(
+                id=self.id).update(is_default=False)
+            self.is_default = True
+            self.save(update_fields=["is_default", "updated_at"])
