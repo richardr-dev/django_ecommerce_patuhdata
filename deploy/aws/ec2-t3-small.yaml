@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Lakuin on one EC2 t3.small: Ubuntu 24.04 with Docker, an Elastic IP, ports 80/443 open
+  for Caddy, Session Manager access, and daily EBS snapshots. The app itself runs from
+  compose.prod.yaml (see docs/DEPLOY_AWS.md).
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.small, t3.medium, t3.large]
+  VolumeSizeGiB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    Description: Root disk for the OS, Docker images, PostgreSQL data, media and local backups.
+  KeyName:
+    Type: String
+    Default: ""
+    Description: Optional EC2 key pair for SSH. Leave empty to connect with Session Manager only.
+  SshCidr:
+    Type: String
+    Default: ""
+    Description: Optional IP range allowed to SSH, e.g. 203.0.113.10/32. Empty keeps port 22 closed.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Optional Route 53 hosted zone for PlatformDomain. Empty means you add the DNS records yourself.
+  PlatformDomain:
+    Type: String
+    Default: lakuin.store
+  SnapshotRetainDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Conditions:
+  HasKey: !Not [!Equals [!Ref KeyName, ""]]
+  HasSsh: !Not [!Equals [!Ref SshCidr, ""]]
+  HasZone: !Not [!Equals [!Ref HostedZoneId, ""]]
+
+Resources:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lakuin web (Caddy) and optional SSH
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: HTTP (ACME + redirect)}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS}
+        - {IpProtocol: udp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTP/3}
+        - !If
+          - HasSsh
+          - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref SshCidr, Description: SSH}
+          - !Ref AWS::NoValue
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}
+      # Session Manager shell in the console: no open SSH port or key needed.
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      KeyName: !If [HasKey, !Ref KeyName, !Ref AWS::NoValue]
+      SecurityGroupIds: [!GetAtt WebSecurityGroup.GroupId]
+      DisableApiTermination: true
+      PropagateTagsToVolumeOnCreation: true
+      MetadataOptions: {HttpTokens: required, HttpEndpoint: enabled}
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref VolumeSizeGiB
+            Encrypted: true
+            # The disk holds the database; keep it if the instance is ever terminated.
+            DeleteOnTermination: false
+      Tags:
+        - {Key: Name, Value: lakuin-web}
+        - {Key: lakuin-backup, Value: daily}
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+
+          # 2 GiB swap: building the image on 2 GiB RAM can otherwise run out of memory.
+          if [ ! -f /swapfile ]; then
+            fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+          echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf && sysctl --system
+
+          apt-get update
+          apt-get install -y ca-certificates curl git unattended-upgrades
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+          apt-get update
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          # Rotate container logs so they cannot fill the disk.
+          cat > /etc/docker/daemon.json <<'JSON'
+          {"log-driver": "local", "log-opts": {"max-size": "20m", "max-file": "5"}}
+          JSON
+          systemctl enable --now docker
+          systemctl restart docker
+          usermod -aG docker ubuntu
+          touch /var/lib/cloud/lakuin-bootstrap-done
+
+  ServerIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Server
+      Tags: [{Key: Name, Value: lakuin-web}]
+
+  SnapshotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: dlm.amazonaws.com}, Action: sts:AssumeRole}
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole]
+
+  DailySnapshots:
+    Type: AWS::DLM::LifecyclePolicy
+    Properties:
+      Description: Daily snapshot of the Lakuin server disk
+      State: ENABLED
+      ExecutionRoleArn: !GetAtt SnapshotRole.Arn
+      PolicyDetails:
+        ResourceTypes: [VOLUME]
+        TargetTags: [{Key: lakuin-backup, Value: daily}]
+        Schedules:
+          - Name: daily
+            CreateRule: {Interval: 24, IntervalUnit: HOURS, Times: ["19:00"]}  # 02:00 WIB
+            RetainRule: {Count: !Ref SnapshotRetainDays}
+            CopyTags: true
+
+  ApexRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref PlatformDomain
+      Type: A
+      TTL: "300"
+      ResourceRecords: [!Ref ServerIp]
+  WwwRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub www.${PlatformDomain}
+      Type: A
+      TTL: "300"
+      ResourceRecords: [!Ref ServerIp]
+  StoresRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "*.${PlatformDomain}"
+      Type: A
+      TTL: "300"
+      ResourceRecords: [!Ref ServerIp]
+
+Outputs:
+  PublicIp:
+    Description: Point lakuin.store, www.lakuin.store and *.lakuin.store (A records) here.
+    Value: !Ref ServerIp
+  InstanceId:
+    Value: !Ref Server
+  Connect:
+    Description: Shell without SSH (needs the AWS CLI with the Session Manager plugin).
+    Value: !Sub aws ssm start-session --region ${AWS::Region} --target ${Server}

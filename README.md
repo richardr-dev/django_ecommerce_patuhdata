@@ -238,6 +238,9 @@ actual labor and AWS bills.
 
 ## AWS deployment choices
 
+Step-by-step for the first launch on one EC2 t3.small (CloudFormation template, DNS,
+first start, updates, backups): [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md).
+
 - **Pilot:** one Lightsail instance/container plus managed PostgreSQL and S3. Lowest operational
   complexity; accept that this is not highly available.
 - **Production SaaS:** ECS Fargate across two AZs, ALB, RDS PostgreSQL Multi-AZ, S3/CloudFront, SQS,
