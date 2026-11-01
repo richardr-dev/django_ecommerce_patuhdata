@@ -61,6 +61,10 @@ class StorePaymentTests(TestCase):
         [option] = payment_options(self.store)
         self.assertEqual((option.provider, option.store_account), ("doku", False))
 
+    @override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=False)
+    def test_disabled_demo_is_not_offered_in_production(self):
+        self.assertEqual(payment_options(self.store), [])
+
     def test_bank_transfer_end_to_end(self):
         _bank(self.store)
 

@@ -253,7 +253,7 @@ def payment_options(store):
     options = []
     if account and account.gateway_ready:
         options.append(PaymentOption("gateway", account.gateway, True, *GATEWAY_LABELS[account.gateway]))
-    elif settings.PAYMENT_PROVIDER == "demo" or (
+    elif (settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS) or (
             settings.PLATFORM_COLLECTS_PAYMENTS and platform_gateway_ready()):
         options.append(PaymentOption("gateway", settings.PAYMENT_PROVIDER, False,
             *GATEWAY_LABELS.get(settings.PAYMENT_PROVIDER, (settings.PAYMENT_PROVIDER, ""))))
