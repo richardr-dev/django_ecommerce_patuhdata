@@ -25,10 +25,27 @@ def reserve_variant(order_item, variant, quantity):
         new_on_hand=variant.stock, previous_reserved=previous_reserved, new_reserved=variant.reserved)
 
 
-def record_level_reservation(order_item, level, quantity, previous_reserved):
-    record_movement(store=order_item.order.store, order_item=order_item, inventory_level=level,
-        kind="reserve", quantity=quantity, reason="checkout", previous_on_hand=level.on_hand,
-        new_on_hand=level.on_hand, previous_reserved=previous_reserved, new_reserved=level.reserved)
+def reserve_from_levels(order_item, levels, quantity, *, reason="checkout"):
+    """Reserve across locked warehouse levels in priority order. Returns the quantity that
+    could not be reserved (0 when fully covered)."""
+    remaining = quantity
+    for level in levels:
+        allocated = min(remaining, level.available)
+        if not allocated:
+            continue
+        previous_reserved = level.reserved
+        level.reserved += allocated
+        level.save(update_fields=["reserved", "updated_at"])
+        InventoryAllocation.objects.create(order_item=order_item, inventory_level=level,
+            quantity=allocated)
+        record_movement(store=order_item.order.store, order_item=order_item, inventory_level=level,
+            kind="reserve", quantity=allocated, reason=reason, previous_on_hand=level.on_hand,
+            new_on_hand=level.on_hand, previous_reserved=previous_reserved,
+            new_reserved=level.reserved)
+        remaining -= allocated
+        if not remaining:
+            break
+    return remaining
 
 
 @transaction.atomic

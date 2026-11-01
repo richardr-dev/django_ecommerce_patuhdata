@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "apps.shops", "apps.catalog", "apps.orders", "apps.integrations", "apps.billing",
-    "apps.accounting",
+    "apps.accounting", "apps.channels",
 ]
 MIDDLEWARE = [
     "config.request_id.RequestIDMiddleware",

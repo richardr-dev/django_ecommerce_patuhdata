@@ -3,6 +3,7 @@ import time
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -10,6 +11,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounting.ledger import post_pending_entries
+from apps.channels.services import pull_channel_orders, push_stock_updates
 from apps.integrations.models import OutboxEvent, WorkerHeartbeat
 from apps.orders.engagement import send_abandoned_cart_recoveries
 from apps.orders.models import Order
@@ -115,6 +117,12 @@ def _run_task(name, task, errors):
         return 0
 
 
+def _due(name, seconds):
+    """True at most once per ``seconds`` across all workers, for tasks that call rate-limited
+    external APIs."""
+    return cache.add(f"worker-due:{name}", 1, timeout=seconds)
+
+
 def run_cycle(batch_size):
     errors = []
     _run_task("expire_pending_orders", lambda: expire_pending_orders(limit=batch_size), errors)
@@ -122,6 +130,10 @@ def run_cycle(batch_size):
         lambda: send_abandoned_cart_recoveries(limit=batch_size), errors)
     synced_shipments = _run_task("shipment_sync",
         lambda: sync_active_shipments(limit=min(batch_size, 25)), errors)
+    if _due("channel_orders", 300):
+        _run_task("channel_orders", pull_channel_orders, errors)
+    if _due("channel_stock", 60):
+        _run_task("channel_stock", lambda: push_stock_updates(limit=batch_size), errors)
     _run_task("ledger_posting", lambda: post_pending_entries(limit=batch_size), errors)
     processed = 0
     while processed < batch_size and process_one_event():

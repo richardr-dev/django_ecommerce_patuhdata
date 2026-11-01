@@ -75,13 +75,12 @@ from .forms import (
     VariantForm,
     WarehouseForm,
 )
-from .inventory import record_level_reservation, record_movement, reserve_variant
+from .inventory import record_movement, reserve_from_levels, reserve_variant
 from .loyalty import loyalty_account, redeem_for_order, redemption_quote
 from .models import (
     CommerceSession,
     Coupon,
     CustomerAddress,
-    InventoryAllocation,
     LoyaltyAccount,
     Order,
     OrderItem,
@@ -460,17 +459,7 @@ def checkout(request):
                     if variant:
                         reserve_variant(item, variant, line["quantity"])
                         continue
-                    remaining = line["quantity"]
-                    for level in by_product[product.id]:
-                        allocated = min(remaining, level.available)
-                        if not allocated: continue
-                        previous_reserved = level.reserved
-                        level.reserved += allocated
-                        level.save(update_fields=["reserved", "updated_at"])
-                        InventoryAllocation.objects.create(order_item=item, inventory_level=level, quantity=allocated)
-                        record_level_reservation(item, level, allocated, previous_reserved)
-                        remaining -= allocated
-                        if remaining == 0: break
+                    reserve_from_levels(item, by_product[product.id], line["quantity"])
                 provider = order_payment_provider(order)
                 order.payment_reference = reserved_reference(provider, order)
                 order.save(update_fields=["payment_reference"])

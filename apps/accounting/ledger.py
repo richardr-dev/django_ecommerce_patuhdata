@@ -5,19 +5,21 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.channels.adapters import PLATFORMS
 from apps.orders.models import PaymentTransaction, Refund
 
 from .models import Account, JournalEntry, JournalLine
 
 logger = logging.getLogger(__name__)
 
-CASH, GATEWAY, VAT, UNIDENTIFIED = "1100", "1200", "2100", "2200"
+CASH, GATEWAY, MARKETPLACE, VAT, UNIDENTIFIED = "1100", "1200", "1300", "2100", "2200"
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
 # Every store gets this chart on its first posting. Refunds and discounts are contra-revenue:
 # revenue accounts whose balance runs on the debit side and so reduce net sales.
 CHART = [
     (CASH, "Kas & bank", "asset"),
     (GATEWAY, "Piutang payment gateway", "asset"),
+    (MARKETPLACE, "Piutang marketplace", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (SALES, "Penjualan", "revenue"),
@@ -59,8 +61,10 @@ def _post(store, *, date, memo, amounts, **source):
 def post_payment(payment):
     order = payment.order
     date = timezone.localdate(payment.updated_at)
-    # A bank transfer lands in the seller's bank; gateway money waits for the gateway's payout.
-    received = CASH if payment.provider == "bank_transfer" else GATEWAY
+    # A bank transfer lands in the seller's bank; gateway and marketplace money waits for
+    # their payout.
+    received = (CASH if payment.provider == "bank_transfer" else
+        MARKETPLACE if payment.provider in PLATFORMS else GATEWAY)
     if not payment.reconciled:
         # Money arrived for an order that could not take it (e.g. expired): owed back until
         # finance refunds or matches it.
