@@ -108,8 +108,10 @@ Before the first start, check in that file:
   `PUBLIC_BASE_URL=https://lakuin.store`
 - `SECRET_KEY` and `POSTGRES_PASSWORD` are filled. Keep `POSTGRES_PASSWORD` unchanged
   after the first start: the database is created with it.
-- `PLATFORM_SUPPORT_EMAIL`, and DOKU keys if you take payments now (without them checkout
-  is refused, by design).
+- `PAYMENT_SECRETS_KEY` is filled and backed up: sellers' gateway secrets are encrypted
+  with it, and they must re-enter them if it is lost or changed.
+- `PLATFORM_SUPPORT_EMAIL`, and DOKU keys for Lakuin subscription billing. Store checkouts
+  pay each seller's own accounts, which sellers set up in back office > Pembayaran.
 
 Start everything (the first build takes several minutes on a t3.small):
 
@@ -135,8 +137,9 @@ docker compose -f compose.prod.yaml --env-file .env.production exec web \
    first load takes a few seconds.
 4. `https://tidak-ada.lakuin.store` (a name nobody registered) fails with a certificate
    error: Caddy asked Django, which refused, so no certificate is requested for it.
-5. DOKU dashboard: set the notification URL to
-   `https://lakuin.store/integrations/webhooks/doku/`.
+5. PT Patuhdata's DOKU dashboard (subscriptions): set the notification URL to
+   `https://lakuin.store/integrations/webhooks/doku/`. Each seller's own gateway uses the
+   store-specific URL shown on their Pembayaran page.
 
 ## Updating
 

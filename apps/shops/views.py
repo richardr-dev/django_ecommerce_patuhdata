@@ -10,7 +10,7 @@ from django.utils.text import slugify
 
 from apps.billing.models import Plan, Subscription
 from apps.billing.plans import default_plan
-from apps.catalog.views import paginate
+from apps.catalog.views import _json_ld, paginate
 from apps.orders.setup_views import create_store_defaults
 
 from .forms import StoreSignupForm
@@ -32,8 +32,16 @@ def _with_urls(stores):
 
 def platform_home(request):
     stores = _directory_stores().order_by("-created_at", "-id")[:8]
+    # Tells search engines that the platform is a service of the operating company.
+    organization = {"@context": "https://schema.org", "@type": "Organization",
+        "name": settings.PLATFORM_COMPANY_NAME, "url": settings.PLATFORM_COMPANY_URL,
+        "brand": {"@type": "Brand", "name": settings.PLATFORM_NAME,
+            "slogan": settings.PLATFORM_TAGLINE, "url": platform_url("/")}}
+    if settings.PLATFORM_SUPPORT_EMAIL:
+        organization["email"] = settings.PLATFORM_SUPPORT_EMAIL
     return render(request, "platform/home.html", {"featured_stores": _with_urls(stores),
-        "plans": Plan.objects.filter(is_public=True), "free_plan": default_plan()})
+        "plans": Plan.objects.filter(is_public=True), "free_plan": default_plan(),
+        "organization_json_ld": _json_ld(organization)})
 
 
 def store_directory(request):

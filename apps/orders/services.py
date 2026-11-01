@@ -130,12 +130,12 @@ GATEWAY_STATUS_GRACE = timedelta(hours=6)
 def _gateway_status(order, now):
     """Ask the gateway whether an expired order was paid; None means cancel without asking."""
     from apps.integrations.http import ProviderError
-    from apps.integrations.payments import get_payment_provider
+    from apps.integrations.payments import order_payment_provider
 
     if not order.payment_reference:
         return None
     try:
-        provider = get_payment_provider(order.payment_provider)
+        provider = order_payment_provider(order)
     except (ProviderError, ValueError):
         return None
     if not hasattr(provider, "fetch_status"):

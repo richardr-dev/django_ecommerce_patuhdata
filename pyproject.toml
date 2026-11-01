@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Multi-tenant commerce platform for Indonesian merchants"
 requires-python = ">=3.12"
 dependencies = [
+  "cryptography>=44,<47",
   "Django>=5.2,<5.3",
   "dj-database-url>=2.2,<3",
   "django-storages[s3]>=1.14,<2",

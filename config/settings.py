@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "apps.shops", "apps.catalog", "apps.orders", "apps.integrations", "apps.billing",
+    "apps.accounting",
 ]
 MIDDLEWARE = [
     "config.request_id.RequestIDMiddleware",
@@ -186,7 +187,15 @@ PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
 
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 
+# Buyers pay each seller's own DOKU/Xendit account or bank account (back office > Pembayaran).
+# PAYMENT_PROVIDER is the platform's own account: Lakuin subscriptions and the local demo. Store
+# checkouts use it only when PLATFORM_COLLECTS_PAYMENTS=1, because collecting buyers' money for
+# sellers needs a payment licence (or a split-payment partner agreement).
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
+PLATFORM_COLLECTS_PAYMENTS = os.getenv("PLATFORM_COLLECTS_PAYMENTS", "0") == "1"
+# Encrypts sellers' gateway secrets; defaults to SECRET_KEY, so set it before rotating SECRET_KEY.
+PAYMENT_SECRETS_KEY = os.getenv("PAYMENT_SECRETS_KEY", "")
+BANK_TRANSFER_DUE_HOURS = int(os.getenv("BANK_TRANSFER_DUE_HOURS", "24"))
 # The demo provider marks orders paid without money changing hands, so it only works in
 # development unless a production trial opts in explicitly.
 ALLOW_DEMO_PAYMENTS = os.getenv("ALLOW_DEMO_PAYMENTS", "1" if DEBUG else "0") == "1"

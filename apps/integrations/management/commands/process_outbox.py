@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.accounting.ledger import post_pending_entries
 from apps.integrations.models import OutboxEvent, WorkerHeartbeat
 from apps.orders.engagement import send_abandoned_cart_recoveries
 from apps.orders.models import Order
@@ -121,6 +122,7 @@ def run_cycle(batch_size):
         lambda: send_abandoned_cart_recoveries(limit=batch_size), errors)
     synced_shipments = _run_task("shipment_sync",
         lambda: sync_active_shipments(limit=min(batch_size, 25)), errors)
+    _run_task("ledger_posting", lambda: post_pending_entries(limit=batch_size), errors)
     processed = 0
     while processed < batch_size and process_one_event():
         processed += 1

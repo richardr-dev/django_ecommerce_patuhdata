@@ -57,6 +57,8 @@ class Order(models.Model):
     payment_reference = models.CharField(max_length=160, blank=True)
     payment_checkout_url = models.URLField(blank=True)
     payment_expires_at = models.DateTimeField(null=True, blank=True)
+    # True when the buyer paid the seller's own gateway or bank account, not the platform's.
+    paid_to_store_account = models.BooleanField(default=False)
     shipping_provider = models.CharField(max_length=40, blank=True)
     shipping_service = models.CharField(max_length=80, blank=True)
     shipping_eta = models.CharField(max_length=80, blank=True)

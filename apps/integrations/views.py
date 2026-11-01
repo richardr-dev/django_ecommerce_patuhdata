@@ -14,7 +14,7 @@ from apps.orders.access import get_customer_order_or_404
 from apps.orders.models import Order, PaymentEvent, PaymentTransaction
 from apps.orders.services import InvalidOrderTransition, transition_order
 
-from .models import OutboxEvent
+from .models import OutboxEvent, StorePaymentSettings
 from .payments import doku_signature
 from .reconciliation import confirm_payment
 
@@ -36,10 +36,25 @@ def demo_payment(request, order_id):
     return render(request, "storefront/demo_payment.html", {"order": order})
 
 
+def _store_account(webhook_key, gateway):
+    """The store whose own gateway account sends to this notification URL, or 404."""
+    account = StorePaymentSettings.objects.select_related("store").filter(
+        webhook_key=webhook_key, gateway=gateway).first()
+    if not account or not account.gateway_ready: raise Http404
+    return account
+
+
 @csrf_exempt
-def xendit_webhook(request):
+def xendit_webhook(request, webhook_key=None):
+    """Platform-account notifications at the bare URL; a seller's own account at its keyed URL."""
     if request.method != "POST": return HttpResponse(status=405)
-    expected = settings.XENDIT_WEBHOOK_VERIFICATION_TOKEN
+    if webhook_key:
+        account = _store_account(webhook_key, "xendit")
+        expected = account.webhook_token
+        orders = Order.objects.filter(store=account.store, paid_to_store_account=True)
+    else:
+        expected = settings.XENDIT_WEBHOOK_VERIFICATION_TOKEN
+        orders = Order.objects.filter(paid_to_store_account=False)
     received = request.headers.get("x-callback-token", "")
     if not expected or not hmac.compare_digest(received, expected):
         return JsonResponse({"error": "Invalid webhook token"}, status=401)
@@ -51,7 +66,7 @@ def xendit_webhook(request):
             "payment_session.expired"} or not reference:
         return JsonResponse({"received": True})
     with transaction.atomic():
-        try: order = Order.objects.select_for_update().get(id=reference, payment_provider="xendit")
+        try: order = orders.select_for_update().get(id=reference, payment_provider="xendit")
         except (Order.DoesNotExist, ValueError): return JsonResponse({"error": "Order not found"}, status=404)
         event_id = hashlib.sha256(request.body).hexdigest()
         _, created = PaymentEvent.objects.get_or_create(store=order.store, provider="xendit",
@@ -95,17 +110,25 @@ def xendit_webhook(request):
 
 
 @csrf_exempt
-def doku_webhook(request):
+def doku_webhook(request, webhook_key=None):
+    """Platform-account notifications at the bare URL; a seller's own account at its keyed URL."""
     if request.method != "POST": return HttpResponse(status=405)
     client_id = request.headers.get("Client-Id", "")
     request_id = request.headers.get("Request-Id", "")
     timestamp = request.headers.get("Request-Timestamp", "")
     received_signature = request.headers.get("Signature", "")
-    if not settings.DOKU_CLIENT_ID or not settings.DOKU_SECRET_KEY:
-        return JsonResponse({"error": "DOKU webhook is not configured"}, status=503)
+    if webhook_key:
+        account = _store_account(webhook_key, "doku")
+        expected_client_id, secret_key = account.doku_client_id, account.secret_key
+        orders = Order.objects.filter(store=account.store, paid_to_store_account=True)
+    else:
+        if not settings.DOKU_CLIENT_ID or not settings.DOKU_SECRET_KEY:
+            return JsonResponse({"error": "DOKU webhook is not configured"}, status=503)
+        expected_client_id, secret_key = settings.DOKU_CLIENT_ID, settings.DOKU_SECRET_KEY
+        orders = Order.objects.filter(paid_to_store_account=False)
     expected_signature = doku_signature(client_id, request_id, timestamp, request.path,
-        request.body, settings.DOKU_SECRET_KEY)
-    if (not hmac.compare_digest(client_id, settings.DOKU_CLIENT_ID) or not request_id or
+        request.body, secret_key)
+    if (not hmac.compare_digest(client_id, expected_client_id) or not request_id or
             not timestamp or not hmac.compare_digest(received_signature, expected_signature)):
         return JsonResponse({"error": "Invalid webhook signature"}, status=401)
     try: payload = json.loads(request.body)
@@ -119,11 +142,11 @@ def doku_webhook(request):
     # A FAILED notification is therefore acknowledged but must not fail the order.
     if status == "FAILED":
         return JsonResponse({"received": True, "ignored": True})
-    if invoice.startswith(SUBSCRIPTION_PREFIX):
+    if invoice.startswith(SUBSCRIPTION_PREFIX) and not webhook_key:
         body, status_code = handle_doku_notification(invoice, request_id, payload)
         return JsonResponse(body, status=status_code)
     with transaction.atomic():
-        try: order = Order.objects.select_for_update().get(
+        try: order = orders.select_for_update().get(
             payment_reference=invoice, payment_provider="doku")
         except Order.DoesNotExist: return JsonResponse({"error": "Order not found"}, status=404)
         _, created = PaymentEvent.objects.get_or_create(store=order.store, provider="doku",

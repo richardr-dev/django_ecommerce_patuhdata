@@ -16,10 +16,13 @@ from django.db.models import Count, F, Min, Sum
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from apps.accounting.ledger import GATEWAY, UNIDENTIFIED, VAT, account_balances
+from apps.accounting.models import JournalLine
 from apps.catalog.models import (
     Category,
     FlashSaleProduct,
@@ -32,9 +35,11 @@ from apps.catalog.models import (
     annotate_available_stock,
 )
 from apps.catalog.views import paginate
+from apps.integrations.forms import PaymentSettingsForm
 from apps.integrations.http import ProviderError
-from apps.integrations.models import OutboxEvent
-from apps.integrations.payments import get_payment_provider, reserved_reference
+from apps.integrations.models import OutboxEvent, StorePaymentSettings
+from apps.integrations.payments import order_payment_provider, payment_options, reserved_reference
+from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
 from apps.shops.models import (
     AuditLog,
@@ -337,6 +342,9 @@ def checkout(request):
     price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon,
         additional_discount=loyalty_discount)
     discount, shipping_cost = price.discount, price.shipping
+    payment_choices = payment_options(request.store)
+    payment_choice = next((option for option in payment_choices
+        if option.code == request.POST.get("payment_method")), payment_choices[0] if payment_choices else None)
     if request.method == "POST":
         required = ["customer_name", "phone", "shipping_address"]
         if any(not request.POST.get(field, "").strip() for field in required):
@@ -350,12 +358,8 @@ def checkout(request):
             messages.error(request, "Alamat tujuan berubah. Silakan cek ulang ongkir.")
         elif live_quote and live_quote["cart_signature"] != _cart_signature(lines):
             messages.error(request, "Keranjang berubah. Silakan cek ulang ongkir.")
-        elif settings.PAYMENT_PROVIDER == "xendit" and not settings.XENDIT_SECRET_KEY:
-            messages.error(request, "Xendit belum dikonfigurasi. Tambahkan secret key pada environment.")
-        elif settings.PAYMENT_PROVIDER == "doku" and not (
-                settings.DOKU_CLIENT_ID and settings.DOKU_SECRET_KEY):
-            messages.error(request,
-                "DOKU belum dikonfigurasi. Tambahkan client ID dan secret key pada environment.")
+        elif not payment_choices:
+            messages.error(request, "Toko ini belum mengaktifkan metode pembayaran.")
         else:
             try: phone = normalize_indonesian_phone(request.POST["phone"])
             except ValueError as error:
@@ -435,7 +439,8 @@ def checkout(request):
                     postal_code=request.POST.get("postal_code", "").strip(), delivery_notes=request.POST.get("delivery_notes", "").strip(),
                     destination_area_id=(live_quote["destination_area_id"] if live_quote else
                         request.POST.get("destination_area_id", "").strip()),
-                    payment_provider=settings.PAYMENT_PROVIDER, payment_method=request.POST.get("payment_method", "qris"),
+                    payment_provider=payment_choice.provider, payment_method=payment_choice.code,
+                    paid_to_store_account=payment_choice.store_account,
                     shipping_provider=live_quote["provider"] if live_quote else selected_shipping.provider,
                     courier_code=live_quote["courier_code"] if live_quote else selected_shipping.code,
                     courier_service_code=live_quote["service_code"] if live_quote else "",
@@ -466,7 +471,7 @@ def checkout(request):
                         record_level_reservation(item, level, allocated, previous_reserved)
                         remaining -= allocated
                         if remaining == 0: break
-                provider = get_payment_provider(order.payment_provider)
+                provider = order_payment_provider(order)
                 order.payment_reference = reserved_reference(provider, order)
                 order.save(update_fields=["payment_reference"])
                 Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
@@ -524,7 +529,8 @@ def checkout(request):
         "shipping_provider_name": _shipping_provider_name(), "account_name": account_name,
         "account_email": account_email, "loyalty_account": loyalty,
         "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points,
-        "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST")})
+        "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST"),
+        "payment_choices": payment_choices, "payment_choice": payment_choice})
 
 
 def customer_register(request):
@@ -953,6 +959,28 @@ def merchant_order_refund(request, order_id):
     return redirect("merchant-orders")
 
 @login_required(login_url="/merchant/login/")
+def merchant_order_confirm_transfer(request, order_id):
+    """The seller saw the buyer's bank transfer arrive in their own account."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance"})
+    with transaction.atomic():
+        order = get_object_or_404(Order.objects.select_for_update(), id=order_id, store=store,
+            payment_provider="bank_transfer")
+        if order.status != "pending":
+            messages.error(request, "Pesanan ini tidak sedang menunggu pembayaran.")
+            return redirect("merchant-orders")
+        confirm_payment(order, provider="bank_transfer", external_id=order.payment_reference,
+            amount=order.total, currency="IDR", payload={"confirmed_by": request.user.get_username()},
+            note=f"Transfer bank dikonfirmasi oleh {request.user.get_username()}")
+        AuditLog.objects.create(store=store, actor=request.user, action="payment.transfer_confirmed",
+            object_type="Order", object_id=str(order.id), details={"amount": str(order.total)})
+    messages.success(request, "Transfer dikonfirmasi. Pesanan siap diproses.")
+    return redirect("merchant-orders")
+
+
+@login_required(login_url="/merchant/login/")
 def merchant_orders_csv(request):
     store = _staff_store(request)
     response = HttpResponse(content_type="text/csv")
@@ -1159,6 +1187,59 @@ def merchant_integrations(request):
         status="pending").select_related("order").order_by("-updated_at")
     return render(request, "merchant/integrations.html", _merchant_context(request, store,
         integration_events=events, reconciliation_mismatches=mismatches))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_finance(request):
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    start = parse_date(request.GET.get("start", "") or "")
+    end = parse_date(request.GET.get("end", "") or "")
+    lines = JournalLine.objects.filter(entry__store=store).select_related("entry", "account")
+    if start:
+        lines = lines.filter(entry__date__gte=start)
+    if end:
+        lines = lines.filter(entry__date__lte=end)
+    lines = lines.order_by("-entry__date", "-entry_id", "-debit", "account__code")
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="jurnal-{store.slug}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Tanggal", "No. jurnal", "Keterangan", "Kode akun", "Nama akun", "Debit", "Kredit"])
+        for line in lines.iterator():
+            writer.writerow([line.entry.date.isoformat(), line.entry_id, line.entry.memo,
+                line.account.code, line.account.name, line.debit, line.credit])
+        return response
+    accounts = account_balances(store, start=start, end=end)
+    by_code = {account.code: account for account in accounts}
+    totals = {"debit": sum((a.total_debit for a in accounts), Decimal(0)),
+        "credit": sum((a.total_credit for a in accounts), Decimal(0))}
+    summary = {"net_revenue": sum((a.balance for a in accounts if a.type == "revenue"), Decimal(0)),
+        "gateway": by_code[GATEWAY].balance if GATEWAY in by_code else Decimal(0),
+        "vat": by_code[VAT].balance if VAT in by_code else Decimal(0),
+        "unidentified": by_code[UNIDENTIFIED].balance if UNIDENTIFIED in by_code else Decimal(0)}
+    return render(request, "merchant/finance.html", _merchant_context(request, store,
+        accounts=accounts, totals=totals, summary=summary, journal_lines=lines[:200],
+        start=start, end=end))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_payment_settings(request):
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin"})
+    account, _ = StorePaymentSettings.objects.get_or_create(store=store)
+    form = PaymentSettingsForm(request.POST or None, instance=account)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        AuditLog.objects.create(store=store, actor=request.user, action="payment_settings.updated",
+            object_type="StorePaymentSettings", object_id=str(account.id),
+            details={"gateway": account.gateway, "bank_transfer": account.bank_transfer_enabled})
+        messages.success(request, "Pengaturan pembayaran disimpan.")
+        return redirect("merchant-payment-settings")
+    webhook_urls = {gateway: settings.PUBLIC_BASE_URL + reverse(f"store-{gateway}-webhook",
+        args=[account.webhook_key]) for gateway in ("doku", "xendit")}
+    return render(request, "merchant/payments.html", _merchant_context(request, store, form=form,
+        account=account, webhook_urls=webhook_urls, options=payment_options(store)))
 
 
 @login_required(login_url="/merchant/login/")

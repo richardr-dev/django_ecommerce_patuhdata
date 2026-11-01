@@ -3,6 +3,7 @@
 Routes are discovered from the URL resolver, so new pages are covered automatically. Add sample
 values to URL_KWARGS when a route introduces a new path parameter.
 """
+import uuid
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -88,7 +89,8 @@ class SmokeUrlTests(TestCase):
             "item_key": f"p:{self.product.id}", "token": self.order.access_token,
             "customer_id": self.customer_record.id, "event_id": self.event.id,
             "section": "products", "object_id": self.product.id, "uidb64": "MQ",
-            "address_id": 1, "action": "default", "invoice_id": self.invoice.id}
+            "address_id": 1, "action": "default", "invoice_id": self.invoice.id,
+            "webhook_key": uuid.uuid4()}
 
     def _clients(self):
         anonymous = Client(raise_request_exception=False)

@@ -5,7 +5,7 @@ from django.db.models import Sum
 
 from apps.integrations.http import ProviderError
 from apps.integrations.models import OutboxEvent
-from apps.integrations.payments import get_payment_provider
+from apps.integrations.payments import order_payment_provider
 from apps.shops.models import AuditLog
 
 from .models import Order, PaymentTransaction, Refund
@@ -43,7 +43,7 @@ def create_refund_request(*, order, amount, reason, actor, note="", method="gate
 
 def execute_refund(refund):
     try:
-        result = get_payment_provider(refund.payment.provider).refund(refund.payment, refund)
+        result = order_payment_provider(refund.order).refund(refund.payment, refund)
     except ProviderError as error:
         refund.status, refund.payload = "failed", {"error": str(error)}
         refund.save(update_fields=["status", "payload", "updated_at"])

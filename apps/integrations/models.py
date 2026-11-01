@@ -1,9 +1,12 @@
+import uuid
 from datetime import timedelta
 
 from django.db import models
 from django.utils import timezone
 
 from apps.shops.models import Store
+
+from .secrets import decrypt, encrypt
 
 
 class IntegrationCredential(models.Model):
@@ -13,6 +16,52 @@ class IntegrationCredential(models.Model):
     is_active = models.BooleanField(default=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "provider"], name="unique_store_provider")]
+
+class StorePaymentSettings(models.Model):
+    """Where a store's buyers pay: the seller's own gateway account and/or bank account."""
+    GATEWAYS = [("", "Belum terhubung"), ("doku", "DOKU"), ("xendit", "Xendit")]
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="payment_settings")
+    # Identifies the store in its gateway notification URL without exposing the store ID.
+    webhook_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    gateway = models.CharField(max_length=20, choices=GATEWAYS, blank=True)
+    doku_client_id = models.CharField(max_length=80, blank=True)
+    encrypted_secret_key = models.TextField(blank=True)  # DOKU secret key or Xendit secret API key
+    encrypted_webhook_token = models.TextField(blank=True)  # Xendit callback verification token
+    bank_transfer_enabled = models.BooleanField(default=False)
+    bank_name = models.CharField(max_length=60, blank=True)
+    bank_account_number = models.CharField(max_length=40, blank=True)
+    bank_account_holder = models.CharField(max_length=120, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def secret_key(self):
+        return decrypt(self.encrypted_secret_key)
+
+    @secret_key.setter
+    def secret_key(self, value):
+        self.encrypted_secret_key = encrypt(value)
+
+    @property
+    def webhook_token(self):
+        return decrypt(self.encrypted_webhook_token)
+
+    @webhook_token.setter
+    def webhook_token(self, value):
+        self.encrypted_webhook_token = encrypt(value)
+
+    @property
+    def gateway_ready(self):
+        if self.gateway == "doku":
+            return bool(self.doku_client_id and self.secret_key)
+        if self.gateway == "xendit":
+            return bool(self.secret_key and self.webhook_token)
+        return False
+
+    @property
+    def bank_transfer_ready(self):
+        return bool(self.bank_transfer_enabled and self.bank_name and self.bank_account_number
+            and self.bank_account_holder)
+
 
 class OutboxEvent(models.Model):
     MAX_ATTEMPTS = 8
