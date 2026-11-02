@@ -30,6 +30,15 @@ class StoreResolverMiddleware:
                 # Custom domains need ALLOWED_HOSTS=*, so this is the host check: an unknown
                 # Host header must never reach views that build absolute links from it.
                 return render(request, "platform/store_not_found.html", status=404)
+            back_office = request.path.startswith("/merchant/") or request.path.rstrip("/") == "/dashboard"
+            if (store and back_office and not request.is_platform
+                    and request.method in {"GET", "HEAD"}):
+                # The back office lives on the platform host, where the merchant session is;
+                # opening it from a store address lands on that store's dashboard.
+                query = request.GET.copy()
+                query["store"] = store.id
+                path = request.path if request.path.startswith("/merchant/") else "/merchant/"
+                return redirect(platform_url(f"{path}?{query.urlencode()}"))
             if (store and store.domain == host and request.method in {"GET", "HEAD"}
                     and not custom_domain_allowed(store)):
                 # The plan lapsed: keep visitors on the store via its platform subdomain.

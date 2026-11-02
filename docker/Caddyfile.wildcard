@@ -1,0 +1,53 @@
+# SITE_ADDRESS is the platform's own domain(s), e.g. "niagakit.id, www.niagakit.id", whose
+# certificates Caddy obtains at start-up; "localhost" uses a local CA.
+#
+# Wildcard variant (CADDYFILE=Caddyfile.wildcard): one *.PLATFORM_DOMAIN certificate, obtained
+# through the Cloudflare DNS API (CLOUDFLARE_API_TOKEN), so a new store's subdomain has HTTPS
+# the moment it is created and signups never hit Let's Encrypt's per-domain weekly limit.
+# Sellers' custom domains still get certificates on demand, after Django's /internal/tls-ask/
+# confirms the host belongs to an active store.
+{
+	on_demand_tls {
+		ask http://web:8000/internal/tls-ask/
+	}
+}
+
+(app) {
+	encode zstd gzip
+
+	# Product photos, logos and banners are public uploads; serve them without Django.
+	handle_path /media/* {
+		root * /srv/media
+		header Cache-Control "public, max-age=604800"
+		file_server
+	}
+
+	handle {
+		reverse_proxy web:8000
+	}
+}
+
+{$SITE_ADDRESS} {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	import app
+}
+
+*.{$PLATFORM_DOMAIN} {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	import app
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	import app
+}
+
+http:// {
+	redir https://{host}{uri} permanent
+}

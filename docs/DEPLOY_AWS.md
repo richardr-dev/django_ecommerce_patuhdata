@@ -128,6 +128,25 @@ docker compose -f compose.prod.yaml --env-file .env.production exec web \
   python manage.py createsuperuser
 ```
 
+### Wildcard certificate for store subdomains (recommended)
+
+Without it, Caddy requests a certificate for each new store on its first visit. That first
+page takes a few seconds, and Let's Encrypt allows only 50 certificates a week for
+lakuin.store, so a busy signup week would leave new stores without HTTPS.
+
+1. In Cloudflare: **My Profile → API Tokens → Create Token → "Edit zone DNS"**, limited to
+   the zone `lakuin.store`. Copy the token.
+2. On the server, add to `.env.production`:
+   ```
+   CLOUDFLARE_API_TOKEN=<the token>
+   CADDYFILE=Caddyfile.wildcard
+   ```
+3. `docker compose -f compose.prod.yaml --env-file .env.production up -d --build caddy`
+
+Caddy then proves ownership through a temporary `_acme-challenge` TXT record and keeps one
+`*.lakuin.store` certificate renewed. Sellers' custom domains still get on-demand certificates.
+Keep the `*` A record in Cloudflare grey-clouded (DNS only).
+
 ## 5. Check it works
 
 1. `https://lakuin.store` shows the Lakuin landing page with a valid padlock.

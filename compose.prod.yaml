@@ -63,13 +63,17 @@ services:
       - ${BACKUP_DIR:-./backups}:/backups
     depends_on: {db: {condition: service_healthy}}
   caddy:
-    image: caddy:2.8-alpine
+    build: {context: docker, dockerfile: caddy.Dockerfile}
+    image: lakuin-caddy:2.10.2
     restart: always
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS}
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile.wildcard once CLOUDFLARE_API_TOKEN is set; see docs/DEPLOY_AWS.md.
+      - ./docker/${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - media:/srv/media:ro
       - caddy_data:/data
       - caddy_config:/config

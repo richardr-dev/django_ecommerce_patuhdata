@@ -41,6 +41,7 @@ def platform_home(request):
         organization["email"] = settings.PLATFORM_SUPPORT_EMAIL
     return render(request, "platform/home.html", {"featured_stores": _with_urls(stores),
         "plans": Plan.objects.filter(is_public=True), "free_plan": default_plan(),
+        "platform_domain": settings.PLATFORM_DISPLAY_DOMAIN or settings.PLATFORM_DOMAIN,
         "organization_json_ld": _json_ld(organization)})
 
 
