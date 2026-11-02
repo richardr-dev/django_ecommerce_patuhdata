@@ -1,0 +1,15 @@
+/* Phone navigation like the marketplace apps: home, orders, cart, account, always in reach. */
+.nav-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:99px;background:#dc2626;color:#fff;font-size:11px;line-height:18px;text-align:center}
+.bottom-nav{display:none}
+@media(max-width:760px){
+  .bottom-nav{position:fixed;z-index:45;right:0;bottom:0;left:0;display:grid;grid-template-columns:repeat(4,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom));border-top:1px solid #e4e7ec;background:#fff}
+  .bottom-nav a{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;color:#667085;font-size:11px;font-weight:600;text-decoration:none}
+  .bottom-nav a.active{color:var(--brand)}
+  .bottom-nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .bottom-nav b{position:absolute;top:-2px;left:calc(50% + 6px);min-width:17px;padding:0 4px;border:2px solid #fff;border-radius:99px;background:#dc2626;color:#fff;font-size:10px;line-height:13px;text-align:center}
+  body{padding-bottom:64px}
+  .cart-bar{bottom:76px}
+  .whatsapp-float{bottom:80px}
+  body:has(.cart-bar:not([hidden])) .whatsapp-float{bottom:150px}
+  .site-header nav{display:none}
+}

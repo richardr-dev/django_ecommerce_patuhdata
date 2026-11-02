@@ -14,8 +14,20 @@ def store_context(request):
         return list(store.pages.filter(Q(show_in_header=True) | Q(show_in_footer=True),
             is_published=True).only("title", "slug", "show_in_header", "show_in_footer"))
 
-    # Lazy, so responses that never render the header or footer skip the query.
-    return {"store": store, "store_nav_pages": SimpleLazyObject(nav_pages)}
+    def cart_items():
+        try:
+            return sum(max(0, int(quantity)) for quantity in request.session.get("cart", {}).values())
+        except (TypeError, ValueError):
+            return 0
+
+    def active_orders():
+        from apps.orders.buyer import active_order_count
+        return active_order_count(request)
+
+    # Lazy, so responses that never render the header, footer or bottom bar skip the queries.
+    return {"store": store, "store_nav_pages": SimpleLazyObject(nav_pages),
+        "nav_cart_items": SimpleLazyObject(cart_items),
+        "nav_active_orders": SimpleLazyObject(active_orders)}
 
 
 def platform_context(request):

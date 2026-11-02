@@ -1,0 +1,22 @@
+/* Pesanan Saya and the order page, marketplace style. */
+.buyer-orders{max-width:820px;margin:0 auto}.buyer-head h1{margin:0 0 4px}
+.buyer-tabs{position:sticky;top:0;z-index:5;display:flex;margin:14px 0;overflow-x:auto;border-bottom:1px solid #e4e7ec;background:var(--page-bg,#fff);scrollbar-width:none}.buyer-tabs::-webkit-scrollbar{display:none}
+.buyer-tabs a{display:flex;flex:1 0 auto;justify-content:center;align-items:center;gap:6px;padding:12px 14px;border-bottom:3px solid transparent;color:#475467;font-weight:600;white-space:nowrap;text-decoration:none}.buyer-tabs a.active{border-bottom-color:var(--brand);color:var(--brand)}.buyer-tabs b{min-width:18px;padding:0 5px;border-radius:99px;background:#dc2626;color:#fff;font-size:11px;line-height:18px}
+.buyer-order{margin-bottom:12px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
+.buyer-order-head{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #f2f4f7;font-size:13px;color:#667085}
+.buyer-status{color:var(--brand);text-transform:uppercase;font-size:12px;letter-spacing:.03em}.buyer-status.status-pending{color:#b54708}.buyer-status.status-cancelled,.buyer-status.status-payment_failed{color:#98a2b3}
+.buyer-items{display:flex;gap:12px;padding:12px 14px;color:inherit;text-decoration:none}.buyer-thumb{display:grid;flex:0 0 72px;place-items:center;width:72px;height:72px;overflow:hidden;border-radius:10px;background:#f2f4f7;color:var(--brand);font-weight:800;font-size:24px}.buyer-thumb img{width:100%;height:100%;object-fit:cover}
+.buyer-item{display:flex;flex:1;flex-direction:column;gap:3px}.buyer-item small{color:#667085}.buyer-price{font-weight:700;white-space:nowrap}
+.buyer-eta{display:flex;align-items:center;gap:10px;margin:0 14px 12px;padding:10px 12px;border-radius:10px;background:#ecfdf3;color:#027a48;text-decoration:none}.buyer-eta span:nth-child(2){display:flex;flex:1;flex-direction:column}.buyer-eta small{color:#067647}.buyer-eta em{font-style:normal;font-size:20px}
+.buyer-order-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid #f2f4f7}.buyer-order-foot b{color:var(--brand);font-size:16px}
+.buyer-actions{display:flex;gap:8px}.buyer-actions form{margin:0}.buyer-actions .button{padding:9px 16px;font-size:14px}.button.secondary{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+.back-to-orders{display:inline-block;margin-bottom:10px;color:var(--brand);font-weight:600;text-decoration:none}
+.order-tracker{display:grid;grid-template-columns:repeat(5,1fr);margin:18px 0;padding:0;list-style:none;counter-reset:step}
+.order-tracker li{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;font-size:12px;color:#98a2b3}
+.order-tracker li i{position:relative;z-index:1;display:block;width:26px;height:26px;border:3px solid #d0d5dd;border-radius:50%;background:#fff}
+.order-tracker li:not(:first-child)::before{content:"";position:absolute;top:12px;right:50%;width:100%;height:3px;background:#d0d5dd}
+.order-tracker li.done{color:#101828}.order-tracker li.done i{border-color:var(--brand);background:var(--brand)}.order-tracker li.done::before{background:var(--brand)}
+.order-tracker small{color:#667085;font-size:11px}
+.eta-banner{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:14px 16px;border-radius:12px;background:#ecfdf3;color:#027a48}.eta-banner span:last-child{display:flex;flex-direction:column}.eta-banner b{font-size:18px}.eta-banner small{color:#067647}
+.received-form{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 18px}.received-form small{color:#667085}
+@media(max-width:560px){.order-tracker b{font-size:11px}.buyer-thumb{flex-basis:60px;width:60px;height:60px}}

@@ -64,6 +64,7 @@ from apps.shops.tenancy import store_url
 
 from .access import get_customer_order_or_404, remember_customer_order
 from .addresses import checkout_prefill, save_checkout_address, saved_addresses
+from .buyer import BUYER_TABS, buyer_orders, estimated_arrival, tracker_steps
 from .cart import get_cart
 from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
@@ -564,15 +565,72 @@ def customer_register(request):
     return render(request, "registration/register.html", {"form": form, "next": next_url})
 
 
-@login_required(login_url="/account/login/")
 def account_orders(request):
+    """Pesanan Saya: status tabs, estimated arrival and next step for every order. Guests see
+    the orders this browser placed."""
     if not request.store:
         raise Http404
-    orders = Order.objects.filter(store=request.store, customer_user=request.user).prefetch_related(
-        "items").order_by("-created_at")
-    loyalty = LoyaltyAccount.objects.filter(store=request.store, user=request.user).prefetch_related(
-        "transactions").first()
-    return render(request, "storefront/account_orders.html", {"orders": orders, "loyalty_account": loyalty})
+    orders = buyer_orders(request)
+    counts = dict(orders.values_list("status").annotate(total=Count("id")))
+    tabs = [{"key": key, "label": label, "count": sum(counts.get(status, 0) for status in statuses)}
+        for key, label, statuses in BUYER_TABS]
+    tab = request.GET.get("tab", "")
+    groups = {key: statuses for key, _, statuses in BUYER_TABS}
+    if tab in groups:
+        orders = orders.filter(status__in=groups[tab])
+    page, page_range, page_query = paginate(request, orders.prefetch_related(
+        "items__product", "status_events").order_by("-created_at"), 20)
+    for order in page.object_list:
+        order.eta = estimated_arrival(order)
+        order.first_item = next(iter(order.items.all()), None)
+        order.more_items = max(0, len(order.items.all()) - 1)
+    loyalty = (LoyaltyAccount.objects.filter(store=request.store, user=request.user)
+        .prefetch_related("transactions").first() if request.user.is_authenticated else None)
+    return render(request, "storefront/account_orders.html", {"orders": page.object_list,
+        "page_obj": page, "page_range": page_range, "page_query": page_query, "tabs": tabs,
+        "tab": tab, "total": sum(counts.values()), "loyalty_account": loyalty})
+
+
+def order_received(request, order_id):
+    """The shopper confirms the parcel arrived, which completes the order."""
+    if request.method != "POST" or not request.store:
+        raise Http404
+    order = get_customer_order_or_404(request, order_id)
+    if order.status not in {"shipped", "delivered"}:
+        messages.error(request, "Pesanan ini belum dikirim.")
+        return redirect("order-detail", order_id=order.id)
+    with transaction.atomic():
+        locked = Order.objects.select_for_update().get(id=order.id)
+        advance_order(locked, "completed", note="Dikonfirmasi diterima oleh pembeli")
+    messages.success(request, "Terima kasih! Pesanan selesai.")
+    return redirect("order-detail", order_id=order.id)
+
+
+def order_buy_again(request, order_id):
+    """Put the items of a past order back in the cart, as far as stock allows."""
+    if request.method != "POST" or not request.store:
+        raise Http404
+    order = get_customer_order_or_404(request, order_id, queryset=Order.objects.prefetch_related(
+        "items__product", "items__variant"))
+    cart, added = request.session.get("cart", {}), 0
+    for item in order.items.all():
+        if not item.product.is_active:
+            continue
+        variant = item.variant if item.variant and item.variant.is_active else None
+        if item.variant_id and variant is None:
+            continue
+        key = f"v:{variant.id}" if variant else f"p:{item.product_id}"
+        available = variant.available_stock if variant else item.product.available_stock
+        quantity = min(int(cart.get(key, 0)) + item.quantity, available)
+        if quantity > 0:
+            cart[key] = quantity
+            added += 1
+    request.session["cart"] = cart
+    if added:
+        messages.success(request, f"{added} produk dimasukkan lagi ke keranjang.")
+    else:
+        messages.error(request, "Produk dari pesanan ini sedang tidak tersedia.")
+    return redirect("cart")
 
 @login_required(login_url="/account/login/")
 def account_addresses(request, address_id=None):
@@ -617,7 +675,8 @@ def order_detail(request, order_id):
         request, order_id, queryset=Order.objects.prefetch_related(
             "items", "status_events", "tracking_events")
     )
-    return render(request, "storefront/order.html", {"order": order})
+    return render(request, "storefront/order.html", {"order": order,
+        "eta": estimated_arrival(order), "steps": tracker_steps(order)})
 
 def request_return(request, order_id):
     if request.method != "POST" or not request.store: raise Http404
