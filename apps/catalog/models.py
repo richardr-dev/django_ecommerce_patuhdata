@@ -42,6 +42,8 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=14, decimal_places=2)
     compare_at_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="Harga pokok (modal) per unit. Dipakai untuk menghitung HPP dan laba.")
     sku = models.CharField(max_length=80)
     image_url = models.URLField(blank=True)
     photo = models.FileField(upload_to="products/%Y/%m/", blank=True)
@@ -197,6 +199,8 @@ class ProductVariant(models.Model):
     sku = models.CharField(max_length=80)
     attributes = models.JSONField(default=dict, help_text='Example: {"size": "M", "color": "Black"}')
     price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="Kosongkan untuk memakai harga pokok produk induk.")
     weight_grams = models.PositiveIntegerField(null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
     reserved = models.PositiveIntegerField(default=0)

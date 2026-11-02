@@ -21,15 +21,48 @@ class Account(models.Model):
         return f"{self.code} {self.name}"
 
 
+class Payout(models.Model):
+    """Money a payment gateway or marketplace transferred to the seller's bank, settling the
+    orders it lists. Each payout reference is recorded once per provider."""
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="payouts")
+    provider = models.CharField(max_length=40)
+    reference = models.CharField(max_length=120)
+    paid_on = models.DateField()
+    gross = models.DecimalField(max_digits=14, decimal_places=2)
+    fees = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    net = models.DecimalField(max_digits=14, decimal_places=2)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_on", "-id"]
+        constraints = [models.UniqueConstraint(fields=["store", "provider", "reference"],
+            name="unique_store_payout_reference")]
+
+    def __str__(self):
+        return f"{self.provider} {self.reference}"
+
+
+class PayoutLine(models.Model):
+    payout = models.ForeignKey(Payout, on_delete=models.CASCADE, related_name="lines")
+    # A payment is settled by exactly one payout.
+    payment = models.OneToOneField(PaymentTransaction, on_delete=models.PROTECT,
+        related_name="payout_line")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+
 class JournalEntry(models.Model):
-    """A balanced double-entry posting. Each payment or refund posts at most once, so the worker
-    can scan for unposted ones on every cycle without double counting."""
+    """A balanced double-entry posting. Each payment, refund or payout posts at most once, so
+    the worker can scan for unposted ones on every cycle without double counting."""
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="journal_entries")
     date = models.DateField()
     memo = models.CharField(max_length=300)
     payment = models.OneToOneField(PaymentTransaction, on_delete=models.PROTECT, null=True,
         blank=True, related_name="journal_entry")
     refund = models.OneToOneField(Refund, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="journal_entry")
+    payout = models.OneToOneField(Payout, on_delete=models.PROTECT, null=True, blank=True,
         related_name="journal_entry")
     created_at = models.DateTimeField(auto_now_add=True)
 

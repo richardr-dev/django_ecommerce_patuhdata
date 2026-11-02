@@ -60,17 +60,23 @@ def parse_import_rows(rows):
             price = Decimal((row.get("price") or "").strip())
             stock = int((row.get("stock") or "").strip())
             weight = int((row.get("weight_grams") or "0").strip() or 0)
+            cost = (row.get("cost_price") or "").strip()
+            cost = Decimal(cost) if cost else None
         except (InvalidOperation, ValueError):
-            raise ValueError(f"Baris {number}: price, stock, atau weight_grams tidak valid.") from None
-        if not price.is_finite() or price < 0 or stock < 0 or weight < 0:
+            raise ValueError(f"Baris {number}: price, stock, weight_grams, atau cost_price "
+                "tidak valid.") from None
+        if not price.is_finite() or price < 0 or stock < 0 or weight < 0 or (
+                cost is not None and (not cost.is_finite() or cost < 0)):
             raise ValueError(f"Baris {number}: angka tidak boleh negatif.")
-        if price >= 10 ** 12:
-            raise ValueError(f"Baris {number}: price terlalu besar.")
+        if price >= 10 ** 12 or (cost or 0) >= 10 ** 12:
+            raise ValueError(f"Baris {number}: price atau cost_price terlalu besar.")
         parsed.append({"number": number, "sku": sku, "stock": stock,
             "category": (row.get("category") or "").strip(),
             "values": {"name": name[:160], "price": price, "weight_grams": weight,
                 "description": (row.get("description") or "").strip(),
-                "image_url": (row.get("image_url") or "").strip()[:200], "is_active": True}})
+                "image_url": (row.get("image_url") or "").strip()[:200], "is_active": True,
+                # A blank cost_price keeps the cost already saved on the product.
+                **({"cost_price": cost} if cost is not None else {})}})
     return parsed
 
 
@@ -123,7 +129,8 @@ def import_products(store, parsed):
         taken_slugs.add(candidate)
         to_create.append(Product(store=store, sku=row["sku"], slug=candidate, **values))
     Product.objects.bulk_update(to_update, ["name", "price", "category", "description",
-        "weight_grams", "image_url", "is_active"], batch_size=BULK_BATCH_SIZE)
+        "weight_grams", "image_url", "is_active",
+        "cost_price"], batch_size=BULK_BATCH_SIZE)
     Product.objects.bulk_create(to_create, batch_size=BULK_BATCH_SIZE)
 
     product_ids = dict(Product.objects.filter(store=store, sku__in=skus).values_list("sku", "id"))
@@ -176,8 +183,8 @@ def merchant_product_import_template(request):
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="template-produk.csv"'
     writer = csv.writer(response)
-    writer.writerow(["name", "sku", "price", "stock", "category", "description", "weight_grams", "image_url"])
-    writer.writerow(["Contoh Produk", "SKU-001", "99000", "10", "Kategori", "Deskripsi produk", "500", "https://example.com/image.jpg"])
+    writer.writerow(["name", "sku", "price", "stock", "category", "description", "weight_grams", "image_url", "cost_price"])
+    writer.writerow(["Contoh Produk", "SKU-001", "99000", "10", "Kategori", "Deskripsi produk", "500", "https://example.com/image.jpg", "60000"])
     return response
 
 

@@ -213,6 +213,8 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     quantity = models.PositiveIntegerField()
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+    # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
 
     class Meta:
         constraints = [

@@ -107,7 +107,7 @@ def _shortage(sku, wanted, available):
         "Tambah stok lalu impor ulang.")
 
 
-def _amount(text):
+def parse_amount(text):
     """Rupiah from a spreadsheet cell: "15000", "15.000", "Rp 15.000" or "15000,50"."""
     text = re.sub(r"(?i)rp|\s", "", str(text or ""))
     if not text:
@@ -134,11 +134,11 @@ def parse_orders_csv(upload):
         if not order_id:
             continue
         try:
-            quantity = int(_amount(row.get("quantity")))
+            quantity = int(parse_amount(row.get("quantity")))
             if quantity <= 0:
                 raise ChannelImportError("jumlah harus lebih dari 0")
             line = OrderLine(sku=(row.get("sku") or "").strip(), quantity=quantity,
-                unit_price=_amount(row.get("unit_price")))
+                unit_price=parse_amount(row.get("unit_price")))
         except ChannelImportError as error:
             raise ChannelImportError(f"Baris {number}: {error}") from error
         head = grouped.setdefault(order_id, {"row": row, "lines": []})
@@ -147,8 +147,8 @@ def parse_orders_csv(upload):
         buyer_name=(head["row"].get("buyer_name") or "").strip(),
         phone=(head["row"].get("phone") or "").strip(),
         address=(head["row"].get("address") or "").strip(), lines=head["lines"],
-        shipping_cost=_amount(head["row"].get("shipping_cost")),
-        discount=_amount(head["row"].get("discount")),
+        shipping_cost=parse_amount(head["row"].get("shipping_cost")),
+        discount=parse_amount(head["row"].get("discount")),
         courier=(head["row"].get("courier") or "").strip(),
         tracking_number=(head["row"].get("tracking_number") or "").strip(), raw=dict(head["row"]))
         for order_id, head in grouped.items()]

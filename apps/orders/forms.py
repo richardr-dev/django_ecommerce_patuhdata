@@ -196,7 +196,7 @@ class InventoryForm(ProductSkuFormMixin, StyledModelForm):
 class VariantForm(ProductSkuFormMixin, StyledModelForm):
     product = ProductSkuField()
 
-    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "barcode", "attributes", "price", "weight_grams", "stock", "is_active")
+    class Meta: model = ProductVariant; fields = ("product", "name", "sku", "barcode", "attributes", "price", "cost_price", "weight_grams", "stock", "is_active")
 
 
 class MarketingCampaignForm(StyledModelForm):

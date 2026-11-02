@@ -21,7 +21,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from apps.accounting.ledger import GATEWAY, UNIDENTIFIED, VAT, account_balances
+from apps.accounting.ledger import (
+    COGS,
+    GATEWAY,
+    MARKETPLACE,
+    UNIDENTIFIED,
+    VAT,
+    account_balances,
+)
 from apps.accounting.models import JournalLine
 from apps.catalog.models import (
     Category,
@@ -1206,10 +1213,24 @@ def merchant_finance(request):
     summary = {"net_revenue": sum((a.balance for a in accounts if a.type == "revenue"), Decimal(0)),
         "gateway": by_code[GATEWAY].balance if GATEWAY in by_code else Decimal(0),
         "vat": by_code[VAT].balance if VAT in by_code else Decimal(0),
+        "marketplace": by_code[MARKETPLACE].balance if MARKETPLACE in by_code else Decimal(0),
         "unidentified": by_code[UNIDENTIFIED].balance if UNIDENTIFIED in by_code else Decimal(0)}
+    cogs = by_code[COGS].balance if COGS in by_code else Decimal(0)
+    expenses = sum((a.balance for a in accounts if a.type == "expense" and a.code != COGS),
+        Decimal(0))
+    profit = {"revenue": summary["net_revenue"], "cogs": cogs,
+        "gross": summary["net_revenue"] - cogs, "expenses": expenses,
+        "net": summary["net_revenue"] - cogs - expenses,
+        "revenue_lines": [a for a in accounts if a.type == "revenue" and a.balance],
+        "expense_lines": [a for a in accounts if a.type == "expense" and a.code != COGS
+            and a.balance]}
+    missing_cost = (Product.objects.filter(store=store, is_active=True, cost_price__isnull=True)
+        .exclude(variants__is_active=True).count() + ProductVariant.objects.filter(
+        product__store=store, is_active=True, cost_price__isnull=True,
+        product__cost_price__isnull=True).count())
     return render(request, "merchant/finance.html", _merchant_context(request, store,
-        accounts=accounts, totals=totals, summary=summary, journal_lines=lines[:200],
-        start=start, end=end))
+        accounts=accounts, totals=totals, summary=summary, profit=profit,
+        missing_cost=missing_cost, journal_lines=lines[:200], start=start, end=end))
 
 
 @login_required(login_url="/merchant/login/")

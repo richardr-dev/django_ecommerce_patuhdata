@@ -19,6 +19,7 @@ urlpatterns = [
     path("", include("apps.orders.urls")),
     path("", include("apps.channels.urls")),
     path("", include("apps.tax.urls")),
+    path("", include("apps.accounting.urls")),
     path("", include("apps.catalog.urls")),
 ]
 if settings.DEBUG:

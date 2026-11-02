@@ -12,20 +12,25 @@ from .models import Account, JournalEntry, JournalLine
 
 logger = logging.getLogger(__name__)
 
-CASH, GATEWAY, MARKETPLACE, VAT, UNIDENTIFIED = "1100", "1200", "1300", "2100", "2200"
+CASH, GATEWAY, MARKETPLACE, INVENTORY = "1100", "1200", "1300", "1400"
+VAT, UNIDENTIFIED = "2100", "2200"
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
+COGS, FEES = "5100", "6100"
 # Every store gets this chart on its first posting. Refunds and discounts are contra-revenue:
 # revenue accounts whose balance runs on the debit side and so reduce net sales.
 CHART = [
     (CASH, "Kas & bank", "asset"),
     (GATEWAY, "Piutang payment gateway", "asset"),
     (MARKETPLACE, "Piutang marketplace", "asset"),
+    (INVENTORY, "Persediaan barang", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (SALES, "Penjualan", "revenue"),
     (SHIPPING, "Pendapatan ongkos kirim", "revenue"),
     (REFUNDS, "Retur & refund penjualan", "revenue"),
     (DISCOUNTS, "Potongan penjualan", "revenue"),
+    (COGS, "Harga pokok penjualan", "expense"),
+    (FEES, "Biaya payment gateway & marketplace", "expense"),
 ]
 
 
@@ -58,13 +63,32 @@ def _post(store, *, date, memo, amounts, **source):
     return entry
 
 
+def receivable_account(provider):
+    """Where money waits after a sale: the seller's bank for a transfer, otherwise with the
+    gateway or marketplace until its payout."""
+    return (CASH if provider == "bank_transfer" else
+        MARKETPLACE if provider in PLATFORMS else GATEWAY)
+
+
+def cost_of_goods(order):
+    """Copy each item's current unit cost onto it once and return the order's total cost.
+    Items whose product has no cost price are left out."""
+    total = Decimal(0)
+    for item in order.items.select_related("product", "variant"):
+        if item.unit_cost is None:
+            cost = item.variant.cost_price if item.variant else None
+            item.unit_cost = cost if cost is not None else item.product.cost_price
+            if item.unit_cost is None:
+                continue
+            item.save(update_fields=["unit_cost"])
+        total += item.unit_cost * item.quantity
+    return total
+
+
 def post_payment(payment):
     order = payment.order
     date = timezone.localdate(payment.updated_at)
-    # A bank transfer lands in the seller's bank; gateway and marketplace money waits for
-    # their payout.
-    received = (CASH if payment.provider == "bank_transfer" else
-        MARKETPLACE if payment.provider in PLATFORMS else GATEWAY)
+    received = receivable_account(payment.provider)
     if not payment.reconciled:
         # Money arrived for an order that could not take it (e.g. expired): owed back until
         # finance refunds or matches it.
@@ -73,10 +97,11 @@ def post_payment(payment):
             amounts={received: payment.amount, UNIDENTIFIED: -payment.amount})
     # Sales is the residual, so the entry balances even for orders priced by older rules.
     sales = order.total - order.shipping_cost - order.tax + order.discount
+    cost = cost_of_goods(order)
     return _post(order.store, date=date, payment=payment,
         memo=f"Penjualan #{str(order.id)[:8]} · {payment.provider}",
         amounts={received: payment.amount, DISCOUNTS: order.discount, SALES: -sales,
-            SHIPPING: -order.shipping_cost, VAT: -order.tax})
+            SHIPPING: -order.shipping_cost, VAT: -order.tax, COGS: cost, INVENTORY: -cost})
 
 
 def post_refund(refund):
@@ -87,6 +112,14 @@ def post_refund(refund):
     return _post(order.store, date=timezone.localdate(refund.updated_at), refund=refund,
         memo=f"Refund #{str(order.id)[:8]} · {refund.get_reason_display()}",
         amounts={REFUNDS: refund.amount - vat, VAT: vat, paid_from: -refund.amount})
+
+
+def post_payout(payout):
+    """The provider paid out: its receivable becomes money in the bank, less its fees."""
+    return _post(payout.store, date=payout.paid_on, payout=payout,
+        memo=f"Pencairan {payout.provider} {payout.reference}",
+        amounts={CASH: payout.net, FEES: payout.fees,
+            receivable_account(payout.provider): -payout.gross})
 
 
 def post_pending_entries(limit=100):
