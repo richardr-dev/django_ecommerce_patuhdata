@@ -187,6 +187,8 @@ PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
 # Where the Custom plan's "Hubungi sales" button points (e.g. a wa.me link); falls back to
 # emailing PLATFORM_SUPPORT_EMAIL.
 PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
+# Days of the default plan a new store gets free at signup when that plan is paid.
+TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
 
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 

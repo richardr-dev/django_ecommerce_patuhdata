@@ -46,7 +46,7 @@ class HostRoutingTests(TestCase):
         response = _host(PLATFORM).get("/")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "platform/home.html")
-        self.assertContains(response, "Buka toko gratis")
+        self.assertContains(response, "Coba gratis 14 hari")
         self.assertContains(response, "https://kopi.example/")
 
     def test_subdomain_serves_that_store_only(self):
@@ -97,7 +97,10 @@ class HostRoutingTests(TestCase):
         self.assertEqual(ask("random.example"), 404)
         self.assertEqual(ask(""), 404)
         Store.objects.filter(id=self.teh.id).update(domain="teh.example")
-        self.assertEqual(ask("teh.example"), 404)  # free plan: no custom domain
+        self.assertEqual(ask("teh.example"), 200)  # Starter includes a custom domain
+        Subscription.objects.filter(store=self.teh).update(
+            current_period_end=timezone.now() - timedelta(days=1))
+        self.assertEqual(ask("teh.example"), 404)  # lapsed: no custom domain
 
     def test_directory_lists_shoppable_opted_in_stores(self):
         response = _host(PLATFORM).get("/stores/")
@@ -212,7 +215,7 @@ class BillingTests(TestCase):
     def test_demo_upgrade_activates_and_renewal_extends(self):
         response, invoice = self._checkout()
         self.assertRedirects(response, f"/merchant/billing/{invoice.id}/demo-pay/")
-        self.assertEqual(invoice.amount, Decimal(99000))
+        self.assertEqual(invoice.amount, Decimal(399000))
         self.client.post(response["Location"])
         subscription = Subscription.objects.get(store=self.store)
         self.assertEqual(subscription.plan, self.pro)
@@ -220,7 +223,7 @@ class BillingTests(TestCase):
         self.assertAlmostEqual(first_end, timezone.now() + timedelta(days=30), delta=timedelta(minutes=1))
 
         response, renewal = self._checkout(months=12)
-        self.assertEqual(renewal.amount, Decimal(990000))
+        self.assertEqual(renewal.amount, Decimal(3990000))
         self.client.post(response["Location"])
         self.client.post(response["Location"])  # paying twice must not extend twice
         subscription.refresh_from_db()
@@ -240,8 +243,8 @@ class BillingTests(TestCase):
         self.assertEqual(client.get("/merchant/billing/").status_code, 404)
         self.assertEqual(client.post("/merchant/billing/checkout/", {"plan": "pro"}).status_code, 404)
 
-    def test_free_plan_cannot_be_checked_out(self):
-        response = self.client.post("/merchant/billing/checkout/", {"plan": "free"}, follow=True)
+    def test_custom_plan_cannot_be_checked_out(self):
+        response = self.client.post("/merchant/billing/checkout/", {"plan": "custom"}, follow=True)
         self.assertContains(response, "tidak tersedia")
         self.assertFalse(SubscriptionInvoice.objects.exists())
 
@@ -259,7 +262,7 @@ class DokuSubscriptionTests(TestCase):
         response = self.client.post("/merchant/billing/checkout/", {"plan": "pro", "months": 1})
         self.assertRedirects(response, "https://checkout.doku.test/pay", fetch_redirect_response=False)
         payload = json.loads(request_json.call_args.kwargs["encoded_payload"])
-        self.assertEqual(payload["order"]["amount"], 99000)
+        self.assertEqual(payload["order"]["amount"], 399000)
         self.assertEqual(payload["callbacks"]["url"], "https://niaga.test/merchant/billing/")
         return SubscriptionInvoice.objects.get(store=self.store)
 
@@ -276,8 +279,8 @@ class DokuSubscriptionTests(TestCase):
     def test_signed_notification_activates_the_plan_once(self):
         invoice = self._start()
         self.assertTrue(invoice.payment_reference.startswith("SB"))
-        self.assertEqual(self._notify(invoice, 99000).status_code, 200)
-        self.assertEqual(self._notify(invoice, 99000).json(), {"received": True, "duplicate": True})
+        self.assertEqual(self._notify(invoice, 399000).status_code, 200)
+        self.assertEqual(self._notify(invoice, 399000).json(), {"received": True, "duplicate": True})
         subscription = Subscription.objects.get(store=self.store)
         self.assertEqual(subscription.plan.code, "pro")
         invoice.refresh_from_db()

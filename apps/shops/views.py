@@ -9,7 +9,7 @@ from django.shortcuts import redirect, render
 from django.utils.text import slugify
 
 from apps.billing.models import Plan, Subscription
-from apps.billing.plans import default_plan
+from apps.billing.plans import default_plan, trial_end_for
 from apps.catalog.views import _json_ld, paginate
 from apps.orders.setup_views import create_store_defaults
 
@@ -41,6 +41,7 @@ def platform_home(request):
         organization["email"] = settings.PLATFORM_SUPPORT_EMAIL
     return render(request, "platform/home.html", {"featured_stores": _with_urls(stores),
         "plans": Plan.objects.filter(is_public=True), "free_plan": default_plan(),
+        "trial_days": settings.TRIAL_DAYS,
         "platform_domain": settings.PLATFORM_DISPLAY_DOMAIN or settings.PLATFORM_DOMAIN,
         "organization_json_ld": _json_ld(organization)})
 
@@ -77,6 +78,7 @@ def store_signup(request):
                     "Lengkapi tampilan dan tambahkan produk pertama Anda.")
                 return redirect("merchant-settings")
     return render(request, "platform/signup.html", {"form": form, "plan": plan,
+        "trial_days": settings.TRIAL_DAYS,
         "platform_domain": settings.PLATFORM_DISPLAY_DOMAIN or settings.PLATFORM_DOMAIN})
 
 
@@ -92,7 +94,7 @@ def _create_store(form, plan):
     store = Store.objects.create(owner=user, organization=organization, name=data["store_name"],
         slug=data["slug"], support_phone=data["phone"], support_email=user.email,
         instagram=data.get("instagram", ""))
-    Subscription.objects.create(store=store, plan=plan)
+    Subscription.objects.create(store=store, plan=plan, current_period_end=trial_end_for(plan))
     create_store_defaults(store)
     AuditLog.objects.create(store=store, actor=user, action="store.created_by_signup",
         object_type="Store", object_id=str(store.id), details={"plan": plan.code})

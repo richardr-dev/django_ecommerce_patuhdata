@@ -8,7 +8,7 @@ from apps.catalog.models import Product
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 
 from .models import Plan, SubscriptionInvoice
-from .plans import effective_plan
+from .plans import effective_plan, subscription_status
 from .services import BillingError, check_pending_invoice, mark_invoice_paid, start_checkout
 
 BILLING_ROLES = {"admin", "finance"}
@@ -23,7 +23,7 @@ def merchant_billing(request):
         title="Langganan", section="billing", subscription=subscription,
         plan=effective_plan(store), plans=Plan.objects.filter(is_public=True),
         active_products=Product.objects.filter(store=store, is_active=True).count(),
-        channel_count=store.sales_channels.count(),
+        channel_count=store.sales_channels.count(), status=subscription_status(store),
         invoices=store.subscription_invoices.select_related("plan")[:12]))
 
 

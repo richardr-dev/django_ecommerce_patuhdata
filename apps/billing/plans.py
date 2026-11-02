@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.utils import timezone
 
 from .models import Plan, Subscription
@@ -20,10 +23,31 @@ def effective_plan(store):
     plan = subscription.plan
     if plan.is_paid and not (subscription.current_period_end and
             subscription.current_period_end > timezone.now()):
-        # Without a default plan configured, a lapsed store keeps what it has but grows no further.
-        return default_plan() or Plan(code="lapsed", name="Langganan berakhir", max_products=0,
-            max_channels=0)
+        # A lapsed store falls back to a free default plan if there is one; otherwise it stays
+        # online with what it has but grows no further until the seller pays.
+        fallback = default_plan()
+        if fallback and not fallback.is_paid:
+            return fallback
+        return Plan(code="lapsed", name="Masa aktif berakhir", max_products=0, max_channels=0)
     return plan
+
+
+def trial_end_for(plan):
+    """When a new store's free trial of a paid default plan ends, or None for a free plan."""
+    return timezone.now() + timedelta(days=settings.TRIAL_DAYS) if plan.is_paid else None
+
+
+def subscription_status(store):
+    """For the dashboard and billing page: trial, active, ending soon, or lapsed."""
+    subscription = getattr(store, "subscription", None)
+    if subscription is None or not subscription.plan.is_paid:
+        return None
+    end = subscription.current_period_end
+    trial = not store.subscription_invoices.filter(status="paid").exists()
+    days_left = (end - timezone.now()).days if end else -1
+    return {"plan": subscription.plan, "ends_at": end, "trial": trial,
+        "lapsed": not end or end <= timezone.now(), "days_left": max(days_left, 0),
+        "ending_soon": end is not None and 0 <= days_left <= 3}
 
 
 def _limit_error(store, field, count_after, what):

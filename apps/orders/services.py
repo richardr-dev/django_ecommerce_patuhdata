@@ -31,6 +31,37 @@ class InvalidOrderTransition(ValueError):
     pass
 
 
+# The happy path of an order. A small seller packs and ships in one go, so the back office can
+# move an order several steps along it with one click; every step still goes through
+# transition_order, so stock, loyalty and notifications behave exactly as when done one by one.
+FULFILMENT_PATH = ["paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered",
+    "completed"]
+
+# The order tabs of the back office, in workflow order.
+ORDER_GROUPS = [
+    ("check", "Perlu dicek", {"pending"}),
+    ("pack", "Perlu dikemas", {"paid", "confirmed", "allocated", "picking"}),
+    ("ship", "Siap kirim", {"packed"}),
+    ("shipped", "Dikirim", {"shipped"}),
+    ("done", "Selesai", {"delivered", "completed"}),
+    ("other", "Batal & retur", {"payment_failed", "cancelled", "refund_requested",
+        "partially_refunded", "refunded", "returned"}),
+]
+
+
+def advance_order(order, target, *, note="", actor=None):
+    """Move an order forward along FULFILMENT_PATH up to `target`. Returns the steps taken."""
+    if order.status not in FULFILMENT_PATH or target not in FULFILMENT_PATH:
+        raise InvalidOrderTransition("Pesanan ini tidak dapat diproses dari status sekarang.")
+    start, end = FULFILMENT_PATH.index(order.status), FULFILMENT_PATH.index(target)
+    if end <= start:
+        raise InvalidOrderTransition("Pesanan sudah melewati langkah ini.")
+    steps = FULFILMENT_PATH[start + 1:end + 1]
+    for status in steps:
+        transition_order(order, status, note=note, actor=actor)
+    return steps
+
+
 def allowed_order_transitions(order):
     labels = dict(order.STATUS)
     return [(status, labels[status]) for status in ORDER_TRANSITIONS.get(order.status, set())]
