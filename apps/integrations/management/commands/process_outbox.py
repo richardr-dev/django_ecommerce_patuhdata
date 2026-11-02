@@ -17,6 +17,7 @@ from apps.orders.engagement import send_abandoned_cart_recoveries
 from apps.orders.models import Order
 from apps.orders.services import expire_pending_orders
 from apps.orders.tracking import sync_active_shipments
+from apps.tax.services import issue_pending_invoices
 
 logger = logging.getLogger("niagakit.worker")
 
@@ -135,6 +136,7 @@ def run_cycle(batch_size):
     if _due("channel_stock", 60):
         _run_task("channel_stock", lambda: push_stock_updates(limit=batch_size), errors)
     _run_task("ledger_posting", lambda: post_pending_entries(limit=batch_size), errors)
+    _run_task("invoicing", lambda: issue_pending_invoices(limit=batch_size), errors)
     processed = 0
     while processed < batch_size and process_one_event():
         processed += 1

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Invoice {{ invoice.number }}</title>
+<style>
+  body { margin: 0; background: #f4f4f5; color: #18181b; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
+  .sheet { max-width: 760px; margin: 24px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  header { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 2px solid #18181b; padding-bottom: 16px; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: .04em; }
+  h2 { margin: 0 0 4px; font-size: 12px; color: #71717a; text-transform: uppercase; letter-spacing: .06em; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
+  .parties p, header p { margin: 0; white-space: pre-line; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #e4e4e7; vertical-align: top; }
+  th { font-size: 12px; color: #71717a; text-transform: uppercase; }
+  .num { text-align: right; white-space: nowrap; }
+  .totals { margin-left: auto; width: min(100%, 340px); margin-top: 16px; }
+  .totals td { border: 0; padding: 4px 6px; }
+  .totals .grand td { border-top: 2px solid #18181b; font-weight: 700; font-size: 16px; padding-top: 10px; }
+  .muted { color: #71717a; font-size: 12px; }
+  .actions { max-width: 760px; margin: 0 auto; display: flex; gap: 12px; align-items: end; flex-wrap: wrap; padding: 0 16px; }
+  .actions form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  .actions label { display: grid; font-size: 12px; color: #52525b; }
+  input, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #d4d4d8; }
+  button { background: #18181b; color: #fff; border-color: #18181b; cursor: pointer; }
+  .errorlist { color: #b91c1c; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+  @media (max-width: 600px) { .sheet { padding: 20px; margin: 16px; } .parties { grid-template-columns: 1fr; } }
+  @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; max-width: none; padding: 0; } .actions { display: none; } }
+</style>
+</head>
+<body>
+<div class="actions" style="margin-top:24px">
+  <button type="button" onclick="window.print()">Cetak / simpan PDF</button>
+  {% if can_edit %}<form method="post">{% csrf_token %}<label>{{ form.buyer_npwp.label }}{{ form.buyer_npwp }}</label><button>Simpan</button>{{ form.buyer_npwp.errors }}</form>{% endif %}
+</div>
+<main class="sheet">
+  <header>
+    <div>
+      <h1>INVOICE</h1>
+      <p>{{ invoice.number }}<br>Tanggal {{ invoice.issued_on|date:"d F Y" }}<br><span class="muted">Pesanan #{{ invoice.order_id|stringformat:"s"|slice:":8" }}</span></p>
+    </div>
+    <div style="text-align:right">
+      <strong>{{ invoice.seller_name }}</strong>
+      {% if invoice.seller_address %}<p>{{ invoice.seller_address }}</p>{% endif %}
+      {% if invoice.seller_npwp %}<p>NPWP {{ invoice.seller_npwp }}</p>{% endif %}
+    </div>
+  </header>
+  <section class="parties">
+    <div><h2>Ditagihkan kepada</h2><strong>{{ invoice.buyer_name }}</strong>{% if invoice.buyer_address %}<p>{{ invoice.buyer_address }}</p>{% endif %}{% if invoice.buyer_npwp %}<p>NPWP/NIK {{ invoice.buyer_npwp }}</p>{% endif %}</div>
+    <div><h2>Status</h2><strong>LUNAS</strong><p class="muted">{{ invoice.order.get_status_display }}</p></div>
+  </section>
+  <table>
+    <thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Jumlah</th></tr></thead>
+    <tbody>{% for item in invoice.order.items.all %}<tr><td>{{ item.name }}{% if item.variant_name %} · {{ item.variant_name }}{% endif %}{% if item.sku %}<br><span class="muted">SKU {{ item.sku }}</span>{% endif %}</td><td class="num">{{ item.quantity }}</td><td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td><td class="num">Rp{{ item.line_total|floatformat:"0g" }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="num">Rp{{ invoice.subtotal|floatformat:"0g" }}</td></tr>
+    {% if invoice.discount %}<tr><td>Diskon</td><td class="num">−Rp{{ invoice.discount|floatformat:"0g" }}</td></tr>{% endif %}
+    {% if invoice.tax %}<tr><td>Dasar pengenaan pajak (DPP)</td><td class="num">Rp{{ invoice.tax_base|floatformat:"0g" }}</td></tr><tr><td>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</td><td class="num">Rp{{ invoice.tax|floatformat:"0g" }}</td></tr>{% endif %}
+    {% if invoice.shipping %}<tr><td>Ongkos kirim</td><td class="num">Rp{{ invoice.shipping|floatformat:"0g" }}</td></tr>{% endif %}
+    {% if invoice.other_charges %}<tr><td>Biaya lain</td><td class="num">Rp{{ invoice.other_charges|floatformat:"0g" }}</td></tr>{% endif %}
+    <tr class="grand"><td>Total</td><td class="num">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
+  </table>
+  <p class="muted" style="margin-top:32px">{% if invoice.seller_is_pkp %}Invoice ini bukan Faktur Pajak. Faktur Pajak diterbitkan penjual melalui Coretax DJP atas permintaan pembeli yang memiliki NPWP.{% elif not invoice.tax %}Penjual bukan Pengusaha Kena Pajak; invoice ini tidak memuat PPN.{% endif %}</p>
+</main>
+</body>
+</html>
