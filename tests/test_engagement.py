@@ -32,7 +32,7 @@ class EngagementTrackingTests(TestCase):
             last_seen_at=timezone.now() - timedelta(hours=1))
         self.client.force_login(self.owner)
         dashboard = self.client.get("/merchant/")
-        self.assertContains(dashboard, "Abandoned cart")
+        self.assertContains(dashboard, "keranjang tertinggal")
         self.assertContains(dashboard, "250.000")
         detail = self.client.get("/merchant/engagement/")
         self.assertContains(detail, "Interesting Product")

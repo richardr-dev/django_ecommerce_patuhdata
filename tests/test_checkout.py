@@ -131,7 +131,7 @@ class CheckoutTests(TestCase):
         other = Store.objects.create(owner=self.owner, name="Other", slug="other-dashboard")
         self.client.force_login(self.owner)
         response = self.client.get("/merchant/", {"store": self.store.id})
-        self.assertContains(response, "Ringkasan penjualan")
+        self.assertContains(response, "Perlu tindakan")
         response = self.client.post("/merchant/setup/products/new/", {
             "name": "Dashboard Product", "slug": "dashboard-product", "sku": "DASH-1",
             "description": "", "price": 45000, "compare_at_price": "", "image_url": "",

@@ -7,3 +7,8 @@
 /* Photo and banner thumbnails (settings and product pages). */
 .banner-manager{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.banner-thumb{position:relative;display:grid;gap:4px;width:180px;font-size:13px}.banner-thumb img{width:100%;aspect-ratio:3/1;border-radius:8px;object-fit:cover}.banner-thumb em{position:absolute;top:6px;left:6px;padding:1px 6px;border-radius:4px;background:#111827cc;color:#fff;font-size:11px;font-style:normal}
 .product-photos{margin-bottom:18px}.photo-thumb{display:grid;gap:4px;width:110px;margin:0;font-size:12px}.photo-thumb img{width:110px;height:110px;border-radius:8px;object-fit:cover}
+/* Grouped sidebar: main items with icons; each group folds open, the current one already open. */
+.bo-nav i{display:inline-block;width:24px;font-style:normal}.bo-nav>a.active,.bo-nav summary:has(+a.active){background:#1d2939;color:#fff}
+.bo-nav details summary{display:flex;align-items:center;padding:10px 12px;border-radius:8px;color:#d0d5dd;font-size:14px;cursor:pointer;list-style:none}.bo-nav details summary::-webkit-details-marker{display:none}.bo-nav details summary:after{content:"▸";margin-left:auto;color:#667085;transition:transform .15s}.bo-nav details[open] summary:after{transform:rotate(90deg)}.bo-nav details summary:hover{background:#1d2939;color:#fff}.bo-nav details[open] summary{color:#fff}
+.bo-sidebar .bo-nav details a{display:block;padding:8px 12px 8px 36px;font-size:13px;color:#98a2b3}.bo-sidebar .bo-nav details a:hover{color:#fff}.bo-sidebar .bo-nav .view-store{margin-top:14px;border:1px solid #344054}
+@media(max-width:700px){.bo-sidebar .bo-nav{grid-template-columns:1fr}}

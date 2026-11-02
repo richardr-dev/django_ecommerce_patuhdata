@@ -121,5 +121,5 @@ class CommerceReliabilityTests(TestCase):
         self.assertEqual(response.context["today_orders"], 1)
         self.assertEqual(response.context["fulfillment"]["paid"], 1)
         self.assertEqual(response.context["payment_errors"], 1)
-        self.assertContains(response, "System health")
+        self.assertContains(response, "Kesehatan sistem")
         self.assertNotContains(response, "9999")

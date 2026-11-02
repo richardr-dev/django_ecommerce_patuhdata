@@ -97,6 +97,7 @@ from .models import (
     ReturnRequest,
     ShippingMethod,
 )
+from .onboarding import setup_steps
 from .pricing import calculate_price
 from .refunds import RefundError, create_refund_request, execute_refund, record_manual_refund
 from .sales import active_sale_offers, offer_sold_quantity
@@ -713,6 +714,8 @@ def merchant_dashboard(request):
             "label": "Backlogged" if queue_backlogged else "Healthy"},
     ]
     engagement = engagement_summary(store)
+    setup = setup_steps(store)
+    setup_done = sum(step.done for step in setup)
     loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
@@ -728,7 +731,12 @@ def merchant_dashboard(request):
         payment_errors=payment_errors, shipping_problems=shipping_problems,
         notification_failures=notification_failures, queue_pending=pending_events.count(),
         queue_backlogged=queue_backlogged, operational_health=operational_health,
-        engagement=engagement, loyalty=loyalty))
+        engagement=engagement, loyalty=loyalty, setup=setup, setup_done=setup_done,
+        to_ship=sum(fulfillment.values()), problem_count=payment_errors + reconciliation_mismatches
+            + failed_integrations + shipping_problems,
+        transfers_to_confirm=store.orders.filter(status="pending",
+            payment_provider="bank_transfer").count(),
+        month_revenue=sum((row["revenue"] for row in daily), Decimal(0))))
 
 @login_required(login_url="/merchant/login/")
 def merchant_orders(request):
