@@ -8,6 +8,8 @@ from django.core.validators import (
 )
 from django.db import models
 
+from .uploads import StoreUploadPath
+
 
 class Organization(models.Model):
     name = models.CharField(max_length=160)
@@ -38,7 +40,7 @@ class Store(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="stores",
         null=True, blank=True)
     name = models.CharField(max_length=120)
-    logo = models.FileField(upload_to="stores/logos/%Y/%m/", blank=True,
+    logo = models.FileField(upload_to=StoreUploadPath("branding"), blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Logo PNG, JPG, or WebP. Recommended square or horizontal, maximum 5 MB.")
     logo_size = models.CharField(max_length=10, choices=LOGO_SIZES, default="medium")
@@ -55,7 +57,7 @@ class Store(models.Model):
     background_color = models.CharField(max_length=7, default="#fffaf5", validators=[hex_color])
     font_family = models.CharField(max_length=10, choices=FONT_CHOICES, default="sans")
     cover_layout = models.CharField(max_length=10, choices=COVER_LAYOUTS, default="split")
-    cover_image = models.FileField(upload_to="stores/covers/%Y/%m/", blank=True,
+    cover_image = models.FileField(upload_to=StoreUploadPath("branding"), blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Foto sampul beranda. Disarankan 1920 × 900 px, maksimal 5 MB.")
     cover_overlay = models.PositiveSmallIntegerField(default=45, validators=[MaxValueValidator(90)],
@@ -140,7 +142,7 @@ class MarketingCampaign(models.Model):
     coupon_code = models.CharField(max_length=50, blank=True, help_text="Optional voucher code shown to shoppers.")
     button_label = models.CharField(max_length=40, blank=True)
     link_url = models.CharField(max_length=300, blank=True)
-    popup_image = models.FileField(upload_to="stores/campaigns/%Y/%m/", blank=True,
+    popup_image = models.FileField(upload_to=StoreUploadPath("campaigns"), blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])])
     show_countdown = models.BooleanField(default=True)
     show_popup = models.BooleanField(default=False)
@@ -159,10 +161,10 @@ class MarketingCampaign(models.Model):
 class StorefrontSlide(models.Model):
     ALIGNMENTS = [("left", "Left"), ("center", "Center"), ("right", "Right")]
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="storefront_slides")
-    image = models.FileField(upload_to="stores/slides/%Y/%m/",
+    image = models.FileField(upload_to=StoreUploadPath("banners"),
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Foto landscape, disarankan 1920 × 640 px (rasio 3:1), maksimal 5 MB.")
-    mobile_image = models.FileField(upload_to="stores/slides/mobile/%Y/%m/", blank=True,
+    mobile_image = models.FileField(upload_to=StoreUploadPath("banners"), blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Opsional: potongan khusus ponsel, landscape 1200 × 600 px (rasio 2:1).")
     eyebrow = models.CharField(max_length=80, blank=True)

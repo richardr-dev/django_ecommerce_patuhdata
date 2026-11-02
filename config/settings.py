@@ -95,15 +95,24 @@ STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"
     "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG
     else "whitenoise.storage.CompressedManifestStaticFilesStorage"
 )}}
+# Uploaded images in the platform's one S3 bucket, under media/ (public read); the same bucket
+# keeps private database backups under backups/. Credentials come from the server's instance
+# role, so no access keys are stored. See deploy/aws/ec2-t3-small.yaml.
 USE_S3 = os.getenv("USE_S3", "0") == "1"
 if USE_S3:
     STORAGES["default"] = {"BACKEND": "storages.backends.s3.S3Storage"}
     AWS_STORAGE_BUCKET_NAME = os.environ["AWS_STORAGE_BUCKET_NAME"]
-    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "ap-southeast-1")
-    AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "") or None
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "ap-southeast-3")
+    # Newer regions such as Jakarta only answer on their regional endpoint.
+    AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "") or (
+        f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com")
+    AWS_S3_SIGNATURE_VERSION = "s3v4"
+    AWS_S3_ADDRESSING_STYLE = "virtual"
+    AWS_LOCATION = "media"
     AWS_DEFAULT_ACL = None
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=604800"}
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

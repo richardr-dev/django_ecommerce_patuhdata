@@ -179,7 +179,7 @@ alarm, and an SNS topic for alerts. Once the stack is updated, install the hourl
 the server (it also alerts when the disk is 85% full or no backup ran for 26 hours):
 
 ```
-sudo /home/ubuntu/lakuin/deploy/aws/install-offsite-backup.sh <BackupBucketName> <AlertTopicArn>
+sudo /home/ubuntu/lakuin/deploy/aws/install-offsite-backup.sh <StorageBucketName> <AlertTopicArn>
 ```
 
 Both values are stack outputs. To receive the alerts, update the stack with

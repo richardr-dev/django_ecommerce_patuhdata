@@ -5,6 +5,7 @@ from django.db.models import Case, Exists, F, OuterRef, Subquery, Sum, Value, Wh
 from django.db.models.functions import Coalesce, Greatest
 
 from apps.shops.models import Store
+from apps.shops.uploads import StoreUploadPath
 
 
 def ensure_store_sku_available(store_id, sku, *, product_id=None, variant_id=None):
@@ -30,7 +31,7 @@ class Category(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="categories")
     name = models.CharField(max_length=100)
     slug = models.SlugField()
-    image = models.FileField(upload_to="categories/%Y/%m/", blank=True,
+    image = models.FileField(upload_to=StoreUploadPath("categories"), blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Ikon kategori di beranda, persegi (misalnya 300 × 300 px). Kosongkan untuk "
             "memakai foto produk pertama di kategori ini.")
@@ -50,7 +51,7 @@ class Product(models.Model):
         help_text="Harga pokok (modal) per unit. Dipakai untuk menghitung HPP dan laba.")
     sku = models.CharField(max_length=80)
     image_url = models.URLField(blank=True)
-    photo = models.FileField(upload_to="products/%Y/%m/", blank=True)
+    photo = models.FileField(upload_to=StoreUploadPath("products"), blank=True)
     weight_grams = models.PositiveIntegerField(default=0)
     length_cm = models.PositiveIntegerField(default=0)
     width_cm = models.PositiveIntegerField(default=0)
@@ -185,7 +186,7 @@ class InventoryLevel(models.Model):
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
     url = models.URLField(blank=True)
-    file = models.FileField(upload_to="products/gallery/%Y/%m/", blank=True)
+    file = models.FileField(upload_to=StoreUploadPath("products"), blank=True)
     alt_text = models.CharField(max_length=180, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
 

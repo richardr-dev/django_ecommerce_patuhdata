@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # One-time setup on the server, as root, after the CloudFormation stack created the bucket:
-#   sudo deploy/aws/install-offsite-backup.sh <BackupBucketName> <AlertTopicArn>
+#   sudo deploy/aws/install-offsite-backup.sh <StorageBucketName> <AlertTopicArn>
 # Both values are outputs of the stack. Installs an hourly systemd timer for offsite-backup.sh.
 set -euo pipefail
-bucket=${1:?BackupBucketName from the stack outputs}
+bucket=${1:?StorageBucketName from the stack outputs}
 topic=${2:?AlertTopicArn from the stack outputs}
 region=$(echo "$topic" | cut -d: -f4)
 here=$(cd "$(dirname "$0")" && pwd)

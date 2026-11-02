@@ -197,7 +197,7 @@ class CheckoutTests(TestCase):
             })
             self.assertRedirects(response, "/merchant/settings/")
             self.store.refresh_from_db()
-            self.assertTrue(self.store.logo.name.startswith("stores/logos/"))
+            self.assertTrue(self.store.logo.name.startswith(f"stores/{self.store.slug}/branding/"))
             storefront = self.client.get("/")
             self.assertContains(storefront, self.store.logo.url, count=3)
             settings_page = self.client.get("/merchant/settings/")

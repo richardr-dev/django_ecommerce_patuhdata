@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Lakuin on one EC2 t3.small: Ubuntu 24.04 with Docker, an Elastic IP, ports 80/443 open
-  for Caddy, Session Manager access, daily EBS snapshots, an off-site S3 backup bucket,
-  automatic recovery and alarms. The app itself runs from
+  for Caddy, Session Manager access, daily EBS snapshots, one S3 bucket for uploaded images
+  (media/, public) and backups (backups/, private), automatic recovery and alarms. The app itself runs from
   compose.prod.yaml (see docs/DEPLOY_AWS.md).
 
 Parameters:
@@ -38,7 +38,7 @@ Parameters:
     Type: Number
     Default: 30
     MinValue: 7
-    Description: Days the S3 bucket keeps each database and media backup.
+    Description: Days the bucket keeps each backup under backups/.
   AlertEmail:
     Type: String
     Default: ""
@@ -77,38 +77,72 @@ Resources:
       # Session Manager shell in the console: no open SSH port or key needed.
       ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
       Policies:
-        - PolicyName: offsite-backup-and-alerts
+        - PolicyName: storage-and-alerts
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # Upload only: a compromised server cannot delete or overwrite past backups,
-              # because the bucket keeps every version.
-              - {Effect: Allow, Action: s3:PutObject, Resource: !Sub "${BackupBucket.Arn}/*"}
+              # Images: the app writes, reads and deletes under media/ only.
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource: !Sub "${StorageBucket.Arn}/media/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt StorageBucket.Arn
+                Condition: {StringLike: {"s3:prefix": ["media/*"]}}
+              # Backups: upload only. A compromised server cannot delete or overwrite past
+              # backups, because the bucket keeps every version.
+              - {Effect: Allow, Action: s3:PutObject, Resource: !Sub "${StorageBucket.Arn}/backups/*"}
               - {Effect: Allow, Action: sns:Publish, Resource: !Ref AlertTopic}
 
-  BackupBucket:
+  # The platform's one bucket: media/ holds sellers' images (public read, per-store folders),
+  # backups/ holds database and image backups (private, expire after OffsiteBackupDays).
+  StorageBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      BucketName: !Sub "lakuin-storage-${AWS::AccountId}"
       VersioningConfiguration: {Status: Enabled}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      # ACLs stay blocked; only the bucket policy below makes media/ readable.
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
       OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
       LifecycleConfiguration:
         Rules:
           - Id: expire-old-backups
             Status: Enabled
+            Prefix: backups/
             ExpirationInDays: !Ref OffsiteBackupDays
+          - Id: tidy-old-versions
+            Status: Enabled
             NoncurrentVersionExpiration: {NoncurrentDays: 7}
             AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}
-      Tags: [{Key: Name, Value: lakuin-backups}]
+      Tags: [{Key: Name, Value: lakuin-storage}]
+
+  StorageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StorageBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicImages
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${StorageBucket.Arn}/media/*"
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: [!GetAtt StorageBucket.Arn, !Sub "${StorageBucket.Arn}/*"]
+            Condition: {Bool: {"aws:SecureTransport": "false"}}
 
   AlertTopic:
     Type: AWS::SNS::Topic
@@ -137,7 +171,9 @@ Resources:
       SecurityGroupIds: [!GetAtt WebSecurityGroup.GroupId]
       DisableApiTermination: true
       PropagateTagsToVolumeOnCreation: true
-      MetadataOptions: {HttpTokens: required, HttpEndpoint: enabled}
+      # Hop limit 2: the app runs in a container, one network hop further from the instance
+      # role's credentials.
+      MetadataOptions: {HttpTokens: required, HttpEndpoint: enabled, HttpPutResponseHopLimit: 2}
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
@@ -289,9 +325,9 @@ Outputs:
     Value: !Ref ServerIp
   InstanceId:
     Value: !Ref Server
-  BackupBucketName:
-    Description: Off-site backups; deploy/aws/install-offsite-backup.sh uploads here.
-    Value: !Ref BackupBucket
+  StorageBucketName:
+    Description: Images under media/ (USE_S3=1, AWS_STORAGE_BUCKET_NAME) and backups under backups/.
+    Value: !Ref StorageBucket
   AlertTopicArn:
     Value: !Ref AlertTopic
   Connect:

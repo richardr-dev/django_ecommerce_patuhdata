@@ -36,11 +36,11 @@ name=$(basename "$db")
 if [ "$(cat "$STATE/last-upload" 2>/dev/null)" = "$name" ]; then
     exit 0
 fi
-aws_cli s3 cp --only-show-errors "/backups/$name" "s3://$BACKUP_BUCKET/db/$name"
+aws_cli s3 cp --only-show-errors "/backups/$name" "s3://$BACKUP_BUCKET/backups/db/$name"
 media="media-${name#db-}"
 media="${media%.dump}.tar.gz"
 if [ -f "$DIR/$media" ]; then
-    aws_cli s3 cp --only-show-errors "/backups/$media" "s3://$BACKUP_BUCKET/media/$media"
+    aws_cli s3 cp --only-show-errors "/backups/$media" "s3://$BACKUP_BUCKET/backups/media/$media"
 fi
 echo "$name" > "$STATE/last-upload"
 echo "uploaded $name to s3://$BACKUP_BUCKET"

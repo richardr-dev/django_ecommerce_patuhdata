@@ -35,7 +35,7 @@ class SimpleHomeTests(TestCase):
             home = self.client.get("/").content.decode()
 
         strip = home.split('class="category-strip"')[1].split("</nav>")[0]
-        self.assertIn("/media/categories/", strip)
+        self.assertIn("/media/stores/toko/categories/", strip)
         self.assertIn("https://cdn.example/kaos.jpg", strip)
         self.assertIn('<span class="category-icon">C</span>', strip)
         self.assertIn('href="/?category=baju#catalog"', strip)
@@ -53,7 +53,8 @@ class SimpleHomeTests(TestCase):
             self.assertEqual(response.status_code, 302,
                 response.context and response.context["form"].errors)
             product = Product.objects.get(sku="KAOS")
-            self.assertTrue(product.photo.name.startswith("products/"))
+            self.assertTrue(product.photo.name.startswith("stores/toko/products/kaos/"))
+            self.assertTrue(product.images.first().file.name.startswith("stores/toko/products/kaos/"))
             self.assertEqual(product.images.count(), 2)
 
             edit = f"/merchant/setup/products/{product.id}/"
@@ -61,3 +62,28 @@ class SimpleHomeTests(TestCase):
                 "price": "50000", "is_active": "on", "weight_grams": 0, "length_cm": 0,
                 "width_cm": 0, "height_cm": 0, "photos": [_png("baru.png")]})
             self.assertEqual(list(product.images.values_list("position", flat=True)), [1, 2, 3])
+
+
+class UploadFolderTests(TestCase):
+    def test_every_image_kind_lands_in_its_store_folder_with_a_random_name(self):
+        from apps.catalog.models import ProductImage
+        from apps.shops.models import Store, StorefrontSlide
+        from apps.shops.uploads import StoreUploadPath
+
+        store = Store.objects.create(owner=User.objects.create_user("o"), name="Kopi Kita",
+            slug="kopi-kita")
+        product = Product(store=store, sku="KOPI 250/G", slug="k", name="K", price=1)
+        cases = [
+            (StoreUploadPath("branding"), store, "stores/kopi-kita/branding/"),
+            (StoreUploadPath("banners"), StorefrontSlide(store=store), "stores/kopi-kita/banners/"),
+            (StoreUploadPath("products"), product, "stores/kopi-kita/products/kopi-250g/"),
+            (StoreUploadPath("products"), ProductImage(product=product),
+                "stores/kopi-kita/products/kopi-250g/"),
+        ]
+        for upload_to, instance, folder in cases:
+            path = upload_to(instance, "Foto KTP Budi.JPG")
+            self.assertTrue(path.startswith(folder), path)
+            self.assertTrue(path.endswith(".jpg"))
+            self.assertNotIn("Budi", path)
+        self.assertNotEqual(StoreUploadPath("banners")(store, "a.png"),
+            StoreUploadPath("banners")(store, "a.png"))
