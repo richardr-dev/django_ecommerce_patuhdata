@@ -222,6 +222,8 @@ class OrderItem(models.Model):
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
     # Made to order: counted against the product's daily quota, never against warehouse stock.
     is_preorder = models.BooleanField(default=False)
+    # The shopper's note for this item, e.g. the writing on a cake.
+    note = models.CharField(max_length=200, blank=True)
     # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
 

@@ -184,3 +184,48 @@ class DeliveryBackOfficeTests(TestCase):
         page = self.client.get(f"/merchant/delivery/recap/?date={day.isoformat()}")
         self.assertEqual(next(iter(page.context["totals"]))["quantity"], 7)
         self.assertContains(page, "2 pesanan dibayar")
+
+
+@override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True,
+    SHIPPING_RATE_PROVIDER="biteship", BITESHIP_API_KEY="")
+class CartDateAndNoteTests(PreorderTests):
+    """The cart picks the order date first and shows each pre-order item's quota for it."""
+
+    def test_cart_shows_dates_and_the_quota_left_for_the_chosen_date(self):
+        self.buyer.post(f"/cart/add/{self.cake.id}/")
+        dates = available_dates(self.store, self._lines(self.cake))
+        self._book(dates[1], quantity=2)
+
+        page = self.buyer.get(f"/cart/?date={dates[1].isoformat()}")
+        self.assertContains(page, 'class="cart-dates"')
+        self.assertContains(page, "Sisa 1 untuk")
+        self.assertEqual(self.buyer.session["delivery_date"], dates[1].isoformat())
+        self.assertContains(self.buyer.get("/checkout/"),
+            f'value="{dates[1].isoformat()}" required checked')
+
+    def test_going_over_the_dates_quota_blocks_checkout_from_the_cart(self):
+        self.buyer.post(f"/cart/add/{self.cake.id}/", {"quantity": 3})
+        day = available_dates(self.store, self._lines(self.cake, 3))[0]
+        self._book(day, quantity=1)
+
+        page = self.buyer.get(f"/cart/?date={day.isoformat()}")
+        self.assertContains(page, "tinggal 2")
+        self.assertContains(page, 'class="button disabled"')
+
+    def test_updating_a_preorder_quantity_keeps_it_in_the_cart(self):
+        self.buyer.post(f"/cart/add/{self.cake.id}/")
+        self.buyer.post(f"/cart/update/p:{self.cake.id}/", {"quantity": 2})
+        self.assertEqual(self.buyer.session["cart"], {f"p:{self.cake.id}": 2})
+
+    def test_item_notes_travel_from_product_to_the_order(self):
+        self.buyer.post(f"/cart/add/{self.cake.id}/", {"note": "Happy Birthday Ayu"})
+        self.assertContains(self.buyer.get("/cart/"), 'value="Happy Birthday Ayu"')
+        day = available_dates(self.store, self._lines(self.cake))[0]
+        self.buyer.post("/checkout/", {**BUYER, "delivery_date": day.isoformat()})
+
+        item = Order.objects.get().items.get()
+        self.assertEqual(item.note, "Happy Birthday Ayu")
+        self.assertNotIn("cart_notes", self.buyer.session)
+        seller = Client()
+        seller.force_login(self.owner)
+        self.assertContains(seller.get("/merchant/orders/?tab=all"), "Happy Birthday Ayu")

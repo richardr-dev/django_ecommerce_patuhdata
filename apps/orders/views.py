@@ -109,6 +109,7 @@ from .scheduling import (
     available_dates,
     needs_schedule,
     orderable_quantity,
+    preorder_remaining,
     slot_options,
     validate_schedule,
 )
@@ -265,11 +266,24 @@ def cart_add(request, product_id):
     except (TypeError, ValueError): in_cart = 0
     cart[key] = min(in_cart + requested, available)
     request.session["cart"] = cart
+    _save_note(request, key)
     lines, subtotal = get_cart(request)
     update_cart_snapshot(request, lines, subtotal)
     record_event(request, "cart_add", product=product, metadata={"quantity": requested}, always=True)
     return _cart_reply(request, True, f"{product.name} ditambahkan ke keranjang.",
         redirect("checkout" if request.POST.get("next") == "checkout" else "cart"))
+
+def _save_note(request, key):
+    if "note" not in request.POST:
+        return
+    notes = dict(request.session.get("cart_notes", {}))
+    note = request.POST.get("note", "").strip()[:200]
+    if note:
+        notes[key] = note
+    else:
+        notes.pop(key, None)
+    request.session["cart_notes"] = notes
+
 
 def cart_update(request, item_key):
     if request.method != "POST" or not request.store: raise Http404
@@ -278,17 +292,18 @@ def cart_update(request, item_key):
     if kind == "v":
         variant = get_object_or_404(ProductVariant.objects.select_related("product"), id=raw_id,
             product__store=request.store, product__is_active=True, is_active=True)
-        available = variant.available_stock
         product = variant.product
+        available = orderable_quantity(product, variant)
     else:
         product = get_object_or_404(Product.objects.prefetch_related("inventory_levels"), id=raw_id, store=request.store)
-        available = product.available_stock
+        available = orderable_quantity(product)
     try: quantity = max(0, min(int(request.POST.get("quantity", 1)), available))
     except ValueError: quantity = 1
     cart = request.session.get("cart", {})
     if quantity: cart[item_key] = quantity
     else: cart.pop(item_key, None)
     request.session["cart"] = cart
+    _save_note(request, item_key)
     lines, subtotal = get_cart(request)
     update_cart_snapshot(request, lines, subtotal)
     record_event(request, "cart_update", product=product, metadata={"quantity": quantity}, always=True)
@@ -338,8 +353,23 @@ def cart_view(request):
     if not request.store: raise Http404
     lines, subtotal = get_cart(request)
     update_cart_snapshot(request, lines, subtotal)
-    return render(request, "storefront/cart.html", {"lines": lines, "subtotal": subtotal,
-        "recovery_session": commerce_session(request)})
+    context = {"lines": lines, "subtotal": subtotal, "recovery_session": commerce_session(request)}
+    if lines and needs_schedule(request.store, lines):
+        # Offer every date with at least one left, and say when the cart wants more than that,
+        # rather than hiding a date the shopper may prefer.
+        dates = available_dates(request.store, [{**line, "quantity": 1} for line in lines])
+        chosen = request.GET.get("date") or request.session.get("delivery_date", "")
+        day = next((d for d in dates if d.isoformat() == chosen), dates[0] if dates else None)
+        if day:
+            request.session["delivery_date"] = day.isoformat()
+        for line in lines:
+            if line["product"].is_preorder and day:
+                line["remaining"] = preorder_remaining(line["product"], day)
+                line["over_quota"] = (line["remaining"] is not None and
+                    line["quantity"] > line["remaining"])
+        context.update(delivery_dates=dates, delivery_day=day,
+            schedule_blocked=any(line.get("over_quota") for line in lines))
+    return render(request, "storefront/cart.html", context)
 
 @login_required(login_url="/account/login/")
 def checkout(request):
@@ -508,7 +538,7 @@ def checkout(request):
                         variant_name=variant.name if variant else "", flash_sale_offer=line["sale_offer"],
                         unit_price=line["unit_price"],
                         quantity=line["quantity"], line_total=line["total"],
-                        is_preorder=product.is_preorder)
+                        is_preorder=product.is_preorder, note=line.get("note", ""))
                     if product.is_preorder:
                         continue  # made to order: the daily quota was checked with the date
                     if variant:
@@ -556,6 +586,8 @@ def checkout(request):
                     payload={"order_id": str(order.id), "phone": order.phone, "email": order.email,
                         "total": str(order.total), "payment_method": order.payment_method})
             request.session["cart"] = {}
+            request.session.pop("cart_notes", None)
+            request.session.pop("delivery_date", None)
             request.session["checkout_key"] = uuid.uuid4().hex
             record_event(request, "converted", metadata={"order_id": str(order.id),
                 "total": str(order.total)}, always=True)
@@ -577,6 +609,7 @@ def checkout(request):
         "payment_choices": payment_choices, "payment_choice": payment_choice,
         "schedule_needed": schedule_needed,
         "delivery_dates": available_dates(request.store, lines) if schedule_needed else [],
+        "chosen_date": request.POST.get("delivery_date") or request.session.get("delivery_date", ""),
         "delivery_slots": slot_options(request.store, None) if schedule_needed else [],
         "has_preorder": any(line["product"].is_preorder for line in lines)})
 

@@ -53,6 +53,7 @@ def get_cart(request):
         unit_price = offer.sale_price if offer else regular_price
         total = unit_price * quantity
         lines.append({"key": key, "product": product, "variant": variant,
+            "note": str(request.session.get("cart_notes", {}).get(key, ""))[:200],
             "unit_price": unit_price, "available_stock": available, "sale_offer": offer,
             "quantity": quantity, "total": total})
         subtotal += total

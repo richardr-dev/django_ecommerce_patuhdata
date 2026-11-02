@@ -9,3 +9,14 @@ fieldset{border:1px solid #dfe4ea;border-radius:14px;padding:20px}legend{font-we
 .date-chip input:checked+span,.slot-chip input:checked+span{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,#fff);color:var(--brand)}.date-chip input:checked+span small{color:var(--brand)}
 .slot-chip input:disabled+span{opacity:.45;cursor:not-allowed;text-decoration:line-through}
 .date-chip input:focus-visible+span,.slot-chip input:focus-visible+span{outline:2px solid var(--brand);outline-offset:2px}
+
+/* Cart: order date first (marketplace and Kiosku style), per-date quota and item notes. */
+.cart-dates{grid-column:1/-1;margin-bottom:14px}.cart-dates>span{display:block;margin-bottom:6px;font-weight:700}.cart-dates div{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.cart-dates a{display:flex;flex:0 0 auto;flex-direction:column;align-items:center;width:58px;padding:7px 0;border:1.5px solid #d0d5dd;border-radius:12px;background:#fff;color:inherit;line-height:1.2;text-decoration:none}.cart-dates b{font-size:19px}.cart-dates small{color:#667085;font-size:11px;text-transform:uppercase}
+.cart-dates a.active{border-color:var(--brand);background:var(--brand);color:#fff}.cart-dates a.active small{color:#fff}
+.cart-quota{display:inline-block;margin:4px 0;padding:2px 8px;border-radius:99px;background:#ecfdf3;color:#027a48;font-size:12px;font-weight:600}.cart-quota.warn{background:#fef3f2;color:#b42318;border-radius:8px}
+.cart-note{display:grid;gap:4px;margin-top:6px;font-size:12px}.cart-note input{padding:7px 9px;border:1px solid #d0d5dd;border-radius:8px;font:inherit}
+.button.disabled{opacity:.5;pointer-events:none}
+.product-note{display:grid;gap:6px;margin:12px 0;font-weight:700}.product-note span{color:#667085;font-weight:400}.product-note input{padding:10px 12px;border:1px solid #d0d5dd;border-radius:10px;font:inherit}
+.cart-quantity .cart-note{grid-column:1/-1;min-width:220px}.cart-quantity .cart-note input{width:100%}
+.cart-quota{align-self:flex-start;width:fit-content}

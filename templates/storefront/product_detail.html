@@ -86,6 +86,7 @@
         </div>
         <small id="stock-label">{% if product.is_preorder %}Pre-order · pilih tanggal kirim saat checkout{% else %}{{ product.available_stock }} tersedia{% endif %}</small>
       </div>
+      <label class="product-note">Catatan untuk penjual <span>(opsional)</span><input name="note" maxlength="200" placeholder="Mis. tulisan di kue, tingkat manis, tanpa kacang"></label>
 
       <div class="product-actions">
         <button class="cart-outline" type="submit" {% if not product.orderable %}disabled{% endif %}>
