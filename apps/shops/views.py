@@ -49,8 +49,9 @@ def platform_home(request):
 
 
 def favicon(request):
-    """Browsers and crawlers request /favicon.ico on every host, platform and store alike."""
-    return redirect(static("img/brand/favicon.ico"), permanent=True)
+    """Browsers and crawlers request /favicon.ico on every host, platform and store alike.
+    Temporary redirect: the target's hashed name changes whenever the icon does."""
+    return redirect(static("img/brand/favicon.ico"))
 
 
 def store_directory(request):

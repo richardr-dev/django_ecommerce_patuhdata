@@ -54,7 +54,7 @@ class HostRoutingTests(TestCase):
     def test_favicon_on_platform_and_store_hosts(self):
         for host in (PLATFORM, f"teh.{PLATFORM}", "kopi.example"):
             response = _host(host).get("/favicon.ico")
-            self.assertEqual(response.status_code, 301, host)
+            self.assertEqual(response.status_code, 302, host)
             self.assertTrue(response["Location"].endswith("img/brand/favicon.ico"), host)
         self.assertContains(_host(f"teh.{PLATFORM}").get("/"), "img/brand/lakuin-icon.svg")
 
