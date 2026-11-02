@@ -397,6 +397,16 @@ def checkout(request):
     if not shipping_methods and not biteship_enabled:
         selected_shipping = ShippingMethod(store=request.store, code="pickup", name="Ambil di toko", flat_rate=0)
         shipping_methods = [selected_shipping]
+    pickup_outlets = list(Warehouse.objects.filter(store=request.store, is_outlet=True,
+        is_active=True, pickup_enabled=True))
+    pickup_outlet = next((outlet for outlet in pickup_outlets
+        if requested_shipping == f"outlet-{outlet.id}"), None)
+    if pickup_outlet:
+        # Collected by the shopper: free, and stock comes from that outlet.
+        selected_shipping = ShippingMethod(store=request.store, code=f"outlet-{pickup_outlet.id}",
+            name=f"Ambil di {pickup_outlet.name}", provider="pickup", flat_rate=0,
+            eta=pickup_outlet.opening_hours)
+        live_quote = None
     shipping_cost = Decimal(live_quote["price"]) if live_quote else (selected_shipping.quote(subtotal) if selected_shipping else Decimal(0))
     coupon = get_coupon(request.store, request.POST.get("coupon_code", ""), subtotal) if request.method == "POST" else None
     base_price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon)
@@ -416,7 +426,7 @@ def checkout(request):
                 request.POST.get("delivery_slot"))
         except ScheduleError as error:
             schedule_error = str(error)
-        required = ["customer_name", "phone", "shipping_address"]
+        required = ["customer_name", "phone"] + ([] if pickup_outlet else ["shipping_address"])
         if any(not request.POST.get(field, "").strip() for field in required):
             messages.error(request, "Semua data pelanggan wajib diisi.")
         elif not selected_shipping and not live_quote:
@@ -489,6 +499,8 @@ def checkout(request):
                 levels = list(InventoryLevel.objects.select_for_update().filter(
                     product_id__in=product_ids, warehouse__store=request.store, warehouse__is_active=True,
                 ).select_related("warehouse").order_by("warehouse__priority", "warehouse_id"))
+                if pickup_outlet:
+                    levels = [level for level in levels if level.warehouse_id == pickup_outlet.id]
                 by_product = {product_id: [] for product_id in product_ids}
                 for level in levels: by_product[level.product_id].append(level)
                 insufficient = any(
@@ -497,8 +509,10 @@ def checkout(request):
                     for x in lines if not x["product"].is_preorder
                 )
                 if insufficient:
-                    messages.error(request, "Stok berubah. Silakan periksa keranjang.")
-                    return redirect("cart")
+                    messages.error(request, f"Stok di {pickup_outlet.name} tidak mencukupi. Pilih "
+                        "outlet lain atau pengiriman." if pickup_outlet else
+                        "Stok berubah. Silakan periksa keranjang.")
+                    return redirect("checkout" if pickup_outlet else "cart")
                 try:
                     delivery_date, delivery_slot = validate_schedule(request.store, lines,
                         request.POST.get("delivery_date"), request.POST.get("delivery_slot"),
@@ -512,7 +526,9 @@ def checkout(request):
                     shipping_cost=price.shipping, discount=price.discount, total=price.total,
                     loyalty_discount=loyalty_discount, loyalty_points_redeemed=loyalty_points,
                     customer_name=request.POST["customer_name"].strip(), email=request.POST.get("email", "").strip(),
-                    phone=phone, shipping_address=request.POST["shipping_address"].strip(),
+                    phone=phone, shipping_address=(request.POST.get("shipping_address", "").strip()
+                        or f"Ambil di {pickup_outlet.name}: {pickup_outlet.address}".strip(": ")),
+                    pickup_outlet=pickup_outlet,
                     province=request.POST.get("province", "").strip(), city=request.POST.get("city", "").strip(),
                     district=request.POST.get("district", "").strip(), village=request.POST.get("village", "").strip(),
                     postal_code=request.POST.get("postal_code", "").strip(), delivery_notes=request.POST.get("delivery_notes", "").strip(),
@@ -607,7 +623,8 @@ def checkout(request):
         "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points,
         "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST"),
         "payment_choices": payment_choices, "payment_choice": payment_choice,
-        "schedule_needed": schedule_needed,
+        "schedule_needed": schedule_needed, "pickup_outlets": pickup_outlets,
+        "pickup_outlet": pickup_outlet,
         "delivery_dates": available_dates(request.store, lines) if schedule_needed else [],
         "chosen_date": request.POST.get("delivery_date") or request.session.get("delivery_date", ""),
         "delivery_slots": slot_options(request.store, None) if schedule_needed else [],
@@ -905,7 +922,8 @@ def merchant_orders(request):
     if group not in {tab["key"] for tab in tabs} | {"all"}:
         # Open where the work is: payments to check, then orders to pack, then to ship.
         group = next((tab["key"] for tab in tabs[:3] if tab["count"]), "all")
-    orders = all_orders.prefetch_related("items", "tracking_events").order_by("-created_at")
+    orders = all_orders.select_related("pickup_outlet").prefetch_related("items",
+        "tracking_events").order_by("-created_at")
     if group != "all":
         orders = orders.filter(status__in={key: statuses for key, _, statuses in ORDER_GROUPS}[group])
     status = request.GET.get("status")
@@ -915,6 +933,9 @@ def merchant_orders(request):
         orders = orders.filter(delivery_date=date.fromisoformat(request.GET.get("date", "")))
     except ValueError:
         pass
+    outlet = request.GET.get("outlet", "")
+    if outlet.isdigit():
+        orders = orders.filter(pickup_outlet_id=int(outlet))
     if group in {"pack", "ship"}:
         # Scheduled orders first, by the day they must leave.
         orders = orders.order_by(F("delivery_date").asc(nulls_last=True), "created_at")
@@ -937,6 +958,7 @@ def merchant_orders(request):
     return render(request, "merchant/orders.html", _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         tabs=tabs, tab=group, query=query, total=all_orders.count(),
+        outlets=Warehouse.objects.filter(store=store, is_outlet=True),
         statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS))
 
 
@@ -1328,7 +1350,8 @@ BACKOFFICE = {
     "images": (ProductImage, ProductImageForm, "Foto produk", ("product", "alt_text", "position")),
     "variants": (ProductVariant, VariantForm, "Varian", ("product", "name", "sku", "price", "stock", "is_active")),
     "categories": (Category, CategoryForm, "Kategori", ("name", "slug")),
-    "warehouses": (Warehouse, WarehouseForm, "Gudang", ("name", "code", "priority", "is_active")),
+    "warehouses": (Warehouse, WarehouseForm, "Gudang & outlet", ("name", "code", "is_outlet",
+        "pickup_enabled", "is_active")),
     "inventory": (InventoryLevel, InventoryForm, "Persediaan", ("warehouse", "product", "on_hand", "reserved", "safety_stock", "available")),
     "shipping": (ShippingMethod, ShippingMethodForm, "Pengiriman", ("name", "provider", "flat_rate", "free_above", "is_active")),
     "coupons": (Coupon, CouponForm, "Voucher", ("code", "kind", "value", "minimum_spend", "used_count", "is_active")),

@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import models
 
-from apps.billing.plans import product_limit_error
+from apps.billing.plans import outlet_limit_error, product_limit_error
 from apps.catalog.models import (
     Category,
     FlashSaleProduct,
@@ -225,6 +225,18 @@ class CategoryForm(StyledModelForm):
 
 class WarehouseForm(StyledModelForm):
     class Meta: model = Warehouse; exclude = ("store",)
+
+    def clean(self):
+        cleaned = super().clean()
+        was_counted = bool(self.instance.pk and self.instance.is_outlet and self.instance.is_active)
+        if self.store and cleaned.get("is_outlet") and cleaned.get("is_active") and not was_counted:
+            active = Warehouse.objects.filter(store=self.store, is_outlet=True, is_active=True)
+            error = outlet_limit_error(self.store, active.exclude(pk=self.instance.pk).count() + 1)
+            if error:
+                raise forms.ValidationError(error)
+        if cleaned.get("pickup_enabled") and not cleaned.get("is_outlet"):
+            self.add_error("pickup_enabled", "Ambil di tempat hanya untuk outlet.")
+        return cleaned
 
 
 class InventoryForm(ProductSkuFormMixin, StyledModelForm):

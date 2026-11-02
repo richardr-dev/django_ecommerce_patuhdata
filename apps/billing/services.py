@@ -1,5 +1,6 @@
 """Seller subscription payments. They go to the platform's own payment account, unlike
 storefront orders, so they never touch Order, inventory or the store's reconciliation."""
+import math
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -15,7 +16,7 @@ from apps.shops.models import AuditLog
 from apps.shops.tenancy import platform_url
 
 from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
-from .plans import PERIOD_DAYS
+from .plans import PERIOD_DAYS, plan_amount
 
 # DOKU invoice numbers for subscriptions; storefront orders use "NK".
 SUBSCRIPTION_PREFIX = "SB"
@@ -29,16 +30,19 @@ class BillingError(Exception):
 def start_checkout(store, plan, months, user):
     if not plan.is_paid or not plan.is_public or plan.contact_sales or months not in PERIOD_DAYS:
         raise BillingError("Paket atau periode tidak tersedia.")
-    amount = plan.price_for(months)
-    if amount <= 0:
+    if plan.price_for(months) <= 0:
         raise BillingError("Harga paket untuk periode ini belum diatur.")
+    current = getattr(store, "subscription", None)
+    # Renewing the same plan pays for the extra outlets too; another plan starts without them.
+    extra = current.extra_outlets if current and current.plan_id == plan.id else 0
+    amount = plan_amount(plan, months, extra)
     provider = settings.PAYMENT_PROVIDER
     if provider not in SUBSCRIPTION_PROVIDERS:
         raise BillingError("Pembayaran langganan saat ini hanya tersedia melalui DOKU.")
     if provider == "demo" and not settings.ALLOW_DEMO_PAYMENTS:
         raise BillingError("Pembayaran langganan belum dikonfigurasi. Hubungi pengelola platform.")
     invoice = SubscriptionInvoice.objects.create(store=store, plan=plan, months=months,
-        amount=amount, provider=provider)
+        amount=amount, provider=provider, extra_outlets=extra)
     if provider == "demo":
         invoice.payment_reference = f"demo-{invoice.id.hex}"
         invoice.checkout_url = reverse("billing-demo-pay", args=[invoice.id])
@@ -77,6 +81,18 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
     now = timezone.now()
     subscription, _ = Subscription.objects.select_for_update().get_or_create(
         store=invoice.store, defaults={"plan": invoice.plan})
+    if invoice.kind == "outlets":
+        # Outlets added mid-period: the period stays, the outlet count grows, and an open
+        # renewal bill is brought up to date if it can still change.
+        subscription.extra_outlets += invoice.extra_outlets
+        subscription.save(update_fields=["extra_outlets", "updated_at"])
+        invoice.status, invoice.paid_at = "paid", now
+        invoice.save(update_fields=["status", "paid_at"])
+        _refresh_open_renewal(subscription)
+        AuditLog.objects.create(store=invoice.store, action="billing.outlets_added",
+            object_type="SubscriptionInvoice", object_id=str(invoice.id),
+            details={"added": invoice.extra_outlets, "extra_outlets": subscription.extra_outlets})
+        return ""
     renewing = (subscription.plan_id == invoice.plan_id and subscription.current_period_end
         and subscription.current_period_end > now)
     start = subscription.current_period_end if renewing else now
@@ -84,7 +100,10 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
     subscription.plan, subscription.current_period_end = invoice.plan, end
     # The next renewal bills the period length the seller just chose.
     subscription.renew_months = invoice.months
-    subscription.save(update_fields=["plan", "current_period_end", "renew_months", "updated_at"])
+    if not invoice.plan.extra_outlet_price:
+        subscription.extra_outlets = 0  # a plan without extra outlets
+    subscription.save(update_fields=["plan", "current_period_end", "renew_months",
+        "extra_outlets", "updated_at"])
     invoice.status, invoice.paid_at = "paid", now
     invoice.period_start, invoice.period_end = start, end
     invoice.save(update_fields=["status", "paid_at", "period_start", "period_end"])
@@ -133,3 +152,57 @@ def check_pending_invoice(invoice):
         SubscriptionInvoice.objects.filter(id=invoice.id, status="pending").update(status="cancelled")
         return "cancelled"
     return invoice.status
+
+
+def _refresh_open_renewal(subscription):
+    """Re-price an open renewal bill nobody has started paying, after the outlet count changed."""
+    renewal = subscription.store.subscription_invoices.filter(kind="renewal",
+        status="pending").first()
+    if renewal and not renewal.checkouts.exists():
+        renewal.extra_outlets = subscription.extra_outlets
+        renewal.amount = plan_amount(renewal.plan, renewal.months, subscription.extra_outlets)
+        renewal.save(update_fields=["extra_outlets", "amount"])
+
+
+def outlet_purchase_quote(subscription, count):
+    """Price of adding `count` outlets for the rest of the current period, rounded up to the
+    next thousand rupiah."""
+    plan = subscription.plan
+    if not plan.extra_outlet_price or count < 1:
+        raise BillingError("Paket ini tidak bisa menambah outlet. Upgrade ke Pro.")
+    end = subscription.current_period_end
+    if not end or end <= timezone.now():
+        raise BillingError("Perpanjang paket terlebih dahulu, lalu tambah outlet.")
+    remaining_days = max(1, round((end - timezone.now()).total_seconds() / 86400))
+    raw = plan.extra_outlet_price * count * remaining_days / Decimal(30)
+    return Decimal(math.ceil(raw / 1000) * 1000), remaining_days
+
+
+def start_outlet_purchase(store, count, user):
+    subscription = Subscription.objects.select_related("plan").filter(store=store).first()
+    if subscription is None:
+        raise BillingError("Toko ini dikelola langsung oleh platform tanpa paket langganan.")
+    amount, days = outlet_purchase_quote(subscription, count)
+    invoice = SubscriptionInvoice.objects.create(store=store, plan=subscription.plan, months=1,
+        amount=amount, provider=settings.PAYMENT_PROVIDER, kind="outlets", extra_outlets=count)
+    AuditLog.objects.create(store=store, actor=user, action="billing.outlets_ordered",
+        object_type="SubscriptionInvoice", object_id=str(invoice.id),
+        details={"count": count, "days": days, "amount": str(amount)})
+    return invoice
+
+
+def reduce_outlets(store, extra_outlets, active_outlets):
+    """Lower the paid extra outlets from now on; the next renewal bills the new count."""
+    subscription = Subscription.objects.select_related("plan").filter(store=store).first()
+    if subscription is None:
+        raise BillingError("Toko ini dikelola langsung oleh platform tanpa paket langganan.")
+    included = subscription.plan.included_outlets or 0
+    if extra_outlets >= subscription.extra_outlets:
+        raise BillingError("Untuk menambah outlet, gunakan tombol Tambah outlet.")
+    if active_outlets > included + extra_outlets:
+        raise BillingError(f"Nonaktifkan dulu outlet yang tidak dipakai: ada {active_outlets} "
+            f"outlet aktif, sedangkan paket akan memuat {included + extra_outlets}.")
+    subscription.extra_outlets = extra_outlets
+    subscription.save(update_fields=["extra_outlets", "updated_at"])
+    _refresh_open_renewal(subscription)
+    return subscription

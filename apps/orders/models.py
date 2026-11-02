@@ -80,6 +80,9 @@ class Order(models.Model):
     delivery_slot = models.ForeignKey("DeliverySlot", on_delete=models.SET_NULL, null=True,
         blank=True, related_name="orders")
     delivery_slot_label = models.CharField(max_length=40, blank=True)
+    # Set when the shopper collects the order at one of the store's outlets.
+    pickup_outlet = models.ForeignKey("catalog.Warehouse", on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="pickup_orders")
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_points_redeemed = models.PositiveIntegerField(default=0)

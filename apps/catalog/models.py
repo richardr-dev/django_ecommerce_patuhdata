@@ -163,6 +163,15 @@ class Warehouse(models.Model):
     address = models.TextField(blank=True)
     priority = models.PositiveSmallIntegerField(default=100, help_text="Lower values allocate first")
     is_active = models.BooleanField(default=True)
+    # An outlet is a stock location that is also a shop customers can visit. Outlets are billed
+    # per outlet on the plan; plain warehouses are free.
+    is_outlet = models.BooleanField(default=False, verbose_name="Outlet / cabang",
+        help_text="Toko fisik yang bisa dikunjungi pembeli. Outlet tambahan berbayar per outlet.")
+    phone = models.CharField(max_length=30, blank=True, verbose_name="Telepon outlet")
+    opening_hours = models.CharField(max_length=120, blank=True, verbose_name="Jam buka",
+        help_text="Mis. Setiap hari 08.00–20.00")
+    pickup_enabled = models.BooleanField(default=False, verbose_name="Bisa ambil di outlet",
+        help_text="Pembeli bisa memilih ambil sendiri di outlet ini saat checkout.")
     class Meta:
         ordering = ["priority", "id"]
         constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_warehouse_code")]

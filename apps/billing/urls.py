@@ -9,6 +9,8 @@ urlpatterns = [
         name="merchant-billing-pay"),
     path("merchant/billing/auto-renew/", views.merchant_billing_autorenew,
         name="merchant-billing-autorenew"),
+    path("merchant/billing/outlets/", views.merchant_billing_outlets,
+        name="merchant-billing-outlets"),
     path("merchant/billing/<uuid:invoice_id>/check/", views.merchant_billing_check,
         name="merchant-billing-check"),
     path("merchant/billing/<uuid:invoice_id>/demo-pay/", views.billing_demo_pay, name="billing-demo-pay"),

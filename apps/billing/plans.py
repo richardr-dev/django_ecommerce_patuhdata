@@ -81,3 +81,32 @@ def channel_limit_error(store, count_after):
 def can_reconcile_payouts(store):
     plan = effective_plan(store)
     return plan is None or plan.allow_payout_reconciliation
+
+
+def plan_amount(plan, months, extra_outlets=0):
+    """What a period costs: the plan plus its extra outlets (a year is billed as ten months,
+    like the plan's own yearly price)."""
+    per_outlet = (plan.extra_outlet_price or 0) * (10 if months == 12 else months)
+    return plan.price_for(months) + per_outlet * extra_outlets
+
+
+def allowed_outlets(store):
+    """Outlets the store may run now, or None for no limit."""
+    plan = effective_plan(store)
+    if plan is None or plan.included_outlets is None:
+        return None
+    subscription = getattr(store, "subscription", None)
+    extra = subscription.extra_outlets if subscription and plan.extra_outlet_price else 0
+    return plan.included_outlets + extra
+
+
+def outlet_limit_error(store, count_after):
+    allowed = allowed_outlets(store)
+    if allowed is None or count_after <= allowed:
+        return ""
+    plan = effective_plan(store)
+    if plan.extra_outlet_price:
+        return (f"Paket {plan.name} Anda memuat {allowed} outlet. Tambah outlet di menu Langganan "
+            f"(Rp{plan.extra_outlet_price:,.0f} per outlet per bulan).".replace(",", "."))
+    return (f"Paket {plan.name} hanya untuk 1 outlet. Multi-outlet tersedia di paket Pro "
+        "(per outlet) atau Custom; upgrade di menu Langganan.")

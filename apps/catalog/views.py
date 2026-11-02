@@ -93,6 +93,7 @@ def home(request):
     lines, cart_total = get_cart(request)
     return render(request, "storefront/customizable_home.html", {"products": products,
         "cart_count": sum(line["quantity"] for line in lines), "cart_total": cart_total,
+        "outlets": request.store.warehouses.filter(is_outlet=True, is_active=True),
         "page_obj": page, "page_range": page_range, "page_query": page_query,
         "product_total": page.paginator.count, "sort": sort,
         "browsing": bool(query or category or page.number > 1),

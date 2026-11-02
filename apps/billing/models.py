@@ -15,6 +15,11 @@ class Plan(models.Model):
     max_products = models.PositiveIntegerField(null=True, blank=True,
         help_text="Produk aktif maksimal. Kosongkan untuk tanpa batas.")
     allow_custom_domain = models.BooleanField(default=False)
+    included_outlets = models.PositiveIntegerField(null=True, blank=True, default=1,
+        help_text="Outlet yang sudah termasuk harga paket. Kosongkan untuk tanpa batas.")
+    extra_outlet_price = models.DecimalField(max_digits=12, decimal_places=0, null=True,
+        blank=True, help_text="Harga per outlet tambahan per bulan. Kosong: tidak bisa menambah "
+            "outlet (perlu upgrade).")
     max_channels = models.PositiveIntegerField(null=True, blank=True,
         help_text="Toko marketplace yang dapat dihubungkan. Kosongkan untuk tanpa batas.")
     allow_payout_reconciliation = models.BooleanField(default=False,
@@ -59,6 +64,8 @@ class Subscription(models.Model):
         help_text="Akhir masa aktif paket berbayar. Kosong untuk paket gratis.")
     # Before each period ends Lakuin bills the next one and reminds the seller to pay it.
     auto_renew = models.BooleanField(default=True)
+    # Outlets bought on top of those the plan includes; renewals bill them too.
+    extra_outlets = models.PositiveIntegerField(default=0)
     renew_months = models.PositiveSmallIntegerField(default=1, choices=[(1, "Bulanan"),
         (12, "Tahunan")])
     created_at = models.DateTimeField(auto_now_add=True)
@@ -71,12 +78,15 @@ class SubscriptionInvoice(models.Model):
     STATUS = [("pending", "Menunggu pembayaran"), ("paid", "Lunas"), ("failed", "Gagal"),
         ("cancelled", "Dibatalkan")]
     PERIODS = [(1, "1 bulan"), (12, "12 bulan")]
-    KINDS = [("checkout", "Dibeli dari menu Langganan"), ("renewal", "Perpanjangan otomatis")]
+    KINDS = [("checkout", "Dibeli dari menu Langganan"), ("renewal", "Perpanjangan otomatis"),
+        ("outlets", "Tambah outlet")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=10, choices=KINDS, default="checkout")
     # Renewals: the period end they continue from, and how many reminders went out.
     due_at = models.DateTimeField(null=True, blank=True)
     reminders_sent = models.PositiveSmallIntegerField(default=0)
+    # Extra outlets this invoice pays for: all of them for a period, or those being added.
+    extra_outlets = models.PositiveIntegerField(default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="subscription_invoices")
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
     months = models.PositiveSmallIntegerField(choices=PERIODS, default=1)

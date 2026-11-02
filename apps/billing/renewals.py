@@ -20,6 +20,7 @@ from apps.shops.models import AuditLog
 from apps.shops.tenancy import platform_url
 
 from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
+from .plans import plan_amount
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ def pending_renewal(store):
 def _renewal_for(subscription):
     """The pending renewal bill for this period, created on first call."""
     plan, months = subscription.plan, subscription.renew_months
-    amount = plan.price_for(months) or plan.price_monthly * months
+    extra = subscription.extra_outlets if plan.extra_outlet_price else 0
+    amount = plan_amount(plan, months, extra) if plan.price_for(months) else (
+        plan.price_monthly * months + (plan.extra_outlet_price or 0) * extra * months)
     if amount <= 0:
         return None
     try:
@@ -48,7 +51,7 @@ def _renewal_for(subscription):
             invoice, created = SubscriptionInvoice.objects.get_or_create(
                 store=subscription.store, kind="renewal", due_at=subscription.current_period_end,
                 defaults={"plan": plan, "months": months, "amount": amount,
-                    "provider": settings.PAYMENT_PROVIDER})
+                    "extra_outlets": extra, "provider": settings.PAYMENT_PROVIDER})
     except IntegrityError:  # created by a concurrent worker
         invoice, created = SubscriptionInvoice.objects.get(store=subscription.store,
             kind="renewal", due_at=subscription.current_period_end), False

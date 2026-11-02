@@ -9,9 +9,17 @@ from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
 from .models import Plan, Subscription, SubscriptionInvoice
-from .plans import effective_plan, subscription_status
+from .plans import allowed_outlets, effective_plan, plan_amount, subscription_status
 from .renewals import RenewalError, open_payment_page
-from .services import BillingError, check_pending_invoice, mark_invoice_paid, start_checkout
+from .services import (
+    BillingError,
+    check_pending_invoice,
+    mark_invoice_paid,
+    outlet_purchase_quote,
+    reduce_outlets,
+    start_checkout,
+    start_outlet_purchase,
+)
 
 BILLING_ROLES = {"admin", "finance"}
 
@@ -26,6 +34,8 @@ def merchant_billing(request):
         plan=effective_plan(store), plans=Plan.objects.filter(is_public=True),
         active_products=Product.objects.filter(store=store, is_active=True).count(),
         channel_count=store.sales_channels.count(), status=subscription_status(store),
+        active_outlets=_active_outlets(store), allowed_outlets=allowed_outlets(store),
+        outlet_quote=_outlet_quote(subscription),
         renewal_notice_days=settings.RENEWAL_NOTICE_DAYS,
         invoices=store.subscription_invoices.select_related("plan")[:12]))
 
@@ -113,8 +123,8 @@ def merchant_billing_autorenew(request):
             renewal.status = "cancelled"
             renewal.save(update_fields=["status"])
         elif renewal.months != months:
-            plan = renewal.plan
-            renewal.months, renewal.amount = months, plan.price_for(months) or plan.price_monthly * months
+            renewal.months = months
+            renewal.amount = plan_amount(renewal.plan, months, renewal.extra_outlets)
             renewal.save(update_fields=["months", "amount"])
     AuditLog.objects.create(store=store, actor=request.user, action="billing.autorenew_updated",
         object_type="Subscription", object_id=str(subscription.id),
@@ -122,3 +132,38 @@ def merchant_billing_autorenew(request):
     messages.success(request, "Perpanjangan otomatis aktif." if subscription.auto_renew else
         "Perpanjangan otomatis dimatikan. Paket berakhir di akhir periode.")
     return redirect("merchant-billing")
+
+
+def _active_outlets(store):
+    return store.warehouses.filter(is_outlet=True, is_active=True).count()
+
+
+def _outlet_quote(subscription):
+    """The price of one more outlet for the rest of this period, for the billing page."""
+    try:
+        return outlet_purchase_quote(subscription, 1) if subscription else None
+    except BillingError:
+        return None
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_billing_outlets(request):
+    """Add outlets (paid now for the rest of the period) or reduce them from now on."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    try:
+        count = max(0, int(request.POST.get("count", "0")))
+    except ValueError:
+        count = 0
+    try:
+        if request.POST.get("action") == "reduce":
+            reduce_outlets(store, count, _active_outlets(store))
+            messages.success(request, f"Outlet tambahan menjadi {count}. Berlaku mulai tagihan berikutnya.")
+            return redirect("merchant-billing")
+        invoice = start_outlet_purchase(store, count, request.user)
+        return redirect(open_payment_page(invoice, request.user))
+    except (BillingError, RenewalError) as error:
+        messages.error(request, str(error))
+        return redirect("merchant-billing")
