@@ -14,7 +14,7 @@ from apps.orders.models import PaymentEvent
 from apps.shops.models import AuditLog
 from apps.shops.tenancy import platform_url
 
-from .models import Subscription, SubscriptionInvoice
+from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
 from .plans import PERIOD_DAYS
 
 # DOKU invoice numbers for subscriptions; storefront orders use "NK".
@@ -82,10 +82,15 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
     start = subscription.current_period_end if renewing else now
     end = start + timedelta(days=PERIOD_DAYS[invoice.months])
     subscription.plan, subscription.current_period_end = invoice.plan, end
-    subscription.save(update_fields=["plan", "current_period_end", "updated_at"])
+    # The next renewal bills the period length the seller just chose.
+    subscription.renew_months = invoice.months
+    subscription.save(update_fields=["plan", "current_period_end", "renew_months", "updated_at"])
     invoice.status, invoice.paid_at = "paid", now
     invoice.period_start, invoice.period_end = start, end
     invoice.save(update_fields=["status", "paid_at", "period_start", "period_end"])
+    # Any other open renewal bill is settled by this payment.
+    SubscriptionInvoice.objects.filter(store=invoice.store, kind="renewal",
+        status="pending").exclude(id=invoice.id).update(status="cancelled")
     AuditLog.objects.create(store=invoice.store, action="billing.subscription_paid",
         object_type="SubscriptionInvoice", object_id=str(invoice.id),
         details={"plan": invoice.plan.code, "period_end": end.isoformat()})
@@ -94,8 +99,10 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
 
 def handle_doku_notification(invoice_number, request_id, payload):
     """Signed DOKU SUCCESS notification for a subscription. Returns (body, status)."""
-    invoice = SubscriptionInvoice.objects.filter(payment_reference=invoice_number,
-        provider="doku").first()
+    checkout = SubscriptionCheckout.objects.filter(reference=invoice_number).select_related(
+        "invoice").first()
+    invoice = checkout.invoice if checkout else SubscriptionInvoice.objects.filter(
+        payment_reference=invoice_number, provider="doku").first()
     if not invoice:
         return {"error": "Invoice not found"}, 404
     _, created = PaymentEvent.objects.get_or_create(provider="doku", external_id=request_id,
@@ -121,7 +128,7 @@ def check_pending_invoice(invoice):
     if status.state == "paid":
         if not mark_invoice_paid(invoice.id, amount=status.amount, currency=status.currency):
             return "paid"
-    elif status.state == "unpaid" and invoice.created_at < timezone.now() - timedelta(
+    elif status.state == "unpaid" and invoice.kind == "checkout" and invoice.created_at < timezone.now() - timedelta(
             minutes=settings.DOKU_PAYMENT_DUE_MINUTES + 5):
         SubscriptionInvoice.objects.filter(id=invoice.id, status="pending").update(status="cancelled")
         return "cancelled"

@@ -189,6 +189,10 @@ PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
 PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
 # Days of the default plan a new store gets free at signup when that plan is paid.
 TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
+# Renewal billing: bill the next period this many days ahead, and keep a paying store fully
+# active this many days after its period ends while the renewal is unpaid.
+RENEWAL_NOTICE_DAYS = int(os.getenv("RENEWAL_NOTICE_DAYS", "7"))
+RENEWAL_GRACE_DAYS = int(os.getenv("RENEWAL_GRACE_DAYS", "3"))
 
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 

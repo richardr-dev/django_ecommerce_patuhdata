@@ -14,3 +14,5 @@
 .billing-badge{margin-top:auto;align-self:flex-start;padding:4px 10px;border-radius:999px;background:#ecfdf3;color:#027a48;font-weight:700;font-size:13px}
 .inline-form{display:inline}
 .billing-plan button.bo-link,.inline-form button.bo-link{background:none;border:0;padding:0;cursor:pointer;font:inherit;font-weight:700}
+
+.billing-renewal{display:grid;gap:16px;margin-bottom:18px}.renewal-due{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--bo-line)}.renewal-due h2{margin:4px 0}.renewal-due p{margin:0;color:var(--bo-muted)}.renewal-due form{display:grid;gap:4px;justify-items:end}.renewal-due small{color:var(--bo-muted)}.renewal-settings{display:flex;flex-wrap:wrap;align-items:center;gap:18px}.renewal-settings .toggle{display:flex;flex:1;gap:10px;align-items:flex-start;min-width:260px}.renewal-settings small{display:block;color:var(--bo-muted)}.renewal-settings select{margin-left:6px;padding:8px;border:1px solid var(--bo-line);border-radius:8px}

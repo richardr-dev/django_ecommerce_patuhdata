@@ -6,9 +6,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.catalog.models import Product
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.models import AuditLog
 
-from .models import Plan, SubscriptionInvoice
+from .models import Plan, Subscription, SubscriptionInvoice
 from .plans import effective_plan, subscription_status
+from .renewals import RenewalError, open_payment_page
 from .services import BillingError, check_pending_invoice, mark_invoice_paid, start_checkout
 
 BILLING_ROLES = {"admin", "finance"}
@@ -24,6 +26,7 @@ def merchant_billing(request):
         plan=effective_plan(store), plans=Plan.objects.filter(is_public=True),
         active_products=Product.objects.filter(store=store, is_active=True).count(),
         channel_count=store.sales_channels.count(), status=subscription_status(store),
+        renewal_notice_days=settings.RENEWAL_NOTICE_DAYS,
         invoices=store.subscription_invoices.select_related("plan")[:12]))
 
 
@@ -74,3 +77,48 @@ def billing_demo_pay(request, invoice_id):
         return redirect("merchant-billing")
     return render(request, "merchant/billing_demo_pay.html", _merchant_context(request, store,
         title="Pembayaran demo", invoice=invoice))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_billing_pay(request, invoice_id):
+    """Open a fresh payment page for a pending bill (renewal or not)."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    invoice = get_object_or_404(SubscriptionInvoice, id=invoice_id, store=store)
+    try:
+        url = open_payment_page(invoice, request.user)
+    except RenewalError as error:
+        messages.error(request, str(error))
+        return redirect("merchant-billing")
+    return redirect(url)
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_billing_autorenew(request):
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    subscription = get_object_or_404(Subscription, store=store)
+    months = 12 if request.POST.get("renew_months") == "12" else 1
+    subscription.auto_renew = request.POST.get("auto_renew") == "on"
+    subscription.renew_months = months
+    subscription.save(update_fields=["auto_renew", "renew_months", "updated_at"])
+    renewal = store.subscription_invoices.filter(kind="renewal", status="pending").first()
+    # An open bill follows the new choice unless a payment page for it may still be paid.
+    if renewal and not renewal.checkouts.exists():
+        if not subscription.auto_renew:
+            renewal.status = "cancelled"
+            renewal.save(update_fields=["status"])
+        elif renewal.months != months:
+            plan = renewal.plan
+            renewal.months, renewal.amount = months, plan.price_for(months) or plan.price_monthly * months
+            renewal.save(update_fields=["months", "amount"])
+    AuditLog.objects.create(store=store, actor=request.user, action="billing.autorenew_updated",
+        object_type="Subscription", object_id=str(subscription.id),
+        details={"auto_renew": subscription.auto_renew, "months": months})
+    messages.success(request, "Perpanjangan otomatis aktif." if subscription.auto_renew else
+        "Perpanjangan otomatis dimatikan. Paket berakhir di akhir periode.")
+    return redirect("merchant-billing")

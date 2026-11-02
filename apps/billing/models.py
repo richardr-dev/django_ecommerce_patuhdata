@@ -57,6 +57,10 @@ class Subscription(models.Model):
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
     current_period_end = models.DateTimeField(null=True, blank=True,
         help_text="Akhir masa aktif paket berbayar. Kosong untuk paket gratis.")
+    # Before each period ends Lakuin bills the next one and reminds the seller to pay it.
+    auto_renew = models.BooleanField(default=True)
+    renew_months = models.PositiveSmallIntegerField(default=1, choices=[(1, "Bulanan"),
+        (12, "Tahunan")])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -67,7 +71,12 @@ class SubscriptionInvoice(models.Model):
     STATUS = [("pending", "Menunggu pembayaran"), ("paid", "Lunas"), ("failed", "Gagal"),
         ("cancelled", "Dibatalkan")]
     PERIODS = [(1, "1 bulan"), (12, "12 bulan")]
+    KINDS = [("checkout", "Dibeli dari menu Langganan"), ("renewal", "Perpanjangan otomatis")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=10, choices=KINDS, default="checkout")
+    # Renewals: the period end they continue from, and how many reminders went out.
+    due_at = models.DateTimeField(null=True, blank=True)
+    reminders_sent = models.PositiveSmallIntegerField(default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="subscription_invoices")
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
     months = models.PositiveSmallIntegerField(choices=PERIODS, default=1)
@@ -84,6 +93,19 @@ class SubscriptionInvoice(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0),
-            name="subscription_invoice_amount_positive")]
+            name="subscription_invoice_amount_positive"),
+            models.UniqueConstraint(fields=["store", "due_at"],
+                condition=models.Q(kind="renewal"), name="one_renewal_per_period")]
 
     def __str__(self): return f"{self.store} · {self.plan} · {self.get_status_display()}"
+
+
+class SubscriptionCheckout(models.Model):
+    """One payment page opened for an invoice. A DOKU page expires within the hour, so a renewal
+    invoice can get several; every reference is kept so a late payment on an older page is
+    still matched to its invoice."""
+    invoice = models.ForeignKey(SubscriptionInvoice, on_delete=models.CASCADE,
+        related_name="checkouts")
+    reference = models.CharField(max_length=80, unique=True)
+    checkout_url = models.URLField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

@@ -21,8 +21,13 @@ def effective_plan(store):
     except Subscription.DoesNotExist:
         return None
     plan = subscription.plan
-    if plan.is_paid and not (subscription.current_period_end and
-            subscription.current_period_end > timezone.now()):
+    end = subscription.current_period_end
+    if plan.is_paid and end and end <= timezone.now() < end + timedelta(
+            days=settings.RENEWAL_GRACE_DAYS) and subscription.auto_renew and (
+            store.subscription_invoices.filter(status="paid").exists()):
+        # A paying seller a few days late with the renewal keeps everything meanwhile.
+        return plan
+    if plan.is_paid and not (end and end > timezone.now()):
         # A lapsed store falls back to a free default plan if there is one; otherwise it stays
         # online with what it has but grows no further until the seller pays.
         fallback = default_plan()
@@ -42,12 +47,17 @@ def subscription_status(store):
     subscription = getattr(store, "subscription", None)
     if subscription is None or not subscription.plan.is_paid:
         return None
+    from .renewals import pending_renewal
+
     end = subscription.current_period_end
     trial = not store.subscription_invoices.filter(status="paid").exists()
     days_left = (end - timezone.now()).days if end else -1
-    return {"plan": subscription.plan, "ends_at": end, "trial": trial,
-        "lapsed": not end or end <= timezone.now(), "days_left": max(days_left, 0),
-        "ending_soon": end is not None and 0 <= days_left <= 3}
+    ended = not end or end <= timezone.now()
+    grace = ended and effective_plan(store).code == subscription.plan.code
+    return {"plan": subscription.plan, "ends_at": end, "trial": trial, "grace": grace,
+        "lapsed": ended and not grace, "days_left": max(days_left, 0),
+        "ending_soon": end is not None and 0 <= days_left <= 3,
+        "auto_renew": subscription.auto_renew, "renewal": pending_renewal(store)}
 
 
 def _limit_error(store, field, count_after, what):
