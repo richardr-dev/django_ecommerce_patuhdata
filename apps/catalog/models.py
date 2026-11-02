@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models import Case, Exists, F, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Greatest
@@ -30,6 +30,10 @@ class Category(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="categories")
     name = models.CharField(max_length=100)
     slug = models.SlugField()
+    image = models.FileField(upload_to="categories/%Y/%m/", blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
+        help_text="Ikon kategori di beranda, persegi (misalnya 300 × 300 px). Kosongkan untuk "
+            "memakai foto produk pertama di kategori ini.")
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "slug"], name="unique_category_slug")]
     def __str__(self): return self.name

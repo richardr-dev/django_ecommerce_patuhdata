@@ -44,7 +44,7 @@ class CheckoutTests(TestCase):
 
     def test_home_privacy_and_cookie_experience_are_available(self):
         home = self.client.get("/")
-        self.assertContains(home, "home-hero")
+        self.assertContains(home, 'id="catalog"')
         self.assertContains(home, "cookie-banner")
         self.assertEqual(self.client.get("/privacy/").status_code, 200)
 

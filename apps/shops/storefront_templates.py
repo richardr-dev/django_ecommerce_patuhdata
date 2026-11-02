@@ -38,6 +38,20 @@ STOREFRONT_TEMPLATES = {
             "font_family": "sans", "cover_layout": "image", "logo_size": "small",
             "cover_overlay": 55},
     },
+    "promo": {
+        "label": "Promo Merah",
+        "description": "Merah meriah ala marketplace untuk toko yang sering promo.",
+        "values": {"theme": "modern", "primary_color": "#dc2626", "background_color": "#f5f5f5",
+            "font_family": "sans", "cover_layout": "image", "logo_size": "medium",
+            "cover_overlay": 40},
+    },
+    "pastel": {
+        "label": "Pastel Manis",
+        "description": "Pink lembut dan huruf membulat untuk kecantikan, fesyen, dan kado.",
+        "values": {"theme": "modern", "primary_color": "#db2777", "background_color": "#fff7fb",
+            "font_family": "rounded", "cover_layout": "image", "logo_size": "medium",
+            "cover_overlay": 35},
+    },
 }
 
 

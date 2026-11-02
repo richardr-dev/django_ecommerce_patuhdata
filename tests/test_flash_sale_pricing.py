@@ -28,7 +28,9 @@ class FlashSalePricingTests(TestCase):
 
     def test_active_sale_price_is_used_everywhere_and_snapshotted(self):
         home = self.client.get("/")
-        self.assertContains(home, "Harga turun, waktu terbatas")
+        self.assertContains(home, 'id="flash-sale"')
+        self.assertContains(home, "data-total-hours")
+        self.assertContains(home, 'href="#flash-sale"')
         self.assertContains(home, "Rp100.000")
         self.assertContains(home, "Rp70.000")
         self.client.post(f"/cart/add/{self.product.id}/")

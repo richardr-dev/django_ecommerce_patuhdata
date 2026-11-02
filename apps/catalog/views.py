@@ -1,6 +1,7 @@
 import json
 
 from django.contrib import messages
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, models, transaction
@@ -33,6 +34,25 @@ def paginate(request, queryset, per_page, *, param="page"):
     params.pop(param, None)
     page_range = list(page.paginator.get_elided_page_range(page.number, on_each_side=1, on_ends=1))
     return page, page_range, params.urlencode()
+
+
+HOME_CATEGORY_LIMIT = 16
+
+
+def _category_icons(store):
+    """Categories for the homepage strip, each with its own icon or else the photo of its
+    first product that has one."""
+    first = Product.objects.filter(category=models.OuterRef("pk"), is_active=True).exclude(
+        photo="", image_url="").order_by("-is_featured", "-created_at", "-id")
+    categories = list(store.categories.annotate(
+        product_photo=models.Subquery(first.values("photo")[:1]),
+        product_image_url=models.Subquery(first.values("image_url")[:1])).order_by("name")[
+        :HOME_CATEGORY_LIMIT])
+    for category in categories:
+        category.icon_url = (category.image.url if category.image else
+            default_storage.url(category.product_photo) if category.product_photo else
+            category.product_image_url or "")
+    return categories
 
 
 def home(request):
@@ -68,7 +88,9 @@ def home(request):
         "page_obj": page, "page_range": page_range, "page_query": page_query,
         "product_total": page.paginator.count, "sort": sort,
         "browsing": bool(query or category or page.number > 1),
-        "categories": request.store.categories.order_by("name"), "slides": list(request.store.storefront_slides.filter(is_active=True)),
+        "categories": request.store.categories.order_by("name"),
+        "category_icons": _category_icons(request.store),
+        "slides": list(request.store.storefront_slides.filter(is_active=True)),
         "active_campaign": active_campaign, "flash_sale_products": flash_sale_products,
         "featured_products": featured_products, "query": query})
 

@@ -15,16 +15,12 @@ class QuickSetupTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_custom_homepage_content_is_rendered(self):
-        self.store.hero_eyebrow = "BUATAN LOKAL"
-        self.store.hero_title = "Judul toko saya"
-        self.store.hero_button_label = "Belanja sekarang"
-        self.store.trust_title_1 = "Garansi resmi"
+        self.store.catalog_title = "Koleksi kami"
+        self.store.announcement_text = "Gratis ongkir hari ini"
         self.store.save()
         response = self.client.get("/")
-        self.assertContains(response, "BUATAN LOKAL")
-        self.assertContains(response, "Judul toko saya")
-        self.assertContains(response, "Belanja sekarang")
-        self.assertContains(response, "Garansi resmi")
+        self.assertContains(response, "Koleksi kami")
+        self.assertContains(response, "Gratis ongkir hari ini")
 
     def test_quick_defaults_are_idempotent(self):
         self.client.post("/merchant/quick-defaults/")

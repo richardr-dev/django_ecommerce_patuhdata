@@ -161,10 +161,10 @@ class StorefrontSlide(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="storefront_slides")
     image = models.FileField(upload_to="stores/slides/%Y/%m/",
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
-        help_text="Desktop image. Recommended 1920 × 760 px, maximum 5 MB.")
+        help_text="Foto landscape, disarankan 1920 × 640 px (rasio 3:1), maksimal 5 MB.")
     mobile_image = models.FileField(upload_to="stores/slides/mobile/%Y/%m/", blank=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
-        help_text="Optional mobile crop. Recommended 900 × 1100 px.")
+        help_text="Opsional: potongan khusus ponsel, landscape 1200 × 600 px (rasio 2:1).")
     eyebrow = models.CharField(max_length=80, blank=True)
     headline = models.CharField(max_length=180, blank=True)
     subheadline = models.CharField(max_length=280, blank=True)

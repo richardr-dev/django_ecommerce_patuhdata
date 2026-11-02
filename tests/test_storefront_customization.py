@@ -53,28 +53,43 @@ class StorefrontCustomizationTests(TestCase):
         self.assertContains(response, "--store-font:ui-serif")
         self.assertContains(response, 'class="font-serif logo-large"')
 
-    def test_cover_image_and_layout_render_on_homepage(self):
+    def test_several_banners_upload_at_once_and_show_as_landscape_slider(self):
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            banners = [SimpleUploadedFile(f"banner{n}.png", PNG, content_type="image/png")
+                for n in range(3)]
             response = self.client.post("/merchant/settings/", self._settings_data(
-                cover_layout="image", cover_overlay="60", show_store_name="on",
-                cover_image=SimpleUploadedFile("cover.png", PNG, content_type="image/png")))
+                show_store_name="on", banners=banners))
             self.assertRedirects(response, "/merchant/settings/")
-            self.store.refresh_from_db()
-            self.assertTrue(self.store.cover_image.name.startswith("stores/covers/"))
+            slides = list(self.store.storefront_slides.all())
+            self.assertEqual([slide.position for slide in slides], [1, 2, 3])
             home = self.client.get("/")
-            self.assertContains(home, "cover-image")
-            self.assertContains(home, "has-cover-image")
-            self.assertContains(home, self.store.cover_image.url)
-            self.assertContains(home, "--cover-overlay:60%")
-            self.assertNotContains(home, 'class="hero-panel"')
+            self.assertContains(home, "commercial-carousel")
+            self.assertContains(home, 'class="carousel-slide"', count=3)
 
-    def test_split_layout_keeps_info_panel_and_centered_drops_it(self):
-        self.assertContains(self.client.get("/"), 'class="hero-panel"')
-        self.store.cover_layout = "centered"
-        self.store.save()
-        response = self.client.get("/")
-        self.assertContains(response, "cover-centered")
-        self.assertNotContains(response, 'class="hero-panel"')
+            self.client.post("/merchant/settings/", self._settings_data(show_store_name="on",
+                remove_banners=[slides[0].id]))
+            self.assertEqual(self.store.storefront_slides.count(), 2)
+
+    def test_without_a_banner_the_top_of_the_store_shows_nothing(self):
+        home = self.client.get("/")
+        self.assertNotContains(home, "commercial-carousel")
+        self.assertNotContains(home, "home-hero")
+        self.assertNotContains(home, "Judul milik merchant")
+
+    def test_an_existing_cover_photo_still_shows_as_the_banner(self):
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            self.store.cover_image = SimpleUploadedFile("cover.png", PNG, content_type="image/png")
+            self.store.save()
+            home = self.client.get("/")
+        self.assertContains(home, "single-banner")
+        self.assertContains(home, self.store.cover_image.url)
+
+    def test_banner_uploads_must_be_images(self):
+        form = StoreSettingsForm(data=self._settings_data(), files={"banners": [
+            SimpleUploadedFile("virus.exe", b"MZ", content_type="application/octet-stream")]},
+            instance=self.store, store=self.store)
+        self.assertFalse(form.is_valid())
+        self.assertIn("banners", form.errors)
 
     def test_store_name_can_be_hidden_next_to_logo(self):
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
@@ -94,8 +109,8 @@ class StorefrontCustomizationTests(TestCase):
         self.assertIn("primary_color", form.errors)
         self.assertIn("background_color", form.errors)
 
-    def test_cover_overlay_is_capped(self):
-        form = StoreSettingsForm(data=self._settings_data(cover_overlay="95"),
-            instance=self.store, store=self.store)
-        self.assertFalse(form.is_valid())
-        self.assertIn("cover_overlay", form.errors)
+    def test_theme_picker_previews_every_preset_including_asian_market_looks(self):
+        page = self.client.get("/merchant/settings/")
+        self.assertContains(page, 'class="theme-preview"', count=len(STOREFRONT_TEMPLATES))
+        self.assertContains(page, "Promo Merah")
+        self.assertContains(page, "Pastel Manis")

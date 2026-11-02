@@ -25,8 +25,9 @@ class CommercialHomepageTests(TestCase):
         self.assertContains(response, "Gratis ongkir akhir pekan")
         self.assertContains(response, "Produk unggulan")
         self.assertContains(response, "Produk Unggulan")
-        self.assertContains(response, "Lengkapi koleksi Anda")
-        self.assertContains(response, "Ambil penawaran")
+        # The retired closing campaign block and text hero stay off the simplified homepage.
+        self.assertNotContains(response, "Lengkapi koleksi Anda")
+        self.assertNotContains(response, "home-hero")
 
     def test_campaign_links_reject_unsafe_schemes(self):
         data = {field: getattr(self.store, field) for field in StoreSettingsForm.Meta.fields}
@@ -35,7 +36,7 @@ class CommercialHomepageTests(TestCase):
         data["primary_color"] = "#155eef"
         data["currency"] = "IDR"
         data["tax_rate"] = "0"
-        data["campaign_link_url"] = "javascript:alert(1)"
+        data["announcement_link_url"] = "javascript:alert(1)"
         form = StoreSettingsForm(data=data, instance=self.store, store=self.store)
         self.assertFalse(form.is_valid())
-        self.assertIn("campaign_link_url", form.errors)
+        self.assertIn("announcement_link_url", form.errors)

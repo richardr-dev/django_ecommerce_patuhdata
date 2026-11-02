@@ -4,6 +4,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.db import models
 
 from apps.billing.plans import product_limit_error
 from apps.catalog.models import (
@@ -23,6 +24,36 @@ from apps.shops.tenancy import custom_domain_allowed
 from .models import Coupon, CustomerAddress, ShippingMethod
 
 DOMAIN_PATTERN = re.compile(r"(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
+
+
+IMAGE_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+class MultipleImageInput(forms.FileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.FileField):
+    """Several photos from one file picker, each checked like a single upload."""
+
+    def __init__(self, *, max_files=10, **kwargs):
+        self.max_files = max_files
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("widget", MultipleImageInput(attrs={
+            "accept": "image/png,image/jpeg,image/webp"}))
+        super().__init__(**kwargs)
+
+    def clean(self, data, initial=None):
+        files = [upload for upload in (data if isinstance(data, list | tuple) else [data]) if upload]
+        if len(files) > self.max_files:
+            raise forms.ValidationError(f"Maksimal {self.max_files} foto sekaligus.")
+        for upload in files:
+            if getattr(upload, "content_type", "") not in IMAGE_CONTENT_TYPES:
+                raise forms.ValidationError(f"{upload.name}: format harus PNG, JPG, atau WebP.")
+            if upload.size > MAX_IMAGE_BYTES:
+                raise forms.ValidationError(f"{upload.name}: ukuran maksimal 5 MB.")
+        return files
 
 
 class StyledModelForm(forms.ModelForm):
@@ -76,6 +107,9 @@ class ProductForm(StyledModelForm):
         label="Gudang awal", help_text="Lokasi stok awal produk ini.")
     initial_stock = forms.IntegerField(min_value=0, initial=0, required=False,
         label="Stok awal", help_text="Dapat diubah kemudian melalui menu Kelola stok.")
+    photos = MultipleImageField(label="Tambah foto produk",
+        help_text="Pilih beberapa foto sekaligus (maksimal 10, masing-masing 5 MB). Foto pertama "
+            "menjadi foto utama bila produk belum punya foto.")
 
     class Meta:
         model = Product
@@ -101,6 +135,16 @@ class ProductForm(StyledModelForm):
             if error:
                 raise forms.ValidationError(error)
         return cleaned
+
+    def save_uploads(self, product):
+        photos = self.cleaned_data.get("photos") or []
+        if photos and not product.photo and not product.image_url:
+            product.photo = photos.pop(0)
+            product.save(update_fields=["photo"])
+        position = (product.images.aggregate(top=models.Max("position"))["top"] or 0) + 1
+        for offset, photo in enumerate(photos):
+            ProductImage.objects.create(product=product, file=photo, alt_text=product.name[:180],
+                position=position + offset)
 
 
 class FlashSaleProductForm(ProductSkuFormMixin, StyledModelForm):
@@ -249,43 +293,37 @@ class StoreSettingsForm(StyledModelForm):
     class Meta:
         model = Store
         fields = ("name", "logo", "logo_size", "show_store_name", "domain", "description", "theme",
-            "primary_color", "background_color", "font_family", "cover_layout", "cover_image",
-            "cover_overlay",
-            "hero_eyebrow", "hero_title", "hero_text", "hero_button_label", "catalog_eyebrow",
-            "catalog_title", "trust_title_1", "trust_text_1", "trust_title_2", "trust_text_2",
-            "trust_title_3", "trust_text_3", "announcement_text", "announcement_link_label",
-            "announcement_link_url", "campaign_eyebrow", "campaign_title", "campaign_text",
-            "campaign_button_label", "campaign_link_url", "currency", "tax_rate",
+            "primary_color", "background_color", "font_family", "catalog_title",
+            "announcement_text", "announcement_link_label", "announcement_link_url",
+            "currency", "tax_rate",
             "support_phone", "instagram", "support_email", "terms_url", "privacy_url", "return_policy",
             "listed_in_directory")
         fields = fields + ("loyalty_enabled", "loyalty_points_per_step", "loyalty_spend_step",
             "loyalty_point_value", "loyalty_min_redeem")
         widgets = {"description": forms.Textarea(attrs={"rows": 3}),
-            "hero_text": forms.Textarea(attrs={"rows": 3}),
             "return_policy": forms.Textarea(attrs={"rows": 4}),
             "primary_color": forms.TextInput(attrs={"type": "color"}),
-            "background_color": forms.TextInput(attrs={"type": "color"}),
-            "cover_overlay": forms.NumberInput(attrs={"min": 0, "max": 90, "step": 5})}
+            "background_color": forms.TextInput(attrs={"type": "color"})}
+
+    banners = MultipleImageField(label="Tambah banner",
+        help_text="Foto landscape, disarankan 1920 × 640 px (rasio 3:1), maksimal 5 MB. Pilih "
+            "beberapa sekaligus; semuanya tampil bergantian di bagian atas toko.")
+    remove_banners = forms.ModelMultipleChoiceField(queryset=StorefrontSlide.objects.none(),
+        required=False, widget=forms.CheckboxSelectMultiple, label="Hapus banner")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.is_bound:
             for name in ("loyalty_points_per_step", "loyalty_spend_step", "loyalty_point_value",
-                    "loyalty_min_redeem", "logo_size", "background_color", "font_family",
-                    "cover_layout", "cover_overlay"):
+                    "loyalty_min_redeem", "logo_size", "background_color", "font_family"):
                 if name not in self.data:
                     self.fields.pop(name)
-        labels = {
-            "hero_eyebrow": "Label kecil hero", "hero_title": "Judul utama",
-            "hero_text": "Deskripsi hero", "hero_button_label": "Teks tombol utama",
-            "catalog_eyebrow": "Label katalog", "catalog_title": "Judul katalog",
-            "trust_title_1": "Keunggulan 1", "trust_text_1": "Penjelasan 1",
-            "trust_title_2": "Keunggulan 2", "trust_text_2": "Penjelasan 2",
-            "trust_title_3": "Keunggulan 3", "trust_text_3": "Penjelasan 3",
-            "announcement_text": "Teks pengumuman", "announcement_link_label": "Teks tautan pengumuman",
-            "announcement_link_url": "Tujuan pengumuman", "campaign_eyebrow": "Label kampanye",
-            "campaign_title": "Judul kampanye", "campaign_text": "Deskripsi kampanye",
-            "campaign_button_label": "Teks tombol kampanye", "campaign_link_url": "Tujuan kampanye"}
+        if "remove_banners" in self.fields:
+            self.fields["remove_banners"].queryset = StorefrontSlide.objects.filter(
+                store=self.instance)
+        labels = {"catalog_title": "Judul katalog", "announcement_text": "Teks pengumuman",
+            "announcement_link_label": "Teks tautan pengumuman",
+            "announcement_link_url": "Tujuan pengumuman"}
         for name, label in labels.items(): self.fields[name].label = label
         if "domain" in self.fields:
             domain_field = self.fields["domain"]
@@ -316,16 +354,15 @@ class StoreSettingsForm(StyledModelForm):
         self.fields["domain"].help_text = "Kosongkan saat lokal. Isi tanpa https://, misalnya tokoanda.id."
         self.fields["primary_color"].help_text = "Warna tombol, tautan, dan aksen toko."
         extra_labels = {"logo_size": "Ukuran logo", "show_store_name": "Tampilkan nama di samping logo",
-            "theme": "Gaya warna sampul", "background_color": "Warna latar halaman",
-            "font_family": "Jenis huruf", "cover_layout": "Tata letak sampul",
-            "cover_image": "Foto sampul", "cover_overlay": "Kegelapan foto sampul (%)"}
+            "theme": "Gaya tampilan", "background_color": "Warna latar halaman",
+            "font_family": "Jenis huruf"}
         for name, label in extra_labels.items():
             if name in self.fields:
                 self.fields[name].label = label
 
     def clean(self):
         cleaned = super().clean()
-        for name in ("announcement_link_url", "campaign_link_url"):
+        for name in ("announcement_link_url",):
             link = cleaned.get(name, "").strip()
             if link and not link.startswith(("/", "https://", "http://", "#")):
                 self.add_error(name, "Gunakan path /..., anchor #..., atau URL http(s) lengkap.")
@@ -347,8 +384,14 @@ class StoreSettingsForm(StyledModelForm):
     def clean_logo(self):
         return self._clean_image("logo", "logo")
 
-    def clean_cover_image(self):
-        return self._clean_image("cover_image", "foto sampul")
+    def save_uploads(self, store):
+        """Add the uploaded banners after the existing ones and delete the ticked ones."""
+        removed = self.cleaned_data.get("remove_banners")
+        if removed:
+            removed.delete()
+        position = (store.storefront_slides.aggregate(top=models.Max("position"))["top"] or 0) + 1
+        for offset, image in enumerate(self.cleaned_data.get("banners") or []):
+            StorefrontSlide.objects.create(store=store, image=image, position=position + offset)
 
 
 class ProductReviewForm(StyledModelForm):

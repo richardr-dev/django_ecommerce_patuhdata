@@ -1087,6 +1087,8 @@ def merchant_entity_edit(request, section, object_id=None):
             saved.store = store
         saved.save()
         form.save_m2m()
+        if hasattr(form, "save_uploads"):
+            form.save_uploads(saved)
         if entity is Product and not instance:
             warehouse = (form.cleaned_data.get("warehouse") or
                 Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id").first())
@@ -1110,13 +1112,15 @@ def merchant_settings(request):
         instance=store, store=store)
     if request.method == "POST" and form.is_valid():
         form.save()
+        form.save_uploads(store)
         AuditLog.objects.create(store=store, actor=request.user, action="store.settings_updated",
             object_type="Store", object_id=str(store.id), details={"fields": list(form.changed_data)})
         messages.success(request, "Pengaturan toko berhasil disimpan.")
         return redirect("merchant-settings")
     return render(request, "merchant/settings.html", _merchant_context(request, store,
         title="Setup cepat", form=form, editing=True, section="settings",
-        storefront_templates=STOREFRONT_TEMPLATES))
+        storefront_templates={key: {**preset, "font_stack": Store.FONT_STACKS[
+            preset["values"]["font_family"]]} for key, preset in STOREFRONT_TEMPLATES.items()}))
 
 
 @login_required(login_url="/merchant/login/")
