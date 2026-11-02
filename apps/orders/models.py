@@ -73,6 +73,7 @@ class Order(models.Model):
     tracking_last_checked_at = models.DateTimeField(null=True, blank=True)
     tracking_error = models.CharField(max_length=300, blank=True)
     external_shipping_id = models.CharField(max_length=100, blank=True)
+    label_printed_at = models.DateTimeField(null=True, blank=True)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_points_redeemed = models.PositiveIntegerField(default=0)

@@ -127,3 +127,58 @@ class OrderWorkflowTests(TestCase):
         response = self.client.post(f"/merchant/orders/{order.id}/advance/", {"to": "packed",
             "next": "https://evil.example/"})
         self.assertRedirects(response, "/merchant/orders/", fetch_redirect_response=False)
+
+
+class BarcodeTests(TestCase):
+    def test_code128_patterns_are_well_formed(self):
+        from apps.orders.barcodes import PATTERNS
+
+        self.assertEqual(len(PATTERNS), 107)
+        self.assertTrue(all(sum(map(int, pattern)) == 11 for pattern in PATTERNS[:106]))
+        self.assertEqual(sum(map(int, PATTERNS[106])), 13)
+        self.assertEqual(len(set(PATTERNS)), 107)
+
+    def test_values_carry_start_checksum_and_stop(self):
+        from apps.orders.barcodes import code128_svg, code128_values
+
+        values = code128_values("JNE123")
+        data = [ord(character) - 32 for character in "JNE123"]
+        checksum = (104 + sum(i * v for i, v in enumerate(data, 1))) % 103
+        self.assertEqual(values, [104, *data, checksum, 106])
+        # Three bars per symbol, four in the stop pattern.
+        self.assertEqual(code128_svg("JNE123").count("<rect x="), 3 * (len(values) - 1) + 4)
+        self.assertEqual(code128_svg("résumé"), "")
+
+
+class LabelPrintingTests(OrderWorkflowTests.__bases__[0]):
+    def setUp(self):
+        OrderWorkflowTests.setUp(self)
+        self.product.weight_grams = 250
+        self.product.save()
+
+    _order = OrderWorkflowTests._order
+
+    def test_ticked_orders_print_on_thermal_labels_with_barcodes(self):
+        first = self._order(name="Sari", status="packed", tracking_number="JNE123456",
+            courier_code="jne")
+        second = self._order(name="Budi")
+        self._order(name="Tidak dipilih")
+
+        page = self.client.get("/merchant/orders/labels/", {"id": [first.id, second.id]})
+        self.assertEqual(len(page.context["orders"]), 2)
+        self.assertContains(page, 'class="paper-100x150"')
+        self.assertContains(page, "@page { size: 100mm 150mm")
+        self.assertContains(page, 'aria-label="Barcode JNE123456"')
+        self.assertContains(page, "0,25 kg")
+        self.assertContains(page, "NON-COD")
+        self.assertNotContains(page, "Tidak dipilih")
+
+    def test_paper_size_can_be_switched_and_opening_marks_printed(self):
+        order = self._order()
+        page = self.client.get("/merchant/orders/labels/", {"id": order.id, "format": "a4",
+            "print": "1"})
+        self.assertContains(page, 'class="paper-a4"')
+        self.assertContains(page, "print()")
+        order.refresh_from_db()
+        self.assertIsNotNone(order.label_printed_at)
+        self.assertContains(self.client.get("/merchant/orders/?tab=pack"), "Sudah dicetak")

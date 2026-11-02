@@ -18,8 +18,21 @@ x-app: &app
   depends_on: {db: {condition: service_healthy}}
 
 services:
+  # The app runs as the unprivileged "app" user, but a fresh media volume can be created
+  # root-owned (by the backup container, whose image has its own /media). Hand it to "app"
+  # before the app starts, so uploads never fail with "Permission denied".
+  media-permissions:
+    image: niagakit:latest
+    build: .
+    user: "0"
+    entrypoint: ["chown", "-R", "app:app", "/app/media"]
+    volumes: ["media:/app/media"]
+    restart: "no"
   web:
     <<: *app
+    depends_on:
+      db: {condition: service_healthy}
+      media-permissions: {condition: service_completed_successfully}
     environment:
       <<: *app-env
       RUN_MIGRATIONS: "1"

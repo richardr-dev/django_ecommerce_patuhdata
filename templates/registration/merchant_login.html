@@ -1,4 +1,4 @@
 {% extends "platform/base.html" %}{% block title %}Masuk Back Office{% endblock %}{% block content %}
-<section class="pf-form-card"><h1>Masuk Back Office</h1><p class="pf-muted">Kelola produk, foto, stok, pesanan, dan pengaturan toko. Belum punya toko? <a href="{% url 'store-signup' %}">Buka toko gratis</a>.</p>
+<section class="pf-form-card"><h1>Masuk Back Office</h1><p class="pf-muted">Kelola produk, foto, stok, pesanan, dan pengaturan toko. Belum punya toko? <a href="{% url 'store-signup' %}">Coba gratis 14 hari</a>.</p>
 <form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next|default:'/merchant/' }}"><button class="pf-button pf-button-lg">Masuk ke Dashboard</button></form></section>
 {% endblock %}

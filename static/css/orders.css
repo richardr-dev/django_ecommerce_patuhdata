@@ -8,3 +8,4 @@
 .bo-button.secondary{background:#fff;color:var(--bo-accent)!important;border:1px solid var(--bo-accent)}
 .order-more{margin-top:10px}.order-more summary{color:var(--bo-muted);font-size:13px;cursor:pointer}.order-more .shipment-actions{display:grid;gap:12px;margin-top:10px}
 @media(max-width:700px){.order-body{grid-template-columns:1fr}.order-next form .bo-button,.ship-form .bo-button{width:100%;justify-content:center}.ship-form input,.ship-form select{flex:1 1 100%}}
+.label-bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px;padding:10px 14px;border:1px solid var(--bo-line);border-radius:12px;background:#fff}.label-bar label{flex:1;font-weight:600}.label-bar select{padding:8px;border:1px solid var(--bo-line);border-radius:8px}.label-bar button:disabled{opacity:.45;cursor:default}.order-card-head .pick{width:18px;height:18px;margin-top:2px}.badge.printed{background:#ecfdf3;color:#027a48}

@@ -888,25 +888,43 @@ def merchant_order_ship(request, order_id):
 
 
 LABEL_LIMIT = 100
+# Paper sizes for the label page; thermal 100 x 150 mm is the marketplace standard.
+LABEL_FORMATS = {"100x150": "Thermal 100×150 mm", "100x100": "Thermal 100×100 mm",
+    "a6": "A6", "a4": "A4 (4 label per halaman)"}
 
 
 @login_required(login_url="/merchant/login/")
 def merchant_order_labels(request):
-    """Printable shipping labels with packing lists: one order (?id=), or a whole tab (?tab=)."""
+    """Printable shipping labels like the marketplaces': ticked orders (?id=…&id=…), or a whole
+    tab (?tab=). Opening the page marks the labels as printed."""
     store = _staff_store(request)
     _require_roles(request, store, FULFILMENT_ROLES | {"customer_service"})
-    orders = Order.objects.filter(store=store).prefetch_related("items").order_by("created_at")
-    order_id = request.GET.get("id", "")
+    orders = Order.objects.filter(store=store).prefetch_related("items__product").order_by(
+        "created_at")
+    ids = request.GET.getlist("id")
     groups = {key: statuses for key, _, statuses in ORDER_GROUPS}
-    if order_id:
+    if ids:
         try:
-            orders = orders.filter(id=uuid.UUID(order_id))
+            orders = orders.filter(id__in=[uuid.UUID(value) for value in ids[:LABEL_LIMIT]])
         except ValueError as error:
             raise Http404 from error
     else:
         orders = orders.filter(status__in=groups.get(request.GET.get("tab"), groups["pack"]))
-    return render(request, "merchant/order_labels.html", {"store": store,
-        "orders": orders[:LABEL_LIMIT], "store_phone": store.support_phone})
+    orders = list(orders[:LABEL_LIMIT])
+    for order in orders:
+        order.weight_grams = sum((item.product.weight_grams or 0) * item.quantity
+            for item in order.items.all())
+        order.weight_kg = Decimal(order.weight_grams) / 1000
+        order.is_cod = order.payment_method == "cod"
+    Order.objects.filter(id__in=[order.id for order in orders],
+        label_printed_at__isnull=True).update(label_printed_at=timezone.now())
+    paper = request.GET.get("format") if request.GET.get("format") in LABEL_FORMATS else "100x150"
+    query = request.GET.copy()
+    query.pop("format", None)
+    query.pop("print", None)
+    return render(request, "merchant/order_labels.html", {"store": store, "orders": orders,
+        "store_phone": store.support_phone, "paper": paper, "formats": LABEL_FORMATS,
+        "base_query": query.urlencode(), "auto_print": request.GET.get("print") == "1"})
 
 
 @login_required(login_url="/merchant/login/")

@@ -1,4 +1,4 @@
-<!doctype html>
+{% load labels %}<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -6,34 +6,62 @@
 <meta name="robots" content="noindex">
 <title>Label pengiriman · {{ store.name }}</title>
 <style>
-  body { margin: 0; background: #f4f4f5; color: #111827; font: 13px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }
-  .toolbar { position: sticky; top: 0; display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #111827; color: #fff; }
-  .toolbar button { padding: 8px 14px; border: 0; border-radius: 8px; background: #22c55e; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-  .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; max-width: 980px; margin: 16px auto; padding: 0 16px; }
-  .label { padding: 16px; border: 2px dashed #9ca3af; border-radius: 10px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
-  .label header { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 2px solid #111827; }
-  .courier { font-size: 18px; font-weight: 800; text-transform: uppercase; }
-  .resi { margin: 8px 0; padding: 8px; border: 1px solid #111827; border-radius: 6px; font: 700 16px/1.2 ui-monospace, monospace; text-align: center; letter-spacing: .05em; }
-  .party { margin: 10px 0; } .party small { display: block; color: #6b7280; font-weight: 700; letter-spacing: .06em; }
-  .party strong { font-size: 15px; } .party p { margin: 2px 0 0; white-space: pre-line; }
-  table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 12px; }
-  td { padding: 4px 2px; border-top: 1px solid #e5e7eb; vertical-align: top; } td.qty { width: 34px; font-weight: 800; } td.check { width: 18px; }
-  .foot { display: flex; justify-content: space-between; margin-top: 8px; color: #6b7280; font-size: 11px; }
-  .empty { padding: 40px; text-align: center; color: #6b7280; }
-  @media print { body { background: #fff; } .toolbar { display: none; } .sheet { margin: 0; padding: 0; grid-template-columns: 1fr 1fr; gap: 8mm; } @page { size: A4; margin: 8mm; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e5e7eb; color: #000; font: 11px/1.3 Arial, Helvetica, sans-serif; }
+  .toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: #111827; color: #fff; font-size: 13px; }
+  .toolbar button { padding: 9px 16px; border: 0; border-radius: 8px; background: #ee4d2d; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .toolbar a { padding: 6px 10px; border: 1px solid #4b5563; border-radius: 6px; color: #d1d5db; text-decoration: none; }
+  .toolbar a.on { border-color: #fff; background: #fff; color: #111827; font-weight: 700; }
+  .toolbar small { width: 100%; color: #9ca3af; }
+  .sheet { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 16px; }
+
+  .label { display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid #000; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+  .paper-100x150 .label { width: 100mm; height: 150mm; }
+  .paper-100x100 .label { width: 100mm; height: 100mm; font-size: 10px; }
+  .paper-a6 .label { width: 105mm; height: 148mm; }
+  .paper-a4 .label { width: 100mm; height: 140mm; }
+  .row { padding: 1.6mm 2.4mm; border-bottom: 1.5px solid #000; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 2mm; }
+  .store { display: flex; align-items: center; gap: 2mm; font-weight: 700; font-size: 12px; }
+  .store img { max-width: 18mm; max-height: 9mm; object-fit: contain; }
+  .courier { text-align: right; } .courier b { display: block; font-size: 17px; text-transform: uppercase; letter-spacing: .02em; } .courier span { font-size: 10px; text-transform: uppercase; }
+  .resi { text-align: center; } .resi .barcode { display: block; width: 100%; height: 15mm; }
+  .resi strong { display: block; margin-top: .8mm; font-size: 15px; letter-spacing: .08em; }
+  .no-resi { padding: 4mm 0; border: 1px dashed #000; font-weight: 700; text-align: center; }
+  .flags { display: flex; gap: 2mm; align-items: center; justify-content: space-between; }
+  .tag { padding: .6mm 2mm; border: 1.5px solid #000; font-weight: 800; font-size: 12px; } .tag.cod { background: #000; color: #fff; }
+  .party small { display: block; font-size: 9px; font-weight: 700; letter-spacing: .06em; }
+  .party strong { font-size: 13px; } .party p { margin: .6mm 0 0; }
+  .to strong { font-size: 15px; } .to p { font-size: 12px; }
+  .items { flex: 1; overflow: hidden; } .items table { width: 100%; border-collapse: collapse; }
+  .items th { font-size: 9px; text-align: left; border-bottom: 1px solid #000; } .items td { padding: .6mm 0; vertical-align: top; border-bottom: 1px dotted #999; }
+  .items td.qty { width: 9mm; font-weight: 800; text-align: right; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 2mm; border-bottom: 0; }
+  .foot .barcode { width: 42mm; height: 8mm; }
+  .empty { padding: 40px; color: #6b7280; }
+
+  @media print {
+    body { background: #fff; } .toolbar { display: none; } .sheet { padding: 0; gap: 0; }
+    .label { border-width: 1px; }
+    .paper-100x150 .label, .paper-100x100 .label, .paper-a6 .label { page-break-after: always; }
+    .paper-a4 .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; justify-items: center; }
+  }
+  {% if paper == "100x150" %}@page { size: 100mm 150mm; margin: 0; }{% elif paper == "100x100" %}@page { size: 100mm 100mm; margin: 0; }{% elif paper == "a6" %}@page { size: A6; margin: 0; }{% else %}@page { size: A4; margin: 5mm; }{% endif %}
 </style>
 </head>
-<body>
-<div class="toolbar"><button type="button" onclick="window.print()">🖨 Cetak {{ orders|length }} label</button><span>Dua label per halaman A4. Gunting di garis putus-putus.</span></div>
+<body class="paper-{{ paper }}">
+<div class="toolbar"><button type="button" onclick="window.print()">🖨 Cetak {{ orders|length }} label</button>{% for key, name in formats.items %}<a class="{% if key == paper %}on{% endif %}" href="?{{ base_query }}{% if base_query %}&{% endif %}format={{ key }}">{{ name }}</a>{% endfor %}<small>Printer thermal: pilih ukuran kertas yang sama di jendela cetak, margin "Tidak ada", skala 100%.</small></div>
 <main class="sheet">
 {% for order in orders %}<section class="label">
-  <header><span class="courier">{{ order.courier_code|default:order.shipping_service|default:"Kurir" }}{% if order.courier_service_code %} · {{ order.courier_service_code }}{% endif %}</span><span>#{{ order.id|stringformat:"s"|slice:":8" }}</span></header>
-  {% if order.tracking_number %}<div class="resi">{{ order.tracking_number }}</div>{% endif %}
-  <div class="party"><small>PENERIMA</small><strong>{{ order.customer_name }}</strong> · {{ order.phone }}<p>{{ order.shipping_address }}{% if order.district %}, {{ order.district }}{% endif %}{% if order.city %}, {{ order.city }}{% endif %}{% if order.province %}, {{ order.province }}{% endif %}{% if order.postal_code %} {{ order.postal_code }}{% endif %}</p>{% if order.delivery_notes %}<p><i>Catatan: {{ order.delivery_notes }}</i></p>{% endif %}</div>
-  <div class="party"><small>PENGIRIM</small><strong>{{ store.name }}</strong>{% if store_phone %} · {{ store_phone }}{% endif %}</div>
-  <table>{% for item in order.items.all %}<tr><td class="check">☐</td><td class="qty">{{ item.quantity }}×</td><td>{{ item.name }}{% if item.variant_name %} · {{ item.variant_name }}{% endif %}{% if item.sku %}<br><small>{{ item.sku }}</small>{% endif %}</td></tr>{% endfor %}</table>
-  <div class="foot"><span>{{ order.created_at|date:"d M Y" }}</span><span>{{ order.shipping_service }}</span></div>
-</section>{% empty %}<p class="empty">Tidak ada pesanan untuk dicetak di tahap ini.</p>{% endfor %}
+  <div class="row top"><span class="store">{% if store.logo %}<img src="{{ store.logo.url }}" alt="">{% endif %}{{ store.name }}</span><span class="courier"><b>{{ order.courier_code|default:"KURIR" }}</b><span>{{ order.courier_service_code|default:order.shipping_service|default:"" }}</span></span></div>
+  <div class="row resi">{% if order.tracking_number %}{{ order.tracking_number|code128 }}<strong>{{ order.tracking_number }}</strong>{% else %}<div class="no-resi">No. resi belum ada · tulis atau tempel resi kurir di sini</div>{% endif %}</div>
+  <div class="row flags">{% if order.is_cod %}<span class="tag cod">COD · Rp{{ order.total|floatformat:"0g" }}</span>{% else %}<span class="tag">NON-COD</span>{% endif %}<span>Berat: <b>{% if order.weight_grams %}{{ order.weight_kg|floatformat:"-2" }} kg{% else %}-{% endif %}</b></span><span>Ongkir: <b>Rp{{ order.shipping_cost|floatformat:"0g" }}</b></span></div>
+  <div class="row party to"><small>PENERIMA</small><strong>{{ order.customer_name }}</strong> · {{ order.phone }}<p>{{ order.shipping_address }}{% if order.village %}, {{ order.village }}{% endif %}{% if order.district %}, {{ order.district }}{% endif %}{% if order.city %}, {{ order.city }}{% endif %}{% if order.province %}, {{ order.province }}{% endif %}{% if order.postal_code %} {{ order.postal_code }}{% endif %}</p>{% if order.delivery_notes %}<p><i>Catatan: {{ order.delivery_notes }}</i></p>{% endif %}</div>
+  <div class="row party"><small>PENGIRIM</small><strong>{{ store.name }}</strong>{% if store_phone %} · {{ store_phone }}{% endif %}</div>
+  <div class="row items"><table><tr><th>Produk</th><th>SKU</th><th style="text-align:right">Qty</th></tr>{% for item in order.items.all %}<tr><td>{{ item.name }}{% if item.variant_name %} · {{ item.variant_name }}{% endif %}</td><td>{{ item.sku }}</td><td class="qty">{{ item.quantity }}</td></tr>{% endfor %}</table></div>
+  <div class="row foot"><span>No. pesanan<br><b>#{{ order.id|stringformat:"s"|slice:":8"|upper }}</b><br>{{ order.created_at|date:"d/m/Y" }}</span>{{ order.id|stringformat:"s"|slice:":8"|upper|code128 }}</div>
+</section>{% empty %}<p class="empty">Tidak ada pesanan untuk dicetak.</p>{% endfor %}
 </main>
+{% if auto_print and orders %}<script>addEventListener('load', () => setTimeout(() => print(), 300));</script>{% endif %}
 </body>
 </html>
