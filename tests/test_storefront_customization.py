@@ -96,7 +96,7 @@ class StorefrontCustomizationTests(TestCase):
             self.store.logo = SimpleUploadedFile("logo.png", PNG, content_type="image/png")
             self.store.show_store_name = False
             self.store.save()
-            response = self.client.get("/")
+            response = self.client.get("/cart/")  # pages other than the home keep the header
         header = response.content.decode().split("</header>")[0]
         self.assertIn("store-logo", header)
         self.assertNotIn("<span>Design Shop</span>", header)

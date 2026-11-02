@@ -34,15 +34,17 @@ class SimpleHomeTests(TestCase):
             Category.objects.create(store=self.store, name="Celana", slug="celana")
             home = self.client.get("/").content.decode()
 
-        strip = home.split('class="category-strip"')[1].split("</nav>")[0]
-        self.assertIn("/media/stores/toko/categories/", strip)
-        self.assertIn("https://cdn.example/kaos.jpg", strip)
-        self.assertIn('<span class="category-icon">C</span>', strip)
-        self.assertIn('href="/?category=baju#catalog"', strip)
+        chips = home.split('class="category-chips"')[1].split("</nav>")[0]
+        self.assertIn("/media/stores/toko/categories/", chips)
+        self.assertIn("https://cdn.example/kaos.jpg", chips)
+        self.assertIn(">Celana</a>", chips)  # no icon: the name alone
+        self.assertIn('href="/?category=baju#catalog"', chips)
 
     def test_browsing_hides_banner_categories_and_flash_sale(self):
         Category.objects.create(store=self.store, name="Baju", slug="baju")
-        self.assertNotContains(self.client.get("/?q=kaos"), "category-strip")
+        page = self.client.get("/?q=kaos")
+        self.assertNotContains(page, "store-profile")
+        self.assertContains(page, "profile-back")
 
     def test_product_takes_several_photos_at_once(self):
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
@@ -87,3 +89,51 @@ class UploadFolderTests(TestCase):
             self.assertNotIn("Budi", path)
         self.assertNotEqual(StoreUploadPath("banners")(store, "a.png"),
             StoreUploadPath("banners")(store, "a.png"))
+
+
+@override_settings(PAYMENT_PROVIDER="demo", SHIPPING_RATE_PROVIDER="biteship", BITESHIP_API_KEY="")
+class ProfileHomeAndQuickAddTests(TestCase):
+    def setUp(self):
+        from apps.catalog.models import InventoryLevel, ProductVariant, Warehouse
+        from apps.shops.models import Store
+
+        self.store = Store.objects.create(owner=User.objects.create_user("o"), name="Ruuma",
+            slug="ruuma", description="Roti & eclair", instagram="ruuma.id",
+            support_phone="081234567890")
+        warehouse = Warehouse.objects.create(store=self.store, name="Dapur", code="D1")
+        self.eclair = Product.objects.create(store=self.store, name="Eclair", slug="eclair",
+            sku="ECL", price=25000)
+        InventoryLevel.objects.create(warehouse=warehouse, product=self.eclair, on_hand=5)
+        self.box = Product.objects.create(store=self.store, name="Box", slug="box", sku="BOX",
+            price=90000)
+        ProductVariant.objects.create(product=self.box, name="Isi 6", sku="BOX-6", stock=3)
+
+    def test_home_shows_the_store_profile_instead_of_the_site_header(self):
+        page = self.client.get("/").content.decode()
+        self.assertNotIn('class="site-header"', page)
+        self.assertIn('class="profile-identity', page)
+        self.assertIn("<h1>Ruuma</h1>", page)
+        self.assertIn("instagram.com/ruuma.id", page)
+        self.assertIn("wa.me/6281234567890", page)
+        self.assertIn('data-focus-search', page)
+
+    def test_simple_products_get_a_tap_to_add_button_and_variants_a_pick_link(self):
+        page = self.client.get("/").content.decode()
+        self.assertIn(f'action="/cart/add/{self.eclair.id}/"', page)
+        self.assertIn("Pilih varian", page)
+        self.assertNotIn(f'action="/cart/add/{self.box.id}/"', page)
+
+    def test_quick_add_answers_with_the_cart_total_and_the_bar_shows_it(self):
+        reply = self.client.post(f"/cart/add/{self.eclair.id}/", {"quantity": 2},
+            HTTP_X_REQUESTED_WITH="fetch")
+        self.assertEqual(reply.json()["count"], 2)
+        self.assertEqual(reply.json()["total"], 50000)
+
+        page = self.client.get("/")
+        self.assertContains(page, 'data-cart-total>Rp50.000')
+        self.assertNotContains(page, "data-cart-bar hidden")
+
+    def test_quick_add_errors_are_reported_without_a_redirect(self):
+        reply = self.client.post(f"/cart/add/{self.box.id}/", HTTP_X_REQUESTED_WITH="fetch")
+        self.assertEqual(reply.status_code, 400)
+        self.assertIn("Pilih varian", reply.json()["message"])

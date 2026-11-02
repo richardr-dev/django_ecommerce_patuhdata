@@ -220,6 +220,18 @@ def shipping_rates(request):
         "destination_area_id": area_id, "postal_code": postal_code})
 
 
+def _cart_reply(request, ok, message, fallback):
+    """Quick add from the storefront answers the page's script with JSON; a plain form post
+    is redirected as before."""
+    if request.headers.get("X-Requested-With") == "fetch":
+        lines, subtotal = get_cart(request)
+        return JsonResponse({"ok": ok, "message": message,
+            "count": sum(line["quantity"] for line in lines), "total": int(subtotal)},
+            status=200 if ok else 400)
+    (messages.success if ok else messages.error)(request, message)
+    return fallback
+
+
 def cart_add(request, product_id):
     if request.method != "POST" or not request.store: raise Http404
     product = get_object_or_404(Product, id=product_id, store=request.store, is_active=True)
@@ -231,13 +243,13 @@ def cart_add(request, product_id):
         variant = (ProductVariant.objects.filter(id=variant_id, product=product, is_active=True).first()
             if variant_id.isdigit() else None)
         if not variant:
-            messages.error(request, "Pilih varian produk terlebih dahulu.")
-            return redirect("product-detail", slug=product.slug)
+            return _cart_reply(request, False, "Pilih varian produk terlebih dahulu.",
+                redirect("product-detail", slug=product.slug))
     key = f"v:{variant.id}" if variant else f"p:{product.id}"
     available = variant.available_stock if variant else product.available_stock
     if available <= 0:
-        messages.error(request, f"Stok {product.name} sedang habis.")
-        return redirect("product-detail", slug=product.slug)
+        return _cart_reply(request, False, f"Stok {product.name} sedang habis.",
+            redirect("product-detail", slug=product.slug))
     try: requested = max(1, int(request.POST.get("quantity", 1)))
     except ValueError: requested = 1
     try: in_cart = max(0, int(cart.get(key, 0)))
@@ -247,8 +259,8 @@ def cart_add(request, product_id):
     lines, subtotal = get_cart(request)
     update_cart_snapshot(request, lines, subtotal)
     record_event(request, "cart_add", product=product, metadata={"quantity": requested}, always=True)
-    messages.success(request, f"{product.name} ditambahkan ke keranjang.")
-    return redirect("checkout" if request.POST.get("next") == "checkout" else "cart")
+    return _cart_reply(request, True, f"{product.name} ditambahkan ke keranjang.",
+        redirect("checkout" if request.POST.get("next") == "checkout" else "cart"))
 
 def cart_update(request, item_key):
     if request.method != "POST" or not request.store: raise Http404

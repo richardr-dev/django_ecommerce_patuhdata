@@ -13,6 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_POST
 
+from apps.orders.cart import get_cart
 from apps.orders.engagement import record_event
 from apps.orders.forms import NewsletterForm, ProductReviewForm
 from apps.orders.sales import active_sale_offers, decorate_products_with_sales
@@ -84,7 +85,13 @@ def home(request):
     flash_sale_products = decorate_products_with_sales(request.store, [product for product in
         campaign_products if product.id in active_offers and
         active_offers[product.id].campaign_id == active_campaign.id][:8])
+    for product in [*products, *featured_products, *flash_sale_products]:
+        # One tap adds simple products; products with variants open their page to pick one.
+        product.quick_add = product.available_stock > 0 and not any(
+            variant.is_active for variant in product.variants.all())
+    lines, cart_total = get_cart(request)
     return render(request, "storefront/customizable_home.html", {"products": products,
+        "cart_count": sum(line["quantity"] for line in lines), "cart_total": cart_total,
         "page_obj": page, "page_range": page_range, "page_query": page_query,
         "product_total": page.paginator.count, "sort": sort,
         "browsing": bool(query or category or page.number > 1),

@@ -391,7 +391,7 @@ class StoreSocialLinksTests(TestCase):
         store = Store.objects.get(slug="batik-sari")
         self.assertEqual(store.instagram, "batik.sari")
         page = _host(f"batik-sari.{PLATFORM}").get("/")
-        self.assertContains(page, 'href="https://wa.me/6281234567890"', count=2)  # footer + chat button
+        self.assertContains(page, 'href="https://wa.me/6281234567890"', count=3)  # profile, footer, chat button
         self.assertContains(page, 'href="https://www.instagram.com/batik.sari/"')
         self.assertContains(page, "@batik.sari")
 
