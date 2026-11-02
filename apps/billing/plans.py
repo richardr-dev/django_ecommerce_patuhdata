@@ -21,14 +21,29 @@ def effective_plan(store):
     if plan.is_paid and not (subscription.current_period_end and
             subscription.current_period_end > timezone.now()):
         # Without a default plan configured, a lapsed store keeps what it has but grows no further.
-        return default_plan() or Plan(code="lapsed", name="Langganan berakhir", max_products=0)
+        return default_plan() or Plan(code="lapsed", name="Langganan berakhir", max_products=0,
+            max_channels=0)
     return plan
+
+
+def _limit_error(store, field, count_after, what):
+    plan = effective_plan(store)
+    limit = getattr(plan, field, None) if plan else None
+    if limit is None or count_after <= limit:
+        return ""
+    return (f"Paket {plan.name} memuat maksimal {limit} {what}. "
+        "Upgrade paket di menu Langganan untuk menambah.")
 
 
 def product_limit_error(store, active_after):
     """Message when `active_after` active products would exceed the plan, else ""."""
+    return _limit_error(store, "max_products", active_after, "produk aktif")
+
+
+def channel_limit_error(store, count_after):
+    return _limit_error(store, "max_channels", count_after, "toko marketplace")
+
+
+def can_reconcile_payouts(store):
     plan = effective_plan(store)
-    if plan is None or plan.max_products is None or active_after <= plan.max_products:
-        return ""
-    return (f"Paket {plan.name} memuat maksimal {plan.max_products} produk aktif. "
-        "Upgrade paket di menu Langganan untuk menambah produk.")
+    return plan is None or plan.allow_payout_reconciliation

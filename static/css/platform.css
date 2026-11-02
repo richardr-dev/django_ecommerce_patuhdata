@@ -28,7 +28,7 @@ main{padding:0 16px}
 .pf-steps h2,.pf-steps h3{font-size:19px;margin:12px 0 6px}.pf-steps p{margin:0;color:var(--pf-muted)}
 .pf-section{max-width:1120px;margin:0 auto 56px}
 .pf-section>h1,.pf-section>h2{font-size:clamp(24px,4vw,32px);margin:0 0 6px}
-.pf-plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:18px}
+.pf-plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:18px}
 .pf-card h3{margin:0;font-size:20px}.pf-card ul{padding-left:18px;margin:12px 0 0;color:var(--pf-muted)}
 .pf-price{display:block;font-size:30px;margin-top:8px}.pf-price small{font-size:15px;color:var(--pf-muted);font-weight:500}
 .pf-store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin:18px 0}

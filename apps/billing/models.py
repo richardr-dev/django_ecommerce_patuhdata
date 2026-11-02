@@ -15,6 +15,15 @@ class Plan(models.Model):
     max_products = models.PositiveIntegerField(null=True, blank=True,
         help_text="Produk aktif maksimal. Kosongkan untuk tanpa batas.")
     allow_custom_domain = models.BooleanField(default=False)
+    max_channels = models.PositiveIntegerField(null=True, blank=True,
+        help_text="Toko marketplace yang dapat dihubungkan. Kosongkan untuk tanpa batas.")
+    allow_payout_reconciliation = models.BooleanField(default=False,
+        help_text="Catat dan cocokkan pencairan dana gateway & marketplace.")
+    contact_sales = models.BooleanField(default=False,
+        help_text="Paket khusus: penjual menghubungi tim sales, tidak bisa dibeli sendiri. "
+            "Pengelola platform menetapkannya ke toko lewat admin.")
+    features = models.TextField(blank=True, help_text="Satu keunggulan per baris, tampil di "
+        "halaman harga.")
     is_default = models.BooleanField(default=False,
         help_text="Paket untuk toko baru dan toko yang langganannya berakhir.")
     is_public = models.BooleanField(default=True)
@@ -33,6 +42,9 @@ class Plan(models.Model):
 
     @property
     def is_paid(self): return self.price_monthly > 0
+
+    @property
+    def feature_list(self): return [line.strip() for line in self.features.splitlines() if line.strip()]
 
     def price_for(self, months):
         return self.price_yearly if months == 12 else self.price_monthly

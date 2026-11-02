@@ -184,6 +184,9 @@ PLATFORM_BASE_URL = os.getenv("PLATFORM_BASE_URL", "").rstrip("/")
 PLATFORM_COMPANY_NAME = os.getenv("PLATFORM_COMPANY_NAME", "PT Patuhdata Solusi Nusantara")
 PLATFORM_COMPANY_URL = os.getenv("PLATFORM_COMPANY_URL", "https://patuhdata.id")
 PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
+# Where the Custom plan's "Hubungi sales" button points (e.g. a wa.me link); falls back to
+# emailing PLATFORM_SUPPORT_EMAIL.
+PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
 
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 

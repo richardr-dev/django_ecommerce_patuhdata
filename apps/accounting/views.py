@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
+from apps.billing.plans import can_reconcile_payouts
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
@@ -41,9 +42,12 @@ def merchant_payouts(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
     form, summary = PayoutUploadForm(request.POST or None, request.FILES or None), None
+    can_reconcile = can_reconcile_payouts(store)
     if request.method == "POST":
         _require_roles(request, store, EDIT_ROLES)
-        if form.is_valid():
+        if not can_reconcile:
+            form.add_error(None, "Rekonsiliasi pencairan tersedia mulai paket Pro.")
+        elif form.is_valid():
             provider = form.cleaned_data["provider"]
             try:
                 grouped = parse_payouts_csv(form.cleaned_data["file"])
@@ -67,7 +71,8 @@ def merchant_payouts(request):
         payout.label = labels.get(payout.provider, payout.provider)
         payout.fee_rate = payout.fees * 100 / payout.gross if payout.gross else 0
     return render(request, "merchant/payouts.html", _merchant_context(request, store, form=form,
-        summary=summary, outstanding=outstanding, oldest=oldest, payouts=payouts, today=today))
+        summary=summary, outstanding=outstanding, oldest=oldest, payouts=payouts, today=today,
+        can_reconcile=can_reconcile))
 
 
 @login_required(login_url="/merchant/login/")

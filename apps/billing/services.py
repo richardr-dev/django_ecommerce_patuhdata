@@ -27,7 +27,7 @@ class BillingError(Exception):
 
 
 def start_checkout(store, plan, months, user):
-    if not plan.is_paid or not plan.is_public or months not in PERIOD_DAYS:
+    if not plan.is_paid or not plan.is_public or plan.contact_sales or months not in PERIOD_DAYS:
         raise BillingError("Paket atau periode tidak tersedia.")
     amount = plan.price_for(months)
     if amount <= 0:

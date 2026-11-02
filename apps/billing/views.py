@@ -23,6 +23,7 @@ def merchant_billing(request):
         title="Langganan", section="billing", subscription=subscription,
         plan=effective_plan(store), plans=Plan.objects.filter(is_public=True),
         active_products=Product.objects.filter(store=store, is_active=True).count(),
+        channel_count=store.sales_channels.count(),
         invoices=store.subscription_invoices.select_related("plan")[:12]))
 
 

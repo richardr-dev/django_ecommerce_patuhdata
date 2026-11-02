@@ -24,4 +24,7 @@ def platform_context(request):
         "platform_company_name": settings.PLATFORM_COMPANY_NAME,
         "platform_company_url": settings.PLATFORM_COMPANY_URL,
         "platform_support_email": settings.PLATFORM_SUPPORT_EMAIL,
+        "platform_sales_url": settings.PLATFORM_SALES_URL or (
+            f"mailto:{settings.PLATFORM_SUPPORT_EMAIL}?subject=Paket%20Custom"
+            if settings.PLATFORM_SUPPORT_EMAIL else ""),
         "is_platform_host": getattr(request, "is_platform", False)}

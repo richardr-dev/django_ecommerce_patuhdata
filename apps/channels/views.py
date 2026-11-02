@@ -6,6 +6,7 @@ from django.db import IntegrityError
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from apps.billing.plans import channel_limit_error
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
@@ -30,7 +31,10 @@ def merchant_channels(request):
     form = SalesChannelForm(request.POST or None)
     if request.method == "POST":
         _require_roles(request, store, CHANNEL_ROLES)
-        if form.is_valid():
+        limit_error = channel_limit_error(store, store.sales_channels.count() + 1)
+        if limit_error:
+            form.add_error(None, limit_error)
+        elif form.is_valid():
             form.instance.store = store
             try:
                 channel = form.save()

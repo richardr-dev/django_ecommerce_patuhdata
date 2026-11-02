@@ -6,7 +6,8 @@ from .models import Plan, Subscription, SubscriptionInvoice
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "price_monthly", "price_yearly", "max_products",
-        "allow_custom_domain", "is_default", "is_public")
+        "max_channels", "allow_custom_domain", "allow_payout_reconciliation", "contact_sales",
+        "is_default", "is_public", "sort_order")
 
 
 @admin.register(Subscription)
