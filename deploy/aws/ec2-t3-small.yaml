@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Lakuin on one EC2 t3.small: Ubuntu 24.04 with Docker, an Elastic IP, ports 80/443 open
-  for Caddy, Session Manager access, and daily EBS snapshots. The app itself runs from
+  for Caddy, Session Manager access, daily EBS snapshots, an off-site S3 backup bucket,
+  automatic recovery and alarms. The app itself runs from
   compose.prod.yaml (see docs/DEPLOY_AWS.md).
 
 Parameters:
@@ -33,6 +34,15 @@ Parameters:
     Type: Number
     Default: 7
     MinValue: 1
+  OffsiteBackupDays:
+    Type: Number
+    Default: 30
+    MinValue: 7
+    Description: Days the S3 bucket keeps each database and media backup.
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: Optional address for alarms (server down, CPU, disk full, stale backup). AWS emails a confirmation link first.
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
@@ -41,6 +51,7 @@ Conditions:
   HasKey: !Not [!Equals [!Ref KeyName, ""]]
   HasSsh: !Not [!Equals [!Ref SshCidr, ""]]
   HasZone: !Not [!Equals [!Ref HostedZoneId, ""]]
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Resources:
   WebSecurityGroup:
@@ -65,6 +76,51 @@ Resources:
           - {Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}
       # Session Manager shell in the console: no open SSH port or key needed.
       ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: offsite-backup-and-alerts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Upload only: a compromised server cannot delete or overwrite past backups,
+              # because the bucket keeps every version.
+              - {Effect: Allow, Action: s3:PutObject, Resource: !Sub "${BackupBucket.Arn}/*"}
+              - {Effect: Allow, Action: sns:Publish, Resource: !Ref AlertTopic}
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration: {Status: Enabled}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-backups
+            Status: Enabled
+            ExpirationInDays: !Ref OffsiteBackupDays
+            NoncurrentVersionExpiration: {NoncurrentDays: 7}
+            AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}
+      Tags: [{Key: Name, Value: lakuin-backups}]
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Lakuin alerts
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -123,6 +179,50 @@ Resources:
           systemctl restart docker
           usermod -aG docker ubuntu
           touch /var/lib/cloud/lakuin-bootstrap-done
+
+  # AWS hardware or network fault: move the instance to healthy hardware, keeping its disk,
+  # Elastic IP and instance ID.
+  RecoverAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lakuin server failed the AWS system check; recovering it.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions: [{Name: InstanceId, Value: !Ref Server}]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Sub "arn:aws:automate:${AWS::Region}:ec2:recover", !Ref AlertTopic]
+  # The operating system stopped responding (e.g. out of memory): reboot it.
+  RebootAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lakuin server failed the instance check; rebooting it.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_Instance
+      Dimensions: [{Name: InstanceId, Value: !Ref Server}]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Sub "arn:aws:automate:${AWS::Region}:ec2:reboot", !Ref AlertTopic]
+  CpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lakuin server CPU above 85% for 15 minutes; time for a bigger instance?
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions: [{Name: InstanceId, Value: !Ref Server}]
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
 
   ServerIp:
     Type: AWS::EC2::EIP
@@ -189,6 +289,11 @@ Outputs:
     Value: !Ref ServerIp
   InstanceId:
     Value: !Ref Server
+  BackupBucketName:
+    Description: Off-site backups; deploy/aws/install-offsite-backup.sh uploads here.
+    Value: !Ref BackupBucket
+  AlertTopicArn:
+    Value: !Ref AlertTopic
   Connect:
     Description: Shell without SSH (needs the AWS CLI with the Session Manager plugin).
     Value: !Sub aws ssm start-session --region ${AWS::Region} --target ${Server}

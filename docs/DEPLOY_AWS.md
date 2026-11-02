@@ -171,6 +171,22 @@ cd lakuin && ./deploy/aws/deploy.sh
 
 ## Backups and recovery
 
+### Off-site backups, automatic recovery and alerts
+
+The stack also creates a private, versioned S3 bucket (30 days of backups), alarms that
+recover the server on an AWS hardware fault and reboot it when it stops responding, a CPU
+alarm, and an SNS topic for alerts. Once the stack is updated, install the hourly uploader on
+the server (it also alerts when the disk is 85% full or no backup ran for 26 hours):
+
+```
+sudo /home/ubuntu/lakuin/deploy/aws/install-offsite-backup.sh <BackupBucketName> <AlertTopicArn>
+```
+
+Both values are stack outputs. To receive the alerts, update the stack with
+`AlertEmail=you@example.com` and click the confirmation link AWS emails you.
+The server can upload but not delete backups, so a compromised server cannot erase them.
+
+
 - **Database + uploads:** the `backup` container writes a dump every 24 hours to
   `~/lakuin/backups` (kept 14 days). To restore one:
 
