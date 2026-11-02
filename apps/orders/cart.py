@@ -3,6 +3,7 @@ from decimal import Decimal
 from apps.catalog.models import Product, ProductVariant
 
 from .sales import active_sale_offers, offer_remaining
+from .scheduling import orderable_quantity
 
 
 def get_cart(request):
@@ -39,7 +40,7 @@ def get_cart(request):
         offer = offers.get(product.id)
         if offer and offer.sale_price >= regular_price:
             offer = None
-        available = variant.available_stock if variant else product.available_stock
+        available = orderable_quantity(product, variant)
         campaign_remaining = offer_remaining(offer) if offer else None
         if campaign_remaining is not None:
             available = min(available, campaign_remaining)

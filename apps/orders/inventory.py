@@ -64,7 +64,8 @@ def release_order_inventory(order, *, actor=None, reason="order_cancelled"):
             kind="release", quantity=allocation.quantity, reason=reason, actor=actor,
             previous_on_hand=level.on_hand, new_on_hand=level.on_hand,
             previous_reserved=previous_reserved, new_reserved=level.reserved)
-    for item in order.items.select_for_update().exclude(variant_id=None):
+    # Pre-order items were never reserved: they use a daily quota, not stock.
+    for item in order.items.select_for_update().exclude(variant_id=None).exclude(is_preorder=True):
         variant = ProductVariant.objects.select_for_update().get(id=item.variant_id)
         if InventoryMovement.objects.filter(order_item=item, variant=variant,
                 kind__in={"release", "commit"}).exists():
@@ -96,7 +97,8 @@ def commit_order_inventory(order, *, actor=None):
             kind="commit", quantity=allocation.quantity, reason="order_packed", actor=actor,
             previous_on_hand=previous_on_hand, new_on_hand=level.on_hand,
             previous_reserved=previous_reserved, new_reserved=level.reserved)
-    for item in order.items.select_for_update().exclude(variant_id=None):
+    # Pre-order items were never reserved: they use a daily quota, not stock.
+    for item in order.items.select_for_update().exclude(variant_id=None).exclude(is_preorder=True):
         variant = ProductVariant.objects.select_for_update().get(id=item.variant_id)
         if InventoryMovement.objects.filter(order_item=item, variant=variant, kind="commit").exists():
             continue

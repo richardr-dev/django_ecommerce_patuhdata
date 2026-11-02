@@ -61,6 +61,15 @@ class Product(models.Model):
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False,
         help_text="Show this product in the featured section on the homepage.")
+    # Made to order: sold against a daily quota instead of warehouse stock, delivered on a date
+    # the shopper picks at checkout.
+    is_preorder = models.BooleanField(default=False, verbose_name="Pre-order",
+        help_text="Dibuat setelah dipesan. Pembeli memilih tanggal kirim; stok gudang tidak dipakai.")
+    preorder_days = models.PositiveSmallIntegerField(default=1, verbose_name="Waktu produksi (hari)",
+        help_text="Tanggal kirim paling cepat: hari ini + waktu produksi.")
+    preorder_daily_quota = models.PositiveIntegerField(null=True, blank=True,
+        verbose_name="Kuota per hari", help_text="Jumlah maksimal yang bisa dibuat untuk satu tanggal "
+            "kirim. Kosongkan untuk tanpa batas.")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [

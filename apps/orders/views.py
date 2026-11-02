@@ -2,7 +2,7 @@ import csv
 import hashlib
 import re
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import quote as url_quote
 
@@ -104,6 +104,14 @@ from .onboarding import setup_steps
 from .pricing import calculate_price
 from .refunds import RefundError, create_refund_request, execute_refund, record_manual_refund
 from .sales import active_sale_offers, offer_sold_quantity
+from .scheduling import (
+    ScheduleError,
+    available_dates,
+    needs_schedule,
+    orderable_quantity,
+    slot_options,
+    validate_schedule,
+)
 from .services import (
     FULFILMENT_PATH,
     ORDER_GROUPS,
@@ -247,7 +255,7 @@ def cart_add(request, product_id):
             return _cart_reply(request, False, "Pilih varian produk terlebih dahulu.",
                 redirect("product-detail", slug=product.slug))
     key = f"v:{variant.id}" if variant else f"p:{product.id}"
-    available = variant.available_stock if variant else product.available_stock
+    available = orderable_quantity(product, variant)
     if available <= 0:
         return _cart_reply(request, False, f"Stok {product.name} sedang habis.",
             redirect("product-detail", slug=product.slug))
@@ -370,7 +378,14 @@ def checkout(request):
     payment_choices = payment_options(request.store)
     payment_choice = next((option for option in payment_choices
         if option.code == request.POST.get("payment_method")), payment_choices[0] if payment_choices else None)
+    schedule_needed = needs_schedule(request.store, lines)
+    schedule_error = ""
     if request.method == "POST":
+        try:
+            validate_schedule(request.store, lines, request.POST.get("delivery_date"),
+                request.POST.get("delivery_slot"))
+        except ScheduleError as error:
+            schedule_error = str(error)
         required = ["customer_name", "phone", "shipping_address"]
         if any(not request.POST.get(field, "").strip() for field in required):
             messages.error(request, "Semua data pelanggan wajib diisi.")
@@ -385,6 +400,8 @@ def checkout(request):
             messages.error(request, "Keranjang berubah. Silakan cek ulang ongkir.")
         elif not payment_choices:
             messages.error(request, "Toko ini belum mengaktifkan metode pembayaran.")
+        elif schedule_error:
+            messages.error(request, schedule_error)
         else:
             try: phone = normalize_indonesian_phone(request.POST["phone"])
             except ValueError as error:
@@ -447,11 +464,18 @@ def checkout(request):
                 insufficient = any(
                     (locked_variants.get(x["variant"].id).available_stock if locked_variants.get(x["variant"].id) else 0) < x["quantity"]
                     if x["variant"] else sum(level.available for level in by_product[x["product"].id]) < x["quantity"]
-                    for x in lines
+                    for x in lines if not x["product"].is_preorder
                 )
                 if insufficient:
                     messages.error(request, "Stok berubah. Silakan periksa keranjang.")
                     return redirect("cart")
+                try:
+                    delivery_date, delivery_slot = validate_schedule(request.store, lines,
+                        request.POST.get("delivery_date"), request.POST.get("delivery_slot"),
+                        lock=True)
+                except ScheduleError as error:
+                    messages.error(request, str(error))
+                    return redirect("checkout")
                 order = Order.objects.create(store=request.store,
                     customer_user=request.user if request.user.is_authenticated else None,
                     subtotal=price.subtotal, tax=price.tax,
@@ -472,7 +496,9 @@ def checkout(request):
                     payment_expires_at=timezone.now() + PAYMENT_SESSION_CREATION_WINDOW,
                     shipping_service=live_quote["name"] if live_quote else selected_shipping.name,
                     shipping_eta=live_quote["eta"] if live_quote else selected_shipping.eta,
-                    coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key)
+                    coupon_code=coupon.code if coupon else "", idempotency_key=checkout_key,
+                    delivery_date=delivery_date, delivery_slot=delivery_slot,
+                    delivery_slot_label=delivery_slot.label if delivery_slot else "")
                 redeem_for_order(order, loyalty_points)
                 for line in lines:
                     variant = locked_variants.get(line["variant"].id) if line["variant"] else None
@@ -481,7 +507,10 @@ def checkout(request):
                         name=product.name, sku=variant.sku if variant else product.sku,
                         variant_name=variant.name if variant else "", flash_sale_offer=line["sale_offer"],
                         unit_price=line["unit_price"],
-                        quantity=line["quantity"], line_total=line["total"])
+                        quantity=line["quantity"], line_total=line["total"],
+                        is_preorder=product.is_preorder)
+                    if product.is_preorder:
+                        continue  # made to order: the daily quota was checked with the date
                     if variant:
                         reserve_variant(item, variant, line["quantity"])
                         continue
@@ -545,7 +574,24 @@ def checkout(request):
         "account_email": account_email, "loyalty_account": loyalty,
         "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points,
         "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST"),
-        "payment_choices": payment_choices, "payment_choice": payment_choice})
+        "payment_choices": payment_choices, "payment_choice": payment_choice,
+        "schedule_needed": schedule_needed,
+        "delivery_dates": available_dates(request.store, lines) if schedule_needed else [],
+        "delivery_slots": slot_options(request.store, None) if schedule_needed else [],
+        "has_preorder": any(line["product"].is_preorder for line in lines)})
+
+
+def delivery_slots(request):
+    """Slots and their remaining places for a date, for the checkout date picker."""
+    if not request.store:
+        raise Http404
+    try:
+        day = date.fromisoformat(request.GET.get("date", ""))
+    except ValueError:
+        return JsonResponse({"slots": []})
+    return JsonResponse({"slots": [{"id": option["slot"].id, "label": option["slot"].label,
+        "remaining": option["remaining"], "full": option["full"]}
+        for option in slot_options(request.store, day)]})
 
 
 def customer_register(request):
@@ -832,6 +878,13 @@ def merchant_orders(request):
     status = request.GET.get("status")
     if status:
         orders = orders.filter(status=status)
+    try:
+        orders = orders.filter(delivery_date=date.fromisoformat(request.GET.get("date", "")))
+    except ValueError:
+        pass
+    if group in {"pack", "ship"}:
+        # Scheduled orders first, by the day they must leave.
+        orders = orders.order_by(F("delivery_date").asc(nulls_last=True), "created_at")
     query = request.GET.get("q", "").strip()
     if query:
         matches = (models.Q(customer_name__icontains=query) | models.Q(phone__icontains=query) |

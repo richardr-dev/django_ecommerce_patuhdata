@@ -3,7 +3,7 @@ from django.urls import path, reverse_lazy
 
 from config.ratelimit import rate_limit
 
-from . import setup_views, views
+from . import delivery_views, setup_views, views
 from .forms import CustomerLoginForm
 
 # Per IP and per submitted username/email; see config/ratelimit.py.
@@ -48,6 +48,7 @@ urlpatterns = [
     path("checkout/", rate_limit("checkout", limit=30, window=600)(views.checkout), name="checkout"), path("orders/<uuid:order_id>/", views.order_detail, name="order-detail"),
     path("orders/<uuid:order_id>/return/", views.request_return, name="request-return"),
     path("orders/<uuid:order_id>/received/", views.order_received, name="order-received"),
+    path("checkout/delivery-slots/", views.delivery_slots, name="checkout-delivery-slots"),
     path("orders/<uuid:order_id>/buy-again/", views.order_buy_again, name="order-buy-again"),
     path("merchant/", views.merchant_dashboard, name="merchant-dashboard"),
     path("merchant/orders/", views.merchant_orders, name="merchant-orders"),
@@ -64,6 +65,9 @@ urlpatterns = [
     path("merchant/orders/<uuid:order_id>/ship/", views.merchant_order_ship,
         name="merchant-order-ship"),
     path("merchant/orders/labels/", views.merchant_order_labels, name="merchant-order-labels"),
+    path("merchant/delivery/", delivery_views.merchant_delivery, name="merchant-delivery"),
+    path("merchant/delivery/recap/", delivery_views.merchant_production_recap,
+        name="merchant-production-recap"),
     path("merchant/orders/<uuid:order_id>/confirm-transfer/", views.merchant_order_confirm_transfer,
         name="merchant-order-confirm-transfer"),
     path("merchant/orders/<uuid:order_id>/refund/", views.merchant_order_refund,

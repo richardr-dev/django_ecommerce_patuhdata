@@ -18,3 +18,4 @@ main:has(.cart-bar:not([hidden])){padding-bottom:96px}
 @media(max-width:620px){.profile-actions a{width:42px;height:42px}.profile-logo{width:96px;height:96px}.profile-identity{margin-top:-48px}.profile-banner .commercial-carousel{border-radius:14px}}
 .profile-pages{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:4px;font-size:14px}.profile-pages a{color:#475467}
 body:has(.cart-bar:not([hidden])) .whatsapp-float{bottom:96px}
+.card-stock.preorder{background:#eef4ff;color:#3538cd}

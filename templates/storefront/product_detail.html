@@ -42,7 +42,7 @@
     <h1>{{ product.name }}</h1>
     {% if rating.count %}<a class="rating-summary" href="#ulasan"><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-hidden="true"></span><strong>{{ rating.average }}</strong><span>({{ rating.count }} ulasan)</span></a>{% endif %}
     <div class="product-rating-row">
-      <strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>
+      {% if product.is_preorder %}<strong>Pre-order</strong><span class="divider"></span><span>Dikirim paling cepat {{ product.preorder_days }} hari setelah dipesan{% if product.preorder_daily_quota %} · kuota {{ product.preorder_daily_quota }}/hari{% endif %}</span>{% else %}<strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>{% endif %}
       <span class="divider"></span><span>SKU {{ product.sku }}</span>
     </div>
 
@@ -65,11 +65,11 @@
           <legend>Pilihan</legend>
           <div class="variant-options">
             {% for variant in product.variants.all %}{% if variant.is_active %}
-              <label class="variant-option {% if not variant.available_stock %}sold-out{% endif %}">
+              <label class="variant-option {% if not variant.available_stock and not product.is_preorder %}sold-out{% endif %}">
                 <input type="radio" name="variant_id" value="{{ variant.id }}"
                   data-price="{{ variant.display_price|floatformat:'0' }}"
-                  data-stock="{{ variant.available_stock }}"
-                  {% if not variant.available_stock %}disabled{% elif forloop.first %}checked{% endif %} required>
+                  data-stock="{% if product.is_preorder %}{{ product.orderable }}{% else %}{{ variant.available_stock }}{% endif %}"
+                  {% if not variant.available_stock and not product.is_preorder %}disabled{% elif forloop.first %}checked{% endif %} required>
                 <span>{{ variant.name }}</span>
               </label>
             {% endif %}{% endfor %}
@@ -81,17 +81,17 @@
         <span>Jumlah</span>
         <div class="quantity-stepper">
           <button type="button" data-quantity="minus" aria-label="Kurangi jumlah">−</button>
-          <input id="quantity" type="number" name="quantity" min="1" max="{{ product.available_stock }}" value="1" aria-label="Jumlah produk">
+          <input id="quantity" type="number" name="quantity" min="1" max="{{ product.orderable }}" value="1" aria-label="Jumlah produk">
           <button type="button" data-quantity="plus" aria-label="Tambah jumlah">+</button>
         </div>
-        <small id="stock-label">{{ product.available_stock }} tersedia</small>
+        <small id="stock-label">{% if product.is_preorder %}Pre-order · pilih tanggal kirim saat checkout{% else %}{{ product.available_stock }} tersedia{% endif %}</small>
       </div>
 
       <div class="product-actions">
-        <button class="cart-outline" type="submit" {% if not product.available_stock %}disabled{% endif %}>
+        <button class="cart-outline" type="submit" {% if not product.orderable %}disabled{% endif %}>
           <span>＋</span> Masukkan Keranjang
         </button>
-        <button type="submit" name="next" value="checkout" {% if not product.available_stock %}disabled{% endif %}>Beli Sekarang</button>
+        <button type="submit" name="next" value="checkout" {% if not product.orderable %}disabled{% endif %}>{% if product.is_preorder %}Pre-order Sekarang{% else %}Beli Sekarang{% endif %}</button>
       </div>
       <p class="purchase-note">Stok baru dikunci setelah checkout berhasil dibuat. Harga dan ongkir diverifikasi oleh server.</p>
     </form>

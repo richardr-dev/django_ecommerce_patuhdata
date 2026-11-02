@@ -17,6 +17,7 @@ from apps.orders.cart import get_cart
 from apps.orders.engagement import record_event
 from apps.orders.forms import NewsletterForm, ProductReviewForm
 from apps.orders.sales import active_sale_offers, decorate_products_with_sales
+from apps.orders.scheduling import orderable_quantity
 from apps.shops.models import NewsletterSubscriber
 
 from .models import Product, ProductReview, WishlistItem
@@ -87,7 +88,7 @@ def home(request):
         active_offers[product.id].campaign_id == active_campaign.id][:8])
     for product in [*products, *featured_products, *flash_sale_products]:
         # One tap adds simple products; products with variants open their page to pick one.
-        product.quick_add = product.available_stock > 0 and not any(
+        product.quick_add = (product.available_stock > 0 or product.is_preorder) and not any(
             variant.is_active for variant in product.variants.all())
     lines, cart_total = get_cart(request)
     return render(request, "storefront/customizable_home.html", {"products": products,
@@ -141,6 +142,7 @@ def product_detail(request, slug):
         store=request.store, slug=slug, is_active=True)
     record_event(request, "product_view", product=product)
     product = decorate_products_with_sales(request.store, [product])[0]
+    product.orderable = orderable_quantity(product)
     related = _storefront_products(request.store).exclude(id=product.id)
     if product.category_id:
         related = related.filter(category_id=product.category_id)

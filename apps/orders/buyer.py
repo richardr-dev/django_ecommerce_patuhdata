@@ -61,6 +61,8 @@ def estimated_arrival(order):
     None when there is no quote or the order is not on its way."""
     if order.status not in BUYER_TABS[1][2] | {"shipped"}:
         return None
+    if order.delivery_date:  # the shopper chose the day
+        return (order.delivery_date, order.delivery_date)
     numbers = [int(value) for value in re.findall(r"\d+", order.shipping_eta or "")]
     if not numbers:
         return None

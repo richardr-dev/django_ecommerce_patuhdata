@@ -74,6 +74,12 @@ class Order(models.Model):
     tracking_error = models.CharField(max_length=300, blank=True)
     external_shipping_id = models.CharField(max_length=100, blank=True)
     label_printed_at = models.DateTimeField(null=True, blank=True)
+    # The day (and slot) the shopper chose for delivery, when the store schedules deliveries or
+    # the cart holds pre-order products.
+    delivery_date = models.DateField(null=True, blank=True, db_index=True)
+    delivery_slot = models.ForeignKey("DeliverySlot", on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="orders")
+    delivery_slot_label = models.CharField(max_length=40, blank=True)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     loyalty_points_redeemed = models.PositiveIntegerField(default=0)
@@ -214,6 +220,8 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     quantity = models.PositiveIntegerField()
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+    # Made to order: counted against the product's daily quota, never against warehouse stock.
+    is_preorder = models.BooleanField(default=False)
     # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
 
@@ -430,3 +438,42 @@ class CustomerAddress(models.Model):
                 id=self.id).update(is_default=False)
             self.is_default = True
             self.save(update_fields=["is_default", "updated_at"])
+
+
+class DeliverySettings(models.Model):
+    """When a store delivers: shoppers pick a date (and a slot) at checkout."""
+    WEEKDAYS = [("0", "Senin"), ("1", "Selasa"), ("2", "Rabu"), ("3", "Kamis"), ("4", "Jumat"),
+        ("5", "Sabtu"), ("6", "Minggu")]
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="delivery_settings")
+    enabled = models.BooleanField(default=False, verbose_name="Pembeli memilih tanggal kirim",
+        help_text="Selalu aktif otomatis untuk keranjang yang berisi produk pre-order.")
+    min_days = models.PositiveSmallIntegerField(default=1, verbose_name="Pemesanan paling lambat (hari sebelumnya)",
+        help_text="0 = bisa dikirim hari ini, 1 = paling cepat besok.")
+    max_days = models.PositiveSmallIntegerField(default=14, verbose_name="Bisa dipesan sampai (hari ke depan)")
+    closed_weekdays = models.CharField(max_length=20, blank=True, verbose_name="Hari libur",
+        help_text="Hari tanpa pengiriman.")
+
+    @property
+    def closed_days(self):
+        return {int(day) for day in self.closed_weekdays.split(",") if day.strip().isdigit()}
+
+
+class DeliverySlot(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="delivery_slots")
+    start_time = models.TimeField(verbose_name="Mulai")
+    end_time = models.TimeField(verbose_name="Selesai")
+    capacity = models.PositiveIntegerField(null=True, blank=True, verbose_name="Maks. pesanan",
+        help_text="Per tanggal. Kosongkan untuk tanpa batas.")
+    is_active = models.BooleanField(default=True, verbose_name="Aktif")
+
+    class Meta:
+        ordering = ["start_time", "id"]
+        constraints = [models.CheckConstraint(condition=models.Q(end_time__gt=models.F("start_time")),
+            name="delivery_slot_ends_after_start")]
+
+    @property
+    def label(self):
+        return f"{self.start_time:%H.%M}–{self.end_time:%H.%M}"
+
+    def __str__(self):
+        return self.label

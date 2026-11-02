@@ -125,6 +125,11 @@ class ProductForm(StyledModelForm):
         if self.instance.pk:
             self.fields.pop("warehouse")
             self.fields.pop("initial_stock")
+        self.fields["preorder_days"].required = False
+
+    def clean_preorder_days(self):
+        days = self.cleaned_data.get("preorder_days")
+        return 1 if days is None else days
 
     def clean(self):
         cleaned = super().clean()
