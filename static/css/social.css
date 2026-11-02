@@ -8,3 +8,6 @@
 .whatsapp-float .social-icon{width:24px;height:24px}
 .whatsapp-float:hover{background:#1ebe5a}
 @media(max-width:640px){.whatsapp-float{right:14px;bottom:14px;padding:12px}.whatsapp-float span{display:none}}
+/* "Dibuat dengan Lakuin" credit in every store footer */
+.made-with-lakuin{display:inline-flex;align-items:center;gap:5px;vertical-align:middle}
+.made-with-lakuin img{display:block;width:14px;height:14px}

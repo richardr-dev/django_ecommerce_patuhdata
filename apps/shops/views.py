@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.templatetags.static import static
 from django.utils.text import slugify
 
 from apps.billing.models import Plan, Subscription
@@ -36,7 +37,8 @@ def platform_home(request):
     organization = {"@context": "https://schema.org", "@type": "Organization",
         "name": settings.PLATFORM_COMPANY_NAME, "url": settings.PLATFORM_COMPANY_URL,
         "brand": {"@type": "Brand", "name": settings.PLATFORM_NAME,
-            "slogan": settings.PLATFORM_TAGLINE, "url": platform_url("/")}}
+            "slogan": settings.PLATFORM_TAGLINE, "url": platform_url("/"),
+            "logo": platform_url(static("img/brand/icon-512.png"))}}
     if settings.PLATFORM_SUPPORT_EMAIL:
         organization["email"] = settings.PLATFORM_SUPPORT_EMAIL
     return render(request, "platform/home.html", {"featured_stores": _with_urls(stores),
@@ -44,6 +46,11 @@ def platform_home(request):
         "trial_days": settings.TRIAL_DAYS,
         "platform_domain": settings.PLATFORM_DISPLAY_DOMAIN or settings.PLATFORM_DOMAIN,
         "organization_json_ld": _json_ld(organization)})
+
+
+def favicon(request):
+    """Browsers and crawlers request /favicon.ico on every host, platform and store alike."""
+    return redirect(static("img/brand/favicon.ico"), permanent=True)
 
 
 def store_directory(request):

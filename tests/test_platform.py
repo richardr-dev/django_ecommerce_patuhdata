@@ -48,6 +48,15 @@ class HostRoutingTests(TestCase):
         self.assertTemplateUsed(response, "platform/home.html")
         self.assertContains(response, "Coba gratis 14 hari")
         self.assertContains(response, "https://kopi.example/")
+        self.assertContains(response, "img/brand/lakuin-logo.svg")
+        self.assertContains(response, "img/brand/og-image.png")
+
+    def test_favicon_on_platform_and_store_hosts(self):
+        for host in (PLATFORM, f"teh.{PLATFORM}", "kopi.example"):
+            response = _host(host).get("/favicon.ico")
+            self.assertEqual(response.status_code, 301, host)
+            self.assertTrue(response["Location"].endswith("img/brand/favicon.ico"), host)
+        self.assertContains(_host(f"teh.{PLATFORM}").get("/"), "img/brand/lakuin-icon.svg")
 
     def test_subdomain_serves_that_store_only(self):
         response = _host(f"teh.{PLATFORM}").get("/")
