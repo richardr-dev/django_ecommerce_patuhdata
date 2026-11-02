@@ -133,7 +133,42 @@ class TrialTests(TestCase):
         store.refresh_from_db()
 
         self.assertEqual(effective_plan(store).code, "lapsed")
-        self.assertIn("maksimal 0", product_limit_error(store, 1))
+        self.assertIn("sudah berakhir", product_limit_error(store, 1))
         client = Client(HTTP_HOST=PLATFORM)
         client.force_login(store.owner)
         self.assertContains(client.get("/merchant/"), "sudah berakhir")
+
+
+class FormerFreeStoreMigrationTests(TestCase):
+    def test_stores_without_a_period_end_get_a_trial(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+        from django.utils import timezone
+
+        from apps.billing.models import Subscription
+
+        store = _store("lama", plan=Plan.objects.get(code="free"))
+        Subscription.objects.filter(store=store).update(current_period_end=None)
+        store.refresh_from_db()
+        self.assertEqual(effective_plan(store).code, "lapsed")
+
+        migration = importlib.import_module("apps.billing.migrations.0009_trial_for_former_free_stores")
+        migration.start_trials(django_apps, None)
+        store.refresh_from_db()
+        self.assertGreater(store.subscription.current_period_end, timezone.now())
+        self.assertEqual(effective_plan(store).code, "free")
+
+    def test_lapsed_message_explains_what_happened(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.billing.models import Subscription
+        from apps.billing.plans import product_limit_error
+
+        store = _store("habis2", plan=Plan.objects.get(code="free"))
+        Subscription.objects.filter(store=store).update(
+            current_period_end=timezone.now() - timedelta(days=1))
+        store.refresh_from_db()
+        self.assertIn("Masa aktif paket toko ini sudah berakhir", product_limit_error(store, 1))

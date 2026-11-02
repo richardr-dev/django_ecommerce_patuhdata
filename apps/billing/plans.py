@@ -65,6 +65,9 @@ def _limit_error(store, field, count_after, what):
     limit = getattr(plan, field, None) if plan else None
     if limit is None or count_after <= limit:
         return ""
+    if plan.code == "lapsed":
+        return (f"Masa aktif paket toko ini sudah berakhir, jadi {what} belum bisa ditambah. "
+            "Pilih paket di menu Langganan; produk yang sudah ada tetap tampil.")
     return (f"Paket {plan.name} memuat maksimal {limit} {what}. "
         "Upgrade paket di menu Langganan untuk menambah.")
 
