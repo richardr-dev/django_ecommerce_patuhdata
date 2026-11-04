@@ -33,6 +33,7 @@
     submit.disabled = true;
     choices.replaceChildren();
     if (summary) summary.textContent = "Pilih layanan";
+    document.dispatchEvent(new Event("checkout:shipping"));
     show(text);
   }
 
@@ -145,8 +146,8 @@
   const SHOWN = 4;
 
   function renderQuotes(data) {
-    const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR",
-      maximumFractionDigits: 0 });
+    // "Rp6.700", the same as every other price on the page (Intl's IDR style adds a space).
+    const currency = { format: (value) => `Rp${Math.round(Number(value)).toLocaleString("id-ID")}` };
     data.quotes.forEach((quote, index) => {
       const label = document.createElement("label");
       label.className = "choice courier-choice";
@@ -157,6 +158,7 @@
       radio.value = quote.token;
       radio.required = true;
       radio.checked = index === 0;
+      radio.dataset.price = String(quote.price);
       const details = document.createElement("span");
       details.className = "courier-details";
       const name = document.createElement("strong");
@@ -193,8 +195,7 @@
   }
 
   function updateSummary() {
-    const selected = document.querySelector("[name=shipping_method]:checked");
-    if (selected && summary) summary.textContent = selected.closest("label").lastElementChild.textContent;
+    document.dispatchEvent(new Event("checkout:shipping"));
   }
 
   async function loadRates() {

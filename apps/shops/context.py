@@ -35,6 +35,12 @@ def store_context(request):
         # On a store address /merchant/ forwards to the platform, opening this store's dashboard.
         return "/merchant/" if settings.PLATFORM_DOMAIN else f"/merchant/?store={store.id}"
 
+    def pending_payment():
+        from apps.orders.buyer import payment_link
+        from apps.orders.buyer import pending_payment as find
+        order = find(request)
+        return {"order": order, "url": payment_link(order)} if order else None
+
     state = getattr(request, "store_state", "open")
     preview = getattr(request, "store_preview", False)
     # Lazy, so responses that never render the header, footer or bottom bar skip the queries.
@@ -44,7 +50,8 @@ def store_context(request):
         "store_nav_pages": SimpleLazyObject(nav_pages),
         "nav_cart_items": SimpleLazyObject(cart_items),
         "nav_active_orders": SimpleLazyObject(active_orders),
-        "manage_store_url": SimpleLazyObject(manage_store_url)}
+        "manage_store_url": SimpleLazyObject(manage_store_url),
+        "pending_payment": SimpleLazyObject(pending_payment)}
 
 
 def platform_context(request):

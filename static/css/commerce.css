@@ -49,3 +49,5 @@ fieldset{border:1px solid #dfe4ea;border-radius:14px;padding:20px}legend{font-we
 @media(max-width:700px){.step-nav{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));z-index:5;padding:10px 0;background:linear-gradient(transparent,var(--page-bg,#fff) 30%)}}
 .courier-choice[hidden]{display:none!important}
 .checkout-form.stepped #check-shipping{padding:8px 14px;border:1px solid #d0d5dd;background:#fff;color:#344054;font-size:14px}
+.line.summary-total{border-bottom:0;padding-top:18px;font-size:18px;font-weight:800}.line.summary-total small{font-size:12px;font-weight:500}.line.summary-total strong{font-size:20px}.summary-coupon-note{margin:0;font-size:13px}
+#total-note[hidden],.summary-coupon-note[hidden]{display:none}

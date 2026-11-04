@@ -38,6 +38,28 @@ def active_order_count(request):
     return buyer_orders(request).filter(status__in=ACTIVE_STATUSES).count()
 
 
+def pending_payment(request):
+    """The newest order this shopper started paying for and can still pay, for the
+    "Menunggu pembayaran" reminder: closing the payment page must not lose the order."""
+    if not getattr(request, "store", None):
+        return None
+    if not request.user.is_authenticated and not request.session.get("customer_order_ids"):
+        return None
+    return (buyer_orders(request).filter(status="pending")
+        .filter(Q(payment_expires_at__isnull=True) | Q(payment_expires_at__gt=timezone.now()))
+        .order_by("-created_at").first())
+
+
+def payment_link(order):
+    """Where "Bayar sekarang" goes: the gateway's payment page, else the order page, which
+    shows the bank transfer details."""
+    from django.urls import reverse
+
+    if order.payment_checkout_url and order.payment_provider != "bank_transfer":
+        return order.payment_checkout_url
+    return reverse("order-detail", args=[order.id])
+
+
 def _add_days(start, days, business):
     day = start
     while days > 0:
