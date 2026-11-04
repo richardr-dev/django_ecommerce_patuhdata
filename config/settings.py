@@ -129,6 +129,10 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "0") == "1"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# SMTP2GO over its HTTP API (EMAIL_BACKEND=apps.integrations.email.Smtp2goBackend), using an API
+# key instead of an SMTP user.
+SMTP2GO_API_KEY = os.getenv("SMTP2GO_API_KEY", "")
+SMTP2GO_API_URL = os.getenv("SMTP2GO_API_URL", "https://api.smtp2go.com/v3").rstrip("/")
 # "Name:email,Name:email" — receives an email with the traceback for every unhandled server
 # error when DEBUG=0. Leave empty when a log-based alert (e.g. CloudWatch) covers this.
 ADMINS = [tuple(entry.split(":", 1)) for entry in os.getenv("ADMINS", "").split(",") if ":" in entry]
