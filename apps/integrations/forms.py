@@ -17,13 +17,16 @@ class PaymentSettingsForm(forms.ModelForm):
     class Meta:
         model = StorePaymentSettings
         fields = ["bank_transfer_enabled", "bank_name", "bank_account_number", "bank_account_holder",
-            "gateway", "doku_client_id"]
+            "gateway", "doku_client_id", "use_platform_gateway"]
         labels = {"bank_transfer_enabled": "Terima transfer bank", "bank_name": "Nama bank",
             "bank_account_number": "Nomor rekening", "bank_account_holder": "Nama pemilik rekening",
-            "gateway": "Payment gateway", "doku_client_id": "DOKU Client ID"}
+            "gateway": "Payment gateway", "doku_client_id": "DOKU Client ID",
+            "use_platform_gateway": "Pakai DOKU Lakuin"}
         help_texts = {"bank_transfer_enabled": "Pembeli transfer langsung ke rekening Anda, lalu Anda "
             "konfirmasi dana masuk di halaman Pesanan.",
-            "gateway": "Hubungkan akun DOKU atau Xendit milik usaha Anda sendiri."}
+            "gateway": "Hubungkan akun DOKU atau Xendit milik usaha Anda sendiri.",
+            "use_platform_gateway": "QRIS, virtual account, dan e-wallet tanpa mendaftar DOKU sendiri. "
+                "Dana ditampung Lakuin lalu ditransfer ke rekening di atas setelah pesanan diterima."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,6 +43,9 @@ class PaymentSettingsForm(forms.ModelForm):
         if data.get("bank_transfer_enabled") and not all(
                 data.get(field) for field in ["bank_name", "bank_account_number", "bank_account_holder"]):
             self.add_error("bank_transfer_enabled", "Lengkapi nama bank, nomor, dan pemilik rekening.")
+        if data.get("use_platform_gateway") and not all(
+                data.get(field) for field in ["bank_name", "bank_account_number", "bank_account_holder"]):
+            self.add_error("use_platform_gateway", "Isi rekening bank tujuan pencairan dana terlebih dahulu.")
         gateway = data.get("gateway")
         # A key saved for another gateway is useless here, so switching asks for new credentials.
         keep_saved = gateway == self.saved_gateway

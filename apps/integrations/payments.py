@@ -261,6 +261,12 @@ def store_payment_settings(store):
     return StorePaymentSettings.objects.filter(store=store).first()
 
 
+def platform_doku_available():
+    """Sellers may take payments through the platform's DOKU account (DOKU Lakuin)."""
+    return (settings.PLATFORM_DOKU_FOR_STORES and settings.PAYMENT_PROVIDER == "doku"
+        and platform_gateway_ready())
+
+
 def platform_gateway_ready():
     if settings.PAYMENT_PROVIDER == "doku":
         return bool(settings.DOKU_CLIENT_ID and settings.DOKU_SECRET_KEY)
@@ -277,7 +283,8 @@ def payment_options(store):
     if account and account.gateway_ready:
         options.append(PaymentOption("gateway", account.gateway, True, *GATEWAY_LABELS[account.gateway]))
     elif (settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS) or (
-            settings.PLATFORM_COLLECTS_PAYMENTS and platform_gateway_ready()):
+            settings.PLATFORM_COLLECTS_PAYMENTS and platform_gateway_ready()) or (
+            platform_doku_available() and account and account.use_platform_gateway):
         options.append(PaymentOption("gateway", settings.PAYMENT_PROVIDER, False,
             *GATEWAY_LABELS.get(settings.PAYMENT_PROVIDER, (settings.PAYMENT_PROVIDER, ""))))
     if account and account.bank_transfer_ready:

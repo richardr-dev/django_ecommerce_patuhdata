@@ -49,14 +49,17 @@ from apps.catalog.reviews import REVIEWABLE_STATUSES, order_review_items, save_o
 from apps.catalog.views import paginate
 from apps.integrations.forms import PaymentSettingsForm
 from apps.integrations.http import ProviderError
-from apps.integrations.models import OutboxEvent, StorePaymentSettings
+from apps.integrations.models import OutboxEvent, PlatformPayout, StorePaymentSettings
 from apps.integrations.payments import (
     DokuPaymentProvider,
     doku_environment,
     order_payment_provider,
     payment_options,
+    platform_doku_available,
     reserved_reference,
 )
+from apps.integrations.platform_balance import balance as platform_balance
+from apps.integrations.platform_balance import platform_orders
 from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider, shipping_origin
 from apps.shops.availability import preview_url, store_state
@@ -967,6 +970,8 @@ def _require_roles(request, store, roles):
 
 
 MERCHANT_PAGE_SIZE = 50
+# Smallest DOKU Lakuin balance a seller can ask to have transferred.
+MIN_PLATFORM_PAYOUT = Decimal(10000)
 
 
 @login_required(login_url="/merchant/login/")
@@ -1769,7 +1774,43 @@ def merchant_payment_settings(request):
         args=[account.webhook_key]) for gateway in ("doku", "xendit")}
     return render(request, "merchant/payments.html", _merchant_context(request, store, form=form,
         account=account, webhook_urls=webhook_urls, options=payment_options(store),
+        platform_doku=platform_doku_available(), platform_fee=settings.PLATFORM_DOKU_FEE_PERCENT,
         doku_environment=doku_environment(), doku_test_url=request.session.pop("doku_test_url", "")))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_platform_balance(request):
+    """Saldo DOKU Lakuin: what buyers paid through the platform's DOKU account for this store,
+    and the payouts Lakuin made or is making to the store's bank account."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "finance"})
+    account = StorePaymentSettings.objects.filter(store=store).first()
+    if request.method == "POST":
+        _require_roles(request, store, {"admin"})
+        with transaction.atomic():
+            Store.objects.select_for_update().get(id=store.id)  # one request at a time
+            amount = platform_balance(store)["available"]
+            if not account or not account.bank_account_number:
+                messages.error(request, "Isi rekening bank di menu Pembayaran terlebih dahulu.")
+            elif amount < MIN_PLATFORM_PAYOUT:
+                messages.error(request, f"Saldo yang bisa dicairkan minimal "
+                    f"Rp{MIN_PLATFORM_PAYOUT:,.0f}.".replace(",", "."))
+            else:
+                payout = PlatformPayout.objects.create(store=store, amount=amount,
+                    bank_name=account.bank_name, bank_account_number=account.bank_account_number,
+                    bank_account_holder=account.bank_account_holder, requested_by=request.user)
+                AuditLog.objects.create(store=store, actor=request.user,
+                    action="platform_payout.requested", object_type="PlatformPayout",
+                    object_id=str(payout.id), details={"amount": str(amount)})
+                messages.success(request, f"Pencairan Rp{amount:,.0f} diajukan. Dana ditransfer ke "
+                    f"{account.bank_name} a.n. {account.bank_account_holder} dalam 1–2 hari kerja."
+                    .replace(",", "."))
+        return redirect("merchant-platform-balance")
+    orders = platform_orders(store).exclude(status__in={"pending", "payment_failed"}).order_by(
+        "-created_at")[:50]
+    return render(request, "merchant/platform_balance.html", _merchant_context(request, store,
+        account=account, summary=platform_balance(store), orders=orders,
+        payouts=store.platform_payouts.all()[:20], minimum=MIN_PLATFORM_PAYOUT))
 
 
 @login_required(login_url="/merchant/login/")

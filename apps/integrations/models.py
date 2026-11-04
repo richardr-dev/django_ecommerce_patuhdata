@@ -31,6 +31,9 @@ class StorePaymentSettings(models.Model):
     bank_name = models.CharField(max_length=60, blank=True)
     bank_account_number = models.CharField(max_length=40, blank=True)
     bank_account_holder = models.CharField(max_length=120, blank=True)
+    # "DOKU Lakuin": take QRIS / VA / e-wallet through the platform's DOKU account instead of the
+    # seller's own; Lakuin holds the money and transfers it to the bank account above.
+    use_platform_gateway = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
@@ -61,6 +64,33 @@ class StorePaymentSettings(models.Model):
     def bank_transfer_ready(self):
         return bool(self.bank_transfer_enabled and self.bank_name and self.bank_account_number
             and self.bank_account_holder)
+
+
+class PlatformPayout(models.Model):
+    """Lakuin transferring a store's DOKU Lakuin balance to the store's bank account. The seller
+    requests it; the platform team transfers and records the reference in the admin."""
+    STATUS = [("requested", "Diajukan"), ("paid", "Sudah ditransfer"), ("rejected", "Ditolak")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="platform_payouts")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS, default="requested")
+    # The bank account at the time of the request, so a later change cannot redirect it.
+    bank_name = models.CharField(max_length=60)
+    bank_account_number = models.CharField(max_length=40)
+    bank_account_holder = models.CharField(max_length=120)
+    transfer_reference = models.CharField(max_length=120, blank=True)
+    note = models.CharField(max_length=300, blank=True)
+    requested_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True,
+        related_name="+")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0),
+            name="platform_payout_positive")]
+
+    def __str__(self):
+        return f"{self.store.name} · Rp{self.amount:,.0f} · {self.get_status_display()}"
 
 
 class OutboxEvent(models.Model):

@@ -86,6 +86,8 @@ urlpatterns = [
     path("merchant/finance/", views.merchant_finance, name="merchant-finance"),
     path("merchant/payments/", views.merchant_payment_settings, name="merchant-payment-settings"),
     path("merchant/payments/test/", views.merchant_payment_test, name="merchant-payment-test"),
+    path("merchant/payments/balance/", views.merchant_platform_balance,
+        name="merchant-platform-balance"),
     path("merchant/engagement/", views.merchant_engagement, name="merchant-engagement"),
     path("merchant/integrations/<int:event_id>/retry/", views.merchant_integration_retry, name="merchant-integration-retry"),
     path("merchant/shipping-areas/", rate_limit("merchant-areas", limit=60, window=600,

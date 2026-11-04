@@ -1,5 +1,6 @@
 import os
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import dj_database_url
@@ -219,6 +220,11 @@ MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 # sellers needs a payment licence (or a split-payment partner agreement).
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
 PLATFORM_COLLECTS_PAYMENTS = os.getenv("PLATFORM_COLLECTS_PAYMENTS", "0") == "1"
+# "DOKU Lakuin": a seller may opt in (Back office > Pembayaran) to take QRIS / VA / e-wallet through
+# the platform's DOKU account; Lakuin then pays out their balance. PLATFORM_DOKU_FEE_PERCENT is
+# Lakuin's fee on those orders, deducted from the balance.
+PLATFORM_DOKU_FOR_STORES = os.getenv("PLATFORM_DOKU_FOR_STORES", "1") == "1"
+PLATFORM_DOKU_FEE_PERCENT = Decimal(os.getenv("PLATFORM_DOKU_FEE_PERCENT", "0"))
 # Encrypts sellers' gateway secrets; defaults to SECRET_KEY, so set it before rotating SECRET_KEY.
 PAYMENT_SECRETS_KEY = os.getenv("PAYMENT_SECRETS_KEY", "")
 BANK_TRANSFER_DUE_HOURS = int(os.getenv("BANK_TRANSFER_DUE_HOURS", "24"))
