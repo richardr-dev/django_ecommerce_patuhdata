@@ -59,6 +59,7 @@ from apps.integrations.payments import (
 )
 from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider, shipping_origin
+from apps.shops.availability import preview_url, store_state
 from apps.shops.models import (
     AuditLog,
     Customer,
@@ -946,7 +947,8 @@ def _merchant_context(request, store, **context):
         Store.objects.filter(staff_members__user=request.user)).distinct().order_by("name")
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
-        "merchant_store_url": store_url(store), **context}
+        "merchant_store_url": store_url(store), "merchant_preview_url": preview_url(store),
+        **context}
 
 
 def _require_editor(request, store):
@@ -1032,10 +1034,11 @@ def merchant_dashboard(request):
     engagement = engagement_summary(store)
     setup = setup_steps(store)
     setup_done = sum(step.done for step in setup)
+    live_state = store_state(store)
     loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
-        revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
+        live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
         low_stock_count=low_stock_count, recent_orders=recent,

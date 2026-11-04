@@ -39,3 +39,6 @@
 .system-details{margin-top:18px}.system-details summary{cursor:pointer}.system-details .health-list{margin-top:14px}
 @media(max-width:700px){.setup-checklist li{flex-wrap:wrap}.setup-checklist li .bo-button{width:100%;justify-content:center}}
 .plan-banner{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;padding:12px 16px;border:1px solid #c7d7fe;border-radius:12px;background:#eff4ff}.plan-banner.lapsed{border-color:#fecdca;background:#fef3f2}
+.store-live{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:16px;padding:14px 18px}.store-live.open{border-color:#abefc6;background:#f6fef9;color:#067647}
+.store-live.setup{border-color:#fedf89;background:#fffaeb;color:#93370d}.store-live.closed{border-color:#fecdca;background:#fef3f2;color:#912018}.store-live a:not(.bo-button){font-weight:700;text-decoration:underline}
+.required-tag{margin-left:6px;padding:1px 7px;border-radius:99px;background:#fef0c7;color:#93370d;font-size:11px;font-style:normal;font-weight:700}

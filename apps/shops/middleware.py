@@ -1,6 +1,15 @@
 from django.conf import settings
+from django.contrib import messages
 from django.shortcuts import redirect, render
 
+from .availability import (
+    ALWAYS_OPEN,
+    ORDERING,
+    PREVIEW_SESSION_KEY,
+    is_previewing,
+    read_preview_token,
+    store_state,
+)
 from .models import Store
 from .tenancy import custom_domain_allowed, platform_host, platform_url, store_url, subdomain_slug
 
@@ -68,3 +77,40 @@ class StoreResolverMiddleware:
             store = Store.objects.filter(is_active=True).first()
         if store: request.session["store_slug"] = store.slug
         return store
+
+
+class StorefrontGateMiddleware:
+    """Shoppers only see a store that is ready, and a store whose subscription lapsed says it is
+    temporarily closed instead of taking orders (see apps/shops/availability.py)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        store = getattr(request, "store", None)
+        request.store_state, request.store_preview = "open", False
+        if (not settings.STOREFRONT_GATE or store is None or getattr(request, "is_platform", False)
+                or request.path.startswith(ALWAYS_OPEN)):
+            return self.get_response(request)
+        token = request.GET.get("preview")
+        if token and read_preview_token(token) == store.id:
+            previews = request.session.get(PREVIEW_SESSION_KEY, [])
+            request.session[PREVIEW_SESSION_KEY] = [*previews, store.id][-10:]
+            query = request.GET.copy()
+            query.pop("preview")
+            return redirect(f"{request.path}?{query.urlencode()}" if query else request.path)
+        request.store_state = store_state(store)
+        if request.store_state == "open":
+            return self.get_response(request)
+        request.store_preview = is_previewing(request, store)
+        if request.store_preview:
+            return self.get_response(request)
+        if request.store_state == "setup":
+            response = render(request, "storefront/coming_soon.html", {"store": store}, status=503)
+            response["Retry-After"] = "86400"
+            return response
+        if request.path.startswith(ORDERING):
+            messages.info(request, f"{store.name} sedang tutup sementara dan belum menerima "
+                "pesanan baru.")
+            return redirect("/")
+        return self.get_response(request)

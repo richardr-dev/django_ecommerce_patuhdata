@@ -88,12 +88,12 @@
       </div>
       <label class="product-note">Catatan untuk penjual <span>(opsional)</span><input name="note" maxlength="200" placeholder="Mis. tulisan di kue, tingkat manis, tanpa kacang"></label>
 
-      <div class="product-actions">
+      {% if store_closed %}<p class="store-closed-note">🔒 Toko sedang tutup sementara. Produk ini belum bisa dipesan.</p>{% else %}<div class="product-actions">
         <button class="cart-outline" type="submit" {% if not product.orderable %}disabled{% endif %}>
           <span>＋</span> Masukkan Keranjang
         </button>
         <button type="submit" name="next" value="checkout" {% if not product.orderable %}disabled{% endif %}>{% if product.is_preorder %}Pre-order Sekarang{% else %}Beli Sekarang{% endif %}</button>
-      </div>
+      </div>{% endif %}
       <p class="purchase-note">Stok baru dikunci setelah checkout berhasil dibuat. Harga dan ongkir diverifikasi oleh server.</p>
     </form>
     <form method="post" action="{% url 'wishlist-toggle' product.id %}" class="wishlist-form">{% csrf_token %}

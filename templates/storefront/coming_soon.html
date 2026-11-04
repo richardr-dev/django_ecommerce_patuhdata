@@ -1,0 +1,19 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>{{ store.name }} · Segera hadir</title>
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<style>
+:root{--brand:{{ store.primary_color|default:"#0e9f6e" }}}*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f8fafc;color:#17212f;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.soon{max-width:440px;text-align:center}.soon .logo{display:grid;place-items:center;width:88px;height:88px;margin:0 auto 18px;border-radius:24px;background:var(--brand);color:#fff;font-size:38px;font-weight:800;overflow:hidden}
+.soon .logo img{width:100%;height:100%;object-fit:cover;background:#fff}.soon h1{margin:0 0 8px;font-size:28px}.soon p{margin:0 0 18px;color:#667085;line-height:1.6}
+.soon .eyebrow{display:inline-block;margin-bottom:14px;padding:5px 12px;border-radius:99px;background:#fff;border:1px solid #e4e7ec;font-size:12px;font-weight:700;letter-spacing:.08em;color:#475467}
+.soon .links{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}.soon .links a{padding:11px 18px;border-radius:10px;background:var(--brand);color:#fff;font-weight:700;text-decoration:none}.soon .links a.secondary{background:#fff;color:#344054;border:1px solid #d0d5dd}
+.soon small{display:block;margin-top:26px;color:#98a2b3}.soon small a{color:inherit}
+</style></head><body><main class="soon">
+<span class="logo">{% if store.logo %}<img src="{{ store.logo.url }}" alt="Logo {{ store.name }}">{% else %}{{ store.name|slice:":1"|upper }}{% endif %}</span>
+<span class="eyebrow">SEGERA HADIR</span><h1>{{ store.name }}</h1>
+<p>{% if store.description %}{{ store.description|truncatechars:160 }} {% endif %}Toko sedang disiapkan dan akan segera dibuka. Kunjungi lagi sebentar lagi.</p>
+{% if store.whatsapp_url or store.instagram_url %}<div class="links">{% if store.whatsapp_url %}<a href="{{ store.whatsapp_url }}" target="_blank" rel="noopener">Chat WhatsApp</a>{% endif %}{% if store.instagram_url %}<a class="secondary" href="{{ store.instagram_url }}" target="_blank" rel="noopener">Instagram @{{ store.instagram }}</a>{% endif %}</div>{% endif %}
+<small>Dibuat dengan <a href="{{ platform_home_url }}">{{ platform_name }}</a></small>
+</main></body></html>

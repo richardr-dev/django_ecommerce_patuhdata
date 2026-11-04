@@ -55,6 +55,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.shops.middleware.StoreResolverMiddleware",
+    "apps.shops.middleware.StorefrontGateMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{
@@ -131,6 +132,9 @@ EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 # SMTP2GO over its HTTP API (EMAIL_BACKEND=apps.integrations.email.Smtp2goBackend), using an API
 # key instead of an SMTP user.
+# Shoppers see a store only once it can take orders, and a lapsed store as temporarily closed
+# (apps/shops/availability.py). Off only in the test suite, whose stores are bare.
+STOREFRONT_GATE = os.getenv("STOREFRONT_GATE", "1") == "1"
 SMTP2GO_API_KEY = os.getenv("SMTP2GO_API_KEY", "")
 SMTP2GO_API_URL = os.getenv("SMTP2GO_API_URL", "https://api.smtp2go.com/v3").rstrip("/")
 # "Name:email,Name:email" — receives an email with the traceback for every unhandled server

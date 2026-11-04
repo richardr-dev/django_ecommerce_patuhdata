@@ -14,6 +14,7 @@ from apps.billing.plans import default_plan, trial_end_for
 from apps.catalog.views import _json_ld, paginate
 from apps.orders.setup_views import create_store_defaults
 
+from .availability import store_state
 from .forms import StoreSignupForm
 from .models import AuditLog, Organization, Store
 from .tenancy import custom_domain_allowed, platform_host, platform_url, store_url, subdomain_slug
@@ -27,12 +28,20 @@ def _directory_stores():
         products__is_active=True).distinct().select_related("subscription__plan"))
 
 
+def _open_only(stores):
+    """Directory listings show stores shoppers can buy from now, not ones still being set up
+    or closed. Checked per store, which is fine while the directory is small."""
+    if not settings.STOREFRONT_GATE:
+        return list(stores)
+    return [store for store in stores if store_state(store) == "open"]
+
+
 def _with_urls(stores):
     return [{"store": store, "url": store_url(store)} for store in stores]
 
 
 def platform_home(request):
-    stores = _directory_stores().order_by("-created_at", "-id")[:8]
+    stores = _open_only(_directory_stores().order_by("-created_at", "-id")[:40])[:8]
     # Tells search engines that the platform is a service of the operating company.
     organization = {"@context": "https://schema.org", "@type": "Organization",
         "name": settings.PLATFORM_COMPANY_NAME, "url": settings.PLATFORM_COMPANY_URL,
@@ -59,7 +68,7 @@ def store_directory(request):
     query = request.GET.get("q", "").strip()
     if query:
         stores = stores.filter(Q(name__icontains=query) | Q(description__icontains=query))
-    page, page_range, page_query = paginate(request, stores, DIRECTORY_PAGE_SIZE)
+    page, page_range, page_query = paginate(request, _open_only(stores), DIRECTORY_PAGE_SIZE)
     return render(request, "platform/directory.html", {"stores": _with_urls(page.object_list),
         "page_obj": page, "page_range": page_range, "page_query": page_query, "query": query})
 

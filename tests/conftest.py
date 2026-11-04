@@ -8,3 +8,9 @@ def _fresh_cache():
     cache.clear()
     yield
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _storefront_open(settings):
+    """Most tests build a bare store; the go-live gate has its own tests (test_store_gate.py)."""
+    settings.STOREFRONT_GATE = False

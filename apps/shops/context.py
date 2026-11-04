@@ -24,8 +24,17 @@ def store_context(request):
         from apps.orders.buyer import active_order_count
         return active_order_count(request)
 
+    def missing_steps():
+        from .availability import setup_steps
+        return [step for step in setup_steps(store) if not step["done"]] if store else []
+
+    state = getattr(request, "store_state", "open")
+    preview = getattr(request, "store_preview", False)
     # Lazy, so responses that never render the header, footer or bottom bar skip the queries.
-    return {"store": store, "store_nav_pages": SimpleLazyObject(nav_pages),
+    return {"store": store, "store_state": state, "store_preview": preview,
+        "store_closed": state == "closed" and not preview,
+        "store_missing_steps": SimpleLazyObject(missing_steps),
+        "store_nav_pages": SimpleLazyObject(nav_pages),
         "nav_cart_items": SimpleLazyObject(cart_items),
         "nav_active_orders": SimpleLazyObject(active_orders)}
 
