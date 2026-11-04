@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
+from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
 from . import delivery_views, setup_views, views
@@ -15,7 +16,7 @@ urlpatterns = [
     path("merchant/products/import/template/", setup_views.merchant_product_import_template, name="merchant-product-import-template"),
     path("account/login/", login_limit(auth_views.LoginView.as_view(
         template_name="registration/login.html", authentication_form=CustomerLoginForm)), name="login"),
-    path("account/logout/", auth_views.LogoutView.as_view(next_page="/"), name="logout"),
+    path("account/logout/", customer_logout, name="logout"),
     path("account/register/", rate_limit("register", limit=5, window=3600)(views.customer_register),
         name="register"),
     path("account/orders/", views.account_orders, name="account-orders"),
@@ -39,6 +40,7 @@ urlpatterns = [
     path("merchant/login/", login_limit(auth_views.LoginView.as_view(
         template_name="registration/merchant_login.html", authentication_form=MerchantLoginForm)),
         name="merchant-login"),
+    path("merchant/logout/", merchant_logout, name="merchant-logout"),
     path("checkout/shipping-rates/", views.shipping_rates, name="shipping-rates"),
     path("checkout/shipping-areas/", views.shipping_areas, name="shipping-areas"),
     path("cart/", views.cart_view, name="cart"),

@@ -117,3 +117,4 @@ main{padding:0 16px}
 .pf-footer-bottom{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;margin-top:32px;padding-top:18px;border-top:1px solid var(--pf-line);font-size:14px}
 @media(max-width:900px){.pf-hero-grid{grid-template-columns:minmax(0,1fr)}.pf-footer-grid{grid-template-columns:1fr 1fr}.pf-footer-about{grid-column:1/-1}}
 @media(max-width:560px){.pf-slug{flex-wrap:wrap}.pf-header nav{gap:8px 14px}.pf-mock-grid{grid-template-columns:repeat(2,1fr)}.pf-mock-toast{position:static;margin:0 16px 16px}.pf-footer-grid{grid-template-columns:1fr}}
+.pf-notice{margin:0 0 16px;padding:10px 14px;border-radius:10px;background:#ecfdf3;color:#05603a;border:1px solid #abefc6;font-size:14px}

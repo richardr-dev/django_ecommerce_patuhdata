@@ -151,3 +151,20 @@ class SellerShortcutMiddleware:
         elif has_cookie:
             response.delete_cookie(SELLER_COOKIE, domain=domain)
         return response
+
+
+PRIVATE_PREFIXES = ("/merchant/", "/account/", "/platform-admin/", "/cart/", "/checkout/",
+    "/dashboard")
+
+
+class PrivatePagesMiddleware:
+    """Back office, account, cart and checkout pages carry personal data: the browser must
+    not keep them, so after Keluar the Back button cannot show them again."""
+    def __init__(self, get_response): self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path.startswith(PRIVATE_PREFIXES) and not response.has_header("Cache-Control"):
+            from django.utils.cache import add_never_cache_headers
+            add_never_cache_headers(response)
+        return response

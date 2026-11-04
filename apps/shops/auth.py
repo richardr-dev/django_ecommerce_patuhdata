@@ -79,3 +79,50 @@ def read_seller_cookie(request):
             max_age=SELLER_COOKIE_AGE))
     except (signing.BadSignature, TypeError, ValueError):
         return set()
+
+
+def seller_cookie_domain():
+    from django.conf import settings
+    return f".{settings.PLATFORM_DOMAIN}" if settings.PLATFORM_DOMAIN else None
+
+
+def sign_out(request, redirect_to, *, clear_site_cookies):
+    """End the session and leave nothing of it in the browser: the session and CSRF cookies,
+    the seller shortcut cookie, and (Clear-Site-Data) cached pages and local storage."""
+    from django.conf import settings
+    from django.contrib.auth import logout
+    from django.shortcuts import redirect
+
+    logout(request)  # flushes the server-side session and rotates its key
+    response = redirect(redirect_to)
+    response.delete_cookie(settings.SESSION_COOKIE_NAME, path=settings.SESSION_COOKIE_PATH,
+        domain=settings.SESSION_COOKIE_DOMAIN, samesite=settings.SESSION_COOKIE_SAMESITE)
+    response.delete_cookie(settings.CSRF_COOKIE_NAME, path=settings.CSRF_COOKIE_PATH,
+        domain=settings.CSRF_COOKIE_DOMAIN, samesite=settings.CSRF_COOKIE_SAMESITE)
+    response.delete_cookie(SELLER_COOKIE, domain=seller_cookie_domain())
+    kinds = ['"cache"', '"storage"', *(['"cookies"'] if clear_site_cookies else [])]
+    response["Clear-Site-Data"] = ", ".join(kinds)
+    return response
+
+
+def merchant_logout(request):
+    """Keluar from the back office, back to the merchant login (never the Django admin)."""
+    from django.http import HttpResponseNotAllowed
+    from django.shortcuts import redirect
+    from django.urls import reverse
+
+    if request.method == "GET":  # a link or prefetch must not sign anyone out
+        return redirect("merchant-dashboard" if request.user.is_authenticated else "merchant-login")
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    return sign_out(request, reverse("merchant-login") + "?keluar=1", clear_site_cookies=True)
+
+
+def customer_logout(request):
+    from django.http import HttpResponseNotAllowed
+    from django.shortcuts import redirect
+
+    if request.method != "POST":
+        return redirect("/") if request.method == "GET" else HttpResponseNotAllowed(["POST"])
+    # Not "cookies": that would also clear other stores' carts on this browser.
+    return sign_out(request, "/", clear_site_cookies=False)

@@ -253,3 +253,5 @@
   .variant-check { flex-direction: row; gap: 8px; padding-top: 0; }
   .variant-row-actions { justify-content: flex-start; padding-top: 0; }
 }
+.bo-logout { display: inline; margin-left: 16px; }
+.bo-topbar .bo-logout button { color: #e3e3e3 !important; font-weight: 500; }

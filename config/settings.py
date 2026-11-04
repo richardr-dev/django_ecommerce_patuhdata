@@ -58,6 +58,7 @@ MIDDLEWARE = [
     "apps.shops.middleware.StoreResolverMiddleware",
     "apps.shops.middleware.StorefrontGateMiddleware",
     "apps.shops.middleware.SellerShortcutMiddleware",
+    "apps.shops.middleware.PrivatePagesMiddleware",
 ]
 # Sellers sign in with their email or WhatsApp number (apps/shops/auth.py).
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend",
@@ -121,6 +122,10 @@ if USE_S3:
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=604800"}
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
+# Sign-ins last SESSION_DAYS (default 7) and the cookie is never readable by page scripts.
+SESSION_COOKIE_AGE = int(os.getenv("SESSION_DAYS", "7")) * 24 * 3600
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "0" if DEBUG else "1") == "1"
 SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))

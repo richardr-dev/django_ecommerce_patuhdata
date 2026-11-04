@@ -140,6 +140,9 @@ def run_cycle(batch_size):
     _run_task("invoicing", lambda: issue_pending_invoices(limit=batch_size), errors)
     if _due("renewals", 3600):
         _run_task("renewals", run_renewals, errors)
+    if _due("prune_sign_ins", 86400):
+        from apps.orders.tokens import prune_sign_ins
+        _run_task("prune_sign_ins", prune_sign_ins, errors)
     processed = 0
     while processed < batch_size and process_one_event():
         processed += 1
