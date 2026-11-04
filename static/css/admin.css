@@ -1,0 +1,205 @@
+/* Back office design system, after Shopify's admin (Polaris): light canvas, white cards, a light
+   sidebar, a dark top bar, black primary buttons and one calm type scale. Loaded last, so it
+   restyles the shared building blocks (cards, buttons, forms, tables, badges) on every page. */
+:root {
+  --bo-bg: #f1f1f1;
+  --bo-surface: #fff;
+  --bo-subdued: #f7f7f7;
+  --bo-ink: #303030;
+  --bo-muted: #616161;
+  --bo-faint: #8a8a8a;
+  --bo-line: #e3e3e3;
+  --bo-input: #b5b5b5;
+  --bo-accent: #005bd3;
+  --bo-primary: #303030;
+  --bo-success-bg: #cdfee1; --bo-success: #0c5132;
+  --bo-warning-bg: #fff1e3; --bo-warning: #5e4200;
+  --bo-critical-bg: #fee9e8; --bo-critical: #8e1f0b;
+  --bo-info-bg: #eaf4ff; --bo-info: #00527c;
+  --bo-radius: 12px;
+  --bo-card-shadow: 0 1px 0 rgba(26, 26, 26, .07), 0 0 0 1px rgba(26, 26, 26, .07);
+}
+
+/* Base */
+.backoffice-body { margin: 0; background: var(--bo-bg); color: var(--bo-ink);
+  font: 13.5px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.backoffice-body *, .backoffice-body *::before, .backoffice-body *::after { box-sizing: border-box; }
+.backoffice-body a { color: var(--bo-accent); text-decoration: none; }
+.backoffice-body a:hover { text-decoration: underline; }
+.backoffice-body h1, .backoffice-body h2, .backoffice-body h3 { color: var(--bo-ink); letter-spacing: -.01em; }
+.backoffice-body h2 { font-size: 14px; font-weight: 650; }
+.backoffice-body h3 { font-size: 13.5px; font-weight: 650; }
+.backoffice-body .muted, .backoffice-body small { color: var(--bo-muted); }
+.backoffice-body hr { border: 0; border-top: 1px solid var(--bo-line); }
+
+/* Sidebar: light, dark text, white active item */
+.bo-sidebar { width: 240px; padding: 14px 10px; background: #ebebeb; color: var(--bo-ink);
+  border-right: 1px solid #e0e0e0; }
+.bo-brand { margin: 2px 6px 16px; color: var(--bo-ink) !important; text-decoration: none !important; }
+.bo-brand > span { width: 32px; height: 32px; border-radius: 8px; background: var(--bo-primary); font-size: 14px; color: #fff; }
+.bo-brand > img { width: 32px; height: 32px; border-radius: 8px; box-shadow: var(--bo-card-shadow); }
+.bo-brand { grid-template-columns: 32px 1fr !important; }
+.bo-brand strong { font-size: 13.5px; font-weight: 650; }
+.bo-brand small { color: var(--bo-muted); font-size: 12px; }
+.bo-sidebar nav { gap: 1px; }
+.bo-sidebar nav a, .bo-nav details summary { display: flex; align-items: center; min-height: 32px; padding: 5px 8px;
+  border-radius: 8px; color: var(--bo-ink) !important; font-size: 13.5px; font-weight: 550; text-decoration: none !important; }
+.bo-sidebar nav a:hover, .bo-nav details summary:hover { background: #e3e3e3; color: var(--bo-ink); }
+.bo-nav > a.active, .bo-nav summary:has(+ a.active) { background: #fff !important; color: var(--bo-ink) !important;
+  box-shadow: 0 1px 0 rgba(26, 26, 26, .07); font-weight: 650; }
+.bo-nav details > a { min-height: 28px; padding: 4px 8px 4px 38px; font-size: 13px; font-weight: 450; color: var(--bo-muted) !important; }
+.bo-nav details > a:hover { color: var(--bo-ink) !important; }
+.bo-nav details[open] summary { color: var(--bo-ink); }
+.bo-nav details summary::after { color: var(--bo-faint); }
+.bo-nav i { width: 30px; color: #4a4a4a; }
+.bo-nav i .ico { opacity: 1; }
+.bo-sidebar .view-store { margin-top: 14px; border: 0 !important; background: #fff; box-shadow: var(--bo-card-shadow); }
+
+/* Top bar: dark, compact */
+.bo-shell { margin-left: 240px; }
+.bo-topbar { height: 52px; padding: 0 20px; background: #1a1a1a; border-bottom: 0; color: #e3e3e3; font-size: 13px; }
+.bo-topbar a { color: #e3e3e3 !important; }
+.bo-topbar label { color: #b5b5b5; }
+.bo-topbar select { height: 32px; padding: 4px 30px 4px 10px; border: 1px solid #4a4a4a; border-radius: 8px;
+  background-color: #303030; color: #fff; font: inherit; }
+.status-dot { background: #29845a; }
+
+/* Page */
+.bo-main { max-width: 1240px; padding: 24px 28px 64px; }
+.bo-heading { align-items: center; margin-bottom: 18px; }
+.bo-heading h1 { margin: 0 0 2px; font-size: 20px; font-weight: 700; line-height: 1.3; }
+.bo-heading p { font-size: 13.5px; color: var(--bo-muted); max-width: 720px; }
+.bo-heading .eyebrow, .bo-heading > div > .eyebrow { display: none; }
+.eyebrow { color: var(--bo-muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; }
+
+/* Cards */
+.bo-card, .kpi-grid article, .stock-summary div, .fulfillment-guide > div, .shipment-card {
+  border: 0 !important; border-radius: var(--bo-radius); background: var(--bo-surface);
+  box-shadow: var(--bo-card-shadow); }
+.bo-card { padding: 16px; }
+.card-heading { margin-bottom: 12px; align-items: center; }
+.card-heading h2 { margin: 0 0 2px; font-size: 14px; font-weight: 650; }
+.card-heading p { font-size: 13px; }
+
+/* KPIs */
+.kpi-grid { gap: 12px; margin-bottom: 16px; }
+.kpi-grid article { padding: 14px 16px; }
+.kpi-grid small { font-size: 13px; color: var(--bo-muted); }
+.kpi-grid strong { margin: 6px 0 2px; font-size: 20px; font-weight: 700; }
+.kpi-grid span { color: var(--bo-faint); font-size: 12px; }
+.dashboard-grid { gap: 16px; margin-bottom: 16px; }
+
+/* Buttons: primary is near-black, secondary is white */
+.bo-button, .bo-search button, .backoffice-body button:not(.bo-link):not(.link-button):not(.product-thumb):not([class*="tp-"]) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px;
+  padding: 6px 12px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600;
+  line-height: 1.2; cursor: pointer; text-decoration: none !important; white-space: nowrap; }
+.bo-button, .bo-search button, .backoffice-body form button:not([class]) {
+  background: linear-gradient(180deg, #3d3d3d, #262626) !important; color: #fff !important;
+  box-shadow: 0 -1px 0 1px rgba(0, 0, 0, .8) inset, 0 0 0 1px #303030 inset, 0 .5px 0 1.5px rgba(255, 255, 255, .25) inset; }
+.bo-button:hover, .backoffice-body form button:not([class]):hover { background: #1a1a1a !important; }
+.backoffice-body button.secondary, .backoffice-body .button.secondary, .backoffice-body button.cart-outline {
+  background: #fff !important; color: var(--bo-ink) !important; box-shadow: 0 0 0 1px #cfcfcf inset, 0 1px 0 rgba(0, 0, 0, .05); }
+.backoffice-body button.secondary:hover { background: var(--bo-subdued) !important; }
+.backoffice-body button:disabled { opacity: .45; cursor: not-allowed; }
+.bo-link { color: var(--bo-accent) !important; font-weight: 600; background: none; border: 0; padding: 0; font: inherit; font-weight: 600; cursor: pointer; }
+.bo-link:hover { text-decoration: underline; }
+.backoffice-body .link-button { background: none; border: 0; padding: 0; color: var(--bo-accent); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* Forms */
+.field-grid { gap: 14px 16px; }
+.field-grid label, .backoffice-body .entity-form label { font-size: 13px; font-weight: 550; color: var(--bo-ink); }
+.field-grid small { font-size: 12.5px; color: var(--bo-muted); }
+.control, .backoffice-body input[type=text], .backoffice-body input[type=number], .backoffice-body input[type=email],
+.backoffice-body input[type=search], .backoffice-body input[type=url], .backoffice-body input[type=tel],
+.backoffice-body input[type=password], .backoffice-body input[type=date], .backoffice-body input[type=time],
+.backoffice-body input:not([type]), .backoffice-body select, .backoffice-body textarea {
+  min-height: 32px; padding: 6px 10px; border: 1px solid var(--bo-input); border-radius: 8px; background: #fff;
+  color: var(--bo-ink); font: inherit; font-size: 13.5px; }
+.backoffice-body textarea { min-height: 72px; line-height: 1.45; }
+.control:focus, .backoffice-body input:focus, .backoffice-body select:focus, .backoffice-body textarea:focus {
+  outline: 2px solid var(--bo-accent); outline-offset: 1px; border-color: var(--bo-input); }
+.backoffice-body input[type=checkbox], .backoffice-body input[type=radio] { width: 16px; height: 16px; min-height: 0; accent-color: var(--bo-primary); }
+.control { margin-top: 5px; }
+.errorlist { margin: 4px 0 0; padding-left: 0; list-style: none; color: var(--bo-critical); font-size: 12.5px; font-weight: 500; }
+.form-errors { padding: 10px 12px; margin-bottom: 12px; border-radius: 8px; background: var(--bo-critical-bg); color: var(--bo-critical); }
+.form-actions { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--bo-line); display: flex; gap: 8px; justify-content: flex-end; }
+.bo-search { gap: 8px; max-width: 520px; }
+.bo-search input { border-radius: 8px !important; }
+.bo-search button { border-radius: 8px !important; }
+
+/* Tables and lists */
+.data-row { border-top: 1px solid #ebebeb; }
+.data-row span { padding: 10px 12px; }
+.data-head { background: var(--bo-subdued); color: var(--bo-muted); font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.data-row:not(.data-head):hover { background: #fafafa; }
+.table-card { padding: 0 !important; overflow: auto; }
+.table-card > .card-heading { padding: 14px 16px 0; }
+.rank-list > div, .stock-list > div, .compact-table > div { border-top: 1px solid #ebebeb; padding: 10px 0; }
+.rank-list b { background: var(--bo-subdued); color: var(--bo-ink); border-radius: 6px; font-size: 12px; }
+.empty-state, .backoffice-body .empty { padding: 24px; color: var(--bo-muted); text-align: center; }
+
+/* Badges: Polaris tones */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 8px; background: #e3e3e3;
+  color: var(--bo-ink); font-size: 12px; font-weight: 550; line-height: 1.5; white-space: nowrap; }
+.badge.paid, .badge.completed, .badge.delivered, .badge.success { background: var(--bo-success-bg); color: var(--bo-success); }
+.badge.pending, .badge.warning { background: var(--bo-warning-bg); color: var(--bo-warning); }
+.badge.failed, .badge.cancelled, .badge.critical { background: var(--bo-critical-bg); color: var(--bo-critical); }
+.badge.info, .badge.shipped { background: var(--bo-info-bg); color: var(--bo-info); }
+
+/* Banners and messages */
+.bo-message { padding: 10px 14px; border: 0; border-radius: var(--bo-radius); background: var(--bo-success-bg);
+  color: var(--bo-success); box-shadow: var(--bo-card-shadow); font-weight: 500; }
+.store-live { padding: 12px 16px !important; font-size: 13.5px; }
+.store-live.open { background: #fff !important; color: var(--bo-ink) !important; }
+.store-live.open .ico { color: #29845a; }
+.store-live.setup { background: var(--bo-warning-bg) !important; color: var(--bo-warning) !important; }
+.store-live.closed { background: var(--bo-critical-bg) !important; color: var(--bo-critical) !important; }
+.required-tag { background: var(--bo-warning-bg); color: var(--bo-warning); border-radius: 6px; }
+
+/* Charts and stock widgets */
+.bar { background: #2c6ecb; border-radius: 4px 4px 0 0; }
+.available-stock { background: var(--bo-success-bg); color: var(--bo-success); border-radius: 8px; }
+.stock-editor-row { border-top: 1px solid #ebebeb; padding: 12px 0; }
+.stock-editor-row label { color: var(--bo-muted); font-weight: 550; }
+.fulfillment-guide b { background: var(--bo-subdued); color: var(--bo-ink); }
+.shipment-card > header { background: var(--bo-subdued); border-bottom: 1px solid #ebebeb; }
+.shipment-order-id { color: var(--bo-ink); }
+.tracking-control { border-color: var(--bo-line); }
+
+/* Pagination */
+.pagination a, .pagination span { min-width: 32px; min-height: 32px; display: inline-grid; place-items: center; padding: 0 8px;
+  border-radius: 8px; background: #fff; box-shadow: var(--bo-card-shadow); color: var(--bo-ink); font-size: 13px; }
+
+/* Phone: sidebar becomes a compact top menu */
+@media (max-width: 700px) {
+  .bo-sidebar { position: static; width: auto; border-right: 0; border-bottom: 1px solid #e0e0e0; }
+  .bo-sidebar nav { grid-template-columns: 1fr 1fr; }
+  .bo-shell { margin: 0; }
+  .bo-topbar { height: auto; padding: 10px 14px; flex-wrap: wrap; }
+  .bo-main { padding: 16px 12px 48px; }
+  .bo-heading { display: flex; flex-wrap: wrap; }
+  .form-actions { justify-content: stretch; }
+  .form-actions .bo-button { flex: 1; }
+}
+
+/* Clickable rows read as content, with only the trailing action in link colour */
+.todo-list a, .rank-list a, .compact-table a, .data-row a:not(.bo-link):not(.bo-button) { color: var(--bo-ink); }
+.todo-list a:hover { text-decoration: none; background: var(--bo-subdued); }
+.todo-list a em, .todo-list a > :last-child { color: var(--bo-accent); font-style: normal; font-weight: 600; }
+.data-row a:not(.bo-link):not(.bo-button):hover { color: var(--bo-accent); }
+
+/* Form fields: label on top, field full width; checkboxes sit before their label text */
+.field-grid > label, .entity-form .field-grid label { display: flex; flex-direction: column; gap: 5px; }
+.field-grid > label > input:not([type=checkbox]):not([type=radio]), .field-grid > label > select,
+.field-grid > label > textarea, .field-grid > label > .control { width: 100%; margin-top: 0; }
+.field-grid > label:has(> input[type=checkbox]) { display: grid; grid-template-columns: 16px 1fr;
+  column-gap: 8px; row-gap: 2px; align-items: center; align-content: start; }
+.field-grid > label:has(> input[type=checkbox]) > input[type=checkbox] { order: -1; margin: 0; }
+.field-grid > label:has(> input[type=checkbox]) > small,
+.field-grid > label:has(> input[type=checkbox]) > .errorlist { grid-column: 2; }
+.entity-form { max-width: 960px; }
+.entity-form > .card-heading h2 { font-size: 14px; }
+
+.data-row span.badge, .data-row .badge { padding: 2px 8px; }

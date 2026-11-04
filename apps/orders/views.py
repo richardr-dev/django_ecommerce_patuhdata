@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.core.validators import validate_email
 from django.db import models, transaction
 from django.db.models import Count, F, Min, Sum
@@ -1577,12 +1577,51 @@ def merchant_entity_list(request, section):
         elif entity is ProductReview: rows = rows.filter(models.Q(product__name__icontains=query) | models.Q(body__icontains=query))
         elif hasattr(entity, "name"): rows = rows.filter(name__icontains=query)
     page, page_range, page_query = paginate(request, rows, MERCHANT_PAGE_SIZE)
-    table_rows = [{"object": row, "values": [getattr(row, column) for column in columns]}
-        for row in page.object_list]
+    table_rows = [{"object": row, "values": [_list_cell(getattr(row, column), column)
+        for column in columns]} for row in page.object_list]
     return render(request, "merchant/entity_list.html", _merchant_context(request, store,
-        section=section, title=title, columns=columns, table_rows=table_rows, page_obj=page,
+        section=section, title=title, columns=[_column_label(entity, column) for column in columns],
+        table_rows=table_rows, page_obj=page,
         page_range=page_range, page_query=page_query,
         can_create=section not in NO_CREATE_SECTIONS, can_edit=section not in READ_ONLY_SECTIONS))
+
+
+# Column headers of the back-office lists, in Indonesian.
+COLUMN_LABELS = {"name": "Nama", "sku": "SKU", "price": "Harga", "stock_available": "Stok tersedia",
+    "is_active": "Status", "code": "Kode", "is_outlet": "Outlet", "priority": "Prioritas",
+    "headline": "Judul", "starts_at": "Mulai", "ends_at": "Berakhir", "button_label": "Tombol",
+    "position": "Urutan", "product": "Produk", "alt_text": "Keterangan", "stock": "Stok",
+    "slug": "Slug", "warehouse": "Gudang", "on_hand": "Stok fisik", "reserved": "Dipesan",
+    "safety_stock": "Stok pengaman", "available": "Tersedia", "provider": "Penyedia",
+    "flat_rate": "Tarif", "free_above": "Gratis di atas", "kind": "Jenis", "value": "Nilai",
+    "minimum_spend": "Minimal belanja", "used_count": "Terpakai", "title": "Judul",
+    "show_in_header": "Di menu atas", "show_in_footer": "Di footer", "is_published": "Tampil",
+    "rating": "Rating", "display_name": "Nama pembeli", "email": "Email", "source": "Sumber",
+    "subscribed_at": "Berlangganan sejak", "is_subscribed": "Aktif", "campaign": "Kampanye",
+    "sale_price": "Harga promo", "stock_limit": "Kuota", "per_customer_limit": "Maks. per pembeli",
+    "pickup_enabled": "Ambil di outlet"}
+MONEY_COLUMNS = {"price", "flat_rate", "free_above", "minimum_spend", "sale_price"}
+
+
+def _column_label(entity, column):
+    if column in COLUMN_LABELS:
+        return COLUMN_LABELS[column]
+    try:
+        return str(entity._meta.get_field(column).verbose_name).capitalize()
+    except FieldDoesNotExist:  # an annotation or property, e.g. "available"
+        return column.replace("_", " ").capitalize()
+
+
+def _list_cell(value, column):
+    """Rupiah with thousand separators and readable dates, instead of 85000,00."""
+    if value is None or isinstance(value, bool):
+        return value
+    if column in MONEY_COLUMNS:
+        return "Rp" + f"{value:,.0f}".replace(",", ".")
+    if hasattr(value, "strftime"):
+        return timezone.localtime(value).strftime("%d %b %Y %H:%M") if hasattr(value, "hour") else (
+            value.strftime("%d %b %Y"))
+    return value
 
 
 @login_required(login_url="/merchant/login/")
