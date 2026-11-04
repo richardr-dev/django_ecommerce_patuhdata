@@ -12,7 +12,8 @@ const SOURCE = readFileSync(new URL("../../static/js/checkout-shipping.js", impo
 class El {
   constructor(tag, props = {}) {
     Object.assign(this, { tagName: tag, children: [], listeners: {}, parent: null, value: "",
-      disabled: false, checked: false, className: "", dataset: {}, name: "", type: "", _text: "" },
+      disabled: false, checked: false, className: "", dataset: {}, name: "", type: "", _text: "",
+      style: {} },
     props);
   }
   // Like a real <input>, assigned values are always stored as strings.
@@ -160,7 +161,7 @@ test("happy path: exact postcode fills the address and shows quotes", async () =
   assert.deepEqual(radios.map((el) => el.value), ["t1", "t2"]);
   assert.equal(ids["checkout-submit"].disabled, false);
   assert.match(ids["shipping-summary"].textContent, /18\.000/);
-  assert.equal(ids["shipping-message"].textContent, "2 layanan Biteship tersedia");
+  assert.equal(ids["shipping-message"].textContent, "2 layanan kurir tersedia");
 });
 
 test("a postcode shared by several areas asks the customer to choose", async () => {
@@ -227,4 +228,28 @@ test("address search errors are shown in the results list", async () => {
   await type(ids["area-search"], "menteng", clock);
   await respond(requests[0], html(500));
   assert.match(ids["area-results"].textContent, /Layanan kurir sedang bermasalah/);
+});
+
+test("courier list shows brand badges and tags, and folds long lists", async () => {
+  const { ids, clock, requests } = setup();
+  await type(ids["postal-code"], "10310", clock);
+  await respond(requests[0], json(200, { areas: [area("MENTENG", 10310)] }));
+  const quotes = ["jne", "jnt", "sicepat", "anteraja", "pos", "tiki"].map((code, index) => ({
+    token: `q${index}`, name: code, price: 10000 + index * 1000, courier: code,
+    courier_name: code.toUpperCase(), service: "Reguler", eta_label: "2–3 hari",
+    colour: "#123456", logo: index === 1 ? "/static/img/couriers/jnt.svg" : "",
+    tags: index === 0 ? ["Termurah"] : [] }));
+  await respond(requests[1], json(200, { quotes }));
+
+  const rows = ids["shipping-choices"].children.filter((el) => el.className.includes("courier-choice"));
+  assert.equal(rows.length, 6);
+  assert.deepEqual(rows.map((row) => !!row.hidden), [false, false, false, false, true, true]);
+  const badge = rows[0].children[1];
+  assert.equal(badge.textContent, "JNE");
+  assert.equal(badge.style.background, "#123456");
+  assert.equal(rows[1].children[1].children[0].src, "/static/img/couriers/jnt.svg");
+  assert.match(rows[0].textContent, /JNE Reguler\s*Termurah.*Estimasi tiba 2–3 hari/);
+
+  const more = ids["shipping-choices"].children.at(-1);
+  assert.equal(more.textContent, "Lihat semua layanan (6)");
 });

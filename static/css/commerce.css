@@ -21,3 +21,31 @@ fieldset{border:1px solid #dfe4ea;border-radius:14px;padding:20px}legend{font-we
 .cart-quantity .cart-note{grid-column:1/-1;min-width:220px}.cart-quantity .cart-note input{width:100%}
 .cart-quota{align-self:flex-start;width:fit-content}
 .pickup-heading{margin:14px 0 6px;font-weight:700}
+/* Courier choices at checkout: brand badge, short name, tags, ETA, price */
+.courier-choice{display:grid!important;grid-template-columns:auto 52px 1fr auto;align-items:center;gap:12px}
+.courier-badge{display:grid;place-items:center;width:52px;height:34px;border-radius:7px;color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em;text-align:center;line-height:1.05;overflow:hidden}
+.courier-badge img{max-width:48px;max-height:30px;object-fit:contain;background:#fff}
+.courier-badge:has(img){background:#fff;border:1px solid #eaecf0}
+.courier-details{display:grid;gap:2px;min-width:0}.courier-details strong{font-size:15px}
+.courier-tag{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:99px;font-size:11px;font-style:normal;font-weight:700;vertical-align:1px}
+.courier-tag.termurah{background:#ecfdf3;color:#067647}.courier-tag.tercepat{background:#eff8ff;color:#175cd3}
+.courier-price{white-space:nowrap}
+.courier-more{width:100%;margin-top:4px;padding:10px;border:1px dashed #d0d5dd;border-radius:10px;background:#fff;color:#344054;font-weight:700}
+@media(max-width:520px){.courier-choice{grid-template-columns:auto 44px 1fr;row-gap:2px}.courier-badge{width:44px;height:30px;font-size:10px}.courier-price{grid-column:3}}
+/* Stepped checkout: 1 Alamat, 2 Pengiriman, 3 Bayar */
+.checkout-form.stepped .checkout-step:not(.active){display:none}
+.checkout-form.stepped .checkout-step{display:grid;gap:18px}
+.checkout-steps{display:flex;gap:0;margin:0 0 6px;padding:0;list-style:none;counter-reset:step}
+.checkout-steps li{flex:1;position:relative;padding-top:34px;text-align:center;font-size:13px;font-weight:700;color:#98a2b3;counter-increment:step}
+.checkout-steps li:before{content:counter(step);position:absolute;top:0;left:50%;transform:translateX(-50%);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#f2f4f7;color:#667085;font-size:13px;z-index:1}
+.checkout-steps li:after{content:"";position:absolute;top:13px;left:calc(50% + 18px);right:calc(-50% + 18px);height:2px;background:#eaecf0}
+.checkout-steps li:last-child:after{display:none}
+.checkout-steps li.active{color:#101828}.checkout-steps li.active:before{background:var(--brand);color:#fff}
+.checkout-steps li.done{color:#344054;cursor:pointer}.checkout-steps li.done:before{content:"✓";background:#d1fadf;color:#067647}.checkout-steps li.done:after{background:#a6f4c5}
+.step-nav{display:flex;flex-wrap:wrap;gap:10px}.step-nav button{flex:1 1 200px}
+.checkout-review{display:grid;gap:10px;padding:14px;border:1px solid #eaecf0;border-radius:12px;background:#f9fafb}
+.checkout-review>div{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:start}.checkout-review small{grid-column:1/-1;color:#667085;font-size:11px;font-weight:700;letter-spacing:.06em}
+.checkout-review p{margin:0;white-space:pre-line;font-size:14px}.checkout-review .link-button{padding:0;border:0;background:none;color:var(--brand);font-size:14px;font-weight:700}
+@media(max-width:700px){.step-nav{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));z-index:5;padding:10px 0;background:linear-gradient(transparent,var(--page-bg,#fff) 30%)}}
+.courier-choice[hidden]{display:none!important}
+.checkout-form.stepped #check-shipping{padding:8px 14px;border:1px solid #d0d5dd;background:#fff;color:#344054;font-size:14px}

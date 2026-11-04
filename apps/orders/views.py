@@ -22,6 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from apps.accounting.ledger import (
     COGS,
@@ -80,7 +81,7 @@ from .access import (
 from .addresses import checkout_prefill, save_checkout_address, saved_addresses
 from .buyer import BUYER_TABS, buyer_orders, estimated_arrival, tracker_steps
 from .cart import get_cart
-from .couriers import courier_tracking
+from .couriers import courier_tracking, present_quotes
 from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
     CategoryForm,
@@ -250,8 +251,11 @@ def shipping_rates(request):
             "service_code": quote.service_code, "name": quote.name, "price": quote.price, "eta": quote.eta,
             "postal_code": postal_code, "destination_area_id": area_id,
             "cart_signature": _cart_signature(lines)}
-        response_quotes.append({"token": token, "name": quote.name, "price": quote.price, "eta": quote.eta})
+        response_quotes.append({"token": token, "name": quote.name, "price": quote.price,
+            "eta": quote.eta, "courier_code": quote.courier_code,
+            "service_code": quote.service_code})
     request.session["shipping_quotes"] = stored
+    response_quotes = present_quotes(response_quotes)
     return JsonResponse({"quotes": response_quotes, "provider_name": _shipping_provider_name(),
         "destination_area_id": area_id, "postal_code": postal_code})
 
@@ -631,6 +635,7 @@ def checkout(request):
             request.session["cart"] = {}
             request.session.pop("cart_notes", None)
             request.session.pop("delivery_date", None)
+            request.session.pop("checkout_draft", None)
             request.session["checkout_key"] = uuid.uuid4().hex
             record_event(request, "converted", metadata={"order_id": str(order.id),
                 "total": str(order.total)}, always=True)
@@ -641,6 +646,13 @@ def checkout(request):
     account_name = request.user.get_full_name() if request.user.is_authenticated else ""
     account_email = request.user.email if request.user.is_authenticated else ""
     addresses = saved_addresses(request.store, request.user)
+    saved = {"email": "", "coupon_code": ""} | checkout_prefill(addresses,
+        posted=request.method == "POST")
+    draft = request.session.get("checkout_draft", {})
+    if request.method != "POST":
+        saved |= {name: value for name, value in draft.items()
+            if name in CHECKOUT_DRAFT_FIELDS and value}
+    initial_step = 3 if request.method == "POST" else draft.get("step", 1)
     return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal,
         "shipping_methods": shipping_methods, "shipping_cost": shipping_cost, "discount": discount,
         "idempotency_key": checkout_key,
@@ -649,7 +661,7 @@ def checkout(request):
         "shipping_provider_name": _shipping_provider_name(), "account_name": account_name,
         "account_email": account_email, "loyalty_account": loyalty,
         "loyalty_discount": loyalty_discount, "loyalty_points": loyalty_points,
-        "addresses": addresses, "saved": checkout_prefill(addresses, posted=request.method == "POST"),
+        "addresses": addresses, "saved": saved, "initial_step": initial_step,
         "payment_choices": payment_choices, "payment_choice": payment_choice,
         "schedule_needed": schedule_needed, "pickup_outlets": pickup_outlets,
         "pickup_outlet": pickup_outlet,
@@ -658,6 +670,27 @@ def checkout(request):
         "delivery_slots": slot_options(request.store, None) if schedule_needed else [],
         "has_preorder": any(line["product"].is_preorder for line in lines),
         "trust": store_trust(request.store)})
+
+
+# What the stepped checkout remembers between steps and visits (personal details stay in the
+# server-side session, never in the browser's storage).
+CHECKOUT_DRAFT_FIELDS = CustomerAddress.CHECKOUT_FIELDS + ("email", "coupon_code")
+
+
+@require_POST
+def checkout_draft(request):
+    """Save the checkout form as the shopper moves between steps, so a reload or a later visit
+    picks up where they left off."""
+    if not request.store:
+        raise Http404
+    draft = {name: request.POST.get(name, "").strip()[:500] for name in CHECKOUT_DRAFT_FIELDS
+        if name in request.POST}
+    try:
+        draft["step"] = min(3, max(1, int(request.POST.get("step", 1))))
+    except ValueError:
+        draft["step"] = 1
+    request.session["checkout_draft"] = {**request.session.get("checkout_draft", {}), **draft}
+    return JsonResponse({"saved": True})
 
 
 def delivery_slots(request):

@@ -53,6 +53,8 @@ urlpatterns = [
     path("orders/<uuid:order_id>/return/", views.request_return, name="request-return"),
     path("orders/<uuid:order_id>/received/", views.order_received, name="order-received"),
     path("checkout/delivery-slots/", views.delivery_slots, name="checkout-delivery-slots"),
+    path("checkout/draft/", rate_limit("checkout-draft", limit=120, window=600)(
+        views.checkout_draft), name="checkout-draft"),
     path("orders/<uuid:order_id>/buy-again/", views.order_buy_again, name="order-buy-again"),
     path("merchant/", views.merchant_dashboard, name="merchant-dashboard"),
     path("merchant/orders/", views.merchant_orders, name="merchant-orders"),

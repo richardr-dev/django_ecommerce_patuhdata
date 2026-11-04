@@ -126,12 +126,31 @@
     }
   }
 
+  // Courier badge: the courier's logo when the store has one, otherwise its name in brand colour.
+  function badge(quote) {
+    const mark = document.createElement("span");
+    mark.className = "courier-badge";
+    if (quote.logo) {
+      const img = document.createElement("img");
+      img.src = quote.logo;
+      img.alt = quote.courier_name || "";
+      mark.appendChild(img);
+    } else {
+      mark.textContent = quote.courier_name || "Kurir";
+      mark.style.background = quote.colour || "#475467";
+    }
+    return mark;
+  }
+
+  const SHOWN = 4;
+
   function renderQuotes(data) {
     const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR",
       maximumFractionDigits: 0 });
     data.quotes.forEach((quote, index) => {
       const label = document.createElement("label");
-      label.className = "choice";
+      label.className = "choice courier-choice";
+      if (index >= SHOWN) label.hidden = true;
       const radio = document.createElement("input");
       radio.type = "radio";
       radio.name = "shipping_method";
@@ -139,16 +158,38 @@
       radio.required = true;
       radio.checked = index === 0;
       const details = document.createElement("span");
+      details.className = "courier-details";
       const name = document.createElement("strong");
+      const title = document.createElement("span");
+      title.className = "courier-title";
+      title.textContent = quote.courier_name ? `${quote.courier_name} ${quote.service}` : quote.name;
+      name.append(title);
+      (quote.tags || []).forEach((tag) => {
+        const pill = document.createElement("em");
+        pill.className = `courier-tag ${tag.toLowerCase()}`;
+        pill.textContent = tag;
+        name.append(pill);
+      });
       const eta = document.createElement("small");
+      eta.textContent = quote.eta_label ? `Estimasi tiba ${quote.eta_label}` : "Estimasi dari kurir";
       const price = document.createElement("strong");
-      name.textContent = quote.name;
-      eta.textContent = quote.eta || "Estimasi dari kurir";
+      price.className = "courier-price";
       price.textContent = currency.format(quote.price);
       details.append(name, eta);
-      label.append(radio, details, price);
+      label.append(radio, badge(quote), details, price);
       choices.appendChild(label);
     });
+    if (data.quotes.length > SHOWN) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "courier-more";
+      more.textContent = `Lihat semua layanan (${data.quotes.length})`;
+      more.addEventListener("click", () => {
+        choices.querySelectorAll(".courier-choice[hidden]").forEach((row) => { row.hidden = false; });
+        more.remove();
+      });
+      choices.appendChild(more);
+    }
   }
 
   function updateSummary() {
@@ -169,7 +210,7 @@
       if (!data.quotes || !data.quotes.length) throw new Error("Tidak ada layanan kurir untuk alamat ini.");
       if (data.destination_area_id && !areaId.value) areaId.value = data.destination_area_id;
       renderQuotes(data);
-      show(data.warning || `${data.quotes.length} layanan ${data.provider_name || "kurir"} tersedia`,
+      show(data.warning || `${data.quotes.length} layanan kurir tersedia`,
         data.fallback ? "notice" : "muted");
       submit.disabled = false;
       updateSummary();
