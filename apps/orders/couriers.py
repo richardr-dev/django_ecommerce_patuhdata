@@ -49,6 +49,12 @@ BRAND_COLOURS = {"jne": "#0a4ea2", "jnt": "#d6001c", "sicepat": "#c8102e", "ante
     "spx": "#ee4d2d", "wahana": "#1f4e9e", "gosend": "#00aa13", "grab": "#00b14f"}
 SHORT_NAMES = {"jnt": "J&T", "ninja": "Ninja", "pos": "POS", "ide": "IDexpress", "lion": "Lion",
     "spx": "SPX", "gosend": "GoSend", "grab": "Grab"}
+# Text on the brand badge, short enough for its 52px box.
+BADGE_LABELS = {"ide": "IDX", "anteraja": "Anter Aja", "sicepat": "SiCepat", "lion": "Lion",
+    "gosend": "GoSend"}
+# How rate providers spell a courier before the service name.
+COURIER_PREFIXES = ("Ninja Express", "Ninja Xpress", "ID Express", "IDexpress", "Lion Parcel",
+    "Pos Indonesia", "SiCepat", "AnterAja", "J&T Express", "J&T", "JNE", "TIKI", "SPX Express")
 SERVICE_NAMES = {"reg": "Reguler", "yes": "YES (besok sampai)", "oke": "OKE (hemat)",
     "ez": "EZ", "eco": "Ekonomi", "ons": "ONS (besok sampai)", "sds": "Sameday"}
 LOGO_DIR = Path(__file__).resolve().parents[2] / "static" / "img" / "couriers"
@@ -66,7 +72,7 @@ def _service_label(key, quote_name, service_code):
     """'Jalur Nugraha Ekakurir (JNE) REG' or 'JNE Reguler' → 'Reguler'."""
     name = re.sub(r"^.*?\)\s*", "", quote_name) if ")" in quote_name else quote_name
     known = COURIERS.get(key, ("", ""))[0]
-    prefixes = {known, SHORT_NAMES.get(key, ""), key.upper(), "Pos", "J&T Express"}
+    prefixes = {known, SHORT_NAMES.get(key, ""), key.upper(), "Pos", *COURIER_PREFIXES}
     for prefix in sorted(filter(None, prefixes), key=len, reverse=True):  # longest first
         if name.lower().startswith(prefix.lower() + " "):
             name = name[len(prefix) + 1:]
@@ -97,6 +103,7 @@ def present_quotes(quotes):
             "courier_name": SHORT_NAMES.get(key) or COURIERS.get(key, (key.upper(), ""))[0],
             "service": _service_label(key, quote["name"], quote["service_code"]),
             "eta_label": eta, "eta_days": days, "logo": courier_logo(key),
+            "badge": BADGE_LABELS.get(key) or SHORT_NAMES.get(key) or key.upper()[:6],
             "colour": BRAND_COLOURS.get(key, "#475467"), "tags": []})
     rows.sort(key=lambda row: (row["price"], row["eta_days"] if row["eta_days"] is not None else 99))
     if rows:

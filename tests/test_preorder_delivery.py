@@ -37,6 +37,8 @@ class PreorderTests(TestCase):
             price=20000)
         warehouse = Warehouse.objects.create(store=self.store, name="Dapur", code="D")
         self.level = InventoryLevel.objects.create(warehouse=warehouse, product=self.bread, on_hand=5)
+        # The seller turned on delivery dates (Jadwal & pre-order); without it nobody picks one.
+        DeliverySettings.objects.create(store=self.store, enabled=True, min_days=0)
         self.buyer = Client()
         self.buyer.force_login(User.objects.create_user("buyer"))
 
@@ -56,7 +58,7 @@ class PreorderTests(TestCase):
         return self.buyer.post("/checkout/", {**BUYER, **extra})
 
     def test_dates_start_after_production_time_and_skip_closed_days(self):
-        DeliverySettings.objects.create(store=self.store, closed_weekdays="6", max_days=8)
+        DeliverySettings.objects.filter(store=self.store).update(closed_weekdays="6", max_days=8)
         days = available_dates(self.store, self._lines(self.cake), today=MONDAY)
 
         self.assertEqual(days[0], MONDAY + timedelta(days=2))  # Wednesday
@@ -92,17 +94,30 @@ class PreorderTests(TestCase):
         self.assertContains(page, "tidak tersedia")
         self.assertFalse(Order.objects.exists())
 
-    def test_normal_products_need_no_date_unless_the_store_schedules_deliveries(self):
-        self._checkout(self.bread)
-        self.assertIsNone(Order.objects.get().delivery_date)
+    def test_nobody_picks_a_date_unless_the_seller_schedules_deliveries(self):
+        DeliverySettings.objects.filter(store=self.store).update(enabled=False)
+        self.buyer.post(f"/cart/add/{self.cake.id}/")
+        page = self.buyer.get("/checkout/")
+        self.assertNotContains(page, 'name="delivery_date"')
+        self.buyer.post("/checkout/", BUYER)
+        order = Order.objects.get()
+        self.assertIsNone(order.delivery_date)
+        self.assertTrue(order.items.get().is_preorder)
 
-        DeliverySettings.objects.create(store=self.store, enabled=True, min_days=1)
+        DeliverySettings.objects.filter(store=self.store).update(enabled=True, min_days=1)
         self.buyer.post(f"/cart/add/{self.bread.id}/")
         page = self.buyer.post("/checkout/", BUYER)
         self.assertContains(page, "Pilih tanggal pengiriman")
 
+    def test_without_dates_the_preorder_quota_counts_todays_orders(self):
+        DeliverySettings.objects.filter(store=self.store).update(enabled=False)
+        self._book(None, quantity=2)  # ordered today, no delivery date
+        self.buyer.post(f"/cart/add/{self.cake.id}/", {"quantity": 2})
+        page = self.buyer.post("/checkout/", BUYER)
+        self.assertContains(page, "hari ini tinggal 1")
+        self.assertEqual(Order.objects.count(), 1)
+
     def test_full_slots_are_refused_and_reported(self):
-        DeliverySettings.objects.create(store=self.store, enabled=True, min_days=0)
         slot = DeliverySlot.objects.create(store=self.store, start_time=time(9),
             end_time=time(12), capacity=1)
         day = timezone.localdate() + timedelta(days=3)

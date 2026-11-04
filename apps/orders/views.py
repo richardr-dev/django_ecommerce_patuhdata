@@ -169,6 +169,18 @@ def _cart_signature(lines):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+# Shoppers see the courier names, never which rate provider the platform uses behind them.
+SHIPPING_UNAVAILABLE = "Layanan kurir sedang tidak dapat dihubungi. Coba lagi sebentar lagi."
+
+
+def _shopper_shipping_error(error):
+    """Our own Indonesian messages pass through; a provider's raw reply does not."""
+    text = str(error)
+    if text.startswith(("Provider returned", "Provider is")) or "API key" in text or "origin" in text:
+        return SHIPPING_UNAVAILABLE
+    return text
+
+
 def _shipping_provider():
     if settings.SHIPPING_RATE_PROVIDER == "rajaongkir": return RajaOngkirProvider()
     return BiteshipProvider()
@@ -194,7 +206,9 @@ def shipping_areas(request):
     query = request.GET.get("q", "").strip()
     if len(query) < 3: return JsonResponse({"areas": []})
     try: areas = _shipping_provider().search_areas(query)
-    except ProviderError as error: return JsonResponse({"error": str(error)}, status=502)
+    except ProviderError as error:
+        logger.warning("shipping area search failed: %s", error)
+        return JsonResponse({"error": SHIPPING_UNAVAILABLE}, status=502)
     return JsonResponse({"areas": areas})
 
 
@@ -225,7 +239,8 @@ def shipping_rates(request):
                 origin_postal_code=origin["postal_code"])
     except ProviderError as error:
         if "sufficient balance" not in str(error).lower():
-            return JsonResponse({"error": str(error)}, status=502)
+            logger.warning("shipping rates failed for %s: %s", request.store.slug, error)
+            return JsonResponse({"error": _shopper_shipping_error(error)}, status=502)
         logger.warning("Biteship balance is empty; store %s falls back to its own rates", request.store.slug)
         methods = ShippingMethod.objects.filter(store=request.store, is_active=True)
         stored, response_quotes = {}, []

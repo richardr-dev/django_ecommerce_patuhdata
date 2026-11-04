@@ -33,8 +33,18 @@ def orderable_quantity(product, variant=None):
 
 
 def needs_schedule(store, lines, settings=None):
+    """The shopper picks a delivery date only when the seller turned scheduling on (Jadwal &
+    pre-order). Pre-order products alone never switch it on."""
     settings = settings or delivery_settings(store)
-    return settings.enabled or any(line["product"].is_preorder for line in lines)
+    return settings.enabled
+
+
+def preorder_sold_today(product):
+    """Pre-order units ordered today, for the daily quota when the seller does not schedule
+    deliveries."""
+    return OrderItem.objects.filter(product=product, is_preorder=True,
+        order__created_at__date=timezone.localdate()).exclude(
+        order__status__in=RELEASED_STATUSES).aggregate(total=Sum("quantity"))["total"] or 0
 
 
 def preorder_booked(product, day):
@@ -102,6 +112,15 @@ def validate_schedule(store, lines, day_text, slot_text, *, lock=False):
 
     settings = delivery_settings(store)
     if not needs_schedule(store, lines, settings):
+        for line in lines:
+            product = line["product"]
+            if product.is_preorder and product.preorder_daily_quota is not None:
+                if lock:
+                    Product.objects.select_for_update().filter(id=product.id).first()
+                left = product.preorder_daily_quota - preorder_sold_today(product)
+                if line["quantity"] > left:
+                    raise ScheduleError(f"Kuota pre-order {product.name} hari ini tinggal "
+                        f"{max(0, left)}. Kurangi jumlahnya atau pesan lagi besok.")
         return None, None
     try:
         day = date.fromisoformat(day_text or "")

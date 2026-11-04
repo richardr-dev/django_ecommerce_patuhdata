@@ -451,7 +451,8 @@ class DeliverySettings(models.Model):
         ("5", "Sabtu"), ("6", "Minggu")]
     store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="delivery_settings")
     enabled = models.BooleanField(default=False, verbose_name="Pembeli memilih tanggal kirim",
-        help_text="Selalu aktif otomatis untuk keranjang yang berisi produk pre-order.")
+        help_text="Aktifkan bila pembeli perlu memilih tanggal (dan jam) pengiriman, termasuk untuk "
+            "produk pre-order. Bila tidak aktif, pesanan dikirim sesuai urutan masuk.")
     min_days = models.PositiveSmallIntegerField(default=1, verbose_name="Pemesanan paling lambat (hari sebelumnya)",
         help_text="0 = bisa dikirim hari ini, 1 = paling cepat besok.")
     max_days = models.PositiveSmallIntegerField(default=14, verbose_name="Bisa dipesan sampai (hari ke depan)")

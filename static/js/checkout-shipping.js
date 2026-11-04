@@ -115,7 +115,7 @@
         renderAreas(exact);
         show("Kode pos memiliki beberapa wilayah. Pilih alamat yang tepat.", "notice");
       } else {
-        // The server can still resolve an exact postcode on its own (RajaOngkir).
+        // The server can still resolve an exact postcode on its own.
         button.disabled = false;
         show("Alamat untuk kode pos ini tidak ditemukan otomatis. Klik cek ongkir atau cari kecamatan.", "notice");
       }
@@ -136,7 +136,7 @@
       img.alt = quote.courier_name || "";
       mark.appendChild(img);
     } else {
-      mark.textContent = quote.courier_name || "Kurir";
+      mark.textContent = quote.badge || quote.courier_name || "Kurir";
       mark.style.background = quote.colour || "#475467";
     }
     return mark;

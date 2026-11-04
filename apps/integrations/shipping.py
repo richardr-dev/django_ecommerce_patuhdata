@@ -167,7 +167,7 @@ class RajaOngkirProvider:
     def resolve_postal_code(self, postal_code):
         postal_code = str(postal_code).strip()
         if not postal_code.isdigit() or len(postal_code) != 5:
-            raise ProviderError("Kode pos RajaOngkir harus terdiri dari 5 digit.")
+            raise ProviderError("Kode pos harus terdiri dari 5 digit.")
         cache_key = f"rajaongkir:postcode:{postal_code}"
         cached = cache.get(cache_key)
         if cached:
@@ -176,7 +176,7 @@ class RajaOngkirProvider:
             if area["postal_code"] == postal_code]
         if not exact:
             raise ProviderError(
-                f"Kode pos {postal_code} tidak ditemukan oleh RajaOngkir. Cari dan pilih alamat."
+                f"Kode pos {postal_code} tidak ditemukan. Cari dan pilih alamat."
             )
         if len({area["id"] for area in exact}) > 1:
             raise ProviderError(
@@ -201,7 +201,7 @@ class RajaOngkirProvider:
         quotes = [ShippingQuote(provider="rajaongkir", courier_code=rate.get("code", ""),
             service_code=rate.get("service", ""), name=f'{rate.get("name", "Kurir")} {rate.get("service", "")}'.strip(),
             price=int(rate.get("cost", 0)), eta=str(rate.get("etd", ""))) for rate in (data.get("data") or [])]
-        if not quotes: raise ProviderError(data.get("meta", {}).get("message", "Tidak ada layanan RajaOngkir untuk tujuan ini."))
+        if not quotes: raise ProviderError(data.get("meta", {}).get("message", "Tidak ada layanan pengiriman untuk tujuan ini."))
         return quotes
 
     def track(self, airway_bill, courier_code, recipient_phone=""):
