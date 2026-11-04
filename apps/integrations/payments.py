@@ -97,6 +97,14 @@ class XenditPaymentProvider:
         return RefundResult(reference=data.get("id", ""), status=status, payload=data)
 
 
+# Invoice numbers of connection tests (see DokuPaymentProvider.check_credentials).
+TEST_INVOICE_PREFIX = "LKTEST"
+
+
+def doku_environment():
+    return "Sandbox" if "sandbox" in settings.DOKU_API_URL else "Produksi"
+
+
 def doku_signature(client_id, request_id, timestamp, target, body, secret_key):
     """DOKU HMAC signature; GET requests (body=None) omit the Digest component."""
     component = (f"Client-Id:{client_id}\nRequest-Id:{request_id}\n"
@@ -153,6 +161,21 @@ class DokuPaymentProvider:
         if not payment.get("url"):
             raise ProviderError("DOKU returned an incomplete payment session.")
         return payment["url"]
+
+    def check_credentials(self):
+        """Open a Rp10.000 test payment page to prove the keys work. Nothing is charged unless
+        someone pays it, and its notification is acknowledged without touching any order."""
+        try:
+            return self.create_checkout(invoice_number=f"{TEST_INVOICE_PREFIX}{uuid.uuid4().hex[:20]}",
+                amount=10000, customer={"name": "Tes koneksi Lakuin"}, request_id=uuid.uuid4().hex)
+        except ProviderError as error:
+            if "HTTP 401" in str(error) or "HTTP 403" in str(error):
+                raise ProviderError(f"DOKU menolak kredensial ({doku_environment()}). Cek Client "
+                    "ID dan Secret Key, dan pastikan keduanya dari lingkungan yang sama.") from error
+            if re.search(r"HTTP 5\d\d|temporarily unavailable", str(error)):
+                raise ProviderError("Server DOKU sedang tidak dapat dihubungi. Coba lagi "
+                    "beberapa menit lagi.") from error
+            raise
 
     def create_payment(self, order):
         invoice = self.reference_for(order)

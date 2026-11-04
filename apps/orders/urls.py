@@ -46,6 +46,10 @@ urlpatterns = [
     path("cart/recover/<uuid:token>/", views.cart_recover, name="cart-recover"), path("cart/add/<int:product_id>/", views.cart_add, name="cart-add"),
     path("cart/update/<str:item_key>/", views.cart_update, name="cart-update"),
     path("checkout/", rate_limit("checkout", limit=30, window=600)(views.checkout), name="checkout"), path("orders/<uuid:order_id>/", views.order_detail, name="order-detail"),
+    path("orders/track/", rate_limit("track-order", limit=10, window=900, field="phone")(views.track_order),
+        name="track-order"),
+    path("orders/<uuid:order_id>/review/", rate_limit("order-review", limit=20, window=3600)(
+        views.order_review), name="order-review"),
     path("orders/<uuid:order_id>/return/", views.request_return, name="request-return"),
     path("orders/<uuid:order_id>/received/", views.order_received, name="order-received"),
     path("checkout/delivery-slots/", views.delivery_slots, name="checkout-delivery-slots"),
@@ -79,6 +83,7 @@ urlpatterns = [
     path("merchant/integrations/", views.merchant_integrations, name="merchant-integrations"),
     path("merchant/finance/", views.merchant_finance, name="merchant-finance"),
     path("merchant/payments/", views.merchant_payment_settings, name="merchant-payment-settings"),
+    path("merchant/payments/test/", views.merchant_payment_test, name="merchant-payment-test"),
     path("merchant/engagement/", views.merchant_engagement, name="merchant-engagement"),
     path("merchant/integrations/<int:event_id>/retry/", views.merchant_integration_retry, name="merchant-integration-retry"),
     path("merchant/setup/<slug:section>/", views.merchant_entity_list, name="merchant-entity-list"),

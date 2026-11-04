@@ -15,7 +15,7 @@ from apps.orders.models import Order, PaymentEvent, PaymentTransaction
 from apps.orders.services import InvalidOrderTransition, transition_order
 
 from .models import OutboxEvent, StorePaymentSettings
-from .payments import doku_signature
+from .payments import TEST_INVOICE_PREFIX, doku_signature
 from .reconciliation import confirm_payment
 
 
@@ -136,6 +136,8 @@ def doku_webhook(request, webhook_key=None):
     invoice = str((payload.get("order") or {}).get("invoice_number", ""))
     transaction_data = payload.get("transaction") or {}
     status = transaction_data.get("status", "")
+    if invoice.startswith(TEST_INVOICE_PREFIX):
+        return JsonResponse({"received": True, "test": True})
     if not invoice or status not in {"SUCCESS", "FAILED"}:
         return JsonResponse({"received": True})
     # DOKU Checkout lets a customer try a different channel after one channel fails.

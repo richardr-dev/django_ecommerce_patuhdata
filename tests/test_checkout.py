@@ -33,14 +33,13 @@ class CheckoutTests(TestCase):
         self.buyer = User.objects.create_user("buyer", password="BuyerPass-2026!")
         self.client.force_login(self.buyer)
 
-    def test_checkout_requires_login_and_preserves_cart(self):
+    def test_guests_check_out_without_an_account(self):
         self.client.logout()
         self.client.post(f"/cart/add/{self.product.id}/")
-        response = self.client.get("/checkout/")
-        self.assertRedirects(response, "/account/login/?next=/checkout/")
-        self.assertEqual(self.client.session["cart"][f"p:{self.product.id}"], 1)
-        login_page = self.client.get(response.url)
-        self.assertContains(login_page, "/account/register/?next=/checkout/")
+        page = self.client.get("/checkout/")
+        self.assertContains(page, "Belanja tanpa akun")
+        self.assertContains(page, "/account/login/?next=/checkout/")
+        self.assertNotContains(page, 'name="save_address"')
 
     def test_home_privacy_and_cookie_experience_are_available(self):
         home = self.client.get("/")

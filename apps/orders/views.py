@@ -43,11 +43,18 @@ from apps.catalog.models import (
     Warehouse,
     annotate_available_stock,
 )
+from apps.catalog.reviews import REVIEWABLE_STATUSES, order_review_items, save_order_review
 from apps.catalog.views import paginate
 from apps.integrations.forms import PaymentSettingsForm
 from apps.integrations.http import ProviderError
 from apps.integrations.models import OutboxEvent, StorePaymentSettings
-from apps.integrations.payments import order_payment_provider, payment_options, reserved_reference
+from apps.integrations.payments import (
+    DokuPaymentProvider,
+    doku_environment,
+    order_payment_provider,
+    payment_options,
+    reserved_reference,
+)
 from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
 from apps.shops.models import (
@@ -61,11 +68,18 @@ from apps.shops.models import (
 )
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 from apps.shops.tenancy import store_url
+from apps.shops.trust import store_trust
 
-from .access import get_customer_order_or_404, remember_customer_order
+from .access import (
+    find_guest_order,
+    get_customer_order_or_404,
+    order_code,
+    remember_customer_order,
+)
 from .addresses import checkout_prefill, save_checkout_address, saved_addresses
 from .buyer import BUYER_TABS, buyer_orders, estimated_arrival, tracker_steps
 from .cart import get_cart
+from .couriers import courier_tracking
 from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
     CategoryForm,
@@ -76,6 +90,7 @@ from .forms import (
     InventoryForm,
     MarketingCampaignForm,
     MerchantReviewForm,
+    OrderReviewForm,
     ProductForm,
     ProductImageForm,
     ShippingMethodForm,
@@ -371,8 +386,8 @@ def cart_view(request):
             schedule_blocked=any(line.get("over_quota") for line in lines))
     return render(request, "storefront/cart.html", context)
 
-@login_required(login_url="/account/login/")
 def checkout(request):
+    """Guests can check out with a name and WhatsApp number; an account is optional."""
     if not request.store: raise Http404
     checkout_key = request.POST.get("idempotency_key") or request.session.get("checkout_key")
     if not checkout_key:
@@ -484,7 +499,8 @@ def checkout(request):
                         return redirect("checkout")
                 base_price = calculate_price(store=request.store, lines=lines,
                     shipping_cost=shipping_cost, coupon=coupon)
-                locked_loyalty = loyalty_account(request.store, request.user, lock=True)
+                locked_loyalty = (loyalty_account(request.store, request.user, lock=True)
+                    if request.user.is_authenticated else None)
                 loyalty_points, loyalty_discount = redemption_quote(request.store, request.user,
                     request.POST.get("loyalty_points", ""), base_price.subtotal - base_price.discount,
                     account=locked_loyalty)
@@ -567,7 +583,7 @@ def checkout(request):
                 Customer.objects.update_or_create(store=request.store, phone=phone, defaults={"name": order.customer_name,
                     "email": order.email, "accepts_marketing": request.POST.get("accepts_marketing") == "on"})
                 OrderStatusEvent.objects.create(order=order, status="pending", note="Pesanan dibuat")
-                if request.POST.get("save_address") == "on":
+                if request.POST.get("save_address") == "on" and request.user.is_authenticated:
                     save_checkout_address(request.store, request.user, request.POST, phone)
                 if coupon:
                     coupon.used_count += 1
@@ -609,7 +625,8 @@ def checkout(request):
                 "total": str(order.total)}, always=True)
             update_cart_snapshot(request, [], 0)
             return redirect(payment.checkout_url)
-    loyalty = loyalty_account(request.store, request.user) if request.store.loyalty_enabled else None
+    loyalty = (loyalty_account(request.store, request.user)
+        if request.store.loyalty_enabled and request.user.is_authenticated else None)
     account_name = request.user.get_full_name() if request.user.is_authenticated else ""
     account_email = request.user.email if request.user.is_authenticated else ""
     addresses = saved_addresses(request.store, request.user)
@@ -628,7 +645,8 @@ def checkout(request):
         "delivery_dates": available_dates(request.store, lines) if schedule_needed else [],
         "chosen_date": request.POST.get("delivery_date") or request.session.get("delivery_date", ""),
         "delivery_slots": slot_options(request.store, None) if schedule_needed else [],
-        "has_preorder": any(line["product"].is_preorder for line in lines)})
+        "has_preorder": any(line["product"].is_preorder for line in lines),
+        "trust": store_trust(request.store)})
 
 
 def delivery_slots(request):
@@ -676,10 +694,15 @@ def account_orders(request):
         orders = orders.filter(status__in=groups[tab])
     page, page_range, page_query = paginate(request, orders.prefetch_related(
         "items__product", "status_events").order_by("-created_at"), 20)
+    reviewed = set(ProductReview.objects.filter(order__in=[order.id for order in page.object_list])
+        .values_list("order_id", "product_id"))
     for order in page.object_list:
+        order.needs_review = order.status in REVIEWABLE_STATUSES and any(
+            (order.id, item.product_id) not in reviewed for item in order.items.all())
         order.eta = estimated_arrival(order)
         order.first_item = next(iter(order.items.all()), None)
         order.more_items = max(0, len(order.items.all()) - 1)
+        order.parcel = courier_tracking(order)
     loyalty = (LoyaltyAccount.objects.filter(store=request.store, user=request.user)
         .prefetch_related("transactions").first() if request.user.is_authenticated else None)
     return render(request, "storefront/account_orders.html", {"orders": page.object_list,
@@ -772,7 +795,52 @@ def order_detail(request, order_id):
             "items", "status_events", "tracking_events")
     )
     return render(request, "storefront/order.html", {"order": order,
-        "eta": estimated_arrival(order), "steps": tracker_steps(order)})
+        "eta": estimated_arrival(order), "steps": tracker_steps(order),
+        "order_code": order_code(order), "parcel": courier_tracking(order),
+        "review_items": order_review_items(order), "review_form": OrderReviewForm()})
+
+def track_order(request):
+    """Lacak pesanan: a guest finds an order by its number and WhatsApp number, on any device."""
+    if not request.store:
+        raise Http404
+    error = ""
+    if request.method == "POST":
+        try:
+            phone = normalize_indonesian_phone(request.POST.get("phone", ""))
+        except ValueError:
+            phone = ""
+        order = phone and find_guest_order(request.store, request.POST.get("code", ""), phone)
+        if order:
+            remember_customer_order(request, order)
+            return redirect("order-detail", order_id=order.id)
+        error = "Pesanan tidak ditemukan. Cek lagi nomor pesanan dan nomor WhatsApp-nya."
+    return render(request, "storefront/track_order.html", {"error": error,
+        "code": request.POST.get("code", ""), "phone": request.POST.get("phone", "")})
+
+
+def order_review(request, order_id):
+    """Penilaian produk from the order page, for guests and account holders alike: the order
+    itself proves the purchase."""
+    if request.method != "POST" or not request.store:
+        raise Http404
+    order = get_customer_order_or_404(request, order_id)
+    entry = next((entry for entry in order_review_items(order)
+        if str(entry["product"].id) == request.POST.get("product")), None)
+    if entry is None:
+        messages.error(request, "Penilaian dapat diberikan setelah pesanan diterima.")
+        return redirect("order-detail", order_id=order.id)
+    form = OrderReviewForm(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(request, " ".join(error for errors in form.errors.values()
+            for error in errors))
+        return redirect(reverse("order-detail", args=[order.id]) + f"#ulasan-{entry['product'].id}")
+    save_order_review(order, entry["item"], rating=form.cleaned_data["rating"],
+        title=form.cleaned_data["title"].strip(), body=form.cleaned_data["body"].strip(),
+        photos=form.cleaned_data["photos"], user=request.user)
+    messages.success(request, f"Terima kasih! Penilaian untuk {entry['product'].name} sudah tampil "
+        "di halaman produk.")
+    return redirect(reverse("order-detail", args=[order.id]) + "#ulasan")
+
 
 def request_return(request, order_id):
     if request.method != "POST" or not request.store: raise Http404
@@ -952,14 +1020,18 @@ def merchant_orders(request):
         order.available_statuses = allowed_order_transitions(order)
         order.can_book_shipment = can_book_shipment(order)
         order.booking_pending = is_booking_pending(order)
+        parcel = courier_tracking(order)
         order.whatsapp_url = _whatsapp_link(order.phone,
             f"Halo {order.customer_name}, terima kasih sudah berbelanja di {store.name}. "
-            f"Pesanan #{str(order.id)[:8]}")
+            f"Pesanan #{str(order.id)[:8]}" + (f" sudah dikirim dengan {parcel['name']}, "
+                f"nomor resi {parcel['number']}." + (f" Lacak di {parcel['url']}" if parcel["url"]
+                else "") if parcel else ""))
     return render(request, "merchant/orders.html", _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         tabs=tabs, tab=group, query=query, total=all_orders.count(),
         outlets=Warehouse.objects.filter(store=store, is_outlet=True),
-        statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS))
+        statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS,
+        tracking_sync=bool(settings.BITESHIP_API_KEY or settings.RAJAONGKIR_API_KEY)))
 
 
 def _whatsapp_link(phone, text):
@@ -1025,7 +1097,7 @@ def _apply_tracking(order, data):
     order.tracking_number, order.courier_code, order.fulfillment_method = (tracking_number,
         courier_code, method)
     order.tracking_status = "ready_to_track"
-    order.tracking_status_detail = "Nomor resi tersimpan dan siap disinkronkan."
+    order.tracking_status_detail = "Nomor resi tersimpan."
     order.tracking_error = ""
     order.tracking_last_checked_at = None
     order.save(update_fields=["tracking_number", "courier_code", "fulfillment_method",
@@ -1594,7 +1666,33 @@ def merchant_payment_settings(request):
     webhook_urls = {gateway: settings.PUBLIC_BASE_URL + reverse(f"store-{gateway}-webhook",
         args=[account.webhook_key]) for gateway in ("doku", "xendit")}
     return render(request, "merchant/payments.html", _merchant_context(request, store, form=form,
-        account=account, webhook_urls=webhook_urls, options=payment_options(store)))
+        account=account, webhook_urls=webhook_urls, options=payment_options(store),
+        doku_environment=doku_environment(), doku_test_url=request.session.pop("doku_test_url", "")))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_payment_test(request):
+    """Tes koneksi: open a Rp10.000 DOKU test page with the seller's saved keys."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin"})
+    account = StorePaymentSettings.objects.filter(store=store).first()
+    if not account or account.gateway != "doku" or not account.gateway_ready:
+        messages.error(request, "Simpan Client ID dan Secret Key DOKU terlebih dahulu.")
+        return redirect("merchant-payment-settings")
+    try:
+        url = DokuPaymentProvider(client_id=account.doku_client_id,
+            secret_key=account.secret_key).check_credentials()
+    except ProviderError as error:
+        messages.error(request, f"Koneksi DOKU gagal: {error}")
+    else:
+        request.session["doku_test_url"] = url
+        messages.success(request, f"Koneksi DOKU berhasil ({doku_environment()}). Halaman "
+            "pembayaran tes Rp10.000 berhasil dibuat; tidak perlu dibayar.")
+    AuditLog.objects.create(store=store, actor=request.user, action="payment_settings.tested",
+        object_type="StorePaymentSettings", object_id=str(account.id), details={"gateway": "doku"})
+    return redirect("merchant-payment-settings")
 
 
 @login_required(login_url="/merchant/login/")

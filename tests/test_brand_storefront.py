@@ -68,7 +68,7 @@ class ProductReviewTests(BrandStorefrontTestCase):
         response = Client(HTTP_X_STORE_SLUG=self.store.slug).get("/products/gayo/")
         self.assertContains(response, "Aromanya wangi sekali.")
         self.assertContains(response, "Pembelian terverifikasi")
-        self.assertContains(response, "(1 ulasan)")
+        self.assertContains(response, "<b>1</b> Penilaian", html=False)
         self.assertNotContains(response, "Saraswati")
 
     def test_resubmitting_updates_the_single_review(self):

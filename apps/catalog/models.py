@@ -266,17 +266,20 @@ class ProductVariant(models.Model):
 
 
 class ProductReview(models.Model):
-    """A rating left by a signed-in customer who received the product. Merchants can hide a
-    review or reply to it, but never author or edit one, so ratings stay genuine."""
+    """A rating left by a customer who received the product, from their account or from the
+    order page (guests). Merchants can hide a review or reply to it, but never author or edit
+    one, so ratings stay genuine."""
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="product_reviews")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
-    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="product_reviews")
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="product_reviews",
+        null=True, blank=True, help_text="Empty for a guest's review, verified by its order.")
     order = models.ForeignKey("orders.Order", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="product_reviews", help_text="Delivered order that verifies the purchase.")
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     title = models.CharField(max_length=120, blank=True)
     body = models.TextField(max_length=2000)
     display_name = models.CharField(max_length=60)
+    variant_name = models.CharField(max_length=120, blank=True)
     is_published = models.BooleanField(default=True)
     merchant_reply = models.TextField(max_length=1000, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -285,6 +288,8 @@ class ProductReview(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["product", "user"], name="unique_product_review_per_user"),
+            models.UniqueConstraint(fields=["product", "order"], condition=models.Q(
+                order__isnull=False), name="unique_product_review_per_order"),
             models.CheckConstraint(condition=models.Q(rating__gte=1, rating__lte=5),
                 name="product_review_rating_range"),
         ]
@@ -293,6 +298,21 @@ class ProductReview(models.Model):
 
     def __str__(self):
         return f"{self.product.name} · {self.rating}★"
+
+
+class ReviewPhoto(models.Model):
+    """A buyer's photo of what arrived, shown with their review (at most 3)."""
+    review = models.ForeignKey(ProductReview, on_delete=models.CASCADE, related_name="photos")
+    file = models.FileField(upload_to=StoreUploadPath("reviews"),
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])])
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    @property
+    def store(self):  # for StoreUploadPath: stores/<store>/reviews/…
+        return self.review.store
 
 
 class WishlistItem(models.Model):

@@ -20,3 +20,18 @@
 .eta-banner{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:14px 16px;border-radius:12px;background:#ecfdf3;color:#027a48}.eta-banner span:last-child{display:flex;flex-direction:column}.eta-banner b{font-size:18px}.eta-banner small{color:#067647}
 .received-form{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 18px}.received-form small{color:#667085}
 @media(max-width:560px){.order-tracker b{font-size:11px}.buyer-thumb{flex-basis:60px;width:60px;height:60px}}
+.order-code{letter-spacing:.06em}
+.guest-save{display:flex;gap:10px;align-items:flex-start;margin:12px 0;padding:12px 14px;border:1px dashed #d0d5dd;border-radius:12px;background:#f9fafb}
+.guest-save p{margin:0;font-size:14px;line-height:1.5}
+.parcel-card{display:grid;gap:10px;margin:18px 0;padding:16px;border:1px solid #e4e7ec;border-radius:14px;background:#fff}
+.parcel-head{display:flex;gap:10px;align-items:center;font-size:22px}.parcel-head span:last-child{display:grid;font-size:16px}.parcel-head small,.parcel-number small{color:#667085;font-size:11px;letter-spacing:.06em}
+.parcel-number{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:#f9fafb}.parcel-number span{display:grid}.parcel-number code{font-size:17px;font-weight:700;letter-spacing:.04em;word-break:break-all}
+.parcel-number button{padding:8px 14px;font-size:14px}.parcel-track{text-align:center}
+.order-reviews{margin:22px 0}.order-reviews h2{margin-bottom:4px}
+.order-review{margin-top:12px;border:1px solid #e4e7ec;border-radius:12px;background:#fff}.order-review>summary{display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer;list-style:none}.order-review>summary::-webkit-details-marker{display:none}
+.order-review>summary span:last-child{display:grid;gap:2px}.order-review small{color:#667085}.order-review .to-review{color:#b54708;font-weight:700}.order-review .reviewed .stars{font-size:12px}
+.order-review-thumb{display:grid;place-items:center;flex:0 0 52px;width:52px;height:52px;border-radius:8px;background:#f2f4f7;overflow:hidden;font-weight:800}.order-review-thumb img{width:100%;height:100%;object-fit:cover}
+.order-review-form{padding:0 14px 16px}.order-review-form input[type=file]{padding:10px}
+.star-picker{display:flex;flex-direction:row-reverse;justify-content:flex-end;gap:4px;margin:0;padding:0;border:0}.star-picker legend{width:100%;margin-bottom:4px;font-weight:700}
+.star-picker input{position:absolute;opacity:0;pointer-events:none}.star-picker label{font-size:34px;line-height:1;color:#d0d5dd;cursor:pointer;transition:color .1s}
+.star-picker label:hover,.star-picker label:hover~label,.star-picker input:checked~label{color:#f59e0b}.star-picker input:focus-visible+label{outline:2px solid var(--brand);border-radius:4px}

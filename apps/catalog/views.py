@@ -19,9 +19,10 @@ from apps.orders.forms import NewsletterForm, ProductReviewForm
 from apps.orders.sales import active_sale_offers, decorate_products_with_sales
 from apps.orders.scheduling import orderable_quantity
 from apps.shops.models import NewsletterSubscriber
+from apps.shops.trust import decorate_with_sales_count, store_trust
 
 from .models import Product, ProductReview, WishlistItem
-from .reviews import rating_summary, reviewer_display_name, verifying_order
+from .reviews import filtered_reviews, rating_summary, reviewer_display_name, verifying_order
 
 CATALOG_PAGE_SIZE = 24
 # A unique tiebreaker keeps pagination stable when many products share a price or name.
@@ -86,6 +87,7 @@ def home(request):
     flash_sale_products = decorate_products_with_sales(request.store, [product for product in
         campaign_products if product.id in active_offers and
         active_offers[product.id].campaign_id == active_campaign.id][:8])
+    decorate_with_sales_count(request.store, [*products, *featured_products, *flash_sale_products])
     for product in [*products, *featured_products, *flash_sale_products]:
         # One tap adds simple products; products with variants open their page to pick one.
         product.quick_add = (product.available_stock > 0 or product.is_preorder) and not any(
@@ -101,10 +103,11 @@ def home(request):
         "category_icons": _category_icons(request.store),
         "slides": list(request.store.storefront_slides.filter(is_active=True)),
         "active_campaign": active_campaign, "flash_sale_products": flash_sale_products,
-        "featured_products": featured_products, "query": query})
+        "featured_products": featured_products, "query": query,
+        "trust": store_trust(request.store)})
 
 RELATED_PRODUCT_LIMIT = 4
-REVIEWS_SHOWN = 20
+REVIEWS_SHOWN = 6
 
 
 def _storefront_products(store):
@@ -144,22 +147,29 @@ def product_detail(request, slug):
     record_event(request, "product_view", product=product)
     product = decorate_products_with_sales(request.store, [product])[0]
     product.orderable = orderable_quantity(product)
+    decorate_with_sales_count(request.store, [product])
     related = _storefront_products(request.store).exclude(id=product.id)
     if product.category_id:
         related = related.filter(category_id=product.category_id)
     related_products = decorate_products_with_sales(request.store,
         related.order_by("-is_featured", "-created_at", "-id")[:RELATED_PRODUCT_LIMIT])
+    decorate_with_sales_count(request.store, related_products)
     summary = rating_summary(product)
-    reviews = product.reviews.filter(is_published=True).order_by("-created_at")[:REVIEWS_SHOWN]
-    own_review = can_review = in_wishlist = None
+    review_filter = {"stars": request.GET.get("bintang", ""), "photos": request.GET.get("foto") == "1",
+        "sort": request.GET.get("urut", "")}
+    review_page, _, _ = paginate(request, filtered_reviews(product, **review_filter),
+        REVIEWS_SHOWN, param="ulasan")
+    own_review = review_order = in_wishlist = None
     if request.user.is_authenticated:
         own_review = product.reviews.filter(user=request.user).first()
-        can_review = bool(verifying_order(request.user, product))
+        review_order = verifying_order(request.user, product)
         in_wishlist = WishlistItem.objects.filter(user=request.user, product=product).exists()
+    more_reviews = request.GET.copy()
+    more_reviews["ulasan"] = review_page.next_page_number() if review_page.has_next() else ""
     return render(request, "storefront/product_detail.html", {"product": product,
-        "related_products": related_products, "rating": summary, "reviews": reviews,
-        "own_review": own_review, "can_review": can_review, "in_wishlist": in_wishlist,
-        "review_form": ProductReviewForm(instance=own_review) if can_review else None,
+        "related_products": related_products, "rating": summary, "reviews": review_page,
+        "review_filter": review_filter, "more_reviews_query": more_reviews.urlencode(),
+        "own_review": own_review, "review_order": review_order, "in_wishlist": in_wishlist,
         "structured_data": _product_structured_data(request, product, summary)})
 
 

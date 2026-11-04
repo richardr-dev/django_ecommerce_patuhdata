@@ -102,6 +102,9 @@ class Store(models.Model):
     listed_in_directory = models.BooleanField(default=True,
         help_text="Tampilkan toko ini di direktori toko platform.")
     is_active = models.BooleanField(default=True)
+    verified_at = models.DateTimeField(null=True, blank=True,
+        help_text="Diisi tim Lakuin setelah identitas usaha dicek (KTP/NIB). Menampilkan lencana "
+            "Terverifikasi di toko.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

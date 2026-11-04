@@ -17,6 +17,7 @@ from apps.catalog.models import (
     ProductVariant,
     Warehouse,
 )
+from apps.catalog.reviews import MAX_REVIEW_PHOTOS, is_image
 from apps.shops.forms import clean_instagram_handle
 from apps.shops.models import MarketingCampaign, Store, StorefrontSlide, StorePage
 from apps.shops.tenancy import custom_domain_allowed
@@ -420,6 +421,27 @@ class ProductReviewForm(StyledModelForm):
         fields = ("rating", "title", "body")
         labels = {"title": "Judul ulasan", "body": "Ulasan Anda"}
         widgets = {"body": forms.Textarea(attrs={"rows": 4, "maxlength": 2000})}
+
+
+class OrderReviewForm(forms.Form):
+    """Penilaian from the order page: stars, an optional title, the review and up to 3 photos."""
+    rating = forms.TypedChoiceField(choices=[(n, f"{n} bintang") for n in range(5, 0, -1)],
+        coerce=int, widget=forms.RadioSelect, label="Penilaian",
+        error_messages={"required": "Pilih jumlah bintang."})
+    title = forms.CharField(max_length=120, required=False, label="Judul (opsional)")
+    body = forms.CharField(max_length=2000, min_length=10, label="Ulasan",
+        widget=forms.Textarea(attrs={"rows": 4, "maxlength": 2000,
+            "placeholder": "Bagaimana kualitas produk, kemasan, dan kesesuaiannya dengan foto?"}),
+        error_messages={"min_length": "Tulis minimal 10 karakter.",
+            "required": "Tulis ulasan singkat tentang produk ini."})
+    photos = MultipleImageField(max_files=MAX_REVIEW_PHOTOS, label="Foto (maks. 3)")
+
+    def clean_photos(self):
+        photos = self.cleaned_data["photos"]
+        for upload in photos:
+            if not is_image(upload):
+                raise forms.ValidationError(f"{upload.name}: bukan file gambar yang valid.")
+        return photos
 
 
 class MerchantReviewForm(StyledModelForm):

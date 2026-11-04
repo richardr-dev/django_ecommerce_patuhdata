@@ -40,7 +40,7 @@
   <section class="product-purchase">
     <div class="product-overline"><span>{{ product.category.name|default:"Koleksi pilihan" }}</span><span class="availability-dot">Siap dikirim</span></div>
     <h1>{{ product.name }}</h1>
-    {% if rating.count %}<a class="rating-summary" href="#ulasan"><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-hidden="true"></span><strong>{{ rating.average }}</strong><span>({{ rating.count }} ulasan)</span></a>{% endif %}
+    {% if rating.count or product.sold %}<a class="rating-summary" href="#ulasan">{% if rating.count %}<strong>{{ rating.average|floatformat:1 }}</strong><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-hidden="true"></span><span class="divider"></span><span><b>{{ rating.count }}</b> Penilaian</span>{% endif %}{% if product.sold %}{% if rating.count %}<span class="divider"></span>{% endif %}<span><b>{{ product.sold_label }}</b> Terjual</span>{% endif %}</a>{% endif %}
     <div class="product-rating-row">
       {% if product.is_preorder %}<strong>Pre-order</strong><span class="divider"></span><span>Dikirim paling cepat {{ product.preorder_days }} hari setelah dipesan{% if product.preorder_daily_quota %} · kuota {{ product.preorder_daily_quota }}/hari{% endif %}</span>{% else %}<strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>{% endif %}
       <span class="divider"></span><span>SKU {{ product.sku }}</span>
@@ -115,35 +115,45 @@
   </dl>
 </section>
 
-<section class="product-reviews" id="ulasan" aria-labelledby="reviews-title">
-  <div class="reviews-summary">
-    <span class="eyebrow">ULASAN PEMBELI</span><h2 id="reviews-title">Kata mereka</h2>
-    {% if rating.count %}
-      <p class="reviews-average"><strong>{{ rating.average }}</strong><span>/ 5</span></p>
-      <span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-label="Rata-rata {{ rating.average }} dari 5"></span>
-      <p class="muted">Dari {{ rating.count }} pembeli terverifikasi</p>
-      <ul class="rating-bars">{% for row in rating.distribution %}<li><span>{{ row.stars }}★</span><span class="bar"><span style="width:{{ row.percent }}%"></span></span><span>{{ row.count }}</span></li>{% endfor %}</ul>
-    {% else %}<p class="muted">Belum ada ulasan. Jadilah yang pertama setelah pesanan Anda diterima.</p>{% endif %}
-    {% if review_form %}
-      <form method="post" action="{% url 'product-review' product.slug %}" class="review-form">{% csrf_token %}
-        <h3>{% if own_review %}Ubah ulasan Anda{% else %}Tulis ulasan{% endif %}</h3>
-        {% for field in review_form %}<label>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}
-        <button type="submit">Kirim ulasan</button>
-      </form>
-    {% elif not request.user.is_authenticated %}<p class="muted"><a href="{% url 'login' %}?next={{ request.path }}">Masuk</a> untuk menulis ulasan setelah pesanan diterima.</p>{% endif %}
+<section class="product-reviews pro-reviews" id="ulasan" aria-labelledby="reviews-title">
+  <div class="pro-reviews-head"><h2 id="reviews-title">Penilaian Produk</h2>{% if review_order %}<a class="button secondary" href="{% url 'order-detail' review_order.id %}#ulasan-{{ product.id }}">{% if own_review %}Ubah ulasan Anda{% else %}Tulis ulasan{% endif %}</a>{% endif %}</div>
+  {% if rating.count %}
+  <div class="pro-reviews-summary">
+    <div class="pro-score"><p><strong>{{ rating.average|floatformat:1 }}</strong><span>dari 5</span></p><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-label="Rata-rata {{ rating.average|floatformat:1 }} dari 5"></span><small>{{ rating.count }} penilaian dari pembeli terverifikasi</small></div>
+    <ul class="rating-bars">{% for row in rating.distribution %}<li><span>{{ row.stars }} ★</span><span class="bar"><span style="width:{{ row.percent }}%"></span></span><span>{{ row.count }}</span></li>{% endfor %}</ul>
   </div>
-  <div class="reviews-list">
+  <nav class="review-filters" aria-label="Saring ulasan">
+    <a class="{% if not review_filter.stars and not review_filter.photos %}active{% endif %}" href="?#ulasan">Semua ({{ rating.count }})</a>
+    {% for row in rating.distribution %}<a class="{% if review_filter.stars == row.stars|stringformat:'s' %}active{% endif %}" href="?bintang={{ row.stars }}#ulasan">{{ row.stars }} Bintang ({{ row.count }})</a>{% endfor %}
+    {% if rating.with_photos %}<a class="{% if review_filter.photos %}active{% endif %}" href="?foto=1#ulasan">📷 Dengan foto ({{ rating.with_photos }})</a>{% endif %}
+    <span class="review-sort">Urutkan: <a class="{% if not review_filter.sort %}active{% endif %}" href="?{% if review_filter.stars %}bintang={{ review_filter.stars }}&{% endif %}{% if review_filter.photos %}foto=1&{% endif %}#ulasan">Terbaru</a> · <a class="{% if review_filter.sort == 'tertinggi' %}active{% endif %}" href="?{% if review_filter.stars %}bintang={{ review_filter.stars }}&{% endif %}{% if review_filter.photos %}foto=1&{% endif %}urut=tertinggi#ulasan">Tertinggi</a> · <a class="{% if review_filter.sort == 'terendah' %}active{% endif %}" href="?{% if review_filter.stars %}bintang={{ review_filter.stars }}&{% endif %}{% if review_filter.photos %}foto=1&{% endif %}urut=terendah#ulasan">Terendah</a></span>
+  </nav>
+  <div class="reviews-list pro-review-list" id="review-list">
     {% for review in reviews %}
-      <article class="review">
-        <header><span class="stars" style="--rating:{{ review.rating }}" aria-label="{{ review.rating }} dari 5"></span>{% if review.order_id %}<span class="verified">✓ Pembelian terverifikasi</span>{% endif %}</header>
-        {% if review.title %}<h3>{{ review.title }}</h3>{% endif %}
-        <p>{{ review.body|linebreaksbr }}</p>
-        <small>{{ review.display_name }} · {{ review.created_at|date:"d M Y" }}</small>
-        {% if review.merchant_reply %}<blockquote class="merchant-reply"><strong>Balasan {{ store.name }}</strong>{{ review.merchant_reply|linebreaksbr }}</blockquote>{% endif %}
+      <article class="review pro-review">
+        <span class="reviewer-avatar" aria-hidden="true">{{ review.display_name|slice:":1"|upper }}</span>
+        <div>
+          <p class="reviewer-name">{{ review.display_name }}</p>
+          <span class="stars" style="--rating:{{ review.rating }}" aria-label="{{ review.rating }} dari 5"></span>
+          <p class="review-meta">{{ review.created_at|date:"d M Y" }}{% if review.variant_name %} · Varian: {{ review.variant_name }}{% endif %}{% if review.order_id %} · <span class="verified">✓ Pembelian terverifikasi</span>{% endif %}</p>
+          {% if review.title %}<h3>{{ review.title }}</h3>{% endif %}
+          <p class="review-body">{{ review.body|linebreaksbr }}</p>
+          {% if review.photos.all %}<div class="review-photos">{% for photo in review.photos.all %}<button type="button" data-review-photo="{{ photo.file.url }}" aria-label="Lihat foto ulasan"><img src="{{ photo.file.url }}" alt="Foto dari {{ review.display_name }}" loading="lazy"></button>{% endfor %}</div>{% endif %}
+          {% if review.merchant_reply %}<blockquote class="merchant-reply"><strong>Respon Penjual</strong>{{ review.merchant_reply|linebreaksbr }}</blockquote>{% endif %}
+        </div>
       </article>
-    {% endfor %}
+    {% empty %}<p class="muted review-empty">Belum ada ulasan dengan filter ini.</p>{% endfor %}
   </div>
+  {% if reviews.has_next %}<p class="review-more"><a class="button secondary" id="more-reviews" href="?{{ more_reviews_query }}#ulasan">Muat lebih banyak ulasan</a></p>{% endif %}
+  {% else %}
+  <div class="review-empty-state"><span class="stars" style="--rating:0" aria-hidden="true"></span><p><b>Belum ada penilaian</b></p><p class="muted">Pembeli dapat menilai produk ini dari halaman pesanan setelah paket diterima.</p></div>
+  {% endif %}
+  <dialog class="review-lightbox" id="review-lightbox"><form method="dialog"><button aria-label="Tutup">✕</button></form><img alt="Foto ulasan"></dialog>
 </section>
+<script>
+(function(){var box=document.getElementById("review-lightbox");document.addEventListener("click",function(e){var b=e.target.closest("[data-review-photo]");if(b&&box&&box.showModal){box.querySelector("img").src=b.dataset.reviewPhoto;box.showModal()}});
+var more=document.getElementById("more-reviews");if(more&&window.fetch){more.addEventListener("click",function(e){e.preventDefault();more.textContent="Memuat…";fetch(more.href).then(function(r){return r.text()}).then(function(html){var doc=new DOMParser().parseFromString(html,"text/html");doc.querySelectorAll("#review-list > article").forEach(function(a){document.getElementById("review-list").appendChild(a)});var next=doc.getElementById("more-reviews");if(next){more.href=next.href;more.textContent="Muat lebih banyak ulasan"}else{more.parentNode.remove()}})})}})();
+</script>
 
 {% if related_products %}
 <section class="featured-showcase related-products" aria-labelledby="related-title">

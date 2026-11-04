@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase, override_settings
@@ -33,6 +34,7 @@ class CatalogScaleTests(TestCase):
         self.warehouse = Warehouse.objects.create(store=self.store, name="Main", code="MAIN")
 
     def _home_query_count(self, path="/"):
+        cache.clear()  # the store's trust summary is cached; count it in every run
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(path)
         self.assertEqual(response.status_code, 200)
