@@ -57,6 +57,7 @@ class CourierLabelTests(TestCase):
         self.assertNotContains(self.seller.get("/merchant/orders/?tab=all"), "Cetak label resmi")
         page = self.seller.get(f"/merchant/orders/labels/?id={order.id}")
         self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Total: <b>Rp1</b>")
         self.assertRedirects(self.seller.get(f"/merchant/orders/{order.id}/courier-label/"),
             f"/merchant/orders/labels/?id={order.id}&print=1", fetch_redirect_response=False)
 
