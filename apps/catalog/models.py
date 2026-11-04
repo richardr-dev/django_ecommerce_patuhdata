@@ -1,5 +1,10 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
+    RegexValidator,
+)
 from django.db import models, transaction
 from django.db.models import Case, Exists, F, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Greatest
@@ -161,6 +166,9 @@ class Warehouse(models.Model):
     name = models.CharField(max_length=120)
     code = models.CharField(max_length=40)
     address = models.TextField(blank=True)
+    postal_code = models.CharField(max_length=5, blank=True, verbose_name="Kode pos",
+        validators=[RegexValidator(r"^\d{5}$", "Kode pos terdiri dari 5 angka.")],
+        help_text="Ongkir otomatis dihitung dari lokasi ini (gudang aktif dengan prioritas terkecil).")
     priority = models.PositiveSmallIntegerField(default=100, help_text="Lower values allocate first")
     is_active = models.BooleanField(default=True)
     # An outlet is a stock location that is also a shop customers can visit. Outlets are billed

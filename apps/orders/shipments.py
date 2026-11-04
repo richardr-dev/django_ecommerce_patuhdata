@@ -1,10 +1,13 @@
 import uuid
 
-from django.conf import settings
 from django.db import transaction
 
 from apps.integrations.http import ProviderError
-from apps.integrations.shipping import BITESHIP_TRACKING_STATUS, BiteshipShipmentProvider
+from apps.integrations.shipping import (
+    BITESHIP_TRACKING_STATUS,
+    BiteshipShipmentProvider,
+    shipping_origin,
+)
 from apps.shops.models import AuditLog
 
 from .models import Order
@@ -19,12 +22,8 @@ class ShipmentBookingError(ValueError):
 
 
 def shipment_origin(store):
-    warehouse = (store.warehouses.filter(is_active=True).exclude(address="")
-        .order_by("priority", "id").first())
-    origin = {"name": settings.BITESHIP_ORIGIN_CONTACT_NAME or store.name,
-        "phone": settings.BITESHIP_ORIGIN_CONTACT_PHONE or store.support_phone,
-        "address": settings.BITESHIP_ORIGIN_ADDRESS or (warehouse.address if warehouse else ""),
-        "postal_code": settings.BITESHIP_ORIGIN_POSTAL_CODE}
+    origin = shipping_origin(store) or {"name": store.name, "phone": store.support_phone,
+        "address": "", "postal_code": ""}
     missing = [label for label, key in (("nomor telepon toko", "phone"),
         ("alamat gudang", "address"), ("kode pos asal", "postal_code")) if not origin[key]]
     if missing:

@@ -22,10 +22,29 @@ def _line_weight(line):
     return variant.weight_grams if variant and variant.weight_grams is not None else line["product"].weight_grams
 
 
+def shipping_origin(store):
+    """Where this store's parcels leave from: its first active warehouse that has a postal code.
+    The platform-wide BITESHIP_ORIGIN_* settings are only a fallback for a single-seller setup;
+    every seller ships from their own place, so rates must start there. None when unknown."""
+    warehouse = (store.warehouses.filter(is_active=True).exclude(postal_code="")
+        .order_by("priority", "id").first())
+    if warehouse:
+        return {"name": store.name, "phone": warehouse.phone or store.support_phone,
+            "address": warehouse.address, "postal_code": warehouse.postal_code}
+    if settings.BITESHIP_ORIGIN_POSTAL_CODE:
+        fallback = (store.warehouses.filter(is_active=True).exclude(address="")
+            .order_by("priority", "id").first())
+        return {"name": settings.BITESHIP_ORIGIN_CONTACT_NAME or store.name,
+            "phone": settings.BITESHIP_ORIGIN_CONTACT_PHONE or store.support_phone,
+            "address": settings.BITESHIP_ORIGIN_ADDRESS or (fallback.address if fallback else ""),
+            "postal_code": settings.BITESHIP_ORIGIN_POSTAL_CODE}
+    return None
+
+
 class BiteshipProvider:
     def __init__(self):
-        if not settings.BITESHIP_API_KEY or not settings.BITESHIP_ORIGIN_POSTAL_CODE:
-            raise ProviderError("Biteship API key and origin postal code are not configured.")
+        if not settings.BITESHIP_API_KEY:
+            raise ProviderError("Biteship API key is not configured.")
         if settings.BITESHIP_API_KEY.startswith("biteship_live.") and not settings.BITESHIP_ALLOW_LIVE:
             raise ProviderError("Live Biteship access is disabled. Use a biteship_test token for demo quotes.")
 
@@ -44,7 +63,7 @@ class BiteshipProvider:
             "village": area.get("administrative_division_level_4_name", "")}
             for area in data.get("areas", []) if area.get("id")]
 
-    def rates(self, destination_postal_code, lines, destination_area_id=""):
+    def rates(self, destination_postal_code, lines, destination_area_id="", *, origin_postal_code):
         items = [{"name": line["product"].name, "description": line["product"].description[:255],
             "value": int(line["unit_price"]), "quantity": line["quantity"],
             "weight": max(1, _line_weight(line)), "length": line["product"].length_cm,
@@ -52,7 +71,7 @@ class BiteshipProvider:
         destination = ({"destination_area_id": destination_area_id} if destination_area_id
             else {"destination_postal_code": int(destination_postal_code)})
         data = request_json(f"{settings.BITESHIP_API_URL}/v1/rates/couriers", method="POST",
-            headers=self.headers, payload={"origin_postal_code": int(settings.BITESHIP_ORIGIN_POSTAL_CODE),
+            headers=self.headers, payload={"origin_postal_code": int(origin_postal_code),
                 "couriers": settings.BITESHIP_COURIERS, "items": items, **destination})
         quotes = []
         for rate in data.get("pricing", []):

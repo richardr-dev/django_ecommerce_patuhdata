@@ -56,7 +56,7 @@ from apps.integrations.payments import (
     reserved_reference,
 )
 from apps.integrations.reconciliation import confirm_payment
-from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider
+from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider, shipping_origin
 from apps.shops.models import (
     AuditLog,
     Customer,
@@ -170,13 +170,15 @@ def _shipping_provider():
     return BiteshipProvider()
 
 
-def _shipping_provider_enabled():
+def _shipping_provider_enabled(store):
+    """Live courier rates at checkout: the provider is configured and, for Biteship, the store
+    has said where it ships from. Otherwise checkout offers the store's own shipping methods."""
     if settings.SHIPPING_RATE_PROVIDER == "rajaongkir":
         return bool(settings.RAJAONGKIR_API_KEY and
             (settings.RAJAONGKIR_ORIGIN_ID or settings.RAJAONGKIR_ORIGIN_POSTAL_CODE))
     key = settings.BITESHIP_API_KEY
-    return bool(key and settings.BITESHIP_ORIGIN_POSTAL_CODE and
-        (not key.startswith("biteship_live.") or settings.BITESHIP_ALLOW_LIVE))
+    return bool(key and (not key.startswith("biteship_live.") or settings.BITESHIP_ALLOW_LIVE)
+        and shipping_origin(store))
 
 
 def _shipping_provider_name():
@@ -211,7 +213,12 @@ def shipping_rates(request):
                 area_id = destination["id"]
             quotes = provider.rates(area_id, lines)
         else:
-            quotes = _shipping_provider().rates(postal_code, lines, area_id)
+            origin = shipping_origin(request.store)
+            if not origin:
+                return JsonResponse({"error": "Toko belum mengisi kode pos gudang untuk ongkir "
+                    "otomatis.", "code": "no_origin"}, status=422)
+            quotes = _shipping_provider().rates(postal_code, lines, area_id,
+                origin_postal_code=origin["postal_code"])
     except ProviderError as error:
         if "sufficient balance" not in str(error).lower():
             return JsonResponse({"error": str(error)}, status=502)
@@ -402,7 +409,7 @@ def checkout(request):
     lines, subtotal = get_cart(request)
     if not lines: return redirect("cart")
     record_event(request, "checkout_started", metadata={"cart_value": str(subtotal)}, always=True)
-    biteship_enabled = _shipping_provider_enabled()
+    biteship_enabled = _shipping_provider_enabled(request.store)
     shipping_methods = [] if biteship_enabled else list(ShippingMethod.objects.filter(store=request.store, is_active=True))
     requested_shipping = request.POST.get("shipping_method", "")
     selected_shipping = next((method for method in shipping_methods if method.code == requested_shipping), None)
