@@ -280,11 +280,12 @@ def payment_options(store):
     platform account is offered only for the demo or when PLATFORM_COLLECTS_PAYMENTS is set."""
     account = store_payment_settings(store)
     options = []
-    if account and account.gateway_ready:
+    # The seller's switch for DOKU Lakuin wins over their own gateway account while it is on.
+    platform_doku = platform_doku_available() and account and account.use_platform_gateway
+    if account and account.gateway_ready and not platform_doku:
         options.append(PaymentOption("gateway", account.gateway, True, *GATEWAY_LABELS[account.gateway]))
-    elif (settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS) or (
-            settings.PLATFORM_COLLECTS_PAYMENTS and platform_gateway_ready()) or (
-            platform_doku_available() and account and account.use_platform_gateway):
+    elif platform_doku or (settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS) or (
+            settings.PLATFORM_COLLECTS_PAYMENTS and platform_gateway_ready()):
         options.append(PaymentOption("gateway", settings.PAYMENT_PROVIDER, False,
             *GATEWAY_LABELS.get(settings.PAYMENT_PROVIDER, (settings.PAYMENT_PROVIDER, ""))))
     if account and account.bank_transfer_ready:

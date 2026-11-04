@@ -48,6 +48,20 @@ class PlatformDokuTests(TestCase):
         option = payment_options(self.store)[0]
         self.assertEqual((option.provider, option.store_account), ("doku", False))
 
+    def test_the_switch_wins_over_the_sellers_own_doku_until_turned_off(self):
+        StorePaymentSettings.objects.filter(id=self.account.id).update(gateway="doku",
+            doku_client_id="MCH-SELLER")
+        self.account.refresh_from_db()
+        self.account.secret_key = "seller-secret"
+        self.account.save()
+        self.assertTrue(payment_options(self.store)[0].store_account)
+        StorePaymentSettings.objects.filter(id=self.account.id).update(use_platform_gateway=True)
+        option = payment_options(self.store)[0]
+        self.assertEqual((option.provider, option.store_account), ("doku", False))
+        page = self.seller.get("/merchant/payments/")
+        self.assertContains(page, "PT Patuhdata Solusi Nusantara")
+        self.assertContains(page, 'role="switch"')
+
     def test_opting_in_needs_a_bank_account_for_payouts(self):
         page = self.seller.post("/merchant/payments/", {"use_platform_gateway": "on"})
         self.assertContains(page, "rekening bank tujuan pencairan")

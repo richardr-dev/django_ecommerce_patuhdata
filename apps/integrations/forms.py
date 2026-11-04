@@ -18,15 +18,18 @@ class PaymentSettingsForm(forms.ModelForm):
         model = StorePaymentSettings
         fields = ["bank_transfer_enabled", "bank_name", "bank_account_number", "bank_account_holder",
             "gateway", "doku_client_id", "use_platform_gateway"]
+        widgets = {"use_platform_gateway": forms.CheckboxInput(attrs={"class": "switch",
+            "role": "switch"})}
         labels = {"bank_transfer_enabled": "Terima transfer bank", "bank_name": "Nama bank",
             "bank_account_number": "Nomor rekening", "bank_account_holder": "Nama pemilik rekening",
             "gateway": "Payment gateway", "doku_client_id": "DOKU Client ID",
-            "use_platform_gateway": "Pakai DOKU Lakuin"}
+            "use_platform_gateway": "Terima pembayaran lewat DOKU Lakuin (PT Patuhdata Solusi Nusantara)"}
         help_texts = {"bank_transfer_enabled": "Pembeli transfer langsung ke rekening Anda, lalu Anda "
             "konfirmasi dana masuk di halaman Pesanan.",
             "gateway": "Hubungkan akun DOKU atau Xendit milik usaha Anda sendiri.",
-            "use_platform_gateway": "QRIS, virtual account, dan e-wallet tanpa mendaftar DOKU sendiri. "
-                "Dana ditampung Lakuin lalu ditransfer ke rekening di atas setelah pesanan diterima."}
+            "use_platform_gateway": "Aktifkan untuk menerima QRIS, virtual account, dan e-wallet "
+                "tanpa mendaftar DOKU sendiri; matikan kapan saja. Dana diterima PT Patuhdata Solusi "
+                "Nusantara lalu ditransfer ke rekening di atas setelah pesanan diterima pembeli."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
