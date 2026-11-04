@@ -1,10 +1,10 @@
-{% load static %}<section class="warehouse-location" data-areas-url="{% url 'merchant-shipping-areas' %}">
-<div class="card-heading"><div><h2>📍 Lokasi pengiriman</h2><p>Ongkir dan penjemputan kurir dihitung dari titik ini. Cari kecamatan atau kode pos, lalu geser pin ke lokasi persis gudang.</p></div></div>
+{% load icons %}{% load static %}<section class="warehouse-location" data-areas-url="{% url 'merchant-shipping-areas' %}">
+<div class="card-heading"><div><h2>{% icon "pin" %} Lokasi pengiriman</h2><p>Ongkir dan penjemputan kurir dihitung dari titik ini. Cari kecamatan atau kode pos, lalu geser pin ke lokasi persis gudang.</p></div></div>
 <label class="span-2">Cari kecamatan, kota, atau kode pos<input type="search" id="location-search" class="control" autocomplete="off" placeholder="Contoh: Kemang Jakarta Selatan atau 12730"></label>
 <div class="location-results" id="location-results" role="listbox"></div>
 <p class="location-chosen" id="location-chosen"{% if not form.instance.area_name %} hidden{% endif %}>✓ <b id="location-chosen-name">{{ form.instance.area_name }}</b> <span id="location-chosen-postal" hidden>{{ form.instance.postal_code }}</span></p>
 <div class="location-map" id="location-map" aria-label="Peta lokasi gudang"></div>
-<div class="location-tools"><button type="button" class="bo-link" id="location-here">🎯 Gunakan lokasi saya</button><button type="button" class="bo-link" id="location-find-address">🔎 Cari alamat di peta</button><small class="muted" id="location-status">{% if form.instance.latitude %}Pin tersimpan. Geser bila kurang tepat.{% else %}Belum ada pin. Pilih kecamatan dulu, lalu geser pin.{% endif %}</small></div>
+<div class="location-tools"><button type="button" class="bo-link" id="location-here">{% icon "locate" %} Gunakan lokasi saya</button><button type="button" class="bo-link" id="location-find-address">{% icon "search" %} Cari alamat di peta</button><small class="muted" id="location-status">{% if form.instance.latitude %}Pin tersimpan. Geser bila kurang tepat.{% else %}Belum ada pin. Pilih kecamatan dulu, lalu geser pin.{% endif %}</small></div>
 </section>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" defer></script>

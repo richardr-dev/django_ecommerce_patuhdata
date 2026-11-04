@@ -12,3 +12,7 @@
 .bo-nav details summary{display:flex;align-items:center;padding:10px 12px;border-radius:8px;color:#d0d5dd;font-size:14px;cursor:pointer;list-style:none}.bo-nav details summary::-webkit-details-marker{display:none}.bo-nav details summary:after{content:"▸";margin-left:auto;color:#667085;transition:transform .15s}.bo-nav details[open] summary:after{transform:rotate(90deg)}.bo-nav details summary:hover{background:#1d2939;color:#fff}.bo-nav details[open] summary{color:#fff}
 .bo-sidebar .bo-nav details a{display:block;padding:8px 12px 8px 36px;font-size:13px;color:#98a2b3}.bo-sidebar .bo-nav details a:hover{color:#fff}.bo-sidebar .bo-nav .view-store{margin-top:14px;border:1px solid #344054}
 @media(max-width:700px){.bo-sidebar .bo-nav{grid-template-columns:1fr}}
+
+/* Line icons ({% icon %}): one simple style in the text colour. */
+.ico{width:1.15em!important;height:1.15em!important;max-width:none;vertical-align:-.2em;flex:none;display:inline-block}
+.bo-nav i{display:inline-flex;align-items:center;width:30px}.bo-nav i .ico{width:18px!important;height:18px!important;opacity:.85}

@@ -1,4 +1,4 @@
-{% load labels %}<!doctype html>
+{% load icons %}{% load labels %}<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -51,7 +51,7 @@
 </style>
 </head>
 <body class="paper-{{ paper }}">
-<div class="toolbar"><button type="button" onclick="window.print()">🖨 Cetak {{ orders|length }} label</button>{% for key, name in formats.items %}<a class="{% if key == paper %}on{% endif %}" href="?{{ base_query }}{% if base_query %}&{% endif %}format={{ key }}">{{ name }}</a>{% endfor %}<small>Printer thermal: pilih ukuran kertas yang sama di jendela cetak, margin "Tidak ada", skala 100%.</small></div>
+<div class="toolbar"><button type="button" onclick="window.print()">{% icon "printer" %} Cetak {{ orders|length }} label</button>{% for key, name in formats.items %}<a class="{% if key == paper %}on{% endif %}" href="?{{ base_query }}{% if base_query %}&{% endif %}format={{ key }}">{{ name }}</a>{% endfor %}<small>Printer thermal: pilih ukuran kertas yang sama di jendela cetak, margin "Tidak ada", skala 100%.</small></div>
 <main class="sheet">
 {% for order in orders %}<section class="label">
   <div class="row top"><span class="store">{% if store.logo %}<img src="{{ store.logo.url }}" alt="">{% endif %}{{ store.name }}</span><span class="courier"><b>{{ order.courier_code|default:"KURIR" }}</b><span>{{ order.courier_service_code|default:order.shipping_service|default:"" }}</span></span></div>
