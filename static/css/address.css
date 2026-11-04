@@ -1,1 +1,2 @@
 .area-results{display:grid;gap:6px;max-height:240px;overflow:auto}.area-option{background:#fff;color:#17212f;border:1px solid #dfe4ea;text-align:left;padding:12px}.area-option:hover{border-color:var(--brand);background:#f8fafc}
+.area-fields[hidden],.area-summary[hidden]{display:none}.area-summary{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0;padding:12px 14px;border:1px solid #dfe4ea;border-radius:10px;background:#f8fafc;font-weight:600}.area-summary span::before{content:"📍 "}

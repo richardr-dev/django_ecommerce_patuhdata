@@ -59,6 +59,37 @@
     throw new Error((data && data.error) || "Layanan kurir sedang bermasalah. Coba beberapa saat lagi.");
   }
 
+  // Once an area is picked, its province…postcode fields fold into one line with "Ubah".
+  const areaFields = document.getElementById("area-fields");
+  const areaSummary = document.getElementById("area-summary");
+  const AREA_NAMES = ["village", "district", "city", "province"];
+
+  function syncAreaSummary() {
+    if (!areaFields || !areaSummary) return;
+    const inputs = [...areaFields.querySelectorAll("input")];
+    const complete = !!areaId.value && inputs.every((input) => input.checkValidity());
+    const folded = complete && areaFields.dataset.editing !== "1";
+    if (folded) {
+      const names = AREA_NAMES.map((name) => document.querySelector(`[name=${name}]`)?.value.trim())
+        .filter(Boolean);
+      areaSummary.querySelector("[data-area-text]").textContent =
+        `${names.join(", ")} ${postal.value.trim()}`.trim();
+    }
+    areaSummary.hidden = !folded;
+    areaFields.hidden = folded;
+  }
+
+  if (areaSummary) {
+    areaSummary.querySelector("[data-area-edit]").addEventListener("click", () => {
+      areaFields.dataset.editing = "1";
+      syncAreaSummary();
+      areaFields.querySelector("input").focus();
+    });
+  }
+  document.addEventListener("input", (event) => {
+    if (event.target.name === "destination_area_id") syncAreaSummary();
+  });
+
   function fillAddress(area) {
     areaId.value = area.id;
     areaSearch.value = area.name;
@@ -69,12 +100,15 @@
     }
     areaResults.replaceChildren();
     button.disabled = false;
+    if (areaFields) delete areaFields.dataset.editing;
+    syncAreaSummary();
   }
 
   function renderAreas(areas) {
     areaResults.replaceChildren();
     if (!areas.length) {
-      areaResults.textContent = "Alamat tidak ditemukan. Coba nama kecamatan atau kota.";
+      areaResults.textContent = "Tidak ditemukan. Cari dengan nama kecamatan, kelurahan, atau kode "
+        + "pos (bukan nama gedung/apartemen; tulis itu di Alamat lengkap).";
       return;
     }
     for (const area of areas) {
@@ -224,6 +258,7 @@
 
   areaSearch.addEventListener("input", () => {
     areaId.value = "";
+    syncAreaSummary();
     button.disabled = true;
     latest.areas += 1;
     areaResults.replaceChildren();
@@ -246,6 +281,7 @@
   button.addEventListener("click", loadRates);
   choices.addEventListener("change", updateSummary);
 
+  syncAreaSummary();
   // A page re-rendered after a validation error keeps the address but loses its quotes.
   if (areaId.value) {
     button.disabled = false;

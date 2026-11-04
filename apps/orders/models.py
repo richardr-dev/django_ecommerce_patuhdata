@@ -102,6 +102,22 @@ class Order(models.Model):
             models.CheckConstraint(condition=models.Q(total__gte=0), name="order_total_nonnegative"),
         ]
 
+    @property
+    def full_address(self):
+        """Street or building, then kelurahan, kecamatan, city, province and postcode: what a
+        courier needs. Parts the shopper already typed in the street are not repeated."""
+        street = self.shipping_address.strip()
+        parts, seen = [street] if street else [], street.lower()
+        for part in (self.village, self.district, self.city, self.province):
+            part = (part or "").strip()
+            if part and part.lower() not in seen:  # e.g. kelurahan and kecamatan both "Pesanggrahan"
+                parts.append(part)
+                seen += f" {part.lower()}"
+        address = ", ".join(parts)
+        if self.postal_code and self.postal_code not in street:
+            address = f"{address} {self.postal_code}".strip()
+        return address
+
 
 class MobileCartItem(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="mobile_cart_items")

@@ -698,7 +698,7 @@ class CustomerAddressForm(StyledModelForm):
         labels = {"label": "Label (Rumah, Kantor…)", "customer_name": "Nama penerima",
             "phone": "Nomor WhatsApp", "province": "Provinsi", "city": "Kota/Kabupaten",
             "district": "Kecamatan", "village": "Kelurahan/Desa", "postal_code": "Kode pos",
-            "shipping_address": "Jalan, nomor rumah, RT/RW", "delivery_notes": "Catatan kurir",
+            "shipping_address": "Alamat lengkap (gedung/jalan, nomor, tower & unit, RT/RW)", "delivery_notes": "Catatan kurir",
             "is_default": "Jadikan alamat utama"}
         widgets = {"shipping_address": forms.Textarea(attrs={"rows": 3})}
 

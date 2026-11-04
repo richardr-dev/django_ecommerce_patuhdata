@@ -108,7 +108,7 @@ def _biteship_booking_payload(order, origin):
             "quantity": item.quantity, "weight": max(1, weight), "length": item.product.length_cm,
             "width": item.product.width_cm, "height": item.product.height_cm})
     destination = {"destination_contact_name": order.customer_name,
-        "destination_contact_phone": order.phone, "destination_address": order.shipping_address,
+        "destination_contact_phone": order.phone, "destination_address": order.full_address,
         "destination_note": order.delivery_notes}
     if order.destination_area_id:
         destination["destination_area_id"] = order.destination_area_id
