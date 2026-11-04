@@ -114,3 +114,40 @@ class StorefrontGateMiddleware:
                 "pesanan baru.")
             return redirect("/")
         return self.get_response(request)
+
+
+class SellerShortcutMiddleware:
+    """Remember, in a signed cookie shared with store subdomains, which stores the signed-in
+    seller manages, so their own storefront can show a "Kelola toko" link. The cookie only
+    lists store ids: it signs no one in, and the back office still asks for the session."""
+    def __init__(self, get_response): self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if settings.PLATFORM_DOMAIN and not getattr(request, "is_platform", False):
+            return response  # set and cleared only where the seller signs in and out
+        from django.core import signing
+
+        from .auth import (
+            SELLER_COOKIE,
+            SELLER_COOKIE_AGE,
+            SELLER_COOKIE_SALT,
+            read_seller_cookie,
+            seller_store_ids,
+        )
+        domain = f".{settings.PLATFORM_DOMAIN}" if settings.PLATFORM_DOMAIN else None
+        user = getattr(request, "user", None)
+        has_cookie = SELLER_COOKIE in request.COOKIES
+        if user is not None and user.is_authenticated:
+            if not request.path.startswith("/merchant/") and has_cookie:
+                return response
+            ids = seller_store_ids(user)
+            if ids and set(ids) != read_seller_cookie(request):
+                response.set_cookie(SELLER_COOKIE, signing.dumps(ids, salt=SELLER_COOKIE_SALT),
+                    max_age=SELLER_COOKIE_AGE, domain=domain, secure=not settings.DEBUG,
+                    httponly=True, samesite="Lax")
+            elif not ids and has_cookie:
+                response.delete_cookie(SELLER_COOKIE, domain=domain)
+        elif has_cookie:
+            response.delete_cookie(SELLER_COOKIE, domain=domain)
+        return response

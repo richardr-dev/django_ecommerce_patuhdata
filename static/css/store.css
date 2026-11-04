@@ -9,3 +9,4 @@
 .store-state-bar{padding:12px max(5vw,16px);font-size:14px;line-height:1.5;text-align:center}.store-state-bar a{font-weight:700;text-decoration:underline}
 .store-state-bar.closed{background:#fef3f2;color:#912018}.store-state-bar.owner{background:#fffaeb;color:#93370d;border-bottom:1px solid #fedf89}
 .store-closed-note{margin:12px 0;padding:12px 14px;border-radius:10px;background:#fef3f2;color:#912018;font-weight:600}
+.owner-shortcut{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:8px max(5vw,16px);font-size:13px;background:#1a1a1a;color:#fff}.owner-shortcut a{color:#fff;font-weight:700;text-decoration:underline}

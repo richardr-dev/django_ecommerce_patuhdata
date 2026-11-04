@@ -4,7 +4,7 @@ from django.urls import path, reverse_lazy
 from config.ratelimit import rate_limit
 
 from . import delivery_views, setup_views, views
-from .forms import CustomerLoginForm
+from .forms import CustomerLoginForm, MerchantLoginForm
 
 # Per IP and per submitted username/email; see config/ratelimit.py.
 login_limit = rate_limit("login", limit=10, window=900, field="username")
@@ -37,7 +37,8 @@ urlpatterns = [
     path("account/reset/complete/", auth_views.PasswordResetCompleteView.as_view(
         template_name="registration/password_reset_complete.html"), name="password-reset-complete"),
     path("merchant/login/", login_limit(auth_views.LoginView.as_view(
-        template_name="registration/merchant_login.html")), name="merchant-login"),
+        template_name="registration/merchant_login.html", authentication_form=MerchantLoginForm)),
+        name="merchant-login"),
     path("checkout/shipping-rates/", views.shipping_rates, name="shipping-rates"),
     path("checkout/shipping-areas/", views.shipping_areas, name="shipping-areas"),
     path("cart/", views.cart_view, name="cart"),

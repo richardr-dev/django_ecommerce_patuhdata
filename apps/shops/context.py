@@ -28,6 +28,13 @@ def store_context(request):
         from .availability import setup_steps
         return [step for step in setup_steps(store) if not step["done"]] if store else []
 
+    def manage_store_url():
+        from .auth import read_seller_cookie
+        if not store or store.id not in read_seller_cookie(request):
+            return ""
+        # On a store address /merchant/ forwards to the platform, opening this store's dashboard.
+        return "/merchant/" if settings.PLATFORM_DOMAIN else f"/merchant/?store={store.id}"
+
     state = getattr(request, "store_state", "open")
     preview = getattr(request, "store_preview", False)
     # Lazy, so responses that never render the header, footer or bottom bar skip the queries.
@@ -36,7 +43,8 @@ def store_context(request):
         "store_missing_steps": SimpleLazyObject(missing_steps),
         "store_nav_pages": SimpleLazyObject(nav_pages),
         "nav_cart_items": SimpleLazyObject(cart_items),
-        "nav_active_orders": SimpleLazyObject(active_orders)}
+        "nav_active_orders": SimpleLazyObject(active_orders),
+        "manage_store_url": SimpleLazyObject(manage_store_url)}
 
 
 def platform_context(request):

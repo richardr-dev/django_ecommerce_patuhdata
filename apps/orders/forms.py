@@ -237,6 +237,19 @@ class ProductImageForm(ProductSkuFormMixin, StyledModelForm):
         return cleaned
 
 
+class MerchantLoginForm(AuthenticationForm):
+    error_messages = {**AuthenticationForm.error_messages,
+        "invalid_login": "Email/nomor WhatsApp atau kata sandi salah. Periksa lagi, lalu coba "
+            "masuk kembali."}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["username"].label = "Email atau nomor WhatsApp"
+        self.fields["username"].widget.attrs.update({"autocomplete": "username",
+            "placeholder": "nama@email.com atau 0812…", "autocapitalize": "none"})
+        self.fields["password"].label = "Kata sandi"
+
+
 class CustomerLoginForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

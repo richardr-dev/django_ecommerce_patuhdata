@@ -57,7 +57,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.shops.middleware.StoreResolverMiddleware",
     "apps.shops.middleware.StorefrontGateMiddleware",
+    "apps.shops.middleware.SellerShortcutMiddleware",
 ]
+# Sellers sign in with their email or WhatsApp number (apps/shops/auth.py).
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend",
+    "apps.shops.auth.EmailOrPhoneBackend"]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",

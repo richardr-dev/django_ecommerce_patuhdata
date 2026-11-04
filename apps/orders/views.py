@@ -761,7 +761,7 @@ def customer_register(request):
     form = CustomerRegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        login(request, user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         messages.success(request, "Akun berhasil dibuat. Selamat berbelanja!")
         return redirect(next_url or "account-orders")
     return render(request, "registration/register.html", {"form": form, "next": next_url})

@@ -102,14 +102,14 @@ def store_signup(request):
 @transaction.atomic
 def _create_store(form, plan):
     data = form.cleaned_data
-    user = form.user or get_user_model().objects.create_user(username=data["email"],
+    user = form.user or get_user_model().objects.create_user(username=form.login_name(),
         email=data["email"], password=data["password1"], first_name=data["full_name"])
     org_slug, suffix = data["slug"], 2
     while Organization.objects.filter(slug=org_slug).exists():
         org_slug, suffix = f"{slugify(data['slug'])[:44]}-{suffix}", suffix + 1
     organization = Organization.objects.create(name=data["store_name"], slug=org_slug, owner=user)
     store = Store.objects.create(owner=user, organization=organization, name=data["store_name"],
-        slug=data["slug"], support_phone=data["phone"], support_email=user.email,
+        slug=data["slug"], support_phone=data["phone"], support_email=user.email or "",
         instagram=data.get("instagram", ""))
     Subscription.objects.create(store=store, plan=plan, current_period_end=trial_end_for(plan))
     create_store_defaults(store)

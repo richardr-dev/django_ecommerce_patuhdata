@@ -34,7 +34,8 @@ class StoreSignupForm(forms.Form):
     instagram = forms.CharField(label="Instagram toko (opsional)", max_length=60, required=False,
         help_text="Nama pengguna tanpa @, misalnya batiksari.id.")
     full_name = forms.CharField(label="Nama lengkap", max_length=150)
-    email = forms.EmailField(label="Email")
+    email = forms.EmailField(label="Email (opsional)", required=False,
+        help_text="Tanpa email, Anda masuk dengan nomor WhatsApp di atas.")
     password1 = forms.CharField(label="Kata sandi", strip=False, widget=forms.PasswordInput)
     password2 = forms.CharField(label="Ulangi kata sandi", strip=False, widget=forms.PasswordInput)
     accept_terms = forms.BooleanField(label="Saya menyetujui syarat layanan platform dan "
@@ -73,19 +74,30 @@ class StoreSignupForm(forms.Form):
             raise forms.ValidationError(str(error)) from None
 
     def clean_email(self):
-        email = self.cleaned_data["email"].strip().lower()
-        if get_user_model().objects.filter(username__iexact=email).exists():
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        User = get_user_model()
+        if email and (User.objects.filter(username__iexact=email).exists()
+                or User.objects.filter(email__iexact=email).exists()):
             raise forms.ValidationError("Email ini sudah terdaftar. Masuk dulu untuk membuka toko baru.")
         return email
 
+    def login_name(self):
+        """The new account's login name: its email, else its WhatsApp number."""
+        return self.cleaned_data.get("email") or self.cleaned_data.get("phone")
+
     def clean(self):
         cleaned = super().clean()
+        if not self.user and not cleaned.get("email") and cleaned.get("phone"):
+            from .auth import user_for_phone
+            if user_for_phone(cleaned["phone"]):
+                self.add_error("phone", "Nomor ini sudah dipakai untuk masuk ke akun penjual. "
+                    "Masuk dulu untuk membuka toko baru, atau isi email.")
         if self.user or not cleaned.get("password1"):
             return cleaned
         if cleaned["password1"] != cleaned.get("password2"):
             self.add_error("password2", "Kata sandi tidak sama.")
             return cleaned
-        candidate = get_user_model()(username=cleaned.get("email", ""), email=cleaned.get("email", ""),
+        candidate = get_user_model()(username=self.login_name() or "", email=cleaned.get("email", ""),
             first_name=cleaned.get("full_name", ""))
         try:
             validate_password(cleaned["password1"], candidate)
