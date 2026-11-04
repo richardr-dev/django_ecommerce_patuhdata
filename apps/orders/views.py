@@ -1274,8 +1274,22 @@ def merchant_stock(request):
             return redirect(back)
         reason = request.POST.get("reason", "Penyesuaian stok dashboard").strip()[:200]
         with transaction.atomic():
+            if target_type == "product":
+                # A product that has no stock entry yet starts one in the main warehouse.
+                product = get_object_or_404(Product, id=request.POST.get("target_id"),
+                    store=store, is_active=True)
+                warehouse = Warehouse.objects.filter(store=store, is_active=True).order_by(
+                    "priority", "id").first()
+                if warehouse is None:
+                    messages.error(request, "Tambahkan gudang terlebih dahulu.")
+                    return redirect(back)
+                level, _ = InventoryLevel.objects.select_for_update().get_or_create(
+                    warehouse=warehouse, product=product)
+                target_type = "level"
+            else:
+                level = None
             if target_type == "level":
-                level = get_object_or_404(InventoryLevel.objects.select_for_update(),
+                level = level or get_object_or_404(InventoryLevel.objects.select_for_update(),
                     id=request.POST.get("target_id"), warehouse__store=store)
                 if new_stock < level.reserved:
                     messages.error(request,
@@ -1323,11 +1337,18 @@ def merchant_stock(request):
             models.Q(product__sku__icontains=query))
         variants = variants.filter(models.Q(product__name__icontains=query) |
             models.Q(name__icontains=query) | models.Q(sku__icontains=query))
+    # Simple products nobody has stocked yet would otherwise be missing from this page.
+    unstocked = Product.objects.filter(store=store, is_active=True, is_preorder=False,
+        inventory_levels__isnull=True).exclude(variants__is_active=True).order_by("name")
+    if query:
+        unstocked = unstocked.filter(models.Q(name__icontains=query) | models.Q(sku__icontains=query))
+    unstocked = list(unstocked.distinct()[:MERCHANT_PAGE_SIZE])
     levels, level_range, level_query = paginate(request, levels, MERCHANT_PAGE_SIZE)
     variants, variant_range, variant_query = paginate(request, variants, MERCHANT_PAGE_SIZE,
         param="vpage")
     return render(request, "merchant/stock.html", _merchant_context(request, store,
         levels=levels, level_range=level_range, level_query=level_query, variants=variants,
+        unstocked=unstocked,
         variant_range=variant_range, variant_query=variant_query, query=query))
 
 @login_required(login_url="/merchant/login/")
@@ -1581,6 +1602,8 @@ def merchant_entity_edit(request, section, object_id=None):
         form.save_m2m()
         if hasattr(form, "save_uploads"):
             form.save_uploads(saved)
+        if hasattr(form, "save_stock"):
+            form.save_stock(saved, request.user)
         if entity is Product and not instance:
             warehouse = (form.cleaned_data.get("warehouse") or
                 Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id").first())

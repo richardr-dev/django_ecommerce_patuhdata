@@ -123,10 +123,56 @@ class ProductForm(StyledModelForm):
             self.instance.store = self.store
         self.fields["category"].queryset = Category.objects.filter(store=self.store)
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store, is_active=True)
+        self.stock_level = None
         if self.instance.pk:
             self.fields.pop("warehouse")
             self.fields.pop("initial_stock")
+            self._add_stock_field()
         self.fields["preorder_days"].required = False
+
+    def _add_stock_field(self):
+        """Stock of a simple product in its main warehouse, editable right here. Products with
+        variants keep stock per variant, and pre-orders have none (both in Kelola stok)."""
+        product = self.instance
+        if product.is_preorder or product.variants.filter(is_active=True).exists():
+            return
+        levels = product.inventory_levels.select_related("warehouse").filter(
+            warehouse__is_active=True).order_by("warehouse__priority", "warehouse_id")
+        self.stock_level = levels.first()
+        warehouse = (self.stock_level.warehouse if self.stock_level else
+            Warehouse.objects.filter(store=self.store, is_active=True).order_by("priority", "id").first())
+        if warehouse is None:
+            return
+        self.stock_warehouse = warehouse
+        reserved = self.stock_level.reserved if self.stock_level else 0
+        others = levels.count() > 1
+        self.fields["stock"] = forms.IntegerField(min_value=reserved, label=f"Stok di {warehouse.name}",
+            initial=self.stock_level.on_hand if self.stock_level else 0,
+            help_text=(f"{reserved} unit sedang dipesan dan tidak bisa dikurangi. " if reserved else "")
+                + ("Stok gudang lain diatur di menu Kelola stok." if others else
+                "Jumlah fisik barang yang siap dijual."))
+
+    def save_stock(self, product, actor):
+        """Apply the stock field, recording the change like Kelola stok does."""
+        if "stock" not in self.fields or self.cleaned_data.get("stock") is None:
+            return
+        from django.db import transaction
+
+        from .inventory import record_movement
+
+        new_stock = self.cleaned_data["stock"]
+        with transaction.atomic():
+            level, _ = InventoryLevel.objects.select_for_update().get_or_create(
+                warehouse=self.stock_warehouse, product=product)
+            previous = level.on_hand
+            if previous == new_stock or new_stock < level.reserved:
+                return
+            level.on_hand = new_stock
+            level.save(update_fields=["on_hand", "updated_at"])
+            record_movement(store=product.store, inventory_level=level, kind="adjust",
+                quantity=abs(new_stock - previous), reason="Ubah stok di halaman produk",
+                actor=actor, previous_on_hand=previous, new_on_hand=new_stock,
+                previous_reserved=level.reserved, new_reserved=level.reserved)
 
     def clean_preorder_days(self):
         days = self.cleaned_data.get("preorder_days")
