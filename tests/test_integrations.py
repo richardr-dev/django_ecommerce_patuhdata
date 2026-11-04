@@ -287,7 +287,7 @@ class ProviderIntegrationTests(TestCase):
 
     @override_settings(BITESHIP_API_KEY="biteship_test.demo", BITESHIP_ORIGIN_POSTAL_CODE="10110")
     @patch("apps.integrations.shipping.request_json")
-    def test_biteship_insufficient_balance_uses_labeled_demo_rate(self, request_json):
+    def test_biteship_insufficient_balance_falls_back_to_the_stores_own_rate(self, request_json):
         request_json.side_effect = ProviderError("Provider returned HTTP 400: No sufficient balance to call rates API")
         ShippingMethod.objects.create(store=self.store, code="demo-reg", name="Reguler", flat_rate=18000)
         client = Client()
@@ -297,7 +297,8 @@ class ProviderIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(data["fallback"])
         self.assertEqual(data["quotes"][0]["price"], 18000)
-        self.assertIn("tarif demo", data["quotes"][0]["name"])
+        self.assertEqual(data["quotes"][0]["name"], "Reguler")  # a real store rate, not "demo"
+        self.assertNotIn("demo", data["warning"].lower())
 
     @override_settings(XENDIT_WEBHOOK_VERIFICATION_TOKEN="webhook-secret")
     def test_xendit_webhook_verifies_and_marks_paid_once(self):

@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import logging
 import re
 import uuid
 from datetime import date, timedelta
@@ -145,6 +146,8 @@ from .tracking import sync_order_tracking
 # How long a new order may hold stock while its gateway session is being created.
 PAYMENT_SESSION_CREATION_WINDOW = timedelta(minutes=15)
 
+logger = logging.getLogger(__name__)
+
 
 def _abandon_unpaid_order(order, coupon):
     """Undo a reservation whose payment session could not be created."""
@@ -222,22 +225,23 @@ def shipping_rates(request):
     except ProviderError as error:
         if "sufficient balance" not in str(error).lower():
             return JsonResponse({"error": str(error)}, status=502)
+        logger.warning("Biteship balance is empty; store %s falls back to its own rates", request.store.slug)
         methods = ShippingMethod.objects.filter(store=request.store, is_active=True)
         stored, response_quotes = {}, []
         for method in methods:
             token = uuid.uuid4().hex
             price = int(method.quote(subtotal))
             stored[token] = {"provider": "demo", "courier_code": method.code,
-                "service_code": method.code, "name": f"{method.name} (tarif demo)", "price": price,
+                "service_code": method.code, "name": method.name, "price": price,
                 "eta": method.eta, "postal_code": postal_code, "destination_area_id": area_id,
                 "cart_signature": _cart_signature(lines)}
-            response_quotes.append({"token": token, "name": f"{method.name} (tarif demo)",
+            response_quotes.append({"token": token, "name": method.name,
                 "price": price, "eta": method.eta})
         if not response_quotes: return JsonResponse({"error": str(error)}, status=402)
         request.session["shipping_quotes"] = stored
         return JsonResponse({"quotes": response_quotes, "fallback": True,
             "provider_name": _shipping_provider_name(),
-            "warning": "Saldo test Biteship tidak cukup. Harga yang ditampilkan adalah tarif demo toko, bukan tarif kurir real-time."})
+            "warning": f"Ongkir ditetapkan oleh {request.store.name}."})
     stored = {}
     response_quotes = []
     for quote in quotes:
