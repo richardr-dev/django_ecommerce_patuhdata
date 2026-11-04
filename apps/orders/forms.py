@@ -225,7 +225,23 @@ class CategoryForm(StyledModelForm):
 
 
 class WarehouseForm(StyledModelForm):
-    class Meta: model = Warehouse; exclude = ("store",)
+    """Gudang & outlet. Its place is picked from the courier provider's area list and a map pin
+    (templates/merchant/warehouse_location.html), which fill the hidden location fields."""
+
+    class Meta:
+        model = Warehouse
+        fields = ("name", "code", "area_id", "area_name", "postal_code", "latitude", "longitude",
+            "address", "phone", "priority", "is_active", "is_outlet", "opening_hours",
+            "pickup_enabled")
+        labels = {"name": "Nama gudang / outlet", "code": "Kode", "address": "Alamat lengkap",
+            "phone": "Telepon (dihubungi kurir)", "priority": "Prioritas stok",
+            "is_active": "Aktif"}
+        help_texts = {"address": "Jalan, nomor, gedung/unit, patokan. Kurir menjemput ke sini.",
+            "priority": "Angka kecil dipakai lebih dulu untuk stok dan ongkir.",
+            "code": "Singkatan unik, mis. JKT atau BDG."}
+        widgets = {"area_id": forms.HiddenInput, "area_name": forms.HiddenInput,
+            "latitude": forms.HiddenInput, "longitude": forms.HiddenInput,
+            "address": forms.Textarea(attrs={"rows": 3})}
 
     def clean(self):
         cleaned = super().clean()

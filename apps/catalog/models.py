@@ -169,6 +169,12 @@ class Warehouse(models.Model):
     postal_code = models.CharField(max_length=5, blank=True, verbose_name="Kode pos",
         validators=[RegexValidator(r"^\d{5}$", "Kode pos terdiri dari 5 angka.")],
         help_text="Ongkir otomatis dihitung dari lokasi ini (gudang aktif dengan prioritas terkecil).")
+    # Chosen from the courier provider's own area list, so rates and pickups use exactly this place.
+    area_id = models.CharField(max_length=80, blank=True)
+    area_name = models.CharField(max_length=200, blank=True, verbose_name="Kecamatan / kota")
+    # Map pin of the pickup point; same-day couriers (GoSend, Grab) need coordinates.
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     priority = models.PositiveSmallIntegerField(default=100, help_text="Lower values allocate first")
     is_active = models.BooleanField(default=True)
     # An outlet is a stock location that is also a shop customers can visit. Outlets are billed

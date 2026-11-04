@@ -212,6 +212,23 @@ def shipping_areas(request):
     return JsonResponse({"areas": areas})
 
 
+@login_required(login_url="/merchant/login/")
+def merchant_shipping_areas(request):
+    """Area search for the warehouse form: the courier provider's own list of kecamatan and
+    postal codes, so a warehouse's place matches what rates and pickups use."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
+    query = request.GET.get("q", "").strip()
+    if len(query) < 3:
+        return JsonResponse({"areas": []})
+    try:
+        areas = _shipping_provider().search_areas(query)
+    except ProviderError as error:
+        logger.warning("merchant area search failed: %s", error)
+        return JsonResponse({"error": SHIPPING_UNAVAILABLE}, status=502)
+    return JsonResponse({"areas": areas[:10]})
+
+
 def shipping_rates(request):
     if request.method != "POST" or not request.store: raise Http404
     lines, subtotal = get_cart(request)
@@ -236,7 +253,7 @@ def shipping_rates(request):
                 return JsonResponse({"error": "Toko belum mengisi kode pos gudang untuk ongkir "
                     "otomatis.", "code": "no_origin"}, status=422)
             quotes = _shipping_provider().rates(postal_code, lines, area_id,
-                origin_postal_code=origin["postal_code"])
+                origin_postal_code=origin["postal_code"], origin_area_id=origin.get("area_id", ""))
     except ProviderError as error:
         if "sufficient balance" not in str(error).lower():
             logger.warning("shipping rates failed for %s: %s", request.store.slug, error)

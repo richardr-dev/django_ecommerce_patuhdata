@@ -30,7 +30,9 @@ def shipping_origin(store):
         .order_by("priority", "id").first())
     if warehouse:
         return {"name": store.name, "phone": warehouse.phone or store.support_phone,
-            "address": warehouse.address, "postal_code": warehouse.postal_code}
+            "address": warehouse.address, "postal_code": warehouse.postal_code,
+            "area_id": warehouse.area_id, "latitude": warehouse.latitude,
+            "longitude": warehouse.longitude}
     if settings.BITESHIP_ORIGIN_POSTAL_CODE:
         fallback = (store.warehouses.filter(is_active=True).exclude(address="")
             .order_by("priority", "id").first())
@@ -63,16 +65,20 @@ class BiteshipProvider:
             "village": area.get("administrative_division_level_4_name", "")}
             for area in data.get("areas", []) if area.get("id")]
 
-    def rates(self, destination_postal_code, lines, destination_area_id="", *, origin_postal_code):
+    def rates(self, destination_postal_code, lines, destination_area_id="", *, origin_postal_code,
+            origin_area_id=""):
         items = [{"name": line["product"].name, "description": line["product"].description[:255],
             "value": int(line["unit_price"]), "quantity": line["quantity"],
             "weight": max(1, _line_weight(line)), "length": line["product"].length_cm,
             "width": line["product"].width_cm, "height": line["product"].height_cm} for line in lines]
         destination = ({"destination_area_id": destination_area_id} if destination_area_id
             else {"destination_postal_code": int(destination_postal_code)})
+        # The area the seller picked on the map is exact; a postal code can cover several areas.
+        origin = ({"origin_area_id": origin_area_id} if origin_area_id
+            else {"origin_postal_code": int(origin_postal_code)})
         data = request_json(f"{settings.BITESHIP_API_URL}/v1/rates/couriers", method="POST",
-            headers=self.headers, payload={"origin_postal_code": int(origin_postal_code),
-                "couriers": settings.BITESHIP_COURIERS, "items": items, **destination})
+            headers=self.headers, payload={**origin, "couriers": settings.BITESHIP_COURIERS,
+                "items": items, **destination})
         quotes = []
         for rate in data.get("pricing", []):
             quotes.append(ShippingQuote(provider="biteship", courier_code=rate.get("courier_code", ""),
@@ -110,7 +116,13 @@ def _biteship_booking_payload(order, origin):
         destination["destination_postal_code"] = int(order.postal_code)
     if order.email:
         destination["destination_contact_email"] = order.email
-    return {"shipper_contact_name": origin["name"], "shipper_contact_phone": origin["phone"],
+    pickup = {}
+    if origin.get("area_id"):
+        pickup["origin_area_id"] = origin["area_id"]
+    if origin.get("latitude") is not None and origin.get("longitude") is not None:
+        pickup["origin_coordinate"] = {"latitude": float(origin["latitude"]),
+            "longitude": float(origin["longitude"])}
+    return {**pickup, "shipper_contact_name": origin["name"], "shipper_contact_phone": origin["phone"],
         "shipper_organization": order.store.name[:100],
         "origin_contact_name": origin["name"], "origin_contact_phone": origin["phone"],
         "origin_address": origin["address"], "origin_postal_code": int(origin["postal_code"]),

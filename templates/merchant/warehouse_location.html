@@ -1,0 +1,15 @@
+{% load static %}<section class="warehouse-location" data-areas-url="{% url 'merchant-shipping-areas' %}">
+<div class="card-heading"><div><h2>📍 Lokasi pengiriman</h2><p>Ongkir dan penjemputan kurir dihitung dari titik ini. Cari kecamatan atau kode pos, lalu geser pin ke lokasi persis gudang.</p></div></div>
+<label class="span-2">Cari kecamatan, kota, atau kode pos<input type="search" id="location-search" class="control" autocomplete="off" placeholder="Contoh: Kemang Jakarta Selatan atau 12730"></label>
+<div class="location-results" id="location-results" role="listbox"></div>
+<p class="location-chosen" id="location-chosen"{% if not form.instance.area_name %} hidden{% endif %}>✓ <b id="location-chosen-name">{{ form.instance.area_name }}</b> <span id="location-chosen-postal" hidden>{{ form.instance.postal_code }}</span></p>
+<div class="location-map" id="location-map" aria-label="Peta lokasi gudang"></div>
+<div class="location-tools"><button type="button" class="bo-link" id="location-here">🎯 Gunakan lokasi saya</button><button type="button" class="bo-link" id="location-find-address">🔎 Cari alamat di peta</button><small class="muted" id="location-status">{% if form.instance.latitude %}Pin tersimpan. Geser bila kurang tepat.{% else %}Belum ada pin. Pilih kecamatan dulu, lalu geser pin.{% endif %}</small></div>
+</section>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" defer></script>
+<script src="{% static 'js/warehouse-location.js' %}" defer></script>
+<style>.warehouse-location{display:grid;gap:10px;margin-bottom:22px;padding-bottom:22px;border-bottom:1px solid #eaecf0}.warehouse-location label{display:grid;gap:6px;font-weight:700}
+.location-results{display:grid;gap:4px}.location-results button{padding:9px 12px;border:1px solid #e4e7ec;border-radius:8px;background:#fff;text-align:left;font:inherit;cursor:pointer}.location-results button:hover{border-color:var(--bo-accent)}
+.location-chosen{margin:0;padding:10px 12px;border-radius:8px;background:#ecfdf3;color:#067647}.location-map{height:320px;border:1px solid #e4e7ec;border-radius:12px;z-index:0}
+.location-tools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}</style>

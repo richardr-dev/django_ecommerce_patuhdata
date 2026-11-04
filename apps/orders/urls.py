@@ -88,6 +88,8 @@ urlpatterns = [
     path("merchant/payments/test/", views.merchant_payment_test, name="merchant-payment-test"),
     path("merchant/engagement/", views.merchant_engagement, name="merchant-engagement"),
     path("merchant/integrations/<int:event_id>/retry/", views.merchant_integration_retry, name="merchant-integration-retry"),
+    path("merchant/shipping-areas/", rate_limit("merchant-areas", limit=60, window=600,
+        methods=("GET",))(views.merchant_shipping_areas), name="merchant-shipping-areas"),
     path("merchant/setup/<slug:section>/", views.merchant_entity_list, name="merchant-entity-list"),
     path("merchant/setup/<slug:section>/new/", views.merchant_entity_edit, name="merchant-entity-new"),
     path("merchant/setup/<slug:section>/<int:object_id>/", views.merchant_entity_edit, name="merchant-entity-edit"),
