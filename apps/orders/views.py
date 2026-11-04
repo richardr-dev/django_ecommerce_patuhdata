@@ -152,6 +152,7 @@ from .shipments import (
     courier_label_url,
     has_courier_label,
     is_booking_pending,
+    merged_courier_labels,
 )
 from .tracking import sync_order_tracking
 
@@ -1259,6 +1260,36 @@ def merchant_order_courier_label(request, order_id):
 
 
 @login_required(login_url="/merchant/login/")
+def merchant_order_courier_labels(request):
+    """The official courier labels of the ticked orders (?id=…&id=…) as one PDF to print in one
+    go. Orders without a booked courier keep the Lakuin label."""
+    store = _staff_store(request)
+    _require_roles(request, store, FULFILMENT_ROLES | {"customer_service"})
+    try:
+        ids = [uuid.UUID(value) for value in request.GET.getlist("id")[:LABEL_LIMIT]]
+    except ValueError as error:
+        raise Http404 from error
+    orders = [order for order in Order.objects.filter(store=store, id__in=ids).order_by("created_at")
+        if has_courier_label(order)]
+    if not orders:
+        messages.error(request, "Belum ada pesanan dengan kurir yang sudah dipesan.")
+        return redirect("merchant-orders")
+    pdf, missing = merged_courier_labels(orders)
+    if pdf is None:
+        messages.error(request, "Label resmi kurir belum tersedia. Coba lagi sebentar, atau cetak "
+            "label Lakuin.")
+        return redirect("merchant-orders")
+    Order.objects.filter(id__in=[order.id for order in orders if order not in missing],
+        label_printed_at__isnull=True).update(label_printed_at=timezone.now())
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'inline; filename="label-kurir-{timezone.localdate():%Y%m%d}.pdf"')
+    if missing:
+        response["X-Labels-Missing"] = ",".join(str(order.id) for order in missing)
+    return response
+
+
+@login_required(login_url="/merchant/login/")
 def merchant_order_labels(request):
     """Printable shipping labels like the marketplaces': ticked orders (?id=…&id=…), or a whole
     tab (?tab=). Opening the page marks the labels as printed."""
@@ -1279,6 +1310,10 @@ def merchant_order_labels(request):
     if len(orders) == 1 and len(ids) == 1 and has_courier_label(orders[0]):
         # One order the courier was booked for: print the courier's own label.
         return redirect("merchant-order-courier-label", order_id=orders[0].id)
+    if len(orders) > 1 and ids and all(has_courier_label(order) for order in orders):
+        # Every ticked order was booked: one PDF of the couriers' own labels.
+        return redirect(f"{reverse('merchant-order-courier-labels')}?"
+            + "&".join(f"id={order.id}" for order in orders))
     for order in orders:
         order.courier_label = has_courier_label(order)
         order.weight_grams = sum((item.product.weight_grams or 0) * item.quantity

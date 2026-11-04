@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from django.db import transaction
@@ -11,6 +12,8 @@ from apps.integrations.shipping import (
 from apps.shops.models import AuditLog
 
 from .models import Order
+
+logger = logging.getLogger(__name__)
 
 # external_shipping_id holds this prefix while a booking request is in flight or its outcome is
 # unknown; it stops a second click (or a retry) from booking a second courier pickup.
@@ -101,3 +104,34 @@ def courier_label_url(order):
         url = BiteshipShipmentProvider().shipping_label_url(order.external_shipping_id)
         cache.set(key, url, 86400)
     return url
+
+
+LABEL_PDF_MAX_BYTES = 5 * 1024 * 1024
+
+
+def merged_courier_labels(orders):
+    """The official labels of several booked orders as one PDF, so a whole batch prints in one go.
+    Returns the PDF bytes and the orders whose label could not be fetched yet."""
+    from io import BytesIO
+
+    import requests
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.errors import PyPdfError
+
+    writer, missing = PdfWriter(), []
+    for order in orders:
+        try:
+            response = requests.get(courier_label_url(order), timeout=(10, 30))
+            if (not response.ok or len(response.content) > LABEL_PDF_MAX_BYTES
+                    or not response.content.startswith(b"%PDF")):
+                raise ProviderError(f"label HTTP {response.status_code}")
+            for page in PdfReader(BytesIO(response.content)).pages:
+                writer.add_page(page)
+        except (ProviderError, requests.RequestException, PyPdfError, ValueError) as error:
+            logger.warning("courier label for %s failed: %s", order.id, error)
+            missing.append(order)
+    if not writer.pages:
+        return None, missing
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue(), missing

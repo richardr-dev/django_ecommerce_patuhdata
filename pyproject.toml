@@ -10,6 +10,7 @@ dependencies = [
   "django-storages[s3]>=1.14,<2",
   "gunicorn>=23,<24",
   "psycopg[binary]>=3.2,<4",
+  "pypdf>=5,<7",
   "requests>=2.32,<3",
   "sentry-sdk[django]>=2.40,<3",
   "whitenoise>=6.8,<7",

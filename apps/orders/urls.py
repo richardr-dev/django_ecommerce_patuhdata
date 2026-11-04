@@ -73,6 +73,8 @@ urlpatterns = [
     path("merchant/orders/labels/", views.merchant_order_labels, name="merchant-order-labels"),
     path("merchant/orders/<uuid:order_id>/courier-label/", views.merchant_order_courier_label,
         name="merchant-order-courier-label"),
+    path("merchant/orders/courier-labels/", views.merchant_order_courier_labels,
+        name="merchant-order-courier-labels"),
     path("merchant/delivery/", delivery_views.merchant_delivery, name="merchant-delivery"),
     path("merchant/delivery/recap/", delivery_views.merchant_production_recap,
         name="merchant-production-recap"),
