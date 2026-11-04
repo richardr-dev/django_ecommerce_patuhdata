@@ -11,6 +11,10 @@
   .toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: #111827; color: #fff; font-size: 13px; }
   .toolbar button { padding: 9px 16px; border: 0; border-radius: 8px; background: #ee4d2d; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .toolbar a { padding: 6px 10px; border: 1px solid #4b5563; border-radius: 6px; color: #d1d5db; text-decoration: none; }
+  .ico { width: 1.1em; height: 1.1em; vertical-align: -.18em; }
+  .official-labels { padding: 10px 16px; background: #fffbeb; color: #78350f; font-size: 13px; }
+  .official-labels a { margin-left: 6px; color: #92400e; font-weight: 700; }
+  @media print { .official-labels { display: none; } }
   .toolbar a.on { border-color: #fff; background: #fff; color: #111827; font-weight: 700; }
   .toolbar small { width: 100%; color: #9ca3af; }
   .sheet { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 16px; }
@@ -51,7 +55,7 @@
 </style>
 </head>
 <body class="paper-{{ paper }}">
-<div class="toolbar"><button type="button" onclick="window.print()">{% icon "printer" %} Cetak {{ orders|length }} label</button>{% for key, name in formats.items %}<a class="{% if key == paper %}on{% endif %}" href="?{{ base_query }}{% if base_query %}&{% endif %}format={{ key }}">{{ name }}</a>{% endfor %}<small>Printer thermal: pilih ukuran kertas yang sama di jendela cetak, margin "Tidak ada", skala 100%.</small></div>
+<div class="toolbar"><button type="button" onclick="window.print()">{% icon "printer" %} Cetak {{ orders|length }} label</button>{% for key, name in formats.items %}<a class="{% if key == paper %}on{% endif %}" href="?{{ base_query }}{% if base_query %}&{% endif %}format={{ key }}">{{ name }}</a>{% endfor %}<small>Printer thermal: pilih ukuran kertas yang sama di jendela cetak, margin "Tidak ada", skala 100%.</small></div>{% if courier_labels %}<div class="official-labels"><b>Label resmi kurir tersedia</b> untuk pesanan yang kurirnya sudah dipesan. Tempel label resmi pada paket:{% for order in courier_labels %} <a href="{% url 'merchant-order-courier-label' order.id %}" target="_blank" rel="noopener">#{{ order.id|stringformat:"s"|slice:":8"|upper }} ({{ order.courier_code|upper }})</a>{% endfor %}</div>{% endif %}
 <main class="sheet">
 {% for order in orders %}<section class="label">
   <div class="row top"><span class="store">{% if store.logo %}<img src="{{ store.logo.url }}" alt="">{% endif %}{{ store.name }}</span><span class="courier"><b>{{ order.courier_code|default:"KURIR" }}</b><span>{{ order.courier_service_code|default:order.shipping_service|default:"" }}</span></span></div>

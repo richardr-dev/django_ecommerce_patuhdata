@@ -83,3 +83,21 @@ def book_shipment(order, *, actor):
                 "price": result["price"]})
     order.refresh_from_db()
     return result
+
+
+def has_courier_label(order):
+    """Biteship booked the courier, so the courier's own label can be printed."""
+    return (order.shipping_provider == "biteship" and bool(order.external_shipping_id)
+        and not is_booking_pending(order))
+
+
+def courier_label_url(order):
+    """Link to the official courier label PDF, cached for a day (Biteship keeps it)."""
+    from django.core.cache import cache
+
+    key = f"courier-label:{order.external_shipping_id}"
+    url = cache.get(key)
+    if not url:
+        url = BiteshipShipmentProvider().shipping_label_url(order.external_shipping_id)
+        cache.set(key, url, 86400)
+    return url

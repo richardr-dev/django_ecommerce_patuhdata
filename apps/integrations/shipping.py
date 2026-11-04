@@ -146,6 +146,15 @@ class BiteshipShipmentProvider(BiteshipProvider):
             "tracking_id": courier.get("tracking_id") or "", "status": data.get("status", ""),
             "price": data.get("price"), "payload": data}
 
+    def shipping_label_url(self, shipment_id):
+        """The courier's official label (PDF, 10×15 cm) Biteship made for a booked shipment."""
+        data = request_json(f"{settings.BITESHIP_API_URL}/v1/orders/{shipment_id}/label",
+            headers=self.headers)
+        url = (data.get("shipping_label") or {}).get("file_url") or ""
+        if not url.startswith("https://"):
+            raise ProviderError("Biteship belum menyediakan label untuk pengiriman ini.")
+        return url
+
     def track_order(self, shipment_id):
         data = request_json(f"{settings.BITESHIP_API_URL}/v1/orders/{shipment_id}",
             headers=self.headers)

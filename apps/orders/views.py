@@ -85,7 +85,7 @@ from .access import (
 from .addresses import checkout_prefill, save_checkout_address, saved_addresses
 from .buyer import BUYER_TABS, buyer_orders, estimated_arrival, tracker_steps
 from .cart import get_cart
-from .couriers import courier_tracking, present_quotes
+from .couriers import courier_name, courier_tracking, present_quotes
 from .engagement import commerce_session, engagement_summary, record_event, update_cart_snapshot
 from .forms import (
     CategoryForm,
@@ -145,7 +145,14 @@ from .services import (
     normalize_indonesian_phone,
     transition_order,
 )
-from .shipments import ShipmentBookingError, book_shipment, can_book_shipment, is_booking_pending
+from .shipments import (
+    ShipmentBookingError,
+    book_shipment,
+    can_book_shipment,
+    courier_label_url,
+    has_courier_label,
+    is_booking_pending,
+)
 from .tracking import sync_order_tracking
 
 # How long a new order may hold stock while its gateway session is being created.
@@ -1103,6 +1110,8 @@ def merchant_orders(request):
     for order in page.object_list:
         order.available_statuses = allowed_order_transitions(order)
         order.can_book_shipment = can_book_shipment(order)
+        order.courier_label = has_courier_label(order)
+        order.courier_name = courier_name(order.courier_code)
         order.booking_pending = is_booking_pending(order)
         parcel = courier_tracking(order)
         order.whatsapp_url = _whatsapp_link(order.phone,
@@ -1229,6 +1238,27 @@ LABEL_FORMATS = {"100x150": "Thermal 100×150 mm", "100x100": "Thermal 100×100 
 
 
 @login_required(login_url="/merchant/login/")
+def merchant_order_courier_label(request, order_id):
+    """Open the courier's official label (JNE, J&T, SiCepat, …) for an order booked through
+    Biteship; print it at 100% on 10×15 cm thermal paper."""
+    store = _staff_store(request)
+    _require_roles(request, store, FULFILMENT_ROLES | {"customer_service"})
+    order = get_object_or_404(Order, id=order_id, store=store)
+    if not has_courier_label(order):
+        return redirect(f"{reverse('merchant-order-labels')}?id={order.id}&print=1")
+    try:
+        url = courier_label_url(order)
+    except ProviderError as error:
+        logger.warning("courier label for %s failed: %s", order.id, error)
+        messages.error(request, "Label resmi kurir belum tersedia. Coba lagi sebentar, atau cetak "
+            "label Lakuin.")
+        return redirect("merchant-orders")
+    Order.objects.filter(id=order.id, label_printed_at__isnull=True).update(
+        label_printed_at=timezone.now())
+    return redirect(url)
+
+
+@login_required(login_url="/merchant/login/")
 def merchant_order_labels(request):
     """Printable shipping labels like the marketplaces': ticked orders (?id=…&id=…), or a whole
     tab (?tab=). Opening the page marks the labels as printed."""
@@ -1246,7 +1276,11 @@ def merchant_order_labels(request):
     else:
         orders = orders.filter(status__in=groups.get(request.GET.get("tab"), groups["pack"]))
     orders = list(orders[:LABEL_LIMIT])
+    if len(orders) == 1 and len(ids) == 1 and has_courier_label(orders[0]):
+        # One order the courier was booked for: print the courier's own label.
+        return redirect("merchant-order-courier-label", order_id=orders[0].id)
     for order in orders:
+        order.courier_label = has_courier_label(order)
         order.weight_grams = sum((item.product.weight_grams or 0) * item.quantity
             for item in order.items.all())
         order.weight_kg = Decimal(order.weight_grams) / 1000
@@ -1259,7 +1293,8 @@ def merchant_order_labels(request):
     query.pop("print", None)
     return render(request, "merchant/order_labels.html", {"store": store, "orders": orders,
         "store_phone": store.support_phone, "paper": paper, "formats": LABEL_FORMATS,
-        "base_query": query.urlencode(), "auto_print": request.GET.get("print") == "1"})
+        "base_query": query.urlencode(), "auto_print": request.GET.get("print") == "1",
+        "courier_labels": [order for order in orders if order.courier_label]})
 
 
 @login_required(login_url="/merchant/login/")
