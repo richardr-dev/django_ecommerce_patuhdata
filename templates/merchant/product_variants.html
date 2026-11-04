@@ -1,0 +1,37 @@
+{% load static %}
+{# Variants of this product, saved together with it. Each one has its own SKU, price and stock. #}
+<section class="variant-card" id="variants" data-product-sku="{{ form.sku.value|default:'' }}" data-product-price="{{ form.price.value|default:'' }}">
+  <div class="card-heading">
+    <div>
+      <h2>Varian</h2>
+      <p>Pakai varian bila produk ini punya pilihan seperti ukuran atau warna. Setiap varian punya SKU, harga, dan stok sendiri, dan stok produk dihitung dari jumlah stok variannya.</p>
+    </div>
+  </div>
+
+  <div class="variant-options-builder">
+    <h3>Opsi</h3>
+    <div class="variant-option-rows" data-option-rows>
+      <div class="variant-option-row">
+        <label>Nama opsi<input type="text" data-option-name placeholder="mis. Ukuran"></label>
+        <label>Pilihan<input type="text" data-option-values placeholder="mis. S, M, L (pisahkan dengan koma)"></label>
+      </div>
+    </div>
+    <div class="variant-builder-actions">
+      <button type="button" class="secondary" data-add-option>+ Tambah opsi lain</button>
+      <button type="button" class="secondary" data-generate>Buat kombinasi varian</button>
+      <button type="button" class="bo-link" data-add-variant>+ Tambah satu varian</button>
+    </div>
+  </div>
+
+  {{ variants.management_form }}
+  {% if variants.non_form_errors %}<div class="form-errors">{{ variants.non_form_errors }}</div>{% endif %}
+  <div class="variant-table" data-variant-table {% if not variants.forms %}hidden{% endif %}>
+    <div class="variant-row variant-head" aria-hidden="true"><span>Varian</span><span>SKU</span><span>Harga</span><span>Stok</span><span>Aktif</span><span></span></div>
+    <div data-variant-rows>
+      {% for row in variants.forms %}{% include "merchant/product_variant_row.html" with row=row %}{% endfor %}
+    </div>
+  </div>
+  <p class="muted variant-empty" data-variant-empty {% if variants.forms %}hidden{% endif %}>Belum ada varian. Produk dijual sebagai satu barang dengan stok di gudang.</p>
+  <template data-variant-template>{% include "merchant/product_variant_row.html" with row=variants.empty_form %}</template>
+</section>
+<script src="{% static 'js/product-variants.js' %}" defer></script>

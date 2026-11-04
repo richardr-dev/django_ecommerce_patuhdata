@@ -99,11 +99,11 @@ from .forms import (
     OrderReviewForm,
     ProductForm,
     ProductImageForm,
+    ProductVariantFormSet,
     ShippingMethodForm,
     StorefrontSlideForm,
     StorePageForm,
     StoreSettingsForm,
-    VariantForm,
     WarehouseForm,
 )
 from .inventory import record_movement, reserve_from_levels, reserve_variant
@@ -1593,9 +1593,9 @@ BACKOFFICE = {
     "flash-sales": (FlashSaleProduct, FlashSaleProductForm, "Produk flash sale", ("campaign", "product", "sale_price", "stock_limit", "per_customer_limit")),
     "campaigns": (MarketingCampaign, MarketingCampaignForm, "Flash sale & popup", ("name", "headline", "starts_at", "ends_at", "is_active")),
     "slides": (StorefrontSlide, StorefrontSlideForm, "Banner carousel", ("headline", "button_label", "position", "is_active")),
-    "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "stock_available", "is_active")),
+    "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "variant_count",
+        "stock_available", "is_active")),
     "images": (ProductImage, ProductImageForm, "Foto produk", ("product", "alt_text", "position")),
-    "variants": (ProductVariant, VariantForm, "Varian", ("product", "name", "sku", "price", "stock", "is_active")),
     "categories": (Category, CategoryForm, "Kategori", ("name", "slug")),
     "warehouses": (Warehouse, WarehouseForm, "Gudang & outlet", ("name", "code", "is_outlet",
         "pickup_enabled", "is_active")),
@@ -1620,8 +1620,6 @@ def _entity_queryset(entity, store):
         return entity.objects.filter(store=store, product__store=store).select_related("product")
     if entity is FlashSaleProduct:
         return entity.objects.filter(product__store=store, campaign__store=store).select_related("product", "campaign")
-    if entity is ProductVariant:
-        return entity.objects.filter(product__store=store).select_related("product")
     if entity is ProductImage:
         return entity.objects.filter(product__store=store).select_related("product")
     if entity is InventoryLevel:
@@ -1632,15 +1630,22 @@ def _entity_queryset(entity, store):
 @login_required(login_url="/merchant/login/")
 def merchant_entity_list(request, section):
     store = _staff_store(request)
+    if section == "variants":  # variants live on their product's page now
+        return redirect("merchant-entity-list", section="products")
     if section not in BACKOFFICE:
         raise Http404
     entity, _, title, columns = BACKOFFICE[section]
     rows = _entity_queryset(entity, store).order_by("-id")
     if entity is Product:
-        rows = annotate_available_stock(rows)
+        rows = annotate_available_stock(rows).annotate(variant_count=models.Subquery(
+            ProductVariant.objects.filter(product=models.OuterRef("pk"), is_active=True)
+            .values("product").annotate(total=Count("id")).values("total"),
+            output_field=models.IntegerField()))
     query = request.GET.get("q", "").strip()
     if query:
-        if entity is Product or entity is ProductVariant: rows = rows.filter(models.Q(name__icontains=query) | models.Q(sku__icontains=query))
+        if entity is Product: rows = rows.filter(models.Q(name__icontains=query) |
+            models.Q(sku__icontains=query) | models.Exists(ProductVariant.objects.filter(
+                product=models.OuterRef("pk"), sku__icontains=query)))
         elif entity is Coupon: rows = rows.filter(code__icontains=query)
         elif entity is NewsletterSubscriber: rows = rows.filter(email__icontains=query)
         elif entity is StorePage: rows = rows.filter(title__icontains=query)
@@ -1669,7 +1674,7 @@ COLUMN_LABELS = {"name": "Nama", "sku": "SKU", "price": "Harga", "stock_availabl
     "rating": "Rating", "display_name": "Nama pembeli", "email": "Email", "source": "Sumber",
     "subscribed_at": "Berlangganan sejak", "is_subscribed": "Aktif", "campaign": "Kampanye",
     "sale_price": "Harga promo", "stock_limit": "Kuota", "per_customer_limit": "Maks. per pembeli",
-    "pickup_enabled": "Ambil di outlet"}
+    "pickup_enabled": "Ambil di outlet", "variant_count": "Varian"}
 MONEY_COLUMNS = {"price", "flat_rate", "free_above", "minimum_spend", "sale_price"}
 
 
@@ -1697,6 +1702,13 @@ def _list_cell(value, column):
 @login_required(login_url="/merchant/login/")
 def merchant_entity_edit(request, section, object_id=None):
     store = _staff_store(request)
+    if section == "variants":  # old links: open the variant's product instead
+        variant = get_object_or_404(ProductVariant, id=object_id, product__store=store) if (
+            object_id) else None
+        if variant is None:
+            return redirect("merchant-entity-list", section="products")
+        return redirect(reverse("merchant-entity-edit", args=["products", variant.product_id])
+            + "#variants")
     if section not in BACKOFFICE:
         raise Http404
     if section in {"inventory", "warehouses"}:
@@ -1708,29 +1720,55 @@ def merchant_entity_edit(request, section, object_id=None):
         raise Http404
     instance = get_object_or_404(_entity_queryset(entity, store), id=object_id) if object_id else None
     form = form_class(request.POST or None, request.FILES or None, instance=instance, store=store)
-    if request.method == "POST" and form.is_valid():
-        saved = form.save(commit=False)
-        if hasattr(saved, "store_id"):
-            saved.store = store
-        saved.save()
-        form.save_m2m()
-        if hasattr(form, "save_uploads"):
-            form.save_uploads(saved)
-        if hasattr(form, "save_stock"):
-            form.save_stock(saved, request.user)
-        if entity is Product and not instance:
-            warehouse = (form.cleaned_data.get("warehouse") or
-                Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id").first())
-            if warehouse:
-                InventoryLevel.objects.get_or_create(warehouse=warehouse, product=saved,
-                    defaults={"on_hand": form.cleaned_data.get("initial_stock") or 0})
-        AuditLog.objects.create(store=store, actor=request.user,
-            action=f"{section}.{'updated' if instance else 'created'}", object_type=entity.__name__,
-            object_id=str(saved.id), details={"label": str(saved)})
-        messages.success(request, f"{title} berhasil disimpan.")
-        return redirect("merchant-entity-list", section=section)
+    # A post without the variant block (an older client or script) leaves the variants alone.
+    variant_data = request.POST if "variants-TOTAL_FORMS" in request.POST else None
+    variants = (ProductVariantFormSet(variant_data, instance=instance or Product(store=store),
+        store=store, prefix="variants") if entity is Product else None)
+    form_ok = request.method == "POST" and form.is_valid()
+    if variants is not None and variants.is_bound:
+        variants.product_sku = form.cleaned_data.get("sku") if form_ok else None
+        form_ok = variants.is_valid() and form_ok
+    if form_ok:
+        try:
+            with transaction.atomic():
+                _, kept = _save_entity(request, store, section, entity, form, instance, variants)
+        except ValidationError as error:
+            if not instance:
+                form.instance.pk = None
+            form.add_error(None, error.messages)
+        else:
+            if kept:
+                messages.info(request, f"{kept} varian sudah punya riwayat pesanan, jadi dinonaktifkan "
+                    "dan tidak dihapus.")
+            messages.success(request, f"{title} berhasil disimpan.")
+            return redirect("merchant-entity-list", section=section)
     return render(request, "merchant/entity_form.html", _merchant_context(request, store,
-        section=section, title=title, form=form, editing=bool(instance)))
+        section=section, title=title, form=form, editing=bool(instance), variants=variants))
+
+
+def _save_entity(request, store, section, entity, form, instance, variants):
+    """Save a back-office form; for products, together with its variants."""
+    saved = form.save(commit=False)
+    if hasattr(saved, "store_id"):
+        saved.store = store
+    saved.save()
+    form.save_m2m()
+    if hasattr(form, "save_uploads"):
+        form.save_uploads(saved)
+    kept = variants.save_all(saved, request.user) if variants is not None and variants.is_bound else 0
+    has_variants = entity is Product and saved.variants.filter(is_active=True).exists()
+    if hasattr(form, "save_stock") and not has_variants:
+        form.save_stock(saved, request.user)
+    if entity is Product and not instance and not has_variants:
+        warehouse = (form.cleaned_data.get("warehouse") or
+            Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id").first())
+        if warehouse:
+            InventoryLevel.objects.get_or_create(warehouse=warehouse, product=saved,
+                defaults={"on_hand": form.cleaned_data.get("initial_stock") or 0})
+    AuditLog.objects.create(store=store, actor=request.user,
+        action=f"{section}.{'updated' if instance else 'created'}", object_type=entity.__name__,
+        object_id=str(saved.id), details={"label": str(saved)})
+    return saved, kept
 
 
 @login_required(login_url="/merchant/login/")

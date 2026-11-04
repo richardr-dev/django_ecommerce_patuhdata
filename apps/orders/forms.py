@@ -146,7 +146,8 @@ class ProductForm(StyledModelForm):
         self.stock_warehouse = warehouse
         reserved = self.stock_level.reserved if self.stock_level else 0
         others = levels.count() > 1
-        self.fields["stock"] = forms.IntegerField(min_value=reserved, label=f"Stok di {warehouse.name}",
+        self.fields["stock"] = forms.IntegerField(min_value=reserved, required=False,
+            label=f"Stok di {warehouse.name}",
             initial=self.stock_level.on_hand if self.stock_level else 0,
             help_text=(f"{reserved} unit sedang dipesan dan tidak bisa dikurangi. " if reserved else "")
                 + ("Stok gudang lain diatur di menu Kelola stok." if others else
@@ -315,6 +316,146 @@ class InventoryForm(ProductSkuFormMixin, StyledModelForm):
         if self.instance.pk:
             self.fields["warehouse"].disabled = True
             self.fields["product"].disabled = True
+
+
+class ProductVariantRowForm(StyledModelForm):
+    """One variant row inside the product page: its own name, SKU, price and stock."""
+
+    class Meta:
+        model = ProductVariant
+        fields = ("name", "sku", "attributes", "price", "cost_price", "stock", "barcode",
+            "weight_grams", "is_active")
+        labels = {"name": "Varian", "sku": "SKU", "price": "Harga", "cost_price": "Harga pokok",
+            "stock": "Stok", "barcode": "Barcode", "weight_grams": "Berat (gram)",
+            "is_active": "Aktif"}
+        widgets = {"attributes": forms.HiddenInput}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["attributes"].required = False
+        self.fields["price"].widget.attrs["placeholder"] = "Harga produk"
+        self.fields["cost_price"].widget.attrs["placeholder"] = "Harga pokok produk"
+        self.fields["weight_grams"].widget.attrs["placeholder"] = "Berat produk"
+        self.fields["is_active"].initial = True
+        reserved = self.instance.reserved if self.instance.pk else 0
+        self.fields["stock"].min_value = reserved
+        self.fields["stock"].widget.attrs["min"] = reserved
+        if reserved:
+            self.fields["stock"].help_text = f"{reserved} dipesan"
+
+    def clean_attributes(self):
+        value = self.cleaned_data.get("attributes")
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise forms.ValidationError("Atribut varian tidak valid.")
+        return {str(key)[:40]: str(item)[:80] for key, item in value.items()}
+
+    def clean_sku(self):
+        return (self.cleaned_data.get("sku") or "").strip()
+
+    def clean_stock(self):
+        stock = self.cleaned_data.get("stock")
+        if stock is not None and self.instance.pk and stock < self.instance.reserved:
+            raise forms.ValidationError(
+                f"Tidak boleh kurang dari {self.instance.reserved} unit yang sedang dipesan.")
+        return stock
+
+
+class BaseProductVariantFormSet(forms.BaseInlineFormSet):
+    """The variants of a product, edited together with the product itself. Stock changes are
+    logged like Kelola stok, and variants with order history are deactivated, not deleted."""
+
+    def __init__(self, *args, store=None, **kwargs):
+        self.store = store
+        self.product_sku = None
+        super().__init__(*args, **kwargs)
+        self.queryset = self.queryset.order_by("id")
+
+    def get_form_kwargs(self, index):
+        return {**super().get_form_kwargs(index), "store": self.store}
+
+    def validate_unique(self):
+        """Duplicate SKUs get a clearer message, per row, in clean()."""
+
+    def live_forms(self):
+        return [form for form in self.forms if getattr(form, "cleaned_data", None)
+            and (form.has_changed() or form.instance.pk) and not self._should_delete_form(form)]
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        seen = {}
+        product = self.instance
+        for form in self.live_forms():
+            sku = form.cleaned_data.get("sku")
+            if not sku:
+                continue
+            if self.product_sku and sku == self.product_sku:
+                form.add_error("sku", "SKU varian tidak boleh sama dengan SKU produk.")
+            elif sku in seen:
+                form.add_error("sku", "SKU ini dipakai dua kali di produk ini.")
+            seen[sku] = form
+        if not seen or not self.store:
+            return
+        own_variants = ProductVariant.objects.filter(product=product) if product.pk else (
+            ProductVariant.objects.none())
+        taken = set(Product.objects.filter(store=self.store, sku__in=seen).exclude(
+            pk=product.pk).values_list("sku", flat=True))
+        taken |= set(ProductVariant.objects.filter(product__store=self.store, sku__in=seen)
+            .exclude(pk__in=own_variants.values("pk")).values_list("sku", flat=True))
+        for sku in taken:
+            seen[sku].add_error("sku", f"SKU {sku} sudah dipakai produk atau varian lain di toko ini.")
+
+    def save_all(self, product, actor):
+        """Save every row. Returns how many variants were deactivated instead of deleted."""
+        from django.db import transaction
+        from django.db.models.deletion import ProtectedError
+
+        from .inventory import record_movement
+
+        self.instance = product
+        kept = 0
+        with transaction.atomic():
+            for form in self.forms:
+                variant = form.instance
+                if self._should_delete_form(form):
+                    if variant.pk:
+                        try:
+                            with transaction.atomic():
+                                variant.delete()
+                        except ProtectedError:
+                            ProductVariant.objects.filter(pk=variant.pk).update(is_active=False)
+                            kept += 1
+                    continue
+                if not form.has_changed() or not form.cleaned_data:
+                    continue
+                data = form.cleaned_data
+                if variant.pk:
+                    locked = ProductVariant.objects.select_for_update().get(pk=variant.pk)
+                    previous = locked.stock
+                    for name in ("name", "sku", "attributes", "price", "cost_price", "barcode",
+                            "weight_grams", "is_active"):
+                        setattr(locked, name, data.get(name))
+                    new_stock = max(data["stock"], locked.reserved)
+                    locked.stock = new_stock
+                    locked.save()
+                else:
+                    locked = form.save(commit=False)
+                    locked.product = product
+                    previous, new_stock = 0, locked.stock
+                    locked.save()
+                if new_stock != previous:
+                    record_movement(store=product.store, variant=locked, kind="adjust",
+                        quantity=abs(new_stock - previous), reason="Ubah stok varian di halaman produk",
+                        actor=actor, previous_on_hand=previous, new_on_hand=new_stock,
+                        previous_reserved=locked.reserved, new_reserved=locked.reserved)
+        return kept
+
+
+ProductVariantFormSet = forms.inlineformset_factory(Product, ProductVariant,
+    form=ProductVariantRowForm, formset=BaseProductVariantFormSet, extra=0, can_delete=True)
 
 
 class VariantForm(ProductSkuFormMixin, StyledModelForm):

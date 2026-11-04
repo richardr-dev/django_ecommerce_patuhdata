@@ -1,0 +1,20 @@
+<div class="variant-item{% if row.errors %} has-errors{% endif %}" data-variant-row>
+  {% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}
+  <div class="variant-row">
+    <label><span class="variant-label">Varian</span>{{ row.name }}{{ row.name.errors }}</label>
+    <label><span class="variant-label">SKU</span>{{ row.sku }}{{ row.sku.errors }}</label>
+    <label><span class="variant-label">Harga</span>{{ row.price }}{{ row.price.errors }}</label>
+    <label><span class="variant-label">Stok</span>{{ row.stock }}{% if row.stock.help_text %}<small>{{ row.stock.help_text }}</small>{% endif %}{{ row.stock.errors }}</label>
+    <label class="variant-check"><span class="variant-label">Aktif</span>{{ row.is_active }}</label>
+    <div class="variant-row-actions">
+      <button type="button" class="bo-link" data-toggle-more aria-expanded="false">Lainnya</button>
+      {% if row.instance.pk %}<label class="variant-delete">{{ row.DELETE }} Hapus</label>{% else %}<span hidden>{{ row.DELETE }}</span><button type="button" class="bo-link variant-remove" data-remove-variant>Hapus</button>{% endif %}
+    </div>
+  </div>
+  <div class="variant-more" hidden>
+    <label>Barcode{{ row.barcode }}{{ row.barcode.errors }}</label>
+    <label>Harga pokok{{ row.cost_price }}{{ row.cost_price.errors }}</label>
+    <label>Berat (gram){{ row.weight_grams }}{{ row.weight_grams.errors }}</label>
+  </div>
+  {% if row.non_field_errors %}<div class="form-errors">{{ row.non_field_errors }}</div>{% endif %}
+</div>
