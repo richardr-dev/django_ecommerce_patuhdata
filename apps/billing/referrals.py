@@ -115,7 +115,7 @@ def apply_rewards(invoice):
         ReferralReward.objects.filter(store=invoice.store, used_at__isnull=True,
             invoice__status="pending", invoice__kind="checkout").exclude(invoice=invoice).update(
             invoice=None)
-        rewards = list(_available(invoice.store).select_for_update()[:invoice.months])
+        rewards = list(_available(invoice.store).select_for_update(of=("self",))[:invoice.months])
         if not rewards:
             return Decimal(0)
         wanted = sum((monthly * reward.percent / 100 for reward in rewards), Decimal(0))
