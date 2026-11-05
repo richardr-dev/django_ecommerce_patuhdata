@@ -85,9 +85,9 @@ def merchant_invoice_register(request):
         # PKP selling ordinary goods at the 12% rate use 11/12 of the price as the tax base.
         other_base = money(invoice.tax_base * 11 / 12) if invoice.seller_is_pkp else ""
         writer.writerow([invoice.number, invoice.issued_on.isoformat(), invoice.order_id,
-            invoice.buyer_name, invoice.buyer_npwp, invoice.buyer_address, invoice.tax_base,
-            other_base, invoice.tax_rate, invoice.tax, invoice.shipping, invoice.total,
-            invoice.refunded])
+            invoice.buyer_name, invoice.buyer_npwp, invoice.buyer_address, money(invoice.tax_base),
+            other_base, invoice.tax_rate, money(invoice.tax), money(invoice.shipping),
+            money(invoice.total), money(invoice.refunded or 0)])
     return response
 
 
