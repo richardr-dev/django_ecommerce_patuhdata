@@ -260,3 +260,12 @@
 .wholesale-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
 .wholesale-row label { font-size: 13px; font-weight: 600; }
 @media (max-width: 700px) { .wholesale-row { grid-template-columns: 1fr 1fr; } }
+.referral-tier { display: grid; gap: 8px; margin: 4px 0 16px; }
+.referral-tier .badge { justify-self: start; }
+.referral-progress { height: 8px; border-radius: 99px; background: #eef2f6; overflow: hidden; max-width: 420px; }
+.referral-progress span { display: block; height: 100%; background: var(--bo-accent); border-radius: 99px; }
+.referral-tier small { color: var(--bo-muted); }
+.referral-tiers { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 4px 0 0; }
+.referral-tiers li { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid var(--bo-line); border-radius: 10px; font-size: 12px; color: var(--bo-muted); }
+.referral-tiers li b { color: var(--bo-ink); font-size: 13px; }
+.referral-tiers li.current { border-color: var(--bo-accent); background: #eff4ff; }

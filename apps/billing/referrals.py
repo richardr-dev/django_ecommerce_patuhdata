@@ -1,8 +1,9 @@
 """Ajak teman: a store's invite link is lakuin.store/start/?ref=<its slug>.
 
-The new store gets one discounted month for its first paid plan, and the inviting store gets
-one once the new store pays. Each reward is REFERRAL_DISCOUNT_PERCENT off one month of the
-plan; a monthly bill uses at most one, a yearly bill at most twelve."""
+The new store gets one discounted month for its first paid plan (REFERRAL_DISCOUNT_PERCENT
+off), and the inviting store gets one once the new store pays. The inviter's discount grows
+with its tier, set by how many invited stores have paid (REFERRAL_TIERS). A monthly bill uses
+at most one reward, a yearly bill at most twelve."""
 import re
 from decimal import Decimal
 
@@ -23,6 +24,30 @@ MAX_SHARE = Decimal("0.9")
 
 def discount_percent():
     return max(1, min(90, int(getattr(settings, "REFERRAL_DISCOUNT_PERCENT", 50))))
+
+
+def tiers():
+    """[(min_paid_invites, name, percent)], lowest first. The first tier never pays less than
+    the welcome discount, and no tier more than 90%."""
+    rows = getattr(settings, "REFERRAL_TIERS", None) or [(1, "Teman", 50), (3, "Mitra", 70),
+        (10, "Duta Lakuin", 90)]
+    rows = sorted((max(1, int(at)), str(name), max(1, min(90, int(percent))))
+        for at, name, percent in rows)
+    _, name, percent = rows[0]
+    rows[0] = (1, name, max(percent, discount_percent()))
+    return rows
+
+
+def tier_for(qualified):
+    """The tier a store with ``qualified`` paying invites is in, and the next one (or None)."""
+    rows = tiers()
+    current = rows[0]
+    for row in rows:
+        if qualified >= row[0]:
+            current = row
+    later = [row for row in rows if row[0] > qualified]
+    return ({"at": current[0], "name": current[1], "percent": current[2]},
+        {"at": later[0][0], "name": later[0][1], "percent": later[0][2]} if later else None)
 
 
 def clean_code(value):
@@ -60,10 +85,17 @@ def _notify_inviter(referral, reward):
     if not recipients:
         return
     link = platform_url(reverse("merchant-billing") + f"?store={store.id}#ajak-teman")
+    qualified = store.referrals_made.filter(status="qualified").count()
+    tier, following = tier_for(qualified)
+    level = (f"Anda sekarang di tingkat {tier['name']}: setiap toko yang Anda ajak dan "
+        f"berlangganan memberi diskon {tier['percent']}%.")
+    if following:
+        level += (f" Ajak {following['at'] - qualified} toko lagi untuk naik ke tingkat "
+            f"{following['name']} ({following['percent']}%).")
     body = (f"Halo,\n\n{referral.referred.name} yang Anda ajak ke {settings.PLATFORM_NAME} baru "
         f"saja mulai berlangganan. Terima kasih!\n\nToko {store.name} mendapat diskon "
         f"{reward.percent}% untuk satu bulan langganan. Diskon otomatis dipotong dari tagihan "
-        f"berikutnya.\n\nLihat diskon dan link undangan Anda:\n{link}\n\n"
+        f"berikutnya.\n\n{level}\n\nLihat diskon dan link undangan Anda:\n{link}\n\n"
         f"{settings.PLATFORM_NAME} · {settings.PLATFORM_COMPANY_NAME}")
     try:
         send_mail(f"{store.name}: Anda dapat diskon {reward.percent}% dari Ajak teman", body,
@@ -140,13 +172,17 @@ def invoice_paid(invoice):
         status="signed_up").first()
     if referral is None:
         return
+    # Lock the inviter so two invited stores paying at once both count toward its tier.
+    Store.objects.select_for_update().filter(id=referral.referrer_id).exists()
     referral.status, referral.qualified_at = "qualified", now
     referral.save(update_fields=["status", "qualified_at"])
+    tier, _ = tier_for(Referral.objects.filter(referrer_id=referral.referrer_id,
+        status="qualified").count())
     reward, created = ReferralReward.objects.get_or_create(referral=referral, kind="referrer",
-        defaults={"store": referral.referrer, "percent": discount_percent()})
+        defaults={"store": referral.referrer, "percent": tier["percent"]})
     AuditLog.objects.create(store=referral.referrer, action="billing.referral_rewarded",
         object_type="Referral", object_id=str(referral.id),
-        details={"referred": invoice.store.slug, "percent": discount_percent()})
+        details={"referred": invoice.store.slug, "percent": reward.percent, "tier": tier["name"]})
     if not created:
         return
     # A renewal already billed but not yet opened for payment takes the reward right away.
@@ -162,10 +198,20 @@ def referral_summary(store):
     from .models import ReferralLink
 
     link = ReferralLink.objects.filter(store=store).first()
+    qualified = referrals.filter(status="qualified").count()
+    tier, following = tier_for(qualified)
+    progress = None
+    if following:
+        span = following["at"] - (tier["at"] if qualified >= tier["at"] else 0)
+        done = qualified - (tier["at"] if qualified >= tier["at"] else 0)
+        progress = {"needed": following["at"] - qualified,
+            "percent": int(100 * done / span) if span else 0}
     return {"invite_url": invite_url(store), "percent": discount_percent(),
+        "tier": tier if qualified else None, "next_tier": following, "progress": progress,
+        "reward_percent": tier["percent"], "tiers": tiers(),
         "clicks": link.clicks if link else 0,
         "invited": referrals.exclude(status="rejected").count(),
-        "qualified": referrals.filter(status="qualified").count(),
+        "qualified": qualified,
         "available": available,
         "held": store.referral_rewards.filter(used_at__isnull=True,
             invoice__status="pending").count(),

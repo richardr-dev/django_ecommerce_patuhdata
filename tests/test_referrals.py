@@ -105,3 +105,43 @@ class ReferralTests(TestCase):
         signup = Client().get("/start/?ref=toko-lama")
         self.assertContains(signup, "Diundang oleh <b>Toko Lama</b>")
         self.assertContains(signup, "diskon 50%")
+
+    def _invite_and_pay(self, index):
+        owner = User.objects.create_user(f"invited-{index}")
+        store = Store.objects.create(owner=owner, name=f"Undangan {index}", slug=f"undangan-{index}")
+        Referral.objects.create(referrer=self.inviter, referred=store, status="signed_up")
+        self._pay(start_checkout(store, self.plan, 1, owner))
+        return ReferralReward.objects.get(referral__referred=store, kind="referrer")
+
+    def test_the_inviter_reward_grows_with_its_tier(self):
+        percents = [self._invite_and_pay(index).percent for index in range(1, 5)]
+        self.assertEqual(percents, [50, 50, 70, 70])  # Teman, Teman, Mitra (3rd), Mitra
+        # Rewards earned before a tier change keep their percentage.
+        self.assertEqual(sorted(ReferralReward.objects.filter(store=self.inviter)
+            .values_list("percent", flat=True)), [50, 50, 70, 70])
+        seller = Client()
+        seller.force_login(self.inviter_owner)
+        page = seller.get("/merchant/billing/")
+        self.assertContains(page, "Tingkat Mitra · 70%")
+        self.assertContains(page, "Ajak 6 toko lagi")
+        self.assertContains(page, "Duta Lakuin")
+
+    @override_settings(REFERRAL_TIERS=[(1, "Teman", 50), (2, "Duta", 90)])
+    def test_top_tier_and_public_program_page(self):
+        self._invite_and_pay(1)
+        self.assertEqual(self._invite_and_pay(2).percent, 90)
+        seller = Client()
+        seller.force_login(self.inviter_owner)
+        self.assertContains(seller.get("/merchant/billing/"), "tingkat tertinggi")
+        page = Client().get("/ajak-teman/")
+        self.assertContains(page, "hemat langganan sampai 90%")
+        self.assertContains(page, "<td>1 toko</td>", html=False)
+        self.assertContains(page, "2 atau lebih toko")
+
+    def test_a_store_without_paid_invites_has_no_tier_yet(self):
+        from apps.billing.referrals import referral_summary, tier_for
+
+        self.assertIsNone(referral_summary(self.inviter)["tier"])
+        self.assertEqual(referral_summary(self.inviter)["next_tier"]["name"], "Teman")
+        self.assertEqual(tier_for(10)[0]["name"], "Duta Lakuin")
+        self.assertIsNone(tier_for(25)[1])

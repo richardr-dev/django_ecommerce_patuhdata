@@ -118,3 +118,4 @@ main{padding:0 16px}
 @media(max-width:900px){.pf-hero-grid{grid-template-columns:minmax(0,1fr)}.pf-footer-grid{grid-template-columns:1fr 1fr}.pf-footer-about{grid-column:1/-1}}
 @media(max-width:560px){.pf-slug{flex-wrap:wrap}.pf-header nav{gap:8px 14px}.pf-mock-grid{grid-template-columns:repeat(2,1fr)}.pf-mock-toast{position:static;margin:0 16px 16px}.pf-footer-grid{grid-template-columns:1fr}}
 .pf-notice{margin:0 0 16px;padding:10px 14px;border-radius:10px;background:#ecfdf3;color:#05603a;border:1px solid #abefc6;font-size:14px}
+.pf-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:15px}.pf-table th,.pf-table td{text-align:left;padding:10px 12px;border-bottom:1px solid #e7e5e4}.pf-table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#78716c}@media(max-width:600px){.pf-table{font-size:13px}.pf-table th,.pf-table td{padding:8px 6px}}

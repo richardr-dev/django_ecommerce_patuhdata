@@ -61,9 +61,13 @@ def referral_program(request):
     """Ajak teman: how the seller referral program works and its rules (platform page)."""
     if settings.PLATFORM_DOMAIN and getattr(request, "store", None):
         return redirect(platform_url("/ajak-teman/"))  # opened on a store's address
-    from apps.billing.referrals import discount_percent
+    from apps.billing.referrals import discount_percent, tiers
+    rows = tiers()
+    table = [{"name": name, "percent": percent, "range": f"{at} atau lebih" if index == len(rows) - 1
+        else (f"{at}" if rows[index + 1][0] - 1 == at else f"{at}–{rows[index + 1][0] - 1}")}
+        for index, (at, name, percent) in enumerate(rows)]
     return render(request, "platform/referral.html", {"percent": discount_percent(),
-        "trial_days": settings.TRIAL_DAYS})
+        "trial_days": settings.TRIAL_DAYS, "tiers": table, "top_percent": rows[-1][2]})
 
 
 def favicon(request):

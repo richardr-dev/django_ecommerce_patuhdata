@@ -220,6 +220,8 @@ PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
 TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
 # Ajak teman: each side of a referral gets this percent off one month of its plan (1-90).
 REFERRAL_DISCOUNT_PERCENT = int(os.getenv("REFERRAL_DISCOUNT_PERCENT", "50"))
+# Ajak teman tiers for the inviting store: (paid invites needed, name, % off one month each).
+REFERRAL_TIERS = [(1, "Teman", 50), (3, "Mitra", 70), (10, "Duta Lakuin", 90)]
 # Renewal billing: bill the next period this many days ahead, and keep a paying store fully
 # active this many days after its period ends while the renewal is unpaid.
 RENEWAL_NOTICE_DAYS = int(os.getenv("RENEWAL_NOTICE_DAYS", "7"))
