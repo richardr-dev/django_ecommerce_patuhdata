@@ -1,0 +1,3 @@
+{% extends "platform/base.html" %}{% block title %}Undangan staf{% endblock %}{% block content %}
+<section class="pf-form-card">{% if valid %}<h1>Buat kata sandi</h1><p class="pf-muted">Halo {{ invited.first_name|default:invited.username }}. Buat kata sandi untuk masuk ke back office. Login Anda: <b>{{ invited.username }}</b>.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="pf-button pf-button-lg">Simpan & masuk</button></form>{% else %}<h1>Link tidak berlaku</h1><p class="pf-muted">Link ini sudah dipakai atau kedaluwarsa. Minta link baru ke pemilik toko, atau <a href="{% url 'merchant-login' %}">masuk</a> bila Anda sudah punya kata sandi.</p>{% endif %}</section>
+{% endblock %}
