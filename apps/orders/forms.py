@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 from django import forms
 from django.conf import settings
@@ -16,6 +17,7 @@ from apps.catalog.models import (
     ProductReview,
     ProductVariant,
     Warehouse,
+    WholesalePrice,
 )
 from apps.catalog.reviews import MAX_REVIEW_PHOTOS, is_image
 from apps.shops.forms import clean_instagram_handle
@@ -23,6 +25,7 @@ from apps.shops.models import MarketingCampaign, Store, StorefrontSlide, StorePa
 from apps.shops.tenancy import custom_domain_allowed
 
 from .models import Coupon, CustomerAddress, ShippingMethod
+from .wholesale import MAX_TIERS
 
 DOMAIN_PATTERN = re.compile(r"(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 
@@ -129,6 +132,63 @@ class ProductForm(StyledModelForm):
             self.fields.pop("initial_stock")
             self._add_stock_field()
         self.fields["preorder_days"].required = False
+        self._add_wholesale_fields()
+
+    def _add_wholesale_fields(self):
+        """Harga grosir rows, shown in their own card (see merchant/product_wholesale.html)."""
+        saved = list(self.instance.wholesale_prices.all()) if self.instance.pk else []
+        for index in range(1, MAX_TIERS + 1):
+            tier = saved[index - 1] if index <= len(saved) else None
+            quantity = forms.IntegerField(min_value=2, required=False, label="Minimal beli",
+                initial=tier.min_quantity if tier else None)
+            price = forms.DecimalField(min_value=Decimal(1), max_digits=14, decimal_places=2,
+                required=False, label="Harga per pcs", initial=tier.price if tier else None)
+            quantity.wholesale = price.wholesale = True
+            quantity.widget.attrs.update({"class": "control", "placeholder": "mis. 10"})
+            price.widget.attrs.update({"class": "control", "placeholder": "mis. 45000"})
+            self.fields[f"wholesale_min_{index}"] = quantity
+            self.fields[f"wholesale_price_{index}"] = price
+
+    @property
+    def wholesale_rows(self):
+        return [(self[f"wholesale_min_{index}"], self[f"wholesale_price_{index}"])
+            for index in range(1, MAX_TIERS + 1)]
+
+    def _clean_wholesale(self, cleaned):
+        tiers = []
+        for index in range(1, MAX_TIERS + 1):
+            quantity = cleaned.get(f"wholesale_min_{index}")
+            price = cleaned.get(f"wholesale_price_{index}")
+            if quantity is None and price is None:
+                continue
+            if quantity is None or price is None:
+                self.add_error(f"wholesale_min_{index}" if quantity is None else
+                    f"wholesale_price_{index}", "Isi jumlah minimal dan harganya.")
+                continue
+            tiers.append((quantity, price, index))
+        tiers.sort()
+        regular = cleaned.get("price")
+        previous_price = regular
+        seen = set()
+        for quantity, price, index in tiers:
+            if quantity in seen:
+                self.add_error(f"wholesale_min_{index}", f"Jumlah {quantity} dipakai dua kali.")
+            elif previous_price is not None and price >= previous_price:
+                self.add_error(f"wholesale_price_{index}", "Harga grosir harus lebih murah dari "
+                    "harga normal dan dari tingkat dengan jumlah lebih sedikit.")
+            seen.add(quantity)
+            previous_price = price
+        self.wholesale_tiers = [(quantity, price) for quantity, price, _ in tiers]
+
+    def save_wholesale(self, product):
+        if not hasattr(self, "wholesale_tiers"):
+            return
+        current = {(tier.min_quantity, tier.price) for tier in product.wholesale_prices.all()}
+        if current == set(self.wholesale_tiers):
+            return
+        product.wholesale_prices.all().delete()
+        WholesalePrice.objects.bulk_create(WholesalePrice(product=product, min_quantity=quantity,
+            price=price) for quantity, price in self.wholesale_tiers)
 
     def _add_stock_field(self):
         """Stock of a simple product in its main warehouse, editable right here. Products with
@@ -190,6 +250,7 @@ class ProductForm(StyledModelForm):
         # self.instance still holds the saved values here; the form copies onto it afterwards.
         if cleaned.get("is_digital") and not (cleaned.get("digital_file") or cleaned.get("digital_url")):
             self.add_error("digital_file", "Unggah file atau isi link digital untuk produk digital.")
+        self._clean_wholesale(cleaned)
         if self.store and cleaned.get("is_active") and not (self.instance.pk and self.instance.is_active):
             error = product_limit_error(self.store,
                 Product.objects.filter(store=self.store, is_active=True).count() + 1)

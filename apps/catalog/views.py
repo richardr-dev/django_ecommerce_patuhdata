@@ -142,7 +142,7 @@ def _product_structured_data(request, product, summary):
 def product_detail(request, slug):
     if not request.store: raise Http404
     product = get_object_or_404(Product.objects.prefetch_related(
-        "inventory_levels", "variants", "images"),
+        "inventory_levels", "variants", "images", "wholesale_prices"),
         store=request.store, slug=slug, is_active=True)
     record_event(request, "product_view", product=product)
     product = decorate_products_with_sales(request.store, [product])[0]

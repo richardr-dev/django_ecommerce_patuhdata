@@ -1,0 +1,17 @@
+{# Harga grosir: up to five quantity tiers, saved together with the product. #}
+<section class="variant-card wholesale-card" id="grosir">
+  <div class="card-heading">
+    <div>
+      <h2>Harga grosir</h2>
+      <p>Beri harga lebih murah untuk pembelian banyak, mis. beli 10 pcs atau lebih jadi Rp45.000 per pcs. Jumlah dihitung dari semua varian produk ini di satu pesanan. Varian dengan harga sendiri ikut turun dengan persentase yang sama. Tidak digabung dengan flash sale. Kosongkan bila tidak dipakai.</p>
+    </div>
+  </div>
+  <div class="wholesale-rows">
+    {% for quantity, price in form.wholesale_rows %}
+    <div class="wholesale-row">
+      <label>{{ quantity.label }}{{ quantity }}{{ quantity.errors }}</label>
+      <label>{{ price.label }} (Rp){{ price }}{{ price.errors }}</label>
+    </div>
+    {% endfor %}
+  </div>
+</section>

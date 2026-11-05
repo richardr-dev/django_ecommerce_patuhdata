@@ -52,6 +52,14 @@
       {% if product.display_has_discount %}<span class="discount-pill">Hemat {{ product.display_discount_percent }}%</span>{% endif %}
     </div>
 
+    {% with tiers=product.wholesale_prices.all %}{% if tiers %}
+    <div class="wholesale-table" id="harga-grosir">
+      <strong>Harga grosir</strong>
+      <ul>{% for tier in tiers %}<li><span>Beli ≥ {{ tier.min_quantity }}</span><b>Rp{{ tier.price|floatformat:"0g" }}</b><small>/pcs</small></li>{% endfor %}</ul>
+      <small>{% if product.active_sale_offer %}Tidak berlaku selama flash sale berlangsung.{% else %}Jumlah dihitung dari semua varian produk ini di keranjang.{% if product.variants.all %} Varian dengan harga berbeda turun dengan persentase yang sama.{% endif %}{% endif %}</small>
+    </div>
+    {% endif %}{% endwith %}
+
     <div class="product-benefits">
       <div><span class="benefit-icon">%</span><span><strong>Voucher toko</strong><small>Voucher yang memenuhi syarat diterapkan saat checkout</small></span></div>
       <div><span class="benefit-icon">→</span><span><strong>Pengiriman seluruh Indonesia</strong><small>JNE, J&amp;T, SiCepat, dan kurir lainnya dengan tarif real-time</small></span></div>

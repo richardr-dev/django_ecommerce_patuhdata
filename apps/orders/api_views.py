@@ -124,6 +124,9 @@ def _product(request, product, offer=None):
         "image_url": (_image(request, product.photo) if product.photo else product.image_url),
         "images": images,
         "variants": variants,
+        # Harga grosir: price per unit from min_quantity units (all variants counted together).
+        "wholesale_prices": [{"min_quantity": tier.min_quantity, "price": str(tier.price)}
+            for tier in product.wholesale_prices.all()],
     }
 
 
@@ -199,7 +202,7 @@ def products(request):
     queryset = (
         Product.objects.filter(store=request.store, is_active=True)
         .select_related("category")
-        .prefetch_related("variants", "inventory_levels", "images")
+        .prefetch_related("variants", "inventory_levels", "images", "wholesale_prices")
     )
     query, category = request.GET.get("q", "").strip(), request.GET.get("category", "").strip()
     if query:
@@ -233,7 +236,7 @@ def product_detail(request, slug):
     product = (
         Product.objects.filter(store=request.store, slug=slug, is_active=True)
         .select_related("category")
-        .prefetch_related("variants", "inventory_levels", "images")
+        .prefetch_related("variants", "inventory_levels", "images", "wholesale_prices")
         .first()
     )
     if not product:

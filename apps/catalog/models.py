@@ -159,6 +159,26 @@ def annotate_available_stock(queryset):
         output_field=models.IntegerField()))
 
 
+class WholesalePrice(models.Model):
+    """Harga grosir: from ``min_quantity`` units of this product in one order (all variants
+    counted together), each unit costs ``price``. Variants with their own price drop by the
+    same percentage. Not combined with a running flash sale."""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="wholesale_prices")
+    min_quantity = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["min_quantity"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "min_quantity"], name="unique_wholesale_tier"),
+            models.CheckConstraint(condition=models.Q(min_quantity__gte=2), name="wholesale_min_qty_gte_2"),
+            models.CheckConstraint(condition=models.Q(price__gt=0), name="wholesale_price_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name}: ≥{self.min_quantity} @ {self.price}"
+
+
 class FlashSaleProduct(models.Model):
     campaign = models.ForeignKey("shops.MarketingCampaign", on_delete=models.CASCADE, related_name="product_offers")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="flash_sale_offers")

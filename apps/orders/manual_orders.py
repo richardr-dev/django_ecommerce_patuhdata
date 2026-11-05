@@ -23,6 +23,7 @@ from .inventory import reserve_from_levels, reserve_variant
 from .models import Order, OrderItem, OrderStatusEvent, PaymentTransaction
 from .pricing import calculate_price
 from .services import normalize_indonesian_phone
+from .wholesale import product_quantities, tier_for, tier_unit_price
 
 MAX_LINES = 50
 
@@ -138,9 +139,16 @@ def _resolve(store, rows):
         regular = variant.effective_price if variant else product.price
         unit_price = row["price"] if row["price"] is not None else regular
         lines.append({"product": product, "variant": variant, "quantity": row["quantity"],
-            "unit_price": unit_price, "total": unit_price * row["quantity"]})
+            "unit_price": unit_price, "priced": row["price"] is not None})
     if errors:
         raise ManualOrderError(" ".join(errors))
+    # Harga grosir for rows without a typed price, by each product's total quantity.
+    quantities = product_quantities(lines)
+    for line in lines:
+        if not line.pop("priced"):
+            tier = tier_for(line["product"], quantities[line["product"].id])
+            line["unit_price"] = tier_unit_price(line["product"], line["variant"], tier)
+        line["total"] = line["unit_price"] * line["quantity"]
     return lines
 
 

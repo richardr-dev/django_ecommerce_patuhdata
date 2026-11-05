@@ -256,3 +256,7 @@
 .bo-logout { display: inline; margin-left: 16px; }
 .bo-topbar .bo-logout button { color: #e3e3e3 !important; font-weight: 500; }
 .activity-filters{max-width:none;gap:8px}.activity-filters .control{width:auto;margin:0;border-radius:9px}.activity-filters button{border-radius:9px}
+.wholesale-rows { display: grid; gap: 10px; max-width: 520px; }
+.wholesale-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
+.wholesale-row label { font-size: 13px; font-weight: 600; }
+@media (max-width: 700px) { .wholesale-row { grid-template-columns: 1fr 1fr; } }

@@ -1789,6 +1789,8 @@ def _save_entity(request, store, section, entity, form, instance, variants):
     form.save_m2m()
     if hasattr(form, "save_uploads"):
         form.save_uploads(saved)
+    if hasattr(form, "save_wholesale"):
+        form.save_wholesale(saved)
     kept = variants.save_all(saved, request.user) if variants is not None and variants.is_bound else 0
     has_variants = entity is Product and saved.variants.filter(is_active=True).exists()
     if hasattr(form, "save_stock") and not has_variants:
