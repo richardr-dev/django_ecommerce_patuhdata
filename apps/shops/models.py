@@ -214,10 +214,47 @@ class Customer(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30)
     accepts_marketing = models.BooleanField(default=False)
+    # Seller's labels, comma separated, e.g. "reseller, vip". Used by segments.
+    tags = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "phone"], name="unique_store_customer_phone")]
+
+    @property
+    def tag_list(self): return [tag.strip() for tag in self.tags.split(",") if tag.strip()]
+
+
+class EmailBroadcast(models.Model):
+    """One promotional email to a customer segment, sent in batches by the worker to customers
+    who agreed to promotions. Each email carries an unsubscribe link."""
+    STATUS = [("queued", "Dalam antrean"), ("sending", "Sedang dikirim"), ("sent", "Terkirim")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="email_broadcasts")
+    subject = models.CharField(max_length=150)
+    body = models.TextField()
+    segment = models.JSONField(default=dict)
+    segment_label = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="queued")
+    recipients = models.PositiveIntegerField(default=0)
+    sent_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class EmailBroadcastRecipient(models.Model):
+    broadcast = models.ForeignKey(EmailBroadcast, on_delete=models.CASCADE, related_name="deliveries")
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    email = models.EmailField()
+    sent_at = models.DateTimeField(null=True, blank=True)
+    error = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["broadcast", "email"], name="one_email_per_broadcast")]
 
 
 class AuditLog(models.Model):

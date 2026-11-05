@@ -1843,18 +1843,6 @@ def merchant_apply_template(request):
 
 
 @login_required(login_url="/merchant/login/")
-def merchant_customers(request):
-    store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
-    customers = Customer.objects.filter(store=store).order_by("-created_at")
-    query = request.GET.get("q", "").strip()
-    if query:
-        customers = customers.filter(models.Q(name__icontains=query) | models.Q(phone__icontains=query) |
-            models.Q(email__icontains=query))
-    return render(request, "merchant/customers.html", _merchant_context(request, store, customers=customers))
-
-
-@login_required(login_url="/merchant/login/")
 def merchant_customer_detail(request, customer_id):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})

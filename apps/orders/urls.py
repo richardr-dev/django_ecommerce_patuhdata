@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
+from apps.shops import segment_views
 from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
@@ -97,7 +98,11 @@ urlpatterns = [
         name="merchant-order-refund"),
     path("merchant/settings/", views.merchant_settings, name="merchant-settings"),
     path("merchant/settings/template/", views.merchant_apply_template, name="merchant-apply-template"),
-    path("merchant/customers/", views.merchant_customers, name="merchant-customers"),
+    path("merchant/customers/", segment_views.merchant_customers, name="merchant-customers"),
+    path("merchant/customers/<int:customer_id>/tags/", segment_views.merchant_customer_tags,
+        name="merchant-customer-tags"),
+    path("merchant/broadcasts/", segment_views.merchant_broadcasts, name="merchant-broadcasts"),
+    path("unsubscribe/<str:token>/", segment_views.customer_unsubscribe, name="customer-unsubscribe"),
     path("merchant/customers/<int:customer_id>/", views.merchant_customer_detail, name="merchant-customer-detail"),
     path("merchant/integrations/", views.merchant_integrations, name="merchant-integrations"),
     path("merchant/finance/", views.merchant_finance, name="merchant-finance"),
