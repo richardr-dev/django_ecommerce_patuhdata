@@ -77,6 +77,11 @@ def store_signup(request):
     if request.store and settings.PLATFORM_DOMAIN:
         # Sign up on the platform host, so the new merchant session lives where the back office is.
         return redirect(platform_url("/start/"))
+    from apps.billing.referrals import SESSION_KEY, clean_code, discount_percent, referrer_for
+
+    if clean_code(request.GET.get("ref")):
+        request.session[SESSION_KEY] = clean_code(request.GET["ref"])
+    referrer = referrer_for(request.session.get(SESSION_KEY))
     form = StoreSignupForm(request.POST or None, user=request.user)
     plan = default_plan()
     if request.method == "POST" and form.is_valid():
@@ -84,10 +89,11 @@ def store_signup(request):
             form.add_error(None, "Pendaftaran toko baru belum dibuka. Hubungi pengelola platform.")
         else:
             try:
-                user, store = _create_store(form, plan)
+                user, store = _create_store(form, plan, referrer)
             except IntegrityError:
                 form.add_error("slug", "Alamat ini baru saja dipakai. Pilih alamat lain.")
             else:
+                request.session.pop(SESSION_KEY, None)
                 if not request.user.is_authenticated:
                     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
                 request.session["merchant_store_id"] = store.id
@@ -95,12 +101,13 @@ def store_signup(request):
                     "Lengkapi tampilan dan tambahkan produk pertama Anda.")
                 return redirect("merchant-settings")
     return render(request, "platform/signup.html", {"form": form, "plan": plan,
+        "referrer": referrer, "referral_percent": discount_percent(),
         "trial_days": settings.TRIAL_DAYS,
         "platform_domain": settings.PLATFORM_DISPLAY_DOMAIN or settings.PLATFORM_DOMAIN})
 
 
 @transaction.atomic
-def _create_store(form, plan):
+def _create_store(form, plan, referrer=None):
     data = form.cleaned_data
     user = form.user or get_user_model().objects.create_user(username=form.login_name(),
         email=data["email"], password=data["password1"], first_name=data["full_name"])
@@ -113,6 +120,9 @@ def _create_store(form, plan):
         instagram=data.get("instagram", ""))
     Subscription.objects.create(store=store, plan=plan, current_period_end=trial_end_for(plan))
     create_store_defaults(store)
+    if referrer is not None:
+        from apps.billing.referrals import record_signup
+        record_signup(referrer, store, user)
     AuditLog.objects.create(store=store, actor=user, action="store.created_by_signup",
         object_type="Store", object_id=str(store.id), details={"plan": plan.code})
     return user, store

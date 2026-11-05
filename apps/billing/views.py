@@ -10,6 +10,7 @@ from apps.shops.models import AuditLog
 
 from .models import Plan, Subscription, SubscriptionInvoice
 from .plans import allowed_outlets, effective_plan, plan_amount, subscription_status
+from .referrals import referral_summary
 from .renewals import RenewalError, open_payment_page
 from .services import (
     BillingError,
@@ -37,7 +38,8 @@ def merchant_billing(request):
         active_outlets=_active_outlets(store), allowed_outlets=allowed_outlets(store),
         outlet_quote=_outlet_quote(subscription),
         renewal_notice_days=settings.RENEWAL_NOTICE_DAYS,
-        invoices=store.subscription_invoices.select_related("plan")[:12]))
+        invoices=store.subscription_invoices.select_related("plan")[:12],
+        referral=referral_summary(store)))
 
 
 @login_required(login_url="/merchant/login/")

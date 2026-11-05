@@ -91,6 +91,8 @@ class SubscriptionInvoice(models.Model):
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
     months = models.PositiveSmallIntegerField(choices=PERIODS, default=1)
     amount = models.DecimalField(max_digits=12, decimal_places=0)
+    # Referral discount already taken off `amount` (the price before it is amount + discount).
+    discount = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
     provider = models.CharField(max_length=40)
     payment_reference = models.CharField(max_length=80, blank=True, db_index=True)
@@ -119,3 +121,44 @@ class SubscriptionCheckout(models.Model):
     reference = models.CharField(max_length=80, unique=True)
     checkout_url = models.URLField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Referral(models.Model):
+    """A store that opened through another store's invite link (lakuin.store/start/?ref=slug).
+    It qualifies, and rewards the inviting store, once the new store pays its first plan."""
+    STATUS = [("signed_up", "Sudah daftar"), ("qualified", "Sudah berlangganan"),
+        ("rejected", "Tidak memenuhi syarat")]
+    referrer = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="referrals_made")
+    referred = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="referred_by")
+    status = models.CharField(max_length=20, choices=STATUS, default="signed_up")
+    note = models.CharField(max_length=160, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    qualified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self): return f"{self.referrer} → {self.referred}"
+
+
+class ReferralReward(models.Model):
+    """One discounted month: `percent` off one month of the plan, taken off a subscription
+    invoice. Held by a pending invoice, spent when that invoice is paid, and free again when
+    the invoice fails or is cancelled."""
+    KINDS = [("welcome", "Diskon pendaftaran lewat undangan"),
+        ("referrer", "Hadiah mengajak toko lain")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="referral_rewards")
+    referral = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name="rewards")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    percent = models.PositiveSmallIntegerField()
+    invoice = models.ForeignKey(SubscriptionInvoice, on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="referral_rewards")
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [models.UniqueConstraint(fields=["referral", "kind"],
+            name="one_reward_per_referral_side")]
+
+    def __str__(self): return f"{self.store} · {self.percent}% · {self.get_kind_display()}"

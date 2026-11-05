@@ -59,6 +59,7 @@ MIDDLEWARE = [
     "apps.shops.middleware.StorefrontGateMiddleware",
     "apps.shops.middleware.SellerShortcutMiddleware",
     "apps.shops.middleware.PrivatePagesMiddleware",
+    "apps.shops.middleware.ReferralCaptureMiddleware",
 ]
 # Sellers sign in with their email or WhatsApp number (apps/shops/auth.py).
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend",
@@ -216,6 +217,8 @@ PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
 PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
 # Days of the default plan a new store gets free at signup when that plan is paid.
 TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
+# Ajak teman: each side of a referral gets this percent off one month of its plan (1-90).
+REFERRAL_DISCOUNT_PERCENT = int(os.getenv("REFERRAL_DISCOUNT_PERCENT", "50"))
 # Renewal billing: bill the next period this many days ahead, and keep a paying store fully
 # active this many days after its period ends while the renewal is unpaid.
 RENEWAL_NOTICE_DAYS = int(os.getenv("RENEWAL_NOTICE_DAYS", "7"))

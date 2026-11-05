@@ -17,6 +17,7 @@ from apps.shops.tenancy import platform_url
 
 from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
 from .plans import PERIOD_DAYS, plan_amount
+from .referrals import apply_rewards, invoice_paid
 
 # DOKU invoice numbers for subscriptions; storefront orders use "NK".
 SUBSCRIPTION_PREFIX = "SB"
@@ -43,6 +44,8 @@ def start_checkout(store, plan, months, user):
         raise BillingError("Pembayaran langganan belum dikonfigurasi. Hubungi pengelola platform.")
     invoice = SubscriptionInvoice.objects.create(store=store, plan=plan, months=months,
         amount=amount, provider=provider, extra_outlets=extra)
+    apply_rewards(invoice)  # before the payment page, which carries the amount
+    amount = invoice.amount
     if provider == "demo":
         invoice.payment_reference = f"demo-{invoice.id.hex}"
         invoice.checkout_url = reverse("billing-demo-pay", args=[invoice.id])
@@ -88,6 +91,7 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
         subscription.save(update_fields=["extra_outlets", "updated_at"])
         invoice.status, invoice.paid_at = "paid", now
         invoice.save(update_fields=["status", "paid_at"])
+        invoice_paid(invoice)
         _refresh_open_renewal(subscription)
         AuditLog.objects.create(store=invoice.store, action="billing.outlets_added",
             object_type="SubscriptionInvoice", object_id=str(invoice.id),
@@ -107,6 +111,7 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
     invoice.status, invoice.paid_at = "paid", now
     invoice.period_start, invoice.period_end = start, end
     invoice.save(update_fields=["status", "paid_at", "period_start", "period_end"])
+    invoice_paid(invoice)
     # Any other open renewal bill is settled by this payment.
     SubscriptionInvoice.objects.filter(store=invoice.store, kind="renewal",
         status="pending").exclude(id=invoice.id).update(status="cancelled")
@@ -160,7 +165,9 @@ def _refresh_open_renewal(subscription):
         status="pending").first()
     if renewal and not renewal.checkouts.exists():
         renewal.extra_outlets = subscription.extra_outlets
-        renewal.amount = plan_amount(renewal.plan, renewal.months, subscription.extra_outlets)
+        # Keep the referral discount the bill already carries.
+        renewal.amount = max(Decimal(1), plan_amount(renewal.plan, renewal.months,
+            subscription.extra_outlets) - renewal.discount)
         renewal.save(update_fields=["extra_outlets", "amount"])
 
 

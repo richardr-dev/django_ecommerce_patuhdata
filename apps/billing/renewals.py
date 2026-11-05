@@ -56,9 +56,12 @@ def _renewal_for(subscription):
         invoice, created = SubscriptionInvoice.objects.get(store=subscription.store,
             kind="renewal", due_at=subscription.current_period_end), False
     if created:
+        from .referrals import apply_rewards
+        apply_rewards(invoice)
         AuditLog.objects.create(store=subscription.store, action="billing.renewal_billed",
             object_type="SubscriptionInvoice", object_id=str(invoice.id),
-            details={"plan": plan.code, "months": months, "amount": str(amount)})
+            details={"plan": plan.code, "months": months, "amount": str(invoice.amount),
+                "discount": str(invoice.discount)})
     return invoice if invoice.status == "pending" else None
 
 
