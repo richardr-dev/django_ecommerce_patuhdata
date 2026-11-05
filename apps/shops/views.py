@@ -57,6 +57,15 @@ def platform_home(request):
         "organization_json_ld": _json_ld(organization)})
 
 
+def referral_program(request):
+    """Ajak teman: how the seller referral program works and its rules (platform page)."""
+    if settings.PLATFORM_DOMAIN and getattr(request, "store", None):
+        return redirect(platform_url("/ajak-teman/"))  # opened on a store's address
+    from apps.billing.referrals import discount_percent
+    return render(request, "platform/referral.html", {"percent": discount_percent(),
+        "trial_days": settings.TRIAL_DAYS})
+
+
 def favicon(request):
     """Browsers and crawlers request /favicon.ico on every host, platform and store alike.
     Temporary redirect: the target's hashed name changes whenever the icon does."""

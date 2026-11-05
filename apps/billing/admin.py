@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Plan, Referral, ReferralReward, Subscription, SubscriptionInvoice
+from .models import (
+    Plan,
+    Referral,
+    ReferralLink,
+    ReferralReward,
+    Subscription,
+    SubscriptionInvoice,
+)
 
 
 @admin.register(Plan)
@@ -39,3 +46,10 @@ class ReferralRewardAdmin(admin.ModelAdmin):
     list_filter = ("kind",)
     search_fields = ("store__slug", "store__name")
     raw_id_fields = ("store", "referral", "invoice")
+
+
+@admin.register(ReferralLink)
+class ReferralLinkAdmin(admin.ModelAdmin):
+    list_display = ("store", "clicks", "last_clicked_at")
+    search_fields = ("store__slug", "store__name")
+    raw_id_fields = ("store",)

@@ -20,7 +20,10 @@
 
 {% if featured_stores %}<section class="pf-section"><span class="pf-kicker">Sudah berjualan</span><h2>Toko terbaru di {{ platform_name }}</h2><div class="pf-store-grid">{% for item in featured_stores %}{% include "platform/store_card.html" %}{% endfor %}</div><a class="pf-link" href="{% url 'store-directory' %}">Semua toko →</a></section>{% endif %}
 
+<section class="pf-section pf-referral"><span class="pf-kicker">Ajak teman</span><h2>Ajak sesama penjual, sama-sama hemat</h2><p class="pf-muted">Setiap toko punya link undangan sendiri. Teman yang membuka toko lewat link Anda dapat diskon bulan pertama, dan Anda dapat diskon satu bulan setiap kali teman Anda mulai berlangganan.</p><a class="pf-link" href="{% url 'referral-program' %}">Cara kerja dan syaratnya →</a></section>
+
 <section class="pf-section pf-faq"><span class="pf-kicker">Pertanyaan umum</span><h2>Yang sering ditanyakan</h2>
+<details><summary>Ada diskon kalau saya diajak teman?</summary><p>Ada. Daftar lewat link undangan teman Anda dan dapatkan diskon bulan pertama langganan berbayar. Lihat <a href="{% url 'referral-program' %}">program Ajak teman</a>.</p></details>
 <details><summary>Bisa dicoba gratis?</summary><p>Bisa. Setiap toko baru mendapat {{ trial_days }} hari gratis dengan semua fitur paket {{ free_plan.name|default:"Starter" }}, tanpa kartu kredit. Setelah masa coba, pilih paket di menu Langganan untuk terus menambah produk.</p></details>
 <details><summary>Perlu keahlian teknis untuk membuat toko?</summary><p>Tidak. Pilih template tampilan, unggah logo dan produk, lalu toko siap dibagikan. Semua pengaturan dilakukan dari back office berbahasa Indonesia.</p></details>
 <details><summary>Bisakah memakai domain sendiri?</summary><p>Bisa, di paket berbayar. Arahkan DNS domain Anda ke {{ platform_name }} dan sertifikat HTTPS diterbitkan otomatis.</p></details>

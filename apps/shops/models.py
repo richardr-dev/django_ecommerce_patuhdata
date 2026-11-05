@@ -258,3 +258,23 @@ class NewsletterSubscriber(models.Model):
     @property
     def is_subscribed(self):
         return self.unsubscribed_at is None
+
+
+class CampaignLink(models.Model):
+    """A seller's own marketing short link, lakuin.store/s/<code>, for a bio, a post, an ad or
+    a WhatsApp blast. It opens a page of their store and the orders that follow are counted
+    for it. Separate from Ajak teman, which invites other sellers to Lakuin."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="campaign_links")
+    name = models.CharField(max_length=80, help_text="Contoh: Bio Instagram, Promo Lebaran.")
+    code = models.SlugField(max_length=40, unique=True)
+    destination = models.CharField(max_length=300, default="/",
+        help_text="Halaman toko yang dibuka, mis. / atau /products/kaos-polos/.")
+    clicks = models.PositiveIntegerField(default=0)
+    last_clicked_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self): return f"{self.store} · {self.name}"

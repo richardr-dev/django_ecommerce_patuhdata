@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from .models import (
     AuditLog,
+    CampaignLink,
     Customer,
     NewsletterSubscriber,
     Organization,
@@ -36,3 +37,11 @@ admin.site.register(Customer)
 admin.site.register(AuditLog)
 admin.site.register(StorePage)
 admin.site.register(NewsletterSubscriber)
+
+
+@admin.register(CampaignLink)
+class CampaignLinkAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "store", "destination", "clicks", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("code", "name", "store__slug")
+    raw_id_fields = ("store",)

@@ -1,0 +1,14 @@
+{% extends "platform/base.html" %}{% block title %}Ajak Teman · {{ platform_name }}{% endblock %}{% block content %}
+<article class="pf-legal"><header><span class="pf-kicker">Program Ajak Teman</span><h1>Ajak sesama penjual, sama-sama hemat {{ percent }}%</h1><p class="pf-muted">Setiap toko di {{ platform_name }} punya link undangan sendiri di menu <b>Langganan → Ajak teman</b>. Bagikan ke teman yang juga berjualan.</p></header>
+<section><h2>Cara kerjanya</h2><ol><li>Teman Anda membuka toko lewat link undangan Anda (lakuin.store/r/nama-toko-anda).</li><li>Teman Anda dapat <b>diskon {{ percent }}% untuk bulan pertama</b> langganan berbayar, setelah masa coba gratis {{ trial_days }} hari.</li><li>Begitu teman Anda membayar langganan pertamanya, toko Anda dapat <b>diskon {{ percent }}% untuk satu bulan</b> langganan.</li><li>Diskon otomatis dipotong dari tagihan berikutnya. Ajak lebih banyak teman, kumpulkan lebih banyak bulan diskon.</li></ol></section>
+<section><h2>Syarat program</h2><ol>
+<li>Undangan berlaku untuk toko baru yang mendaftar lewat link undangan, dan dicatat saat pendaftaran. Undangan tidak bisa ditambahkan setelah toko dibuat.</li>
+<li>Hadiah untuk pengundang diberikan setelah toko yang diundang membayar langganan berbayar pertamanya. Pendaftaran yang belum membayar belum menghasilkan hadiah.</li>
+<li>Setiap diskon berlaku untuk satu bulan langganan, sebesar {{ percent }}% dari harga bulanan paket yang ditagih. Tagihan bulanan memakai satu diskon; tagihan tahunan memakai paling banyak dua belas. Diskon tidak pernah melebihi 90% dari satu tagihan; sisanya tetap tersimpan untuk tagihan berikutnya.</li>
+<li>Diskon tidak bisa ditukar dengan uang, dipindahkan ke toko lain, atau dipakai untuk penambahan outlet.</li>
+<li>Mengundang diri sendiri tidak menghasilkan hadiah, termasuk toko dengan pemilik atau nomor WhatsApp yang sama dengan pengundang.</li>
+<li>Kami dapat membatalkan hadiah dari pendaftaran palsu, berulang, atau yang tidak wajar, serta mengubah atau mengakhiri program ini. Diskon yang sudah diperoleh tetap berlaku sampai dipakai, kecuali karena pelanggaran.</li>
+<li>Link undangan berbeda dengan <b>Link kampanye</b> (lakuin.store/s/…), yang dipakai penjual untuk mempromosikan tokonya sendiri kepada pembeli.</li>
+</ol></section>
+<section><h2>Belum punya toko?</h2><p><a class="pf-button" href="{% url 'store-signup' %}">Buka toko gratis {{ trial_days }} hari</a></p></section>
+</article>{% endblock %}

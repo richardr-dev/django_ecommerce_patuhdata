@@ -182,3 +182,15 @@ class ReferralCaptureMiddleware:
             if clean_code(code):
                 request.session[SESSION_KEY] = clean_code(code)
         return self.get_response(request)
+
+
+class CampaignAttributionMiddleware:
+    """A store page opened from a seller's campaign link (?lk=<code>) remembers the campaign,
+    so the order that follows is counted for it."""
+    def __init__(self, get_response): self.get_response = get_response
+
+    def __call__(self, request):
+        if request.GET.get("lk") and getattr(request, "store", None):
+            from .shortlinks import remember_campaign
+            remember_campaign(request)
+        return self.get_response(request)

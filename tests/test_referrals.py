@@ -101,7 +101,7 @@ class ReferralTests(TestCase):
         seller.force_login(self.inviter_owner)
         page = seller.get("/merchant/billing/")
         self.assertContains(page, "Ajak teman, hemat langganan")
-        self.assertContains(page, "/start/?ref=toko-lama")
+        self.assertContains(page, "/r/toko-lama")
         signup = Client().get("/start/?ref=toko-lama")
         self.assertContains(signup, "Diundang oleh <b>Toko Lama</b>")
         self.assertContains(signup, "diskon 50%")

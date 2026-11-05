@@ -162,3 +162,12 @@ class ReferralReward(models.Model):
             name="one_reward_per_referral_side")]
 
     def __str__(self): return f"{self.store} · {self.percent}% · {self.get_kind_display()}"
+
+
+class ReferralLink(models.Model):
+    """Visits to a store's Ajak teman short link, lakuin.store/r/<slug>."""
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="referral_link")
+    clicks = models.PositiveIntegerField(default=0)
+    last_clicked_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self): return f"{self.store} · {self.clicks} klik"

@@ -72,6 +72,7 @@ from apps.shops.models import (
     StorefrontSlide,
     StorePage,
 )
+from apps.shops.shortlinks import attributed_campaign_id
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 from apps.shops.tenancy import store_url
 from apps.shops.trust import store_trust
@@ -604,6 +605,7 @@ def checkout(request):
                     phone=phone, shipping_address=(request.POST.get("shipping_address", "").strip()
                         or f"Ambil di {pickup_outlet.name}: {pickup_outlet.address}".strip(": ")),
                     pickup_outlet=pickup_outlet,
+                    campaign_link_id=attributed_campaign_id(request),
                     province=request.POST.get("province", "").strip(), city=request.POST.get("city", "").strip(),
                     district=request.POST.get("district", "").strip(), village=request.POST.get("village", "").strip(),
                     postal_code=request.POST.get("postal_code", "").strip(), delivery_notes=request.POST.get("delivery_notes", "").strip(),

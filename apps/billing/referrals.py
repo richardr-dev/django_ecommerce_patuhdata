@@ -36,8 +36,41 @@ def referrer_for(code):
 
 
 def invite_url(store):
+    """The Ajak teman short link, lakuin.store/r/<slug>: it counts the click, then opens
+    the signup page with the invite."""
     from apps.shops.tenancy import platform_url
-    return platform_url(f"/start/?ref={store.slug}")
+    return platform_url(f"/r/{store.slug}")
+
+
+def _open_renewal(store):
+    """A renewal bill whose amount can still change: no payment page opened for it yet."""
+    return (store.subscription_invoices.filter(kind="renewal", status="pending", discount=0,
+        payment_reference="").exclude(checkouts__isnull=False).select_related("plan").first())
+
+
+def _notify_inviter(referral, reward):
+    """Tell the inviting seller, by email, that a store they invited started paying."""
+    from django.core.mail import send_mail
+    from django.urls import reverse
+
+    from apps.shops.tenancy import platform_url
+
+    store = referral.referrer
+    recipients = sorted({email for email in (store.owner.email, store.support_email) if email})
+    if not recipients:
+        return
+    link = platform_url(reverse("merchant-billing") + f"?store={store.id}#ajak-teman")
+    body = (f"Halo,\n\n{referral.referred.name} yang Anda ajak ke {settings.PLATFORM_NAME} baru "
+        f"saja mulai berlangganan. Terima kasih!\n\nToko {store.name} mendapat diskon "
+        f"{reward.percent}% untuk satu bulan langganan. Diskon otomatis dipotong dari tagihan "
+        f"berikutnya.\n\nLihat diskon dan link undangan Anda:\n{link}\n\n"
+        f"{settings.PLATFORM_NAME} · {settings.PLATFORM_COMPANY_NAME}")
+    try:
+        send_mail(f"{store.name}: Anda dapat diskon {reward.percent}% dari Ajak teman", body,
+            settings.DEFAULT_FROM_EMAIL, recipients)
+    except Exception:  # an unreachable mail server must not undo the payment
+        import logging
+        logging.getLogger(__name__).exception("referral email failed for store %s", store.pk)
 
 
 def record_signup(referrer, store, user):
@@ -109,17 +142,28 @@ def invoice_paid(invoice):
         return
     referral.status, referral.qualified_at = "qualified", now
     referral.save(update_fields=["status", "qualified_at"])
-    ReferralReward.objects.get_or_create(referral=referral, kind="referrer",
+    reward, created = ReferralReward.objects.get_or_create(referral=referral, kind="referrer",
         defaults={"store": referral.referrer, "percent": discount_percent()})
     AuditLog.objects.create(store=referral.referrer, action="billing.referral_rewarded",
         object_type="Referral", object_id=str(referral.id),
         details={"referred": invoice.store.slug, "percent": discount_percent()})
+    if not created:
+        return
+    # A renewal already billed but not yet opened for payment takes the reward right away.
+    renewal = _open_renewal(referral.referrer)
+    if renewal is not None:
+        apply_rewards(renewal)
+    transaction.on_commit(lambda: _notify_inviter(referral, reward))
 
 
 def referral_summary(store):
     referrals = store.referrals_made.all()
     available = _available(store).count()
+    from .models import ReferralLink
+
+    link = ReferralLink.objects.filter(store=store).first()
     return {"invite_url": invite_url(store), "percent": discount_percent(),
+        "clicks": link.clicks if link else 0,
         "invited": referrals.exclude(status="rejected").count(),
         "qualified": referrals.filter(status="qualified").count(),
         "available": available,
