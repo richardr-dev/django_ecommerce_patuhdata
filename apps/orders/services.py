@@ -89,6 +89,8 @@ def transition_order(order, new_status, *, note="", release_inventory=False, act
         commit_order_inventory(locked_order, actor=actor)
     from .loyalty import apply_order_loyalty
     apply_order_loyalty(locked_order, new_status)
+    from .gift_cards import apply_order_gift_card
+    apply_order_gift_card(locked_order, new_status)
     locked_order.status = new_status
     locked_order.save(update_fields=["status"])
     OrderStatusEvent.objects.create(order=locked_order, status=new_status, note=note)

@@ -89,6 +89,10 @@ class Order(models.Model):
     loyalty_points_earned = models.PositiveIntegerField(default=0)
     coupon_code = models.CharField(max_length=50, blank=True)
     idempotency_key = models.CharField(max_length=64, unique=True)
+    # Store credit from a gift card, already included in `discount`.
+    gift_card = models.ForeignKey("orders.GiftCard", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="orders")
+    gift_card_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     # "manual": created by the seller in the back office (a chat order) and paid through a link.
     source = models.CharField(max_length=10, default="storefront",
         choices=[("storefront", "Toko online"), ("manual", "Dibuat penjual")])
@@ -507,3 +511,45 @@ class DeliverySlot(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class GiftCard(models.Model):
+    """Store credit with a code and a balance, issued by the seller (giveaways, compensation,
+    cards sold in person). Redeemed at checkout like a discount; restored if the order is
+    cancelled. Every change is a GiftCardEntry."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="gift_cards")
+    code = models.CharField(max_length=19)
+    initial_value = models.DecimalField(max_digits=14, decimal_places=2)
+    balance = models.DecimalField(max_digits=14, decimal_places=2)
+    recipient_name = models.CharField(max_length=120, blank=True)
+    recipient_email = models.EmailField(blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    expires_on = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_store_gift_card"),
+            models.CheckConstraint(condition=models.Q(balance__gte=0), name="gift_card_balance_nonnegative")]
+
+    def __str__(self): return f"{self.code} · Rp{self.balance:,.0f}"
+
+    @property
+    def masked(self): return f"•••• {self.code[-4:]}"
+
+
+class GiftCardEntry(models.Model):
+    KINDS = [("issue", "Diterbitkan"), ("redeem", "Dipakai"), ("restore", "Dikembalikan"),
+        ("adjust", "Disesuaikan")]
+    gift_card = models.ForeignKey(GiftCard, on_delete=models.CASCADE, related_name="entries")
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="gift_card_entries")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    actor = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

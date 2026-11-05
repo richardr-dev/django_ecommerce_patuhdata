@@ -4,7 +4,7 @@ from django.urls import path, reverse_lazy
 from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
-from . import delivery_views, manual_views, setup_views, views
+from . import delivery_views, gift_card_views, manual_views, setup_views, views
 from .forms import CustomerLoginForm, MerchantLoginForm
 
 # Per IP and per submitted username/email; see config/ratelimit.py.
@@ -61,6 +61,9 @@ urlpatterns = [
     path("orders/<uuid:order_id>/buy-again/", views.order_buy_again, name="order-buy-again"),
     path("merchant/", views.merchant_dashboard, name="merchant-dashboard"),
     path("merchant/orders/", views.merchant_orders, name="merchant-orders"),
+    path("merchant/gift-cards/", gift_card_views.merchant_gift_cards, name="merchant-gift-cards"),
+    path("merchant/gift-cards/<int:card_id>/toggle/", gift_card_views.merchant_gift_card_toggle,
+        name="merchant-gift-card-toggle"),
     path("merchant/orders/new/", manual_views.merchant_order_new, name="merchant-order-new"),
     path("merchant/orders/<uuid:order_id>/payment-link/", manual_views.merchant_order_payment_link,
         name="merchant-order-payment-link"),

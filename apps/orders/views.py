@@ -107,6 +107,9 @@ from .forms import (
     StoreSettingsForm,
     WarehouseForm,
 )
+from .gift_cards import find as find_gift_card
+from .gift_cards import redeem as redeem_gift_card
+from .gift_cards import usable_amount as gift_card_usable
 from .inventory import record_movement, reserve_from_levels, reserve_variant
 from .loyalty import loyalty_account, redeem_for_order, redemption_quote
 from .models import (
@@ -489,6 +492,12 @@ def checkout(request):
         request.POST.get("loyalty_points", ""), base_price.subtotal - base_price.discount)
     price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost, coupon=coupon,
         additional_discount=loyalty_discount)
+    gift_code = request.POST.get("gift_card_code", "").strip() if request.method == "POST" else ""
+    gift_amount = gift_card_usable(find_gift_card(request.store, gift_code),
+        price.subtotal - price.discount, price.shipping) if gift_code else Decimal(0)
+    if gift_amount:
+        price = calculate_price(store=request.store, lines=lines, shipping_cost=shipping_cost,
+            coupon=coupon, additional_discount=loyalty_discount + gift_amount)
     discount, shipping_cost = price.discount, price.shipping
     payment_choices = payment_options(request.store)
     payment_choice = next((option for option in payment_choices
@@ -566,6 +575,16 @@ def checkout(request):
                     account=locked_loyalty)
                 price = calculate_price(store=request.store, lines=lines,
                     shipping_cost=shipping_cost, coupon=coupon, additional_discount=loyalty_discount)
+                locked_card = find_gift_card(request.store, gift_code, lock=True) if gift_code else None
+                if gift_code and locked_card is None:
+                    messages.error(request, "Kode gift card tidak berlaku atau saldonya habis.")
+                    return redirect("checkout")
+                gift_amount = gift_card_usable(locked_card, price.subtotal - price.discount,
+                    price.shipping)
+                if gift_amount:
+                    price = calculate_price(store=request.store, lines=lines,
+                        shipping_cost=shipping_cost, coupon=coupon,
+                        additional_discount=loyalty_discount + gift_amount)
                 product_ids = [x["product"].id for x in lines if not x["variant"]]
                 variant_ids = [x["variant"].id for x in lines if x["variant"]]
                 locked = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
@@ -601,6 +620,7 @@ def checkout(request):
                     subtotal=price.subtotal, tax=price.tax,
                     shipping_cost=price.shipping, discount=price.discount, total=price.total,
                     loyalty_discount=loyalty_discount, loyalty_points_redeemed=loyalty_points,
+                    gift_card=locked_card if gift_amount else None, gift_card_amount=gift_amount,
                     customer_name=request.POST["customer_name"].strip(), email=request.POST.get("email", "").strip(),
                     phone=phone, shipping_address=(request.POST.get("shipping_address", "").strip()
                         or f"Ambil di {pickup_outlet.name}: {pickup_outlet.address}".strip(": ")),
@@ -623,6 +643,7 @@ def checkout(request):
                     delivery_date=delivery_date, delivery_slot=delivery_slot,
                     delivery_slot_label=delivery_slot.label if delivery_slot else "")
                 redeem_for_order(order, loyalty_points)
+                redeem_gift_card(locked_card, order, gift_amount)
                 for line in lines:
                     variant = locked_variants.get(line["variant"].id) if line["variant"] else None
                     product = variant.product if variant else locked[line["product"].id]
