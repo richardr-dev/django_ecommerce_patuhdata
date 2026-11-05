@@ -465,8 +465,13 @@ def checkout(request):
     lines, subtotal = get_cart(request)
     if not lines: return redirect("cart")
     record_event(request, "checkout_started", metadata={"cart_value": str(subtotal)}, always=True)
-    biteship_enabled = _shipping_provider_enabled(request.store)
+    # A cart of only digital products needs no address and no courier.
+    digital_only = all(line["product"].is_digital for line in lines)
+    biteship_enabled = _shipping_provider_enabled(request.store) and not digital_only
     shipping_methods = [] if biteship_enabled else list(ShippingMethod.objects.filter(store=request.store, is_active=True))
+    if digital_only:
+        shipping_methods = [ShippingMethod(store=request.store, code="digital",
+            name="Produk digital (diunduh)", provider="digital", flat_rate=0)]
     requested_shipping = request.POST.get("shipping_method", "")
     selected_shipping = next((method for method in shipping_methods if method.code == requested_shipping), None)
     live_quote = request.session.get("shipping_quotes", {}).get(requested_shipping) if biteship_enabled else None
@@ -475,8 +480,8 @@ def checkout(request):
     if not shipping_methods and not biteship_enabled:
         selected_shipping = ShippingMethod(store=request.store, code="pickup", name="Ambil di toko", flat_rate=0)
         shipping_methods = [selected_shipping]
-    pickup_outlets = list(Warehouse.objects.filter(store=request.store, is_outlet=True,
-        is_active=True, pickup_enabled=True))
+    pickup_outlets = [] if digital_only else list(Warehouse.objects.filter(store=request.store,
+        is_outlet=True, is_active=True, pickup_enabled=True))
     pickup_outlet = next((outlet for outlet in pickup_outlets
         if requested_shipping == f"outlet-{outlet.id}"), None)
     if pickup_outlet:
@@ -510,7 +515,7 @@ def checkout(request):
                 request.POST.get("delivery_slot"))
         except ScheduleError as error:
             schedule_error = str(error)
-        required = ["customer_name", "phone"] + ([] if pickup_outlet else ["shipping_address"])
+        required = ["customer_name", "phone"] + ([] if pickup_outlet or digital_only else ["shipping_address"])
         if any(not request.POST.get(field, "").strip() for field in required):
             messages.error(request, "Semua data pelanggan wajib diisi.")
         elif not selected_shipping and not live_quote:
@@ -601,7 +606,7 @@ def checkout(request):
                 insufficient = any(
                     (locked_variants.get(x["variant"].id).available_stock if locked_variants.get(x["variant"].id) else 0) < x["quantity"]
                     if x["variant"] else sum(level.available for level in by_product[x["product"].id]) < x["quantity"]
-                    for x in lines if not x["product"].is_preorder
+                    for x in lines if not x["product"].is_preorder and not x["product"].is_digital
                 )
                 if insufficient:
                     messages.error(request, f"Stok di {pickup_outlet.name} tidak mencukupi. Pilih "
@@ -623,7 +628,8 @@ def checkout(request):
                     gift_card=locked_card if gift_amount else None, gift_card_amount=gift_amount,
                     customer_name=request.POST["customer_name"].strip(), email=request.POST.get("email", "").strip(),
                     phone=phone, shipping_address=(request.POST.get("shipping_address", "").strip()
-                        or f"Ambil di {pickup_outlet.name}: {pickup_outlet.address}".strip(": ")),
+                        or ("Produk digital" if digital_only else
+                            f"Ambil di {pickup_outlet.name}: {pickup_outlet.address}".strip(": "))),
                     pickup_outlet=pickup_outlet,
                     campaign_link_id=attributed_campaign_id(request),
                     province=request.POST.get("province", "").strip(), city=request.POST.get("city", "").strip(),
@@ -653,8 +659,8 @@ def checkout(request):
                         unit_price=line["unit_price"],
                         quantity=line["quantity"], line_total=line["total"],
                         is_preorder=product.is_preorder, note=line.get("note", ""))
-                    if product.is_preorder:
-                        continue  # made to order: the daily quota was checked with the date
+                    if product.is_preorder or product.is_digital:
+                        continue  # made to order (quota checked with the date) or downloaded
                     if variant:
                         reserve_variant(item, variant, line["quantity"])
                         continue
@@ -720,7 +726,7 @@ def checkout(request):
         saved |= {name: value for name, value in draft.items()
             if name in CHECKOUT_DRAFT_FIELDS and value}
     initial_step = 3 if request.method == "POST" else draft.get("step", 1)
-    return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal,
+    return render(request, "storefront/checkout.html", {"lines": lines, "subtotal": subtotal, "digital_only": digital_only,
         "shipping_methods": shipping_methods, "shipping_cost": shipping_cost, "discount": discount,
         "idempotency_key": checkout_key,
         "biteship_enabled": biteship_enabled,
@@ -907,7 +913,10 @@ def order_detail(request, order_id):
     )
     if request.GET.get("token"):
         remember_customer_order(request, order)  # a payment link: keep it on this device
+    from .manual_views import DOWNLOADABLE
+    downloads = [item for item in order.items.all() if item.product.is_digital]
     return render(request, "storefront/order.html", {"order": order,
+        "downloads": downloads, "can_download": order.status in DOWNLOADABLE,
         "eta": estimated_arrival(order), "steps": tracker_steps(order),
         "order_code": order_code(order), "parcel": courier_tracking(order),
         "review_items": order_review_items(order), "review_form": OrderReviewForm()})
@@ -1438,7 +1447,7 @@ def merchant_stock(request):
         variants = variants.filter(models.Q(product__name__icontains=query) |
             models.Q(name__icontains=query) | models.Q(sku__icontains=query))
     # Simple products nobody has stocked yet would otherwise be missing from this page.
-    unstocked = Product.objects.filter(store=store, is_active=True, is_preorder=False,
+    unstocked = Product.objects.filter(store=store, is_active=True, is_preorder=False, is_digital=False,
         inventory_levels__isnull=True).exclude(variants__is_active=True).order_by("name")
     if query:
         unstocked = unstocked.filter(models.Q(name__icontains=query) | models.Q(sku__icontains=query))

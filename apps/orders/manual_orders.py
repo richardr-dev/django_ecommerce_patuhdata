@@ -166,7 +166,7 @@ def create_manual_order(store, user, data, rows):
             key = ("v", line["variant"].id) if line["variant"] else ("p", line["product"].id)
             needed[key] = needed.get(key, 0) + line["quantity"]
         for line in lines:
-            if line["product"].is_preorder:
+            if line["product"].is_preorder or line["product"].is_digital:
                 continue
             key = ("v", line["variant"].id) if line["variant"] else ("p", line["product"].id)
             available = (line["variant"].available_stock if line["variant"] else
@@ -203,7 +203,7 @@ def create_manual_order(store, user, data, rows):
                 name=product.name, sku=variant.sku if variant else product.sku,
                 variant_name=variant.name if variant else "", unit_price=line["unit_price"],
                 quantity=line["quantity"], line_total=line["total"], is_preorder=product.is_preorder)
-            if product.is_preorder:
+            if product.is_preorder or product.is_digital:
                 continue
             if variant:
                 reserve_variant(item, variant, line["quantity"])

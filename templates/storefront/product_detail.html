@@ -42,7 +42,7 @@
     <h1>{{ product.name }}</h1>
     {% if rating.count or product.sold %}<a class="rating-summary" href="#ulasan">{% if rating.count %}<strong>{{ rating.average|floatformat:1 }}</strong><span class="stars" style="--rating:{{ rating.average|stringformat:'s' }}" aria-hidden="true"></span><span class="divider"></span><span><b>{{ rating.count }}</b> Penilaian</span>{% endif %}{% if product.sold %}{% if rating.count %}<span class="divider"></span>{% endif %}<span><b>{{ product.sold_label }}</b> Terjual</span>{% endif %}</a>{% endif %}
     <div class="product-rating-row">
-      {% if product.is_preorder %}<strong>Pre-order</strong><span class="divider"></span><span>Dikirim paling cepat {{ product.preorder_days }} hari setelah dipesan{% if product.preorder_daily_quota %} · kuota {{ product.preorder_daily_quota }}/hari{% endif %}</span>{% else %}<strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>{% endif %}
+      {% if product.is_preorder %}<strong>Pre-order</strong><span class="divider"></span><span>Dikirim paling cepat {{ product.preorder_days }} hari setelah dipesan{% if product.preorder_daily_quota %} · kuota {{ product.preorder_daily_quota }}/hari{% endif %}</span>{% elif product.is_digital %}<strong>Produk digital</strong><span class="divider"></span><span>Diunduh setelah pembayaran, tanpa ongkir</span>{% else %}<strong>Stok tersedia</strong><span class="divider"></span><span>{{ product.available_stock }} unit</span>{% endif %}
       <span class="divider"></span><span>SKU {{ product.sku }}</span>
     </div>
 
@@ -84,7 +84,7 @@
           <input id="quantity" type="number" name="quantity" min="1" max="{{ product.orderable }}" value="1" aria-label="Jumlah produk">
           <button type="button" data-quantity="plus" aria-label="Tambah jumlah">+</button>
         </div>
-        <small id="stock-label">{% if product.is_preorder %}Pre-order · pilih tanggal kirim saat checkout{% else %}{{ product.available_stock }} tersedia{% endif %}</small>
+        <small id="stock-label">{% if product.is_preorder %}Pre-order · pilih tanggal kirim saat checkout{% elif product.is_digital %}Produk digital · diunduh setelah bayar{% else %}{{ product.available_stock }} tersedia{% endif %}</small>
       </div>
       <label class="product-note">Catatan untuk penjual <span>(opsional)</span><input name="note" maxlength="200" placeholder="Mis. tulisan di kue, tingkat manis, tanpa kacang"></label>
 

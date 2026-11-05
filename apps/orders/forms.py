@@ -175,6 +175,12 @@ class ProductForm(StyledModelForm):
                 actor=actor, previous_on_hand=previous, new_on_hand=new_stock,
                 previous_reserved=level.reserved, new_reserved=level.reserved)
 
+    def clean_digital_file(self):
+        upload = self.cleaned_data.get("digital_file")
+        if upload and hasattr(upload, "size") and upload.size > 50 * 1024 * 1024:
+            raise forms.ValidationError("Ukuran file digital maksimal 50 MB.")
+        return upload
+
     def clean_preorder_days(self):
         days = self.cleaned_data.get("preorder_days")
         return 1 if days is None else days
@@ -182,6 +188,8 @@ class ProductForm(StyledModelForm):
     def clean(self):
         cleaned = super().clean()
         # self.instance still holds the saved values here; the form copies onto it afterwards.
+        if cleaned.get("is_digital") and not (cleaned.get("digital_file") or cleaned.get("digital_url")):
+            self.add_error("digital_file", "Unggah file atau isi link digital untuk produk digital.")
         if self.store and cleaned.get("is_active") and not (self.instance.pk and self.instance.is_active):
             error = product_limit_error(self.store,
                 Product.objects.filter(store=self.store, is_active=True).count() + 1)

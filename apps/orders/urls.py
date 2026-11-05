@@ -67,6 +67,8 @@ urlpatterns = [
     path("merchant/orders/new/", manual_views.merchant_order_new, name="merchant-order-new"),
     path("merchant/orders/<uuid:order_id>/payment-link/", manual_views.merchant_order_payment_link,
         name="merchant-order-payment-link"),
+    path("orders/<uuid:order_id>/download/<int:item_id>/", manual_views.order_download,
+        name="order-download"),
     path("orders/<uuid:order_id>/pay/", rate_limit("order-pay", limit=20, window=600)(
         manual_views.order_pay), name="order-pay"),
     path("merchant/stock/", views.merchant_stock, name="merchant-stock"),

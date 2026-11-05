@@ -93,3 +93,33 @@ def order_pay(request, order_id):
             "atau hubungi toko.")
         return redirect(back)
     return redirect(url)
+
+
+DOWNLOADABLE = {"paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered",
+    "completed"}
+
+
+def order_download(request, order_id, item_id):
+    """A paid buyer's download of a digital product: the private file is streamed through
+    Django (it has no public URL), or the seller's link is opened."""
+    from django.http import FileResponse
+
+    from apps.catalog.private_files import private_storage
+
+    if not request.store:
+        raise Http404
+    order = get_customer_order_or_404(request, order_id)
+    if order.status not in DOWNLOADABLE:
+        raise Http404
+    item = get_object_or_404(order.items.select_related("product"), id=item_id,
+        product__is_digital=True)
+    product = item.product
+    if product.digital_file:
+        name = product.digital_file.name.rsplit("/", 1)[-1]
+        response = FileResponse(private_storage.open(product.digital_file.name, "rb"),
+            as_attachment=True, filename=name)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    if product.digital_url:
+        return redirect(product.digital_url)
+    raise Http404

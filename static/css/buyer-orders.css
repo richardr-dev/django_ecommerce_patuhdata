@@ -35,3 +35,4 @@
 .star-picker{display:flex;flex-direction:row-reverse;justify-content:flex-end;gap:4px;margin:0;padding:0;border:0}.star-picker legend{width:100%;margin-bottom:4px;font-weight:700}
 .star-picker input{position:absolute;opacity:0;pointer-events:none}.star-picker label{font-size:34px;line-height:1;color:#d0d5dd;cursor:pointer;transition:color .1s}
 .star-picker label:hover,.star-picker label:hover~label,.star-picker input:checked~label{color:#f59e0b}.star-picker input:focus-visible+label{outline:2px solid var(--brand);border-radius:4px}
+.digital-downloads ul{list-style:none;padding:0;margin:10px 0;display:grid;gap:8px}

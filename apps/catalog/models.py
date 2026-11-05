@@ -12,6 +12,8 @@ from django.db.models.functions import Coalesce, Greatest
 from apps.shops.models import Store
 from apps.shops.uploads import StoreUploadPath
 
+from .private_files import DigitalUploadPath, private_storage_callable
+
 
 def ensure_store_sku_available(store_id, sku, *, product_id=None, variant_id=None):
     """SKUs identify order lines and stock, so they must be unique per store across both
@@ -52,6 +54,14 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=14, decimal_places=2)
     compare_at_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # Digital product: no shipping and no stock; the buyer downloads it after paying.
+    is_digital = models.BooleanField("Produk digital", default=False,
+        help_text="E-book, template, kelas online, dll. Tanpa pengiriman dan tanpa stok gudang.")
+    digital_file = models.FileField("File digital", blank=True, max_length=300,
+        storage=private_storage_callable, upload_to=DigitalUploadPath(),
+        help_text="Maksimal 50 MB. Hanya pembeli yang sudah membayar bisa mengunduh.")
+    digital_url = models.URLField("Link digital", blank=True, max_length=500,
+        help_text="Atau link (Google Drive, kelas online). Dibuka pembeli setelah membayar.")
     cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
         help_text="Harga pokok (modal) per unit. Dipakai untuk menghitung HPP dan laba.")
     sku = models.CharField(max_length=80)
@@ -121,10 +131,16 @@ class Product(models.Model):
 
     @property
     def available_stock(self):
+        if self.is_digital:
+            return DIGITAL_STOCK  # downloads never run out
         variants = [variant for variant in self.variants.all() if variant.is_active]
         if variants:
             return sum(variant.available_stock for variant in variants)
         return sum(level.available for level in self.inventory_levels.all())
+
+
+# What a digital product reports as stock: never sold out, but a sane number for carts and lists.
+DIGITAL_STOCK = 999
 
 
 def annotate_available_stock(queryset):
@@ -137,6 +153,7 @@ def annotate_available_stock(queryset):
     variants = (active_variants.values("product")
         .annotate(total=Sum(Greatest(F("stock") - F("reserved"), Value(0)))).values("total"))
     return queryset.annotate(stock_available=Case(
+        When(is_digital=True, then=Value(DIGITAL_STOCK)),
         When(Exists(active_variants), then=Coalesce(Subquery(variants), Value(0))),
         default=Coalesce(Subquery(levels), Value(0)),
         output_field=models.IntegerField()))
