@@ -255,3 +255,4 @@
 }
 .bo-logout { display: inline; margin-left: 16px; }
 .bo-topbar .bo-logout button { color: #e3e3e3 !important; font-weight: 500; }
+.activity-filters{max-width:none;gap:8px}.activity-filters .control{width:auto;margin:0;border-radius:9px}.activity-filters button{border-radius:9px}
