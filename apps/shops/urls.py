@@ -2,7 +2,7 @@ from django.urls import path
 
 from config.ratelimit import rate_limit
 
-from . import campaign_views, shortlinks, staff_views, views
+from . import campaign_views, shortlinks, staff_views, tracking, views
 
 urlpatterns = [
     path("start/", rate_limit("store-signup", limit=10, window=3600)(views.store_signup),
@@ -15,6 +15,7 @@ urlpatterns = [
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),
     path("s/<slug:code>/", shortlinks.campaign_redirect, name="campaign-short-slash"),
     path("merchant/staff/", staff_views.merchant_staff, name="merchant-staff"),
+    path("merchant/tracking/", tracking.merchant_tracking, name="merchant-tracking"),
     path("merchant/staff/<int:staff_id>/", staff_views.merchant_staff_update,
         name="merchant-staff-update"),
     path("merchant/invite/<str:uidb64>/<str:token>/", staff_views.staff_invite_accept,

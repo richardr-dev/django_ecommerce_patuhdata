@@ -51,7 +51,13 @@ def store_context(request):
         "nav_cart_items": SimpleLazyObject(cart_items),
         "nav_active_orders": SimpleLazyObject(active_orders),
         "manage_store_url": SimpleLazyObject(manage_store_url),
-        "pending_payment": SimpleLazyObject(pending_payment)}
+        "pending_payment": SimpleLazyObject(pending_payment),
+        "store_tracking": SimpleLazyObject(lambda: _tracking(store))}
+
+
+def _tracking(store):
+    from .tracking import tracking_config
+    return tracking_config(store)
 
 
 def platform_context(request):

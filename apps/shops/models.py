@@ -107,6 +107,17 @@ class Store(models.Model):
             "Terverifikasi di toko.")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Marketing pixels and analytics, loaded on the storefront only after the shopper accepts
+    # cookies. IDs only (validated), never pasted scripts.
+    ga4_id = models.CharField("Google Analytics 4", max_length=20, blank=True)
+    gtm_id = models.CharField("Google Tag Manager", max_length=20, blank=True)
+    google_ads_id = models.CharField("Google Ads", max_length=20, blank=True)
+    meta_pixel_id = models.CharField("Meta Pixel", max_length=20, blank=True)
+    tiktok_pixel_id = models.CharField("TikTok Pixel", max_length=30, blank=True)
+    clarity_id = models.CharField("Microsoft Clarity", max_length=20, blank=True)
+    google_site_verification = models.CharField("Google Search Console", max_length=100,
+        blank=True)
+
     class Meta:
         constraints = [
             models.CheckConstraint(condition=models.Q(loyalty_points_per_step__gt=0),
