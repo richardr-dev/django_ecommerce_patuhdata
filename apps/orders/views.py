@@ -884,6 +884,8 @@ def order_detail(request, order_id):
         request, order_id, queryset=Order.objects.prefetch_related(
             "items", "status_events", "tracking_events")
     )
+    if request.GET.get("token"):
+        remember_customer_order(request, order)  # a payment link: keep it on this device
     return render(request, "storefront/order.html", {"order": order,
         "eta": estimated_arrival(order), "steps": tracker_steps(order),
         "order_code": order_code(order), "parcel": courier_tracking(order),

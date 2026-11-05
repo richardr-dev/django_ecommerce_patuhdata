@@ -89,6 +89,11 @@ class Order(models.Model):
     loyalty_points_earned = models.PositiveIntegerField(default=0)
     coupon_code = models.CharField(max_length=50, blank=True)
     idempotency_key = models.CharField(max_length=64, unique=True)
+    # "manual": created by the seller in the back office (a chat order) and paid through a link.
+    source = models.CharField(max_length=10, default="storefront",
+        choices=[("storefront", "Toko online"), ("manual", "Dibuat penjual")])
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="created_orders")
     # The seller's campaign short link (lakuin.store/s/<code>) the shopper last came through.
     campaign_link = models.ForeignKey("shops.CampaignLink", on_delete=models.SET_NULL, null=True,
         blank=True, related_name="orders")
