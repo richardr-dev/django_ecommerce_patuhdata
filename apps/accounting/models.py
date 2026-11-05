@@ -1,5 +1,7 @@
 from django.db import models
+from django.utils.deconstruct import deconstructible
 
+from apps.catalog.private_files import private_storage_callable
 from apps.orders.models import PaymentTransaction, Refund
 from apps.shops.models import Store
 
@@ -52,6 +54,56 @@ class PayoutLine(models.Model):
     fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
 
+# Operating expenses the seller records by hand (Biaya operasional), one ledger account each.
+EXPENSE_CATEGORIES = [
+    ("6200", "Gaji & upah"),
+    ("6300", "Sewa tempat"),
+    ("6400", "Iklan & promosi"),
+    ("6500", "Kemasan & perlengkapan"),
+    ("6600", "Listrik, air & internet"),
+    ("6700", "Transportasi & ongkos kirim"),
+    ("6800", "Langganan aplikasi & software"),
+    ("6900", "Biaya lain-lain"),
+]
+
+
+@deconstructible
+class ExpenseReceiptPath:
+    def __call__(self, instance, filename):
+        import uuid
+
+        safe = "".join(c for c in filename if c.isalnum() or c in "._- ")[:120] or "nota"
+        return f"expenses/{instance.store.slug}/{uuid.uuid4().hex}/{safe}"
+
+
+class Expense(models.Model):
+    """An operating expense paid from the seller's bank (rent, salaries, ads...). Posted to the
+    ledger when saved, so the profit and loss shows real net profit."""
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="expenses")
+    date = models.DateField()
+    category = models.CharField(max_length=10, choices=EXPENSE_CATEGORIES)
+    description = models.CharField(max_length=200)
+    vendor = models.CharField(max_length=120, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)  # what left the bank
+    input_vat = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # PPN masukan
+    receipt = models.FileField(upload_to=ExpenseReceiptPath(), storage=private_storage_callable,
+        blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="expense_positive"),
+            models.CheckConstraint(condition=models.Q(input_vat__gte=0)
+                & models.Q(input_vat__lt=models.F("amount")), name="expense_vat_within_amount"),
+        ]
+
+    def __str__(self):
+        return f"{self.date} {self.description}"
+
+
 class JournalEntry(models.Model):
     """A balanced double-entry posting. Each payment, refund or payout posts at most once, so
     the worker can scan for unposted ones on every cycle without double counting."""
@@ -63,6 +115,8 @@ class JournalEntry(models.Model):
     refund = models.OneToOneField(Refund, on_delete=models.PROTECT, null=True, blank=True,
         related_name="journal_entry")
     payout = models.OneToOneField(Payout, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="journal_entry")
+    expense = models.OneToOneField(Expense, on_delete=models.PROTECT, null=True, blank=True,
         related_name="journal_entry")
     created_at = models.DateTimeField(auto_now_add=True)
 

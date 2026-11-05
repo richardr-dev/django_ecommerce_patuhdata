@@ -90,7 +90,7 @@ class SmokeUrlTests(TestCase):
             "customer_id": self.customer_record.id, "event_id": self.event.id,
             "section": "products", "object_id": self.product.id, "uidb64": "MQ",
             "address_id": 1, "action": "default", "invoice_id": self.invoice.id,
-            "webhook_key": uuid.uuid4(), "channel_id": 1, "payout_id": 1, "code": "smoke", "staff_id": 1, "card_id": 1, "item_id": 1,
+            "webhook_key": uuid.uuid4(), "channel_id": 1, "payout_id": 1, "expense_id": 1, "code": "smoke", "staff_id": 1, "card_id": 1, "item_id": 1,
             "link_id": 1}
 
     def _clients(self):

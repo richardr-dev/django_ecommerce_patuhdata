@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.accounting.ledger import VAT, account_balances, money
+from apps.accounting.ledger import INPUT_VAT, VAT, account_balances, money
 from apps.orders.models import Order
 
 from .models import Invoice, InvoiceSequence, TaxProfile
@@ -113,10 +113,16 @@ class MonthlyTax:
     pph_base: Decimal
     pph: Decimal
     pph_due: date
-    vat: Decimal
+    vat: Decimal  # PPN keluaran collected from buyers
     vat_due: date
     invoice_count: int
     over_umkm_limit: bool
+    input_vat: Decimal = Decimal(0)  # PPN masukan on recorded expenses
+
+    @property
+    def vat_payable(self):
+        """PPN kurang bayar for the SPT Masa PPN (negative: lebih bayar, carried forward)."""
+        return self.vat - self.input_vat
 
 
 def _turnover(store, start, end):
@@ -135,11 +141,12 @@ def monthly_tax(store, year, month, profile=None):
     if pph_base and profile.taxpayer_type == "individual":
         exemption_left = max(Decimal(0), INDIVIDUAL_EXEMPTION - before)
         pph_base = max(Decimal(0), turnover - exemption_left)
-    vat = next((account.balance for account in account_balances(store, start=start, end=end)
-        if account.code == VAT), Decimal(0))
+    balances = {account.code: account.balance
+        for account in account_balances(store, start=start, end=end)}
+    vat, input_vat = balances.get(VAT, Decimal(0)), balances.get(INPUT_VAT, Decimal(0))
     next_month_end = month_bounds(end.year + (end.month == 12), end.month % 12 + 1)[1]
     return MonthlyTax(start=start, end=end, turnover=turnover, turnover_ytd=before + turnover,
         pph_base=pph_base, pph=money(max(Decimal(0), pph_base) * UMKM_RATE),
         pph_due=next_month_end.replace(day=15), vat=vat, vat_due=next_month_end,
         invoice_count=Invoice.objects.filter(store=store, issued_on__range=(start, end)).count(),
-        over_umkm_limit=before + turnover > UMKM_TURNOVER_LIMIT)
+        over_umkm_limit=before + turnover > UMKM_TURNOVER_LIMIT, input_vat=input_vat)

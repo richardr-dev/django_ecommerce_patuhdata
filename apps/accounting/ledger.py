@@ -8,11 +8,11 @@ from django.utils import timezone
 from apps.channels.adapters import PLATFORMS
 from apps.orders.models import PaymentTransaction, Refund
 
-from .models import Account, JournalEntry, JournalLine
+from .models import EXPENSE_CATEGORIES, Account, JournalEntry, JournalLine
 
 logger = logging.getLogger(__name__)
 
-CASH, GATEWAY, MARKETPLACE, INVENTORY = "1100", "1200", "1300", "1400"
+CASH, GATEWAY, MARKETPLACE, INVENTORY, INPUT_VAT = "1100", "1200", "1300", "1400", "1500"
 VAT, UNIDENTIFIED = "2100", "2200"
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
 COGS, FEES = "5100", "6100"
@@ -23,6 +23,7 @@ CHART = [
     (GATEWAY, "Piutang payment gateway", "asset"),
     (MARKETPLACE, "Piutang marketplace", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
+    (INPUT_VAT, "PPN masukan", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (SALES, "Penjualan", "revenue"),
@@ -31,7 +32,7 @@ CHART = [
     (DISCOUNTS, "Potongan penjualan", "revenue"),
     (COGS, "Harga pokok penjualan", "expense"),
     (FEES, "Biaya payment gateway & marketplace", "expense"),
-]
+] + [(code, name, "expense") for code, name in EXPENSE_CATEGORIES]
 
 
 class LedgerError(ValueError):
@@ -120,6 +121,15 @@ def post_payout(payout):
         memo=f"Pencairan {payout.provider} {payout.reference}",
         amounts={CASH: payout.net, FEES: payout.fees,
             receivable_account(payout.provider): -payout.gross})
+
+
+def post_expense(expense):
+    """Money spent from the bank on running the business. PPN masukan a PKP seller may credit
+    against PPN keluaran is kept apart from the cost."""
+    return _post(expense.store, date=expense.date, expense=expense,
+        memo=f"Biaya: {expense.get_category_display()} · {expense.description}",
+        amounts={expense.category: expense.amount - expense.input_vat,
+            INPUT_VAT: expense.input_vat, CASH: -expense.amount})
 
 
 def post_pending_entries(limit=100):
