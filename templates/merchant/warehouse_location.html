@@ -3,7 +3,7 @@
 <label class="span-2">Cari kecamatan, kota, atau kode pos<input type="search" id="location-search" class="control" autocomplete="off" placeholder="Contoh: Kemang Jakarta Selatan atau 12730"></label>
 <div class="location-results" id="location-results" role="listbox"></div>
 <p class="location-chosen" id="location-chosen"{% if not form.instance.area_name %} hidden{% endif %}>✓ <b id="location-chosen-name">{{ form.instance.area_name }}</b> <span id="location-chosen-postal" hidden>{{ form.instance.postal_code }}</span></p>
-<div class="location-map" id="location-map" aria-label="Peta lokasi gudang"></div>
+<div class="location-map" id="location-map" aria-label="Peta lokasi gudang"></div><div class="location-pin" id="location-pin" role="status" aria-live="polite"{% if not form.instance.latitude %} hidden{% endif %}><span aria-hidden="true">📍</span><div><b>Titik lokasi dipilih</b><small id="location-pin-address">{{ form.instance.address }}</small><small class="muted" id="location-pin-coords">{% if form.instance.latitude %}{{ form.instance.latitude }}, {{ form.instance.longitude }}{% endif %}</small></div><button type="button" class="bo-link" id="location-undo" hidden>Urungkan perubahan alamat</button></div>
 <div class="location-tools"><button type="button" class="bo-link" id="location-here">{% icon "locate" %} Gunakan lokasi saya</button><button type="button" class="bo-link" id="location-find-address">{% icon "search" %} Cari alamat di peta</button><small class="muted" id="location-status">{% if form.instance.latitude %}Pin tersimpan. Geser bila kurang tepat.{% else %}Belum ada pin. Pilih kecamatan dulu, lalu geser pin.{% endif %}</small></div>
 </section>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
@@ -12,4 +12,5 @@
 <style>.warehouse-location{display:grid;gap:10px;margin-bottom:22px;padding-bottom:22px;border-bottom:1px solid #eaecf0}.warehouse-location label{display:grid;gap:6px;font-weight:700}
 .location-results{display:grid;gap:4px}.location-results button{padding:9px 12px;border:1px solid #e4e7ec;border-radius:8px;background:#fff;text-align:left;font:inherit;cursor:pointer}.location-results button:hover{border-color:var(--bo-accent)}
 .location-chosen{margin:0;padding:10px 12px;border-radius:8px;background:#ecfdf3;color:#067647}.location-map{height:320px;border:1px solid #e4e7ec;border-radius:12px;z-index:0}
+.location-pin{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:12px 14px;border:1px solid #abefc6;border-radius:10px;background:#ecfdf3;color:#05603a}.location-pin[hidden]{display:none}.location-pin b,.location-pin small{display:block}.location-pin small{margin-top:3px;color:#05603a}.location-pin small.muted{color:#667085;font-variant-numeric:tabular-nums}
 .location-tools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}</style>

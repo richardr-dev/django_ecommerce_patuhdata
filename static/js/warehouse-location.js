@@ -16,17 +16,103 @@
 
   const say = (text) => { status.textContent = text; };
 
-  function setPoint(lat, lng, { zoom } = {}) {
+  // The pin card: confirms a point is chosen and shows the address found there.
+  const pinCard = $("location-pin");
+  const pinAddress = $("location-pin-address");
+  const pinCoords = $("location-pin-coords");
+  const undo = $("location-undo");
+  let lookup = 0, lookupTimer, previousAddress = null;
+
+  function showPin(lat, lng, text) {
+    pinCard.hidden = false;
+    pinCoords.textContent = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
+    if (text !== undefined) pinAddress.textContent = text;
+  }
+
+  async function reverseGeocode(lat, lng) {
+    const url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1"
+      + `&accept-language=id&lat=${lat}&lon=${lng}`;
+    try {
+      const found = await (await fetch(url, { headers: { Accept: "application/json" },
+        referrerPolicy: "strict-origin-when-cross-origin" })).json();
+      return found && found.display_name ? found : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Street-level part of a reverse-geocoded place: building, road and number, neighbourhood.
+  function streetOf(place) {
+    const a = place.address || {};
+    const road = [a.road, a.house_number].filter(Boolean).join(" ");
+    const parts = [place.name && place.name !== a.road ? place.name : "", road,
+      a.neighbourhood || a.hamlet || "", a.suburb || a.village || "", a.city_district || "",
+      a.city || a.town || a.county || "", a.state || ""].filter(Boolean);
+    const unique = parts.filter((part, index) => parts.indexOf(part) === index);
+    return unique.join(", ") + (a.postcode ? ` ${a.postcode}` : "");
+  }
+
+  async function matchArea(postcode) {
+    // No kecamatan chosen yet: pick it from the pin's postcode when exactly one area fits.
+    if (!postcode || field("area_id").value) return;
+    try {
+      const response = await fetch(`${box.dataset.areasUrl}?q=${encodeURIComponent(postcode)}`,
+        { headers: { Accept: "application/json" } });
+      const data = await response.json();
+      const exact = (data.areas || []).filter((area) => area.postal_code === postcode);
+      if (exact.length === 1 && !field("area_id").value) choose(exact[0], { movePin: false });
+    } catch { /* the seller can still pick the kecamatan by search */ }
+  }
+
+  function pinPlaced(lat, lng) {
+    showPin(lat, lng, "Mencari alamat di titik ini…");
+    clearTimeout(lookupTimer);
+    const current = ++lookup;
+    lookupTimer = setTimeout(async () => {  // one lookup per drag, within OSM's usage policy
+      const place = await reverseGeocode(lat, lng);
+      if (current !== lookup) return;
+      if (!place) {
+        showPin(lat, lng, "Alamat di titik ini tidak ditemukan. Tulis alamat lengkap secara manual.");
+        return;
+      }
+      const street = streetOf(place) || place.display_name;
+      showPin(lat, lng, street);
+      const address = field("address");
+      if (address && address.value.trim() !== street) {
+        if (previousAddress === null) previousAddress = address.value;
+        address.value = street;
+        address.dispatchEvent(new Event("input", { bubbles: true }));
+        undo.hidden = !previousAddress.trim();
+        say("Pin dipasang dan alamat diperbarui. Lengkapi nomor, blok, atau patokan bila perlu, lalu simpan.");
+      }
+      const postcode = (place.address || {}).postcode || "";
+      const postal = field("postal_code");
+      if (postal && !postal.value.trim() && /^\d{5}$/.test(postcode)) postal.value = postcode;
+      matchArea(/^\d{5}$/.test(postcode) ? postcode : "");
+    }, 600);
+  }
+
+  undo.addEventListener("click", () => {
+    if (previousAddress === null) return;
+    field("address").value = previousAddress;
+    previousAddress = null;
+    undo.hidden = true;
+    say("Alamat dikembalikan. Pin tetap di posisinya.");
+  });
+
+  function setPoint(lat, lng, { zoom, exact = false } = {}) {
     field("latitude").value = Number(lat).toFixed(6);
     field("longitude").value = Number(lng).toFixed(6);
+    if (exact) pinPlaced(lat, lng);
+    else showPin(lat, lng);
     if (!map) return;
     if (pin) pin.setLatLng([lat, lng]);
     else {
       pin = window.L.marker([lat, lng], { draggable: true }).addTo(map);
       pin.on("dragend", () => {
         const point = pin.getLatLng();
-        setPoint(point.lat, point.lng);
         say("Pin dipindahkan. Jangan lupa simpan perubahan.");
+        setPoint(point.lat, point.lng, { exact: true });
       });
     }
     map.setView([lat, lng], zoom || Math.max(map.getZoom(), 16));
@@ -44,7 +130,7 @@
     }
   }
 
-  function choose(area) {
+  function choose(area, { movePin = true } = {}) {
     field("area_id").value = area.id;
     field("area_name").value = area.name;
     if (area.postal_code && field("postal_code")) field("postal_code").value = area.postal_code;
@@ -53,6 +139,7 @@
     chosen.hidden = false;
     results.replaceChildren();
     search.value = "";
+    if (!movePin) return;
     say("Mencari titik di peta…");
     geocode([area.district, area.city, area.province].filter(Boolean).join(", ") || area.name)
       .then((point) => {
@@ -101,8 +188,8 @@
     say("Mengambil lokasi Anda…");
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setPoint(position.coords.latitude, position.coords.longitude, { zoom: 18 });
         say("Lokasi Anda dipakai. Pastikan Anda sedang di gudang, lalu simpan.");
+        setPoint(position.coords.latitude, position.coords.longitude, { zoom: 18, exact: true });
       },
       () => say("Izin lokasi ditolak. Geser pin secara manual."),
       { enableHighAccuracy: true, timeout: 10000 });
@@ -132,9 +219,12 @@
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' })
       .addTo(map);
     map.on("click", (event) => {
-      setPoint(event.latlng.lat, event.latlng.lng);
       say("Pin dipasang. Jangan lupa simpan perubahan.");
+      setPoint(event.latlng.lat, event.latlng.lng, { exact: true });
     });
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) setPoint(lat, lng, { zoom: 17 });
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+      setPoint(lat, lng, { zoom: 17 });
+      showPin(lat, lng, field("address")?.value.trim() || "Titik tersimpan.");
+    }
   });
 })();
