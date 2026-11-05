@@ -22,6 +22,7 @@ urlpatterns = [
         name="staff-invite-accept"),
     path("ajak-teman/", views.referral_program, name="referral-program"),
     path("merchant/campaign-links/", campaign_views.campaign_links, name="merchant-campaign-links"),
+    path("merchant/feeds/", campaign_views.feeds_and_qr, name="merchant-feeds"),
     path("merchant/campaign-links/<int:link_id>/toggle/", campaign_views.toggle_campaign_link,
         name="merchant-campaign-link-toggle"),
 ]

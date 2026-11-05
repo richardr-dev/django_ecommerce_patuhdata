@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel><title>{{ store.name }}</title><link>{{ home }}</link><description>Katalog produk {{ store.name }}</description>{% for item in items %}
+<item><g:id>{{ item.id }}</g:id><g:title>{{ item.title }}</g:title><g:description>{{ item.description }}</g:description><g:link>{{ item.link }}</g:link>{% if item.image %}<g:image_link>{{ item.image }}</g:image_link>{% endif %}<g:availability>{{ item.availability }}</g:availability><g:price>{{ item.price }}</g:price>{% if item.sale_price %}<g:sale_price>{{ item.sale_price }}</g:sale_price>{% endif %}<g:brand>{{ item.brand }}</g:brand><g:condition>new</g:condition><g:identifier_exists>no</g:identifier_exists>{% if item.group %}<g:item_group_id>{{ item.group }}</g:item_group_id>{% endif %}{% if item.category %}<g:product_type>{{ item.category }}</g:product_type>{% endif %}</item>{% endfor %}
+</channel></rss>

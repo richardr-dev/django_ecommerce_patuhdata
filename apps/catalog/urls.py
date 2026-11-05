@@ -2,7 +2,7 @@ from django.urls import path
 
 from config.ratelimit import rate_limit
 
-from . import views
+from . import feeds, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -10,6 +10,7 @@ urlpatterns = [
     path("terms/", views.terms_of_service, name="terms-of-service"),
     path("robots.txt", views.robots_txt, name="robots-txt"),
     path("sitemap.xml", views.sitemap_xml, name="sitemap"),
+    path("feeds/products.xml", feeds.products_feed, name="products-feed"),
     path("pages/<slug:slug>/", views.store_page, name="store-page"),
     path("products/<slug:slug>/", views.product_detail, name="product-detail"),
     path("products/<slug:slug>/review/", rate_limit("review", limit=10, window=3600)(

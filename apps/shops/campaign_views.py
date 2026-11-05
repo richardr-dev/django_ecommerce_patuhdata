@@ -111,3 +111,19 @@ def toggle_campaign_link(request, link_id):
     link.save(update_fields=["is_active"])
     messages.success(request, f"Link {link.name} {'diaktifkan' if link.is_active else 'dinonaktifkan'}.")
     return redirect("merchant-campaign-links")
+
+
+@login_required(login_url="/merchant/login/")
+def feeds_and_qr(request):
+    """Feed produk (Google Shopping, Meta) and QR katalog in one place."""
+    from apps.orders.views import _merchant_context, _staff_store
+
+    from .tenancy import store_url
+
+    store = _staff_store(request)
+    targets = [{"label": "Beranda toko", "url": store_url(store)}]
+    targets += [{"label": f"Link kampanye: {link.name}", "url": campaign_short_url(link)}
+        for link in CampaignLink.objects.filter(store=store, is_active=True).order_by("-created_at")[:50]]
+    return render(request, "merchant/feeds_qr.html", _merchant_context(request, store,
+        title="Feed & QR katalog", section="feeds", feed_url=store_url(store, "/feeds/products.xml"),
+        targets=targets))
