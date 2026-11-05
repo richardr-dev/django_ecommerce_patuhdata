@@ -8,7 +8,7 @@ from .models import AuditLog
 
 GROUPS = {"order": "Pesanan", "refund": "Refund", "payment": "Pembayaran", "products": "Produk",
     "variants": "Produk", "inventory": "Stok", "staff": "Staf", "store": "Toko",
-    "billing": "Langganan", "channel": "Marketplace", "campaign_link": "Promosi",
+    "billing": "Langganan", "channel": "Marketplace", "campaign_link": "Promosi", "whatsapp": "WhatsApp",
     "coupons": "Promosi", "gift_card": "Promosi", "campaigns": "Promosi", "flash-sales": "Promosi"}
 VERBS = {"created": "membuat", "updated": "mengubah", "invited": "mengundang", "removed": "menghapus",
     "role_changed": "mengubah peran", "status_updated": "mengubah status", "shipped": "mengirim",

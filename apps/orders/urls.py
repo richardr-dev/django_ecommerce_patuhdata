@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
+from apps.integrations import whatsapp_views
 from apps.shops import segment_views
 from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
@@ -107,6 +108,8 @@ urlpatterns = [
     path("merchant/integrations/", views.merchant_integrations, name="merchant-integrations"),
     path("merchant/finance/", views.merchant_finance, name="merchant-finance"),
     path("merchant/payments/", views.merchant_payment_settings, name="merchant-payment-settings"),
+    path("merchant/whatsapp/", whatsapp_views.merchant_whatsapp, name="merchant-whatsapp"),
+    path("merchant/whatsapp/test/", whatsapp_views.merchant_whatsapp_test, name="merchant-whatsapp-test"),
     path("merchant/payments/test/", views.merchant_payment_test, name="merchant-payment-test"),
     path("merchant/payments/balance/", views.merchant_platform_balance,
         name="merchant-platform-balance"),

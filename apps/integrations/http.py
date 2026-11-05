@@ -36,7 +36,7 @@ def request_json(url, *, method="GET", headers=None, payload=None, encoded_paylo
         timeout=timeout, attempts=attempts, **kwargs)
 
 
-def request_form_json(url, payload, *, headers=None, timeout=20):
+def request_form_json(url, payload, *, headers=None, timeout=20, attempts=2):
     return _request(url, method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded", **(headers or {})},
-        timeout=timeout, data=payload)
+        timeout=timeout, attempts=attempts, data=payload)

@@ -2,7 +2,7 @@ import re
 
 from django import forms
 
-from .models import StorePaymentSettings
+from .models import StorePaymentSettings, StoreWhatsAppSettings
 
 
 class PaymentSettingsForm(forms.ModelForm):
@@ -73,6 +73,72 @@ class PaymentSettingsForm(forms.ModelForm):
                 account.webhook_token = self.cleaned_data["webhook_token"]
             if account.gateway == "xendit":
                 account.doku_client_id = ""
+        if commit:
+            account.save()
+        return account
+
+
+class WhatsAppSettingsForm(forms.ModelForm):
+    token = forms.CharField(required=False, strip=True, label="Token",
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off"}),
+        help_text="Fonnte: token perangkat (menu Device). Cloud API: access token permanen dari "
+            "System User Meta. Kosongkan untuk memakai yang tersimpan.")
+
+    class Meta:
+        model = StoreWhatsAppSettings
+        fields = ["provider", "phone_number_id", "template_name", "template_language",
+            "seller_alert_phone", "notify_order_created", "notify_payment_received",
+            "notify_shipped", "notify_delivered", "notify_cancelled"]
+        labels = {"provider": "Layanan pengirim", "phone_number_id": "Phone number ID",
+            "template_name": "Nama template", "template_language": "Bahasa template",
+            "seller_alert_phone": "Nomor WhatsApp Anda (notifikasi pesanan baru)",
+            "notify_order_created": "Pesanan dibuat: rincian dan link pembayaran",
+            "notify_payment_received": "Pembayaran diterima",
+            "notify_shipped": "Pesanan dikirim: kurir dan nomor resi",
+            "notify_delivered": "Pesanan sampai", "notify_cancelled": "Pesanan dibatalkan"}
+        help_texts = {"provider": "Pesan dikirim dari nomor WhatsApp usaha Anda sendiri.",
+            "phone_number_id": "Khusus Cloud API: di Meta Business > WhatsApp > API Setup.",
+            "template_name": "Khusus Cloud API: template kategori Utility yang sudah disetujui, "
+                "dengan isi hanya {{1}}.",
+            "template_language": "Kode bahasa template, mis. id atau en_US.",
+            "seller_alert_phone": "Opsional. Anda dikabari setiap ada pesanan yang sudah dibayar."}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.saved_provider = self.instance.provider
+
+    def clean_seller_alert_phone(self):
+        from .whatsapp import msisdn
+
+        phone = self.cleaned_data["seller_alert_phone"].strip()
+        if phone and not msisdn(phone):
+            raise forms.ValidationError("Gunakan nomor Indonesia, mis. 081234567890.")
+        return phone
+
+    def clean(self):
+        data = super().clean()
+        provider = data.get("provider")
+        keep_saved = provider == self.saved_provider
+        token = data.get("token") or (self.instance.token if keep_saved else "")
+        if provider and not token:
+            self.add_error("token", "Masukkan token dari layanan pengirim.")
+        if provider == "cloud_api":
+            for field in ("phone_number_id", "template_name"):
+                if not data.get(field):
+                    self.add_error(field, "Wajib untuk WhatsApp Cloud API.")
+        return data
+
+    def save(self, commit=True):
+        account = super().save(commit=False)
+        if not account.provider:
+            account.token = ""
+        else:
+            if account.provider != self.saved_provider:
+                account.token = ""
+            if self.cleaned_data.get("token"):
+                account.token = self.cleaned_data["token"]
+            if account.provider == "fonnte":
+                account.phone_number_id = account.template_name = ""
         if commit:
             account.save()
         return account

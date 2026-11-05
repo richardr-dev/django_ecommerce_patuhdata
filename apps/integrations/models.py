@@ -137,3 +137,62 @@ class WorkerHeartbeat(models.Model):
     def beat(cls, name, error=""):
         cls.objects.update_or_create(name=name, defaults={"last_seen_at": timezone.now(),
             "last_error": str(error)[:2000]})
+
+
+class StoreWhatsAppSettings(models.Model):
+    """The seller's own WhatsApp sender: buyers get order updates from the store's number, sent
+    through the seller's Fonnte device or Meta WhatsApp Cloud API account."""
+    PROVIDERS = [("", "Nonaktif"), ("fonnte", "Fonnte"), ("cloud_api", "WhatsApp Cloud API (Meta)")]
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="whatsapp_settings")
+    provider = models.CharField(max_length=20, choices=PROVIDERS, blank=True)
+    encrypted_token = models.TextField(blank=True)  # Fonnte device token or Meta access token
+    phone_number_id = models.CharField(max_length=40, blank=True)  # Cloud API sender
+    template_name = models.CharField(max_length=80, blank=True)  # Cloud API: body "{{1}}"
+    template_language = models.CharField(max_length=10, default="id")
+    notify_order_created = models.BooleanField(default=True)
+    notify_payment_received = models.BooleanField(default=True)
+    notify_shipped = models.BooleanField(default=True)
+    notify_delivered = models.BooleanField(default=True)
+    notify_cancelled = models.BooleanField(default=True)
+    # The seller's own number: gets a message for every newly paid order.
+    seller_alert_phone = models.CharField(max_length=30, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def token(self):
+        return decrypt(self.encrypted_token)
+
+    @token.setter
+    def token(self, value):
+        self.encrypted_token = encrypt(value)
+
+    @property
+    def ready(self):
+        if self.provider == "fonnte":
+            return bool(self.token)
+        if self.provider == "cloud_api":
+            return bool(self.token and self.phone_number_id and self.template_name)
+        return False
+
+
+class WhatsAppMessage(models.Model):
+    """Every WhatsApp message Lakuin tried to send for a store, so a retry never sends twice and
+    the seller can see what buyers received."""
+    STATUS = [("sent", "Terkirim"), ("failed", "Gagal")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="whatsapp_messages")
+    order = models.ForeignKey("orders.Order", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="whatsapp_messages")
+    outbox_event = models.ForeignKey(OutboxEvent, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    kind = models.CharField(max_length=30)
+    to = models.CharField(max_length=20)
+    body = models.TextField()
+    status = models.CharField(max_length=10, choices=STATUS)
+    provider = models.CharField(max_length=20)
+    provider_message_id = models.CharField(max_length=120, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["store", "-created_at"])]

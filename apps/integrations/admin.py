@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import IntegrationCredential, OutboxEvent, PlatformPayout
+from .models import IntegrationCredential, OutboxEvent, PlatformPayout, WhatsAppMessage
 
 admin.site.register(IntegrationCredential)
 @admin.register(OutboxEvent)
@@ -32,3 +32,11 @@ class PlatformPayoutAdmin(admin.ModelAdmin):
         if obj.status == "paid" and obj.paid_at is None:
             obj.paid_at = timezone.now()
         super().save_model(request, obj, form, change)
+
+
+@admin.register(WhatsAppMessage)
+class WhatsAppMessageAdmin(admin.ModelAdmin):
+    list_display = ("store", "kind", "to", "status", "provider", "created_at")
+    list_filter = ("status", "kind", "provider")
+    search_fields = ("store__name", "to", "error")
+    readonly_fields = [field.name for field in WhatsAppMessage._meta.fields]

@@ -26,7 +26,7 @@ logger = logging.getLogger("niagakit.worker")
 STALE_CLAIM = timedelta(minutes=10)
 
 
-def _notification(event):
+def _email_notification(event):
     order_id = event.payload.get("order_id")
     if not order_id:
         return {"skipped": "event has no order"}
@@ -42,6 +42,23 @@ def _notification(event):
         f"Pesanan {order.id} sekarang berstatus {status}. Detail: {url}",
         settings.DEFAULT_FROM_EMAIL, [order.email], fail_silently=False)
     return {"email_sent": bool(sent)}
+
+
+def _notification(event):
+    """Email, then WhatsApp. Each channel is marked done on the event as it succeeds, so a retry
+    after a WhatsApp failure does not email the customer again."""
+    from apps.integrations.whatsapp import deliver as deliver_whatsapp
+
+    done, results = set(event.payload.get("delivered", [])), {}
+    for name, handler in (("email", _email_notification), ("whatsapp", deliver_whatsapp)):
+        if name in done:
+            results[name] = "already delivered"
+            continue
+        results[name] = handler(event)
+        done.add(name)
+        event.payload = {**event.payload, "delivered": sorted(done)}
+        event.save(update_fields=["payload"])
+    return results
 
 
 HANDLED_TOPICS = {"order.created", "payment.received", "order.status_changed", "order.refunded"}
