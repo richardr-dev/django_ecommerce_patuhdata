@@ -1130,6 +1130,24 @@ def merchant_orders(request):
     outlet = request.GET.get("outlet", "")
     if outlet.isdigit():
         orders = orders.filter(pickup_outlet_id=int(outlet))
+    channel_filter = request.GET.get("channel", "")
+    if channel_filter:
+        orders = orders.filter(channel=channel_filter)
+    order_type_filter = request.GET.get("order_type", "")
+    if order_type_filter:
+        orders = orders.filter(order_type=order_type_filter)
+    date_from = request.GET.get("date_from", "")
+    date_to = request.GET.get("date_to", "")
+    try:
+        if date_from:
+            orders = orders.filter(created_at__date__gte=date.fromisoformat(date_from))
+    except ValueError:
+        date_from = ""
+    try:
+        if date_to:
+            orders = orders.filter(created_at__date__lte=date.fromisoformat(date_to))
+    except ValueError:
+        date_to = ""
     if group in {"pack", "ship"}:
         # Scheduled orders first, by the day they must leave.
         orders = orders.order_by(F("delivery_date").asc(nulls_last=True), "created_at")
@@ -1159,7 +1177,157 @@ def merchant_orders(request):
         tabs=tabs, tab=group, query=query, total=all_orders.count(),
         outlets=Warehouse.objects.filter(store=store, is_outlet=True),
         statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS,
-        tracking_sync=bool(settings.BITESHIP_API_KEY or settings.RAJAONGKIR_API_KEY)))
+        tracking_sync=bool(settings.BITESHIP_API_KEY or settings.RAJAONGKIR_API_KEY),
+        channel_filter=channel_filter, order_type_filter=order_type_filter,
+        date_from=date_from, date_to=date_to,
+        channels=Order.CHANNELS, order_types=Order.ORDER_TYPES))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_abshop(request):
+    """AB Shop & Reseller order management: sell-in, sell-through, billing queue."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+
+    base_qs = Order.objects.filter(store=store).filter(
+        models.Q(channel="abshop") |
+        models.Q(order_type__in=["reseller_sell_in", "reseller_sell_through"])
+    )
+    orders = base_qs.select_related("pickup_outlet").prefetch_related("items").order_by("-created_at")
+
+    source_filter = request.GET.get("source", "")
+    if source_filter:
+        orders = orders.filter(ab_shop_source=source_filter)
+    billing_filter = request.GET.get("billing", "")
+    if billing_filter:
+        orders = orders.filter(abshop_billing_status=billing_filter)
+    order_type_filter = request.GET.get("order_type", "")
+    if order_type_filter:
+        orders = orders.filter(order_type=order_type_filter)
+    date_from = request.GET.get("date_from", "")
+    date_to = request.GET.get("date_to", "")
+    try:
+        if date_from:
+            orders = orders.filter(created_at__date__gte=date.fromisoformat(date_from))
+    except ValueError:
+        date_from = ""
+    try:
+        if date_to:
+            orders = orders.filter(created_at__date__lte=date.fromisoformat(date_to))
+    except ValueError:
+        date_to = ""
+    query = request.GET.get("q", "").strip()
+    if query:
+        orders = orders.filter(
+            models.Q(customer_name__icontains=query) | models.Q(phone__icontains=query)
+        )
+
+    sell_in_qs = base_qs.filter(order_type="reseller_sell_in")
+    summary = {
+        "total": base_qs.count(),
+        "unbilled": sell_in_qs.filter(abshop_billing_status="unbilled").count(),
+        "total_amount": sell_in_qs.aggregate(s=Sum("total"))["s"] or 0,
+    }
+
+    page, page_range, page_query = paginate(request, orders, MERCHANT_PAGE_SIZE)
+    for order in page.object_list:
+        order.abshop_total = sum(
+            (item.effective_ab_shop_price or item.unit_price) * item.quantity
+            for item in order.items.all()
+        )
+
+    return render(request, "merchant/abshop.html", _merchant_context(request, store,
+        orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
+        summary=summary, query=query,
+        source_filter=source_filter, billing_filter=billing_filter,
+        order_type_filter=order_type_filter, date_from=date_from, date_to=date_to,
+        ab_shop_sources=Order.AB_SHOP_SOURCES,
+        billing_statuses=Order.ABSHOP_BILLING_STATUSES,
+        order_types=Order.ORDER_TYPES))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_returns(request):
+    """Merchant-side return & exchange request list."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "viewer"})
+
+    returns = ReturnRequest.objects.filter(
+        order__store=store
+    ).select_related("order", "order_item__product", "replacement_variant").order_by("-created_at")
+
+    status_filter = request.GET.get("status", "")
+    if status_filter:
+        returns = returns.filter(status=status_filter)
+    type_filter = request.GET.get("type", "")
+    if type_filter:
+        returns = returns.filter(request_type=type_filter)
+    query = request.GET.get("q", "").strip()
+    if query:
+        returns = returns.filter(
+            models.Q(order__customer_name__icontains=query) | models.Q(order__phone__icontains=query)
+        )
+
+    counts = {}
+    for status_key, _ in ReturnRequest.STATUS:
+        counts[status_key] = ReturnRequest.objects.filter(order__store=store, status=status_key).count()
+
+    page, page_range, page_query = paginate(request, returns, MERCHANT_PAGE_SIZE)
+    return render(request, "merchant/returns.html", _merchant_context(request, store,
+        returns=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
+        query=query, status_filter=status_filter, type_filter=type_filter,
+        statuses=ReturnRequest.STATUS, types=ReturnRequest.TYPES, counts=counts))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_return_detail(request, return_id):
+    """Merchant-side return/exchange detail with status transition actions."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops"})
+    ret = get_object_or_404(ReturnRequest, pk=return_id, order__store=store)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        STATUS_TRANSITIONS = {
+            "approve": ("requested", "approved"),
+            "reject": ("requested", "rejected"),
+            "mark_received": ("approved", "item_received"),
+            "mark_inspected": ("item_received", "inspected"),
+            "mark_sent": ("inspected", "replacement_sent"),
+            "complete": ("replacement_sent", "completed"),
+            "refunded": ("inspected", "refunded"),
+        }
+        if action in STATUS_TRANSITIONS:
+            from_status, to_status = STATUS_TRANSITIONS[action]
+            if ret.status == from_status:
+                ret.status = to_status
+                admin_notes = request.POST.get("admin_notes", "").strip()
+                if admin_notes:
+                    ret.admin_notes = admin_notes
+                if action == "mark_received":
+                    ret.return_tracking_number = request.POST.get("return_tracking_number",
+                        ret.return_tracking_number)
+                    ret.return_courier = request.POST.get("return_courier", ret.return_courier)
+                if action == "mark_sent":
+                    ret.replacement_tracking_number = request.POST.get("replacement_tracking_number",
+                        ret.replacement_tracking_number)
+                    ret.replacement_courier = request.POST.get("replacement_courier",
+                        ret.replacement_courier)
+                ret.save()
+                messages.success(request, f"Status retur diperbarui: {ret.get_status_display()}")
+                AuditLog.objects.create(store=store, actor=request.user,
+                    action="return.status_updated", object_type="ReturnRequest",
+                    object_id=str(ret.pk), details={"from": from_status, "to": to_status})
+        return redirect("merchant-return-detail", return_id=return_id)
+
+    available_variants = []
+    if ret.request_type == "exchange" and ret.order_item:
+        available_variants = list(
+            ret.order_item.product.variants.filter(is_active=True).order_by("name")
+        )
+
+    return render(request, "merchant/return_detail.html", _merchant_context(request, store,
+        ret=ret, available_variants=available_variants))
 
 
 def _whatsapp_link(phone, text):

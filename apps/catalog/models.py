@@ -64,6 +64,11 @@ class Product(models.Model):
         help_text="Atau link (Google Drive, kelas online). Dibuka pembeli setelah membayar.")
     cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
         help_text="Harga pokok (modal) per unit. Dipakai untuk menghitung HPP dan laba.")
+    # Special wholesale price charged to AB Shop (reseller/partner). Overrides regular price
+    # on reseller sell-in orders. Leave blank to use the regular retail price.
+    ab_shop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name="Harga AB Shop",
+        help_text="Harga khusus untuk reseller AB Shop. Kosongkan jika sama dengan harga normal.")
     sku = models.CharField(max_length=80)
     image_url = models.URLField(blank=True)
     photo = models.FileField(upload_to=StoreUploadPath("products"), blank=True)
@@ -275,6 +280,10 @@ class ProductVariant(models.Model):
     price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
         help_text="Kosongkan untuk memakai harga pokok produk induk.")
+    # Special AB Shop reseller price for this variant; falls back to product-level ab_shop_price.
+    ab_shop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name="Harga AB Shop",
+        help_text="Harga khusus AB Shop untuk varian ini. Kosongkan untuk memakai harga produk induk.")
     weight_grams = models.PositiveIntegerField(null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
     reserved = models.PositiveIntegerField(default=0)
@@ -307,6 +316,15 @@ class ProductVariant(models.Model):
     @property
     def effective_price(self):
         return self.price if self.price is not None else self.product.price
+
+    @property
+    def effective_ab_shop_price(self):
+        """AB Shop price for this variant; falls back to product-level price."""
+        if self.ab_shop_price is not None:
+            return self.ab_shop_price
+        if self.product.ab_shop_price is not None:
+            return self.product.ab_shop_price
+        return self.effective_price
 
     @property
     def available_stock(self):

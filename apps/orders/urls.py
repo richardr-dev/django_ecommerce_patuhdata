@@ -120,4 +120,7 @@ urlpatterns = [
     path("merchant/setup/<slug:section>/", views.merchant_entity_list, name="merchant-entity-list"),
     path("merchant/setup/<slug:section>/new/", views.merchant_entity_edit, name="merchant-entity-new"),
     path("merchant/setup/<slug:section>/<int:object_id>/", views.merchant_entity_edit, name="merchant-entity-edit"),
+    path("merchant/abshop/", views.merchant_abshop, name="merchant-abshop"),
+    path("merchant/returns/", views.merchant_returns, name="merchant-returns"),
+    path("merchant/returns/<int:return_id>/", views.merchant_return_detail, name="merchant-return-detail"),
 ]

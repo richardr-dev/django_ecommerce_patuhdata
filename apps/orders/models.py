@@ -102,6 +102,53 @@ class Order(models.Model):
     campaign_link = models.ForeignKey("shops.CampaignLink", on_delete=models.SET_NULL, null=True,
         blank=True, related_name="orders")
     created_at = models.DateTimeField(auto_now_add=True)
+    # ── Commerce channel & invoice ────────────────────────────────────────────
+    # Channels represent WHERE the sale originated.
+    # AB Shop is a reseller/partner: orders tagged `abshop` are B2B sell-in orders
+    # where the store invoices AB Shop directly. AB Shop then resells on their own
+    # Tokopedia/Shopee accounts — that downstream activity is recorded separately
+    # as SELL_THROUGH (informational only, no store revenue movement).
+    CHANNELS = [
+        # ── Direct / owned channels ───────────────────────────────────────────
+        ("web", "Toko Online"),
+        ("shopee", "Shopee Toko"),
+        ("tokopedia", "Tokopedia Toko"),
+        ("pos", "POS Retail"),
+        ("manual", "Manual / Chat"),
+        ("tv", "TV Shopping"),
+        # ── Reseller / partner channel ────────────────────────────────────────
+        ("abshop", "AB Shop (Reseller)"),
+    ]
+    ORDER_TYPES = [
+        ("direct", "Penjualan Langsung"),      # B2C: store → customer
+        ("reseller_sell_in", "Jual ke Reseller"),  # B2B: store → AB Shop (creates invoice & stock handover)
+        ("reseller_sell_through", "Penjualan Reseller"),  # Downstream: AB Shop → end customer (informational)
+    ]
+    ABSHOP_BILLING_STATUSES = [
+        ("unbilled", "Belum Ditagih"),
+        ("billed", "Sudah Ditagih"),
+        ("paid", "Sudah Dibayar"),
+    ]
+    # Sub-channel for AB Shop orders: which platform AB Shop sells through to end customers
+    AB_SHOP_SOURCES = [
+        ("shopee", "Shopee AB Shop"),
+        ("tokopedia", "Tokopedia AB Shop"),
+        ("tv", "TV Shopping"),
+    ]
+    # Sequential, gap-free invoice number per store, e.g. INV-2025-00042
+    invoice_number = models.CharField(max_length=80, blank=True, db_index=True)
+    channel = models.CharField(max_length=40, choices=CHANNELS, default="web", db_index=True)
+    order_type = models.CharField(max_length=30, choices=ORDER_TYPES, default="direct", db_index=True)
+    # Marketplace order ID when imported from Shopee/Tokopedia
+    external_order_id = models.CharField(max_length=100, blank=True, db_index=True)
+    # Raw status string from marketplace (e.g. "Selesai", "Dikirim")
+    marketplace_status = models.CharField(max_length=60, blank=True)
+    # Tracks whether this AB Shop reseller sell-in has been invoiced to them
+    abshop_billing_status = models.CharField(max_length=30, choices=ABSHOP_BILLING_STATUSES,
+        default="unbilled")
+    # For AB Shop orders: which platform AB Shop used to sell to end customers
+    ab_shop_source = models.CharField(max_length=20, choices=AB_SHOP_SOURCES, blank=True,
+        db_index=True)
 
     class Meta:
         constraints = [
@@ -113,6 +160,36 @@ class Order(models.Model):
             models.CheckConstraint(condition=models.Q(tax__gte=0), name="order_tax_nonnegative"),
             models.CheckConstraint(condition=models.Q(total__gte=0), name="order_total_nonnegative"),
         ]
+
+    def save(self, *args, **kwargs):
+        """Auto-generate a gap-free invoice number on first save."""
+        if not self.invoice_number and self.id:
+            year = self.created_at.year if self.created_at else __import__("datetime").date.today().year
+            last = (Order.objects.filter(store=self.store,
+                invoice_number__startswith=f"INV-{year}-")
+                .order_by("-invoice_number").values_list("invoice_number", flat=True).first())
+            seq = 1
+            if last:
+                try:
+                    seq = int(last.split("-")[-1]) + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            self.invoice_number = f"INV-{year}-{seq:05d}"
+        super().save(*args, **kwargs)
+
+    def get_channel_badge(self):
+        """Return a short label suitable for a coloured badge."""
+        return dict(self.CHANNELS).get(self.channel, self.channel)
+
+    @property
+    def is_abshop(self):
+        """True when this order is a B2B sell-in to AB Shop reseller."""
+        return self.channel == "abshop"
+
+    @property
+    def is_sell_through(self):
+        """True for informational downstream AB Shop sales (no store revenue)."""
+        return self.order_type == "reseller_sell_through"
 
     @property
     def full_address(self):
@@ -257,6 +334,23 @@ class OrderItem(models.Model):
     note = models.CharField(max_length=200, blank=True)
     # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # ABShop reseller price charged to AB Shop; different from regular retail unit_price.
+    ab_shop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    @property
+    def effective_ab_shop_price(self):
+        """The price used when billing AB Shop for this item."""
+        if self.ab_shop_price is not None:
+            return self.ab_shop_price
+        if self.variant and self.variant.ab_shop_price is not None:
+            return self.variant.ab_shop_price
+        if self.product and self.product.ab_shop_price is not None:
+            return self.product.ab_shop_price
+        return self.unit_price
+
+    @property
+    def ab_shop_line_total(self):
+        return self.effective_ab_shop_price * self.quantity
 
     class Meta:
         constraints = [
@@ -428,11 +522,57 @@ class ShipmentTrackingEvent(models.Model):
 
 
 class ReturnRequest(models.Model):
-    STATUS = [("requested", "Requested"), ("approved", "Approved"), ("rejected", "Rejected"), ("refunded", "Refunded")]
+    """Full enterprise return/exchange workflow with photo evidence and tracking."""
+    STATUS = [
+        ("requested", "Diminta"),
+        ("approved", "Disetujui"),
+        ("rejected", "Ditolak"),
+        ("item_received", "Barang Diterima"),
+        ("inspected", "Diperiksa"),
+        ("replacement_sent", "Pengganti Dikirim"),
+        ("refunded", "Sudah Direfund"),
+        ("completed", "Selesai"),
+    ]
+    TYPES = [
+        ("return_refund", "Retur & Refund"),
+        ("exchange", "Tukar Ukuran/Barang"),
+    ]
+    REASONS = [
+        ("wrong_size", "Ukuran Tidak Sesuai"),
+        ("defective", "Produk Cacat/Rusak"),
+        ("wrong_item", "Produk Berbeda"),
+        ("not_as_described", "Tidak Sesuai Deskripsi"),
+        ("other", "Lainnya"),
+    ]
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="return_requests")
-    reason = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS, default="requested")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT,
+        related_name="return_requests", null=True, blank=True)
+    request_type = models.CharField(max_length=20, choices=TYPES, default="return_refund")
+    reason = models.CharField(max_length=30, choices=REASONS, default="other")
+    reason_detail = models.TextField(blank=True)
+    status = models.CharField(max_length=30, choices=STATUS, default="requested")
+    # For exchanges: the variant the customer wants
+    original_variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT,
+        related_name="return_originals", null=True, blank=True)
+    replacement_variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT,
+        related_name="return_replacements", null=True, blank=True)
+    # Photo evidence (required before processing); FileField avoids Pillow dependency
+    photo = models.FileField(upload_to="returns/photos/%Y/%m/", null=True, blank=True)
+    # Return shipment tracking
+    return_tracking_number = models.CharField(max_length=100, blank=True)
+    return_courier = models.CharField(max_length=60, blank=True)
+    replacement_tracking_number = models.CharField(max_length=100, blank=True)
+    replacement_courier = models.CharField(max_length=60, blank=True)
+    # Admin notes
+    admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Return #{self.pk} – {self.order} [{self.get_status_display()}]"
 
 
 class CustomerAddress(models.Model):
