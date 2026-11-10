@@ -11,7 +11,7 @@ from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
 from .adapters import PLATFORMS
-from .forms import OrdersCsvForm, SalesChannelForm
+from .forms import OrdersImportForm, SalesChannelForm
 from .models import SalesChannel
 from .services import (
     CSV_COLUMNS,
@@ -20,6 +20,9 @@ from .services import (
     match_listings,
     parse_orders_csv,
 )
+
+# Keep old alias used in a few tests.
+OrdersCsvForm = OrdersImportForm
 
 CHANNEL_ROLES = {"admin", "manager", "ops"}
 
@@ -57,7 +60,7 @@ def merchant_channel_detail(request, channel_id):
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
     channel = get_object_or_404(SalesChannel, id=channel_id, store=store)
-    csv_form, summary = OrdersCsvForm(), None
+    import_form, summary = OrdersImportForm(), None
     if request.method == "POST":
         _require_roles(request, store, CHANNEL_ROLES)
         action = request.POST.get("action")
@@ -70,23 +73,35 @@ def merchant_channel_detail(request, channel_id):
             channel.save(update_fields=["is_active"])
             return redirect("merchant-channel-detail", channel_id=channel.id)
         if action == "import":
-            csv_form = OrdersCsvForm(request.POST, request.FILES)
-            if csv_form.is_valid():
+            import_form = OrdersImportForm(request.POST, request.FILES)
+            if import_form.is_valid():
+                upload = import_form.cleaned_data["file"]
                 try:
-                    summary = import_orders(channel, parse_orders_csv(csv_form.cleaned_data["file"]))
+                    skipped = 0
+                    if upload.name.lower().endswith(".xlsx"):
+                        from .parsers.shopee import parse_shopee_xlsx
+                        orders, skipped = parse_shopee_xlsx(upload)
+                    else:
+                        orders = parse_orders_csv(upload)
+                    summary = import_orders(channel, orders)
+                    summary["skipped"] = skipped
                 except (ChannelImportError, UnicodeDecodeError, csv.Error) as error:
-                    csv_form.add_error("file", f"File tidak dapat dibaca: {error}")
+                    import_form.add_error("file", f"File tidak dapat dibaca: {error}")
                 else:
                     AuditLog.objects.create(store=store, actor=request.user,
                         action="channel.orders_imported", object_type="SalesChannel",
                         object_id=str(channel.id), details={"created": summary["created"],
-                            "duplicates": summary["duplicates"], "errors": len(summary["errors"])})
+                            "duplicates": summary["duplicates"],
+                            "skipped": summary.get("skipped", 0),
+                            "errors": len(summary["errors"])})
         else:
             raise Http404
     listings = channel.listings.select_related("product", "variant")[:500]
     imported = channel.orders.select_related("order").order_by("-imported_at")[:50]
     return render(request, "merchant/channel_detail.html", _merchant_context(request, store,
-        channel=channel, listings=listings, imported=imported, csv_form=csv_form,
+        channel=channel, listings=listings, imported=imported,
+        csv_form=import_form,  # template still uses csv_form variable name
+        import_form=import_form,
         summary=summary, platform=PLATFORMS[channel.platform]))
 
 
