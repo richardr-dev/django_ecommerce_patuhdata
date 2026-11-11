@@ -7,15 +7,17 @@ from decimal import Decimal, InvalidOperation
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.catalog.models import InventoryLevel, Product, ProductVariant
+from apps.channels.adapters import OrderLine
 from apps.integrations.http import ProviderError
 from apps.integrations.reconciliation import confirm_payment
 from apps.orders.inventory import reserve_from_levels, reserve_variant
 from apps.orders.models import Order, OrderItem, OrderStatusEvent
 
 from .adapters import PLATFORMS, ChannelNotReady, MarketplaceOrder, OrderLine, adapter_for
-from .models import ChannelListing, ChannelOrder, SalesChannel
+from .models import ChannelBuyer, ChannelListing, ChannelOrder, ImportBatch, SalesChannel
 
 CSV_COLUMNS = ["order_id", "buyer_name", "phone", "address", "sku", "quantity", "unit_price",
     "shipping_cost", "discount", "courier", "tracking_number"]
@@ -38,10 +40,13 @@ def _resolve_sku(store, sku):
     return product, None
 
 
-def import_order(channel, data: MarketplaceOrder):
-    """Create the paid Lakuin order for a marketplace order, reserving its stock. Returns
-    (order, created). All or nothing: when stock is short nothing is saved, so the seller can
-    restock and import again."""
+def import_order(channel, data: MarketplaceOrder, soft: bool = False):
+    """Create the paid Lakuin order for a marketplace order. Returns (order, created).
+
+    soft=True: historical import mode — auto-creates placeholder products for unrecognised
+    SKUs and skips stock deduction. Use for importing past orders when catalog isn't set up yet.
+    soft=False (default): strict mode — raises ChannelImportError on unknown SKU or low stock.
+    """
     existing = ChannelOrder.objects.filter(channel=channel,
         external_order_id=data.external_id).select_related("order").first()
     if existing:
@@ -49,12 +54,20 @@ def import_order(channel, data: MarketplaceOrder):
     if not data.lines:
         raise ChannelImportError("Pesanan tanpa produk.")
     store = channel.store
-    resolved = [(line, *_resolve_sku(store, line.sku)) for line in data.lines]
     label = PLATFORMS[channel.platform].label
+
+    if soft:
+        resolved = [(line, *_resolve_sku_soft(store, line)) for line in data.lines]
+    else:
+        resolved = [(line, *_resolve_sku(store, line.sku)) for line in data.lines]
+
     try:
         with transaction.atomic():
             subtotal = data.subtotal
+            notes = "Stok belum dikurangi — perlu review SKU produk." if soft else ""
             order = Order.objects.create(store=store,
+                channel=channel.platform,
+                external_order_id=data.external_id[:100],
                 customer_name=(data.buyer_name or f"Pembeli {label}")[:120],
                 phone=data.phone[:30] or "-", shipping_address=data.address or "-",
                 subtotal=subtotal, discount=min(data.discount, subtotal),
@@ -63,20 +76,26 @@ def import_order(channel, data: MarketplaceOrder):
                 payment_reference=f"{channel.platform}-{data.external_id}"[:160],
                 paid_to_store_account=True, shipping_service=data.courier[:80],
                 tracking_number=data.tracking_number[:100],
+                delivery_notes=notes[:300],
                 idempotency_key=f"ch{channel.id}-{data.external_id}"[:64])
-            OrderStatusEvent.objects.create(order=order, status="pending",
-                note=f"Diimpor dari {label} · {channel.name}")
+            event_note = f"Diimpor dari {label} · {channel.name}"
+            if soft:
+                event_note += " (mode historis — stok belum dikurangi)"
+            OrderStatusEvent.objects.create(order=order, status="pending", note=event_note)
             for line, product, variant in resolved:
                 item = OrderItem.objects.create(order=order, product=product, variant=variant,
                     name=(line.name or product.name)[:160], sku=line.sku,
                     variant_name=variant.name if variant else "", unit_price=line.unit_price,
                     quantity=line.quantity, line_total=line.unit_price * line.quantity)
-                _reserve(item, product, variant, line.quantity)
+                if not soft:
+                    _reserve(item, product, variant, line.quantity)
             confirm_payment(order, provider=channel.platform, external_id=data.external_id,
                 amount=order.total, currency="IDR", payload=data.raw,
                 note=f"Dibayar melalui {label}")
             ChannelOrder.objects.create(channel=channel, order=order,
-                external_order_id=data.external_id)
+                external_order_id=data.external_id,
+                batch=_current_batch.get(channel.id))
+            _upsert_buyer(channel, data, order)
     except IntegrityError:  # imported concurrently
         existing = ChannelOrder.objects.filter(channel=channel,
             external_order_id=data.external_id).select_related("order").first()
@@ -84,6 +103,128 @@ def import_order(channel, data: MarketplaceOrder):
             return existing.order, False
         raise
     return order, True
+
+
+def _resolve_sku_soft(store, line: "OrderLine"):
+    """Resolve SKU softly: return existing product/variant or create a placeholder product.
+    Never raises — always returns something so historical imports always succeed."""
+    # Try strict match first
+    try:
+        return _resolve_sku(store, line.sku)
+    except ChannelImportError:
+        pass
+
+    # Auto-create a placeholder product so the OrderItem FK constraint is satisfied
+    sku = (line.sku or "").strip()
+    base_name = (line.name or sku or "Produk Impor")[:140]
+    # Slug: use SKU (guaranteed unique per store) or fallback to slugify(name)
+    candidate_slug = slugify(sku) if sku else slugify(base_name)[:50]
+    # Ensure slug uniqueness by appending a suffix when collisions exist
+    slug = candidate_slug
+    suffix = 1
+    while Product.objects.filter(store=store, slug=slug).exists():
+        slug = f"{candidate_slug}-{suffix}"
+        suffix += 1
+
+    name = f"{base_name} [{sku}]" if sku else base_name[:160]
+
+    if sku:
+        product, _ = Product.objects.get_or_create(
+            store=store,
+            sku=sku,
+            defaults={
+                "name": name,
+                "slug": slug,
+                "is_active": True,
+                "price": line.unit_price,
+                "description": "Dibuat otomatis dari impor marketplace. Perlu review SKU.",
+            },
+        )
+    else:
+        product, _ = Product.objects.get_or_create(
+            store=store,
+            name=name,
+            defaults={
+                "slug": slug,
+                "is_active": True,
+                "price": line.unit_price,
+                "description": "Dibuat otomatis dari impor marketplace. Perlu review SKU.",
+            },
+        )
+    return product, None
+
+
+def _upsert_buyer(channel: "SalesChannel", data: MarketplaceOrder, order):
+    """Create or update the ChannelBuyer record for this marketplace order."""
+    raw = data.raw or {}
+    external_id = (raw.get("shopee_username") or raw.get("tokopedia_username")
+                   or data.phone or data.external_id)
+    if not external_id or external_id == "-":
+        return
+    city = raw.get("city", "")
+    province = raw.get("province", "")
+    name = data.buyer_name or ""
+    # Strip masked-name marker (@username) to store clean name
+    if name.startswith("@"):
+        name = ""
+    buyer, created = ChannelBuyer.objects.get_or_create(
+        store=channel.store,
+        platform=channel.platform,
+        external_id=external_id[:160],
+        defaults={"name": name[:160], "phone": data.phone[:40],
+                  "city": city[:100], "province": province[:100],
+                  "last_address": data.address or ""},
+    )
+    if not created:
+        # Update with latest info (Shopee may unmask more data later)
+        update_fields = []
+        if name and not buyer.name:
+            buyer.name = name[:160]; update_fields.append("name")
+        if city and not buyer.city:
+            buyer.city = city[:100]; update_fields.append("city")
+        if province and not buyer.province:
+            buyer.province = province[:100]; update_fields.append("province")
+        if data.address and data.address != "-":
+            buyer.last_address = data.address; update_fields.append("last_address")
+        buyer.order_count = ChannelBuyer.objects.filter(
+            store=channel.store, platform=channel.platform, external_id=external_id
+        ).values_list("order_count", flat=True).first() or 0
+        buyer.order_count += 1
+        update_fields.append("order_count")
+        from decimal import Decimal
+        buyer.total_spent = (buyer.total_spent or Decimal("0")) + order.total
+        update_fields.append("total_spent")
+        if update_fields:
+            buyer.save(update_fields=update_fields + ["last_seen"])
+    else:
+        buyer.order_count = 1
+        buyer.total_spent = order.total
+        buyer.save(update_fields=["order_count", "total_spent"])
+
+    # Link the ChannelOrder to this buyer for direct order lookups
+    ChannelOrder.objects.filter(channel=channel, order=order).update(buyer=buyer)
+
+    # Auto-create a pending Customer for merchant review (skipped if one already linked)
+    _ensure_pending_customer(channel.store, buyer)
+
+
+def _ensure_pending_customer(store, buyer):
+    """Create a pending Customer linked to this ChannelBuyer if none exists yet."""
+    if hasattr(buyer, "customer"):
+        return  # already linked
+    from apps.shops.models import Customer
+    display_name = buyer.name or buyer.external_id
+    # Truncate display name for Customer.name (max 120)
+    Customer.objects.get_or_create(
+        channel_buyer=buyer,
+        defaults={
+            "store": store,
+            "name": display_name[:120],
+            "phone": "",
+            "status": Customer.STATUS_PENDING,
+            "tags": buyer.platform,
+        },
+    )
 
 
 def _reserve(item, product, variant, quantity):
@@ -154,17 +295,64 @@ def parse_orders_csv(upload):
         for order_id, head in grouped.items()]
 
 
-def import_orders(channel, orders):
-    """Import each order on its own, so one bad order does not block the rest."""
-    summary = {"created": 0, "duplicates": 0, "errors": []}
-    for data in orders:
-        try:
-            _, created = import_order(channel, data)
-        except ChannelImportError as error:
-            summary["errors"].append(f"{data.external_id}: {error}")
-            continue
-        summary["created" if created else "duplicates"] += 1
+# Thread-local batch context so import_order can find the current batch without arg drilling.
+_current_batch: dict = {}
+
+
+def import_orders(channel, orders, soft: bool = False,
+                  file_name: str = "", imported_by=None, skipped: int = 0,
+                  category: str = "regular"):
+    """Import each order, create an ImportBatch record, return summary."""
+    from decimal import Decimal
+    batch = ImportBatch.objects.create(
+        store=channel.store, channel=channel, imported_by=imported_by,
+        file_name=file_name[:255], is_soft=soft,
+        category=category if category in {c for c, _ in ImportBatch.CAT_CHOICES} else "regular",
+    )
+    _current_batch[channel.id] = batch
+
+    summary = {"created": 0, "duplicates": 0, "errors": [], "soft": soft,
+               "batch_id": str(batch.id)}
+    total_amount = Decimal("0")
+
+    try:
+        for data in orders:
+            try:
+                order, created = import_order(channel, data, soft=soft)
+            except ChannelImportError as error:
+                summary["errors"].append(f"{data.external_id}: {error}")
+                continue
+            if created:
+                summary["created"] += 1
+                total_amount += order.total
+            else:
+                summary["duplicates"] += 1
+    finally:
+        _current_batch.pop(channel.id, None)
+
+    # Update batch totals now that we know them
+    batch.order_count = summary["created"]
+    batch.duplicate_count = summary["duplicates"]
+    batch.skipped_count = skipped
+    batch.error_count = len(summary["errors"])
+    batch.total_amount = total_amount
+    batch.save(update_fields=["order_count", "duplicate_count", "skipped_count",
+                               "error_count", "total_amount"])
+
     return summary
+
+
+def get_or_create_channel(store, platform: str, name: str = "") -> "SalesChannel":
+    """Return the first active channel for this platform, or create one automatically."""
+    channel = SalesChannel.objects.filter(store=store, platform=platform, is_active=True).first()
+    if not channel:
+        channel = SalesChannel.objects.create(
+            store=store, platform=platform,
+            name=name or f"Toko {platform.capitalize()}",
+            connection="csv",
+        )
+        match_listings(channel)
+    return channel
 
 
 def match_listings(channel):

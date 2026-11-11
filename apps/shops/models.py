@@ -102,6 +102,8 @@ class Store(models.Model):
     listed_in_directory = models.BooleanField(default=True,
         help_text="Tampilkan toko ini di direktori toko platform.")
     is_active = models.BooleanField(default=True)
+    is_open = models.BooleanField(default=True,
+        help_text="Toko aktif buka. Matikan untuk menampilkan halaman 'toko sedang tutup' di storefront.")
     verified_at = models.DateTimeField(null=True, blank=True,
         help_text="Diisi tim Lakuin setelah identitas usaha dicek (KTP/NIB). Menampilkan lencana "
             "Terverifikasi di toko.")
@@ -209,20 +211,74 @@ class StoreStaff(models.Model):
 
 
 class Customer(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_ACTIVE = "active"
+    STATUS_BLOCKED = "blocked"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Menunggu Konfirmasi"),
+        (STATUS_ACTIVE, "Aktif"),
+        (STATUS_BLOCKED, "Diblokir"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="customers")
     name = models.CharField(max_length=120)
     email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=30)
+    phone = models.CharField(max_length=30, blank=True)
+    # Human-readable customer code: auto-assigned on creation or imported from marketplace
+    customer_code = models.CharField(
+        max_length=80, blank=True, db_index=True,
+        help_text="ID pelanggan dari Shopee, Tokopedia, atau input manual.")
     accepts_marketing = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True)
+    # Company / B2B fields — blank for individual customers
+    company_name = models.CharField(max_length=160, blank=True,
+        help_text="Nama perusahaan untuk pelanggan B2B.")
+    npwp = models.CharField(max_length=20, blank=True,
+        help_text="NPWP wajib pajak, dicetak di invoice.")
+    address = models.TextField(blank=True,
+        help_text="Alamat tagihan / pengiriman default.")
+    # Source channel buyer (set for marketplace-imported customers)
+    channel_buyer = models.OneToOneField(
+        "channels.ChannelBuyer", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="customer")
     # Seller's labels, comma separated, e.g. "reseller, vip". Used by segments.
     tags = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["store", "phone"], name="unique_store_customer_phone")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["store", "phone"],
+                condition=models.Q(phone__gt=""),
+                name="unique_store_customer_phone",
+            ),
+            models.UniqueConstraint(
+                fields=["store", "customer_code"],
+                condition=models.Q(customer_code__gt=""),
+                name="unique_store_customer_code",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.customer_code:
+            # Set customer_code from channel_buyer external_id or generate one
+            if self.channel_buyer_id:
+                from apps.channels.models import ChannelBuyer
+                try:
+                    cb = ChannelBuyer.objects.get(pk=self.channel_buyer_id)
+                    self.customer_code = f"{cb.platform.upper()}-{cb.external_id[:40]}"
+                except ChannelBuyer.DoesNotExist:
+                    pass
+        super().save(*args, **kwargs)
 
     @property
     def tag_list(self): return [tag.strip() for tag in self.tags.split(",") if tag.strip()]
+
+    @property
+    def is_pending(self): return self.status == self.STATUS_PENDING
+
+    def __str__(self): return self.name
 
 
 class EmailBroadcast(models.Model):
@@ -326,3 +382,22 @@ class CampaignLink(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self): return f"{self.store} · {self.name}"
+
+
+class Outlet(models.Model):
+    """A physical sales location (branch/cabang) under a Store. Orders, invoices,
+    and expenses can be tagged to an outlet for per-branch P&L. Products and
+    customers are shared across all outlets in a store."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="outlets")
+    name = models.CharField(max_length=120)
+    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["store", "name"], name="unique_store_outlet_name")]
+
+    def __str__(self):
+        return f"{self.name} ({self.store.name})"

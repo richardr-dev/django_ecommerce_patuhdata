@@ -38,14 +38,34 @@ BATCH = 50
 def with_stats(queryset):
     from apps.orders.models import Order
 
-    orders = Order.objects.filter(store=OuterRef("store"), phone=OuterRef("phone")).exclude(
-        status__in=UNSOLD).values("phone")
+    # FK-based: reliable once CRM sync has run
+    fk_qs = Order.objects.filter(
+        store=OuterRef("store"), customer=OuterRef("pk")
+    ).exclude(status__in=UNSOLD).values("customer")
+
+    # Phone-based fallback for orders not yet synced
+    phone_qs = Order.objects.filter(
+        store=OuterRef("store"), phone=OuterRef("phone")
+    ).exclude(phone="").exclude(status__in=UNSOLD).values("phone")
+
     return queryset.annotate(
-        order_count=Coalesce(Subquery(orders.annotate(n=Count("id")).values("n")), Value(0),
-            output_field=IntegerField()),
-        total_spent=Coalesce(Subquery(orders.annotate(t=Sum("total")).values("t")), Value(Decimal(0)),
-            output_field=DecimalField(max_digits=14, decimal_places=2)),
-        last_order_at=Subquery(orders.annotate(last=Max("created_at")).values("last")))
+        order_count=Coalesce(
+            Subquery(fk_qs.annotate(n=Count("id")).values("n")),
+            Subquery(phone_qs.annotate(n=Count("id")).values("n")),
+            Value(0),
+            output_field=IntegerField(),
+        ),
+        total_spent=Coalesce(
+            Subquery(fk_qs.annotate(t=Sum("total")).values("t")),
+            Subquery(phone_qs.annotate(t=Sum("total")).values("t")),
+            Value(Decimal(0)),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
+        last_order_at=Coalesce(
+            Subquery(fk_qs.annotate(last=Max("created_at")).values("last")),
+            Subquery(phone_qs.annotate(last=Max("created_at")).values("last")),
+        ),
+    )
 
 
 def _int(value):

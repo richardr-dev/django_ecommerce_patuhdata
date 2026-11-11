@@ -42,11 +42,28 @@ class InvoiceSequence(models.Model):
 class Invoice(models.Model):
     """The sales invoice of a paid order. Seller and buyer details are copied at issue time so a
     later profile change never rewrites an invoice already sent."""
+    STATUS_DRAFT   = "draft"
+    STATUS_ISSUED  = "issued"
+    STATUS_PAID    = "paid"
+    STATUS_PARTIAL = "partial"
+    STATUS_OVERDUE = "overdue"
+    STATUS_VOID    = "void"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT,   "Draft"),
+        (STATUS_ISSUED,  "Diterbitkan"),
+        (STATUS_PAID,    "Lunas"),
+        (STATUS_PARTIAL, "Bayar Sebagian"),
+        (STATUS_OVERDUE, "Jatuh Tempo"),
+        (STATUS_VOID,    "Dibatalkan"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="invoices")
     order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="invoice")
     number = models.CharField(max_length=40)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ISSUED)
     issued_on = models.DateField()
+    due_date = models.DateField(null=True, blank=True)
     seller_name = models.CharField(max_length=160)
     seller_npwp = models.CharField(max_length=16, blank=True)
     seller_address = models.TextField(blank=True)
@@ -62,6 +79,7 @@ class Invoice(models.Model):
     shipping = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     other_charges = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -71,3 +89,70 @@ class Invoice(models.Model):
 
     def __str__(self):
         return self.number
+
+    @property
+    def amount_paid(self):
+        return sum(p.amount for p in self.payments.all())
+
+    @property
+    def amount_due(self):
+        from decimal import Decimal
+        return self.total - self.amount_paid
+
+
+class InvoiceItem(models.Model):
+    """One line on a sales invoice, copied from OrderItem at issue time."""
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey("catalog.Product", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+")
+    description = models.CharField(max_length=200)
+    sku = models.CharField(max_length=60, blank=True)
+    dimension = models.CharField(max_length=60, blank=True, help_text="Ukuran/dimensi, mis. 100×200cm")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    line_total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.description} ×{self.quantity}"
+
+
+class InvoicePayment(models.Model):
+    """A payment applied against an invoice (full or partial)."""
+    METHOD_CASH       = "cash"
+    METHOD_TRANSFER   = "transfer"
+    METHOD_QRIS       = "qris"
+    METHOD_COD        = "cod"
+    METHOD_MARKETPLACE = "marketplace"
+    METHOD_OTHER      = "other"
+    METHOD_CHOICES = [
+        (METHOD_CASH,        "Tunai"),
+        (METHOD_TRANSFER,    "Transfer Bank"),
+        (METHOD_QRIS,        "QRIS"),
+        (METHOD_COD,         "COD"),
+        (METHOD_MARKETPLACE, "Marketplace"),
+        (METHOD_OTHER,       "Lainnya"),
+    ]
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments")
+    paid_on = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES, default=METHOD_TRANSFER)
+    reference = models.CharField(max_length=120, blank=True,
+        help_text="Nomor referensi/bukti transfer atau kode transaksi.")
+    note = models.CharField(max_length=200, blank=True)
+    recorded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["paid_on", "id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="invoice_payment_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.paid_on} Rp{self.amount}"

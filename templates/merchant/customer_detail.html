@@ -1,1 +1,246 @@
-{% extends "merchant/base.html" %}{% block title %}{{ customer.name }}{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">CUSTOMER 360</span><h1>{{ customer.name }}</h1><p>{{ customer.phone }} · {{ customer.email|default:'Tanpa email' }}</p></div><a href="{% url 'merchant-customers' %}">← Semua pelanggan</a></div><section class="kpi-grid"><article><small>Lifetime spend</small><strong>Rp{{ lifetime_spend|floatformat:'0g' }}</strong></article><article><small>Pesanan</small><strong>{{ order_count }}</strong></article><article><small>Rata-rata order</small><strong>Rp{{ average_order|floatformat:'0g' }}</strong></article><article><small>Marketing</small><strong>{% if customer.accepts_marketing %}Opted in{% else %}No consent{% endif %}</strong></article></section>{% if merchant_role != 'viewer' and merchant_role != 'ops' %}<form method="post" action="{% url 'merchant-customer-tags' customer.id %}" class="bo-card segment-tag-form" style="max-width:none">{% csrf_token %}<label style="flex:1">Tag pelanggan<input class="control" name="tags" value="{{ customer.tags }}" placeholder="mis. reseller, vip"></label><button class="secondary">Simpan tag</button></form>{% endif %}<section class="bo-card"><div class="card-heading"><h2>Riwayat pembelian</h2></div><div class="compact-table">{% for order in orders %}<div><span><b>#{{ order.id|stringformat:'s'|slice:':8' }}</b><small>{{ order.created_at|date:'d M Y H:i' }}</small></span><span class="badge {{ order.status }}">{{ order.get_status_display }}</span><strong>Rp{{ order.total|floatformat:'0g' }}</strong></div>{% empty %}<div class="empty-state">Belum ada pembelian.</div>{% endfor %}</div></section>{% endblock %}
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}{{ customer.name }} — CRM{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">CRM — PELANGGAN</p>
+    <h1 class="text-2xl font-bold text-gray-900">{{ customer.name }}</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {% if customer.customer_code %}<span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-mono mr-2">{{ customer.customer_code }}</span>{% endif %}
+      {% if customer.phone %}{{ customer.phone }}{% endif %}
+      {% if customer.phone and customer.email %} · {% endif %}
+      {{ customer.email|default:'' }}
+      {% if not customer.phone and not customer.email %}<span class="text-gray-400">Tanpa kontak</span>{% endif %}
+      · <span class="{% if customer.status == 'active' %}text-green-600{% elif customer.status == 'pending' %}text-amber-600{% else %}text-red-500{% endif %} font-medium">{{ customer.get_status_display }}</span>
+    </p>
+  </div>
+  <div class="flex items-center gap-3">
+    <a class="text-sm text-gray-400 hover:text-gray-600" href="{% url 'merchant-customers' %}">← Semua pelanggan</a>
+    {% if customer.status == 'pending' %}
+    <form method="post" action="{% url 'merchant-customers' %}">{% csrf_token %}
+      <input type="hidden" name="customer_id" value="{{ customer.id }}">
+      <button type="submit" name="action" value="approve"
+              class="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors">
+        Setujui
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{# KPI cards #}
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Lifetime Value</p>
+    <p class="text-xl font-bold text-gray-900">Rp{{ lifetime_spend|floatformat:"0g" }}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Total Pesanan</p>
+    <p class="text-xl font-bold text-gray-900">{{ order_count }}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Rata-rata / Order</p>
+    <p class="text-xl font-bold text-gray-900">Rp{{ average_order|floatformat:"0g" }}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Terakhir Beli</p>
+    <p class="text-sm font-bold text-gray-900">
+      {% if days_since is not None %}
+        {% if days_since == 0 %}Hari ini
+        {% elif days_since == 1 %}Kemarin
+        {% else %}{{ days_since }} hari lalu{% endif %}
+      {% else %}—{% endif %}
+    </p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Marketing</p>
+    <p class="text-sm font-semibold {% if customer.accepts_marketing %}text-green-600{% else %}text-gray-400{% endif %}">
+      {% if customer.accepts_marketing %}Opted in{% else %}No consent{% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+
+  {# Channel breakdown #}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Channel Pembelian</h3>
+    {% if channel_breakdown %}
+    <div class="space-y-3">
+      {% for row in channel_breakdown %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+          {% if row.channel == 'tokopedia' %}bg-green-100 text-green-700
+          {% elif row.channel == 'shopee' %}bg-orange-100 text-orange-700
+          {% elif row.channel == 'tiktok_shop' %}bg-gray-900 text-white
+          {% elif row.channel == 'manual' %}bg-pink-100 text-pink-700
+          {% elif row.channel == 'web' %}bg-indigo-100 text-indigo-700
+          {% elif row.channel == 'abshop' %}bg-purple-100 text-purple-700
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {{ row.label }}
+        </span>
+        <div class="text-right">
+          <p class="font-semibold text-gray-800">Rp{{ row.revenue|floatformat:"0g" }}</p>
+          <p class="text-xs text-gray-400">{{ row.orders }} pesanan</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 py-4 text-center">Belum ada data.</p>
+    {% endif %}
+  </div>
+
+  {# Top products #}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Produk Favorit</h3>
+    {% if top_products %}
+    <div class="space-y-2">
+      {% for p in top_products %}
+      <div class="flex items-center justify-between text-sm">
+        <div class="flex-1 min-w-0 mr-3">
+          <p class="font-medium text-gray-800 truncate">{{ p.name }}</p>
+          {% if p.sku %}<p class="text-xs font-mono text-gray-400">{{ p.sku }}</p>{% endif %}
+        </div>
+        <div class="text-right flex-shrink-0">
+          <p class="font-semibold text-gray-800">{{ p.units }}×</p>
+          <p class="text-xs text-gray-400">Rp{{ p.revenue|floatformat:"0g" }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 py-4 text-center">Belum ada data.</p>
+    {% endif %}
+  </div>
+
+  {# Info panel #}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Info Pelanggan</h3>
+
+    {% if customer.company_name %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">Perusahaan</p>
+      <p class="text-sm font-semibold text-gray-800">{{ customer.company_name }}</p>
+    </div>
+    {% endif %}
+
+    {% if customer.npwp %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">NPWP</p>
+      <p class="text-sm font-mono text-gray-700">{{ customer.npwp }}</p>
+    </div>
+    {% endif %}
+
+    {% if customer.address %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">Alamat</p>
+      <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{{ customer.address }}</p>
+    </div>
+    {% endif %}
+
+    {% if customer.channel_buyer %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">Marketplace</p>
+      <p class="text-sm font-medium text-gray-800">{{ customer.channel_buyer.get_platform_display }}</p>
+      <p class="text-xs font-mono text-gray-400">{{ customer.channel_buyer.external_id }}</p>
+    </div>
+    {% if customer.channel_buyer.city %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">Kota / Provinsi</p>
+      <p class="text-sm text-gray-700">{{ customer.channel_buyer.city }}, {{ customer.channel_buyer.province }}</p>
+    </div>
+    {% endif %}
+    {% endif %}
+    <div>
+      <p class="text-xs text-gray-400 mb-1">Bergabung</p>
+      <p class="text-sm text-gray-700">{{ customer.created_at|date:"d M Y" }}</p>
+    </div>
+
+    {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
+    <form method="post" action="{% url 'merchant-customer-tags' customer.id %}" class="pt-2 border-t border-gray-100">
+      {% csrf_token %}
+      <label class="block text-xs font-medium text-gray-600 mb-1">Tag</label>
+      <div class="flex gap-2">
+        <input class="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+               name="tags" value="{{ customer.tags }}" placeholder="mis. reseller, vip">
+        <button class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 transition-colors">Simpan</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+
+</div>
+
+{# Order history #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-gray-700">Riwayat Pembelian</h2>
+    <p class="text-xs text-gray-400">{{ order_count }} pesanan</p>
+  </div>
+  {% for order in orders %}
+  <div class="border-b border-gray-50 last:border-0">
+    <div class="flex items-center justify-between px-5 py-3 bg-gray-50">
+      <div class="flex items-center gap-3">
+        <a href="{% url 'merchant-order-detail' order.id %}"
+           class="text-sm font-mono font-semibold text-indigo-600 hover:underline">
+          {{ order.invoice_number|default:order.id|stringformat:"s"|slice:":8" }}
+        </a>
+        <span class="text-xs text-gray-400">{{ order.created_at|date:"d M Y" }}</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+          {% if order.channel == 'tokopedia' %}bg-green-100 text-green-700
+          {% elif order.channel == 'shopee' %}bg-orange-100 text-orange-700
+          {% elif order.channel == 'tiktok_shop' %}bg-gray-900 text-white
+          {% elif order.channel == 'manual' %}bg-pink-100 text-pink-700
+          {% elif order.channel == 'web' %}bg-indigo-100 text-indigo-700
+          {% elif order.channel == 'abshop' %}bg-purple-100 text-purple-700
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {{ order.get_channel_display }}
+        </span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+          {% if order.status == 'paid' or order.status == 'completed' %}bg-green-100 text-green-700
+          {% elif order.status == 'cancelled' %}bg-red-100 text-red-600
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {{ order.get_status_display }}
+        </span>
+      </div>
+      <div class="flex items-center gap-4">
+        <p class="text-sm font-bold text-gray-900">Rp{{ order.total|floatformat:"0g" }}</p>
+        {% if order.invoice %}
+        <a href="{% url 'merchant-invoice-detail' order.invoice.id %}" class="text-xs text-indigo-500 hover:underline">Invoice →</a>
+        {% else %}
+        <a href="{% url 'merchant-order-detail' order.id %}" class="text-xs text-indigo-500 hover:underline">Detail →</a>
+        {% endif %}
+      </div>
+    </div>
+    {% for item in order.items.all %}
+    <div class="flex items-center justify-between px-5 py-2 hover:bg-gray-50">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <span class="text-xs text-gray-400 w-5 text-center flex-shrink-0">{{ forloop.counter }}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-gray-800 truncate">{{ item.name }}</p>
+          {% if item.sku %}<p class="text-xs text-gray-400 font-mono">{{ item.sku }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-6 text-sm text-right flex-shrink-0">
+        <span class="text-gray-500 w-20 text-xs">{{ item.quantity }} × Rp{{ item.unit_price|floatformat:"0g" }}</span>
+        <span class="font-semibold text-gray-800 w-24">Rp{{ item.line_total|floatformat:"0g" }}</span>
+      </div>
+    </div>
+    {% empty %}
+    <div class="px-5 py-2 text-xs text-gray-400 italic">Tidak ada detail produk.</div>
+    {% endfor %}
+    {% if order.shipping_cost or order.discount %}
+    <div class="flex justify-end gap-6 px-5 py-2 text-xs text-gray-400 border-t border-gray-50">
+      {% if order.discount %}<span>Diskon: −Rp{{ order.discount|floatformat:"0g" }}</span>{% endif %}
+      {% if order.shipping_cost %}<span>Ongkir: Rp{{ order.shipping_cost|floatformat:"0g" }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="px-5 py-10 text-center text-sm text-gray-400">Belum ada riwayat pembelian.</div>
+  {% endfor %}
+</div>
+
+{% endblock %}

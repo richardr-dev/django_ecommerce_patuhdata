@@ -111,8 +111,10 @@ class Order(models.Model):
     CHANNELS = [
         # ── Direct / owned channels ───────────────────────────────────────────
         ("web", "Toko Online"),
-        ("shopee", "Shopee Toko"),
-        ("tokopedia", "Tokopedia Toko"),
+        ("shopee", "Shopee"),
+        ("tokopedia", "Tokopedia"),
+        ("tiktok_shop", "TikTok Shop"),
+        ("lazada", "Lazada"),
         ("pos", "POS Retail"),
         ("manual", "Manual / Chat"),
         ("tv", "TV Shopping"),
@@ -149,6 +151,16 @@ class Order(models.Model):
     # For AB Shop orders: which platform AB Shop used to sell to end customers
     ab_shop_source = models.CharField(max_length=20, choices=AB_SHOP_SOURCES, blank=True,
         db_index=True)
+    # Direct link to the consignment partner for Mitra-channel invoices
+    consignment_partner = models.ForeignKey(
+        "settlements.ConsignmentPartner", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="orders")
+    # CRM link — set by apps.shops.crm.sync_customer_from_order; null for anonymous orders
+    customer = models.ForeignKey(
+        "shops.Customer", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="orders",
+        help_text="Linked CRM customer. Set by sync service."
+    )
 
     class Meta:
         constraints = [

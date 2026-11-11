@@ -1,0 +1,137 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Laporan Penjualan {{ year }}{% endblock %}
+{% block content %}
+
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">PENJUALAN</p>
+    <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan {{ year }}</h1>
+    <p class="text-sm text-gray-500 mt-1">Ringkasan pendapatan per bulan dari semua channel.</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <form method="get">
+      <select name="year" onchange="this.form.submit()"
+              class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        {% for y in available_years %}
+        <option value="{{ y }}"{% if y == year %} selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="{% url 'merchant-sales-invoices' %}" class="text-sm text-indigo-600 hover:text-indigo-800">Semua Invoice →</a>
+  </div>
+</div>
+
+{# Year total card #}
+<div class="bg-indigo-500 rounded-2xl p-6 text-white mb-6 shadow-sm">
+  <p class="text-sm font-medium opacity-80 mb-1">Total Pendapatan {{ year }}</p>
+  <p class="text-4xl font-bold">Rp{{ year_total|floatformat:"0g" }}</p>
+  <p class="text-sm opacity-70 mt-1">Semua channel yang memiliki pesanan selesai</p>
+</div>
+
+{# Monthly × Channel revenue matrix #}
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-gray-100">
+    <h2 class="text-sm font-semibold text-gray-800">Pendapatan per Bulan & Channel</h2>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100 bg-gray-50">
+          <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Bulan</th>
+          {% for ch in channels_used %}
+          <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">{{ channel_label|default_if_none:ch }}</th>
+          {% endfor %}
+          <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in table_rows %}
+        <tr class="hover:bg-gray-50 transition-colors{% if not row.has_data %} opacity-40{% endif %}">
+          <td class="px-5 py-3 font-medium text-gray-700 text-xs">{{ row.name }}</td>
+          {% for ch, ch_label, val in row.channels %}
+          <td class="px-4 py-3 text-right text-xs {% if val %}text-gray-700{% else %}text-gray-200{% endif %}">
+            {% if val %}Rp{{ val|floatformat:"0g" }}{% else %}—{% endif %}
+          </td>
+          {% endfor %}
+          <td class="px-5 py-3 text-right font-semibold {% if row.total %}text-gray-900{% else %}text-gray-300{% endif %}">
+            {% if row.total %}Rp{{ row.total|floatformat:"0g" }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="border-t-2 border-gray-200 bg-gray-50">
+        <tr>
+          <td class="px-5 py-3 font-bold text-gray-900 text-sm">Total {{ year }}</td>
+          {% for ch in channels_used %}<td class="px-4 py-3"></td>{% endfor %}
+          <td class="px-5 py-3 text-right font-bold text-indigo-600 text-base">Rp{{ year_total|floatformat:"0g" }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{# Invoice status per month #}
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-gray-800">Status Invoice per Bulan</h2>
+    <a href="{% url 'merchant-sales-invoices' %}" class="text-xs text-indigo-600 hover:text-indigo-800">Lihat semua →</a>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 bg-gray-50">
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Bulan</th>
+        <th class="text-right px-4 py-3 text-xs font-medium text-green-600 uppercase tracking-wide">Lunas</th>
+        <th class="text-right px-4 py-3 text-xs font-medium text-blue-600 uppercase tracking-wide">Diterbitkan</th>
+        <th class="text-right px-4 py-3 text-xs font-medium text-yellow-600 uppercase tracking-wide">Sebagian</th>
+        <th class="text-right px-4 py-3 text-xs font-medium text-red-600 uppercase tracking-wide">Jatuh Tempo</th>
+        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total Invoice</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for row in table_rows %}
+      {% if row.inv_total %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-5 py-3 font-medium text-gray-700 text-xs">{{ row.name }}</td>
+        <td class="px-4 py-3 text-right {% if row.inv_paid %}text-green-700 font-semibold{% else %}text-gray-200{% endif %}">
+          {% if row.inv_paid %}{{ row.inv_paid }}{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right {% if row.inv_issued %}text-blue-700{% else %}text-gray-200{% endif %}">
+          {% if row.inv_issued %}{{ row.inv_issued }}{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right {% if row.inv_partial %}text-yellow-700{% else %}text-gray-200{% endif %}">
+          {% if row.inv_partial %}{{ row.inv_partial }}{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right {% if row.inv_overdue %}text-red-600 font-semibold{% else %}text-gray-200{% endif %}">
+          {% if row.inv_overdue %}{{ row.inv_overdue }}{% else %}—{% endif %}
+        </td>
+        <td class="px-5 py-3 text-right font-semibold text-gray-800">{{ row.inv_total }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+      {% if not table_rows %}
+      <tr><td colspan="6" class="px-5 py-10 text-center text-sm text-gray-400">Belum ada invoice diterbitkan di tahun {{ year }}. <a href="{% url 'merchant-sales-invoices' %}" class="text-indigo-600 hover:text-indigo-800">Terbitkan invoice →</a></td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{# Mini bar chart: monthly revenue #}
+{% if year_total %}
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+  <h2 class="text-sm font-semibold text-gray-800 mb-4">Tren Bulanan {{ year }}</h2>
+  <div class="flex items-end gap-1 h-24">
+    {% for row in table_rows %}
+    {% if year_total %}
+    <div class="flex-1 flex flex-col items-center gap-1">
+      <div class="w-full rounded-t transition-all"
+           style="height:{% widthratio row.total year_total 100 %}%;min-height:{% if row.total %}2px{% else %}0{% endif %};background:#6366f1;"
+           title="{{ row.name }}: Rp{{ row.total|floatformat:'0g' }}"></div>
+      <span class="text-gray-400 text-center leading-none" style="font-size:9px">{{ row.abbr }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

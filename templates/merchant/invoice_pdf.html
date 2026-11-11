@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Invoice {{ invoice.number }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 20mm 18mm 20mm;
+    @bottom-center {
+      content: "Halaman " counter(page) " dari " counter(pages);
+      font-size: 8pt;
+      color: #9ca3af;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9.5pt; color: #111827; line-height: 1.4; }
+  .page-break { page-break-before: always; }
+
+  /* ── Header ── */
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24pt; }
+  .store-name { font-size: 18pt; font-weight: 700; color: #111827; letter-spacing: -0.3pt; }
+  .store-meta { font-size: 8pt; color: #6b7280; margin-top: 3pt; white-space: pre-line; }
+  .inv-title-block { text-align: right; }
+  .inv-title { font-size: 20pt; font-weight: 800; color: #111827; letter-spacing: -0.5pt; }
+  .inv-number { font-size: 10pt; font-weight: 600; color: #374151; margin-top: 2pt; font-family: 'Courier New', monospace; }
+  .status-badge { display: inline-block; margin-top: 5pt; padding: 2pt 7pt; border-radius: 20pt; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5pt; }
+  .status-draft    { background: #f3f4f6; color: #6b7280; }
+  .status-issued   { background: #dbeafe; color: #1d4ed8; }
+  .status-paid     { background: #dcfce7; color: #15803d; }
+  .status-partial  { background: #fef9c3; color: #a16207; }
+  .status-overdue  { background: #fee2e2; color: #b91c1c; }
+  .status-void     { background: #f3f4f6; color: #9ca3af; }
+
+  /* ── Divider ── */
+  .divider { border: none; border-top: 1.5pt solid #111827; margin: 10pt 0; }
+  .divider-light { border: none; border-top: 0.5pt solid #e5e7eb; margin: 8pt 0; }
+
+  /* ── Addresses ── */
+  .addr-row { display: flex; gap: 20pt; margin-bottom: 18pt; }
+  .addr-block { flex: 1; }
+  .addr-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8pt; color: #9ca3af; margin-bottom: 3pt; }
+  .addr-name { font-size: 10pt; font-weight: 700; color: #111827; }
+  .addr-detail { font-size: 8.5pt; color: #374151; white-space: pre-line; margin-top: 2pt; }
+  .meta-block { flex: 0 0 auto; text-align: right; }
+  .meta-row { font-size: 8.5pt; color: #374151; margin-bottom: 2pt; }
+  .meta-row strong { color: #111827; }
+
+  /* ── Items table ── */
+  table.items { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+  table.items thead tr { background: #111827; }
+  table.items thead th { color: #fff; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4pt; padding: 5pt 7pt; text-align: left; }
+  table.items thead th.r { text-align: right; }
+  table.items tbody tr { border-bottom: 0.5pt solid #f3f4f6; }
+  table.items tbody tr:last-child { border-bottom: none; }
+  table.items tbody td { padding: 6pt 7pt; font-size: 9pt; color: #374151; vertical-align: top; }
+  table.items tbody td.r { text-align: right; }
+  table.items tbody .item-name { font-weight: 600; color: #111827; }
+  table.items tbody .item-sku { font-size: 7.5pt; color: #9ca3af; font-family: 'Courier New', monospace; margin-top: 1pt; }
+  table.items tbody .item-dim { font-size: 7.5pt; color: #9ca3af; margin-top: 1pt; }
+
+  /* ── Totals ── */
+  .totals-wrap { display: flex; justify-content: flex-end; }
+  .totals-table { width: 200pt; }
+  .totals-table td { font-size: 9pt; padding: 2pt 0; color: #374151; }
+  .totals-table td.r { text-align: right; }
+  .totals-table .grand td { font-size: 11pt; font-weight: 800; color: #111827; border-top: 1.5pt solid #111827; padding-top: 5pt; }
+
+  /* ── Notes & footer ── */
+  .notes-section { margin-top: 18pt; padding: 8pt 10pt; background: #f9fafb; border-left: 3pt solid #111827; border-radius: 2pt; }
+  .notes-label { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5pt; color: #9ca3af; margin-bottom: 2pt; }
+  .notes-text { font-size: 8.5pt; color: #374151; white-space: pre-line; }
+  .footer { margin-top: 24pt; padding-top: 8pt; border-top: 0.5pt solid #e5e7eb; display: flex; justify-content: space-between; }
+  .footer-left { font-size: 7.5pt; color: #9ca3af; }
+  .footer-right { font-size: 7.5pt; color: #9ca3af; text-align: right; }
+  .npwp-row { font-size: 7.5pt; color: #9ca3af; margin-top: 2pt; font-family: 'Courier New', monospace; }
+</style>
+</head>
+<body>
+{% for invoice in invoices %}
+<div{% if not forloop.first %} class="page-break"{% endif %}>
+
+  <div class="inv-header">
+    <div>
+      <div class="store-name">{{ invoice.store.name }}</div>
+      {% if invoice.seller_address %}
+      <div class="store-meta">{{ invoice.seller_address }}</div>
+      {% endif %}
+      {% if invoice.seller_npwp %}
+      <div class="npwp-row">NPWP: {{ invoice.seller_npwp }}</div>
+      {% endif %}
+    </div>
+    <div class="inv-title-block">
+      <div class="inv-title">INVOICE</div>
+      <div class="inv-number">{{ invoice.number }}</div>
+      <div>
+        <span class="status-badge status-{{ invoice.status }}">{{ invoice.get_status_display }}</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="addr-row">
+    <div class="addr-block">
+      <div class="addr-label">Tagihan Kepada</div>
+      <div class="addr-name">{{ invoice.buyer_name }}</div>
+      {% if invoice.buyer_address %}
+      <div class="addr-detail">{{ invoice.buyer_address }}</div>
+      {% endif %}
+      {% if invoice.buyer_npwp %}
+      <div class="npwp-row">NPWP: {{ invoice.buyer_npwp }}</div>
+      {% endif %}
+    </div>
+    <div class="meta-block">
+      <div class="meta-row">Tanggal: <strong>{{ invoice.issued_on|date:"d M Y" }}</strong></div>
+      {% if invoice.due_date %}
+      <div class="meta-row">Jatuh Tempo: <strong>{{ invoice.due_date|date:"d M Y" }}</strong></div>
+      {% endif %}
+      {% if invoice.order.invoice_number %}
+      <div class="meta-row">No. Order: <strong>{{ invoice.order.invoice_number }}</strong></div>
+      {% endif %}
+      {% if invoice.order.external_order_id %}
+      <div class="meta-row">Ref. Eksternal: <strong>{{ invoice.order.external_order_id }}</strong></div>
+      {% endif %}
+      {% if invoice.order.channel %}
+      <div class="meta-row">Channel: <strong>{{ invoice.order.get_channel_display }}</strong></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width:40%">Produk / Deskripsi</th>
+        <th class="r" style="width:8%">Qty</th>
+        <th class="r" style="width:18%">Harga Satuan</th>
+        {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
+        <th class="r" style="width:10%">Diskon</th>
+        {% endif %}
+        <th class="r" style="width:18%">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in invoice.items.all %}
+      <tr>
+        <td>
+          <div class="item-name">{{ item.description }}</div>
+          {% if item.sku %}<div class="item-sku">{{ item.sku }}</div>{% endif %}
+          {% if item.dimension %}<div class="item-dim">{{ item.dimension }}</div>{% endif %}
+        </td>
+        <td class="r">{{ item.quantity|floatformat:"-2" }}</td>
+        <td class="r">Rp{{ item.unit_price|floatformat:"0g" }}</td>
+        {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
+        <td class="r">{% if item.discount %}−Rp{{ item.discount|floatformat:"0g" }}{% else %}—{% endif %}</td>
+        {% endif %}
+        <td class="r">Rp{{ item.line_total|floatformat:"0g" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="totals-wrap">
+    <table class="totals-table">
+      <tr><td>Subtotal</td><td class="r">Rp{{ invoice.subtotal|floatformat:"0g" }}</td></tr>
+      {% if invoice.discount %}
+      <tr><td>Diskon</td><td class="r">−Rp{{ invoice.discount|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      {% if invoice.shipping %}
+      <tr><td>Ongkos Kirim</td><td class="r">Rp{{ invoice.shipping|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      {% if invoice.tax %}
+      <tr><td>PPN {{ invoice.tax_rate|floatformat:"1" }}%</td><td class="r">Rp{{ invoice.tax|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      {% if invoice.other_charges %}
+      <tr><td>Biaya Lain</td><td class="r">Rp{{ invoice.other_charges|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      <tr class="grand"><td>TOTAL</td><td class="r">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
+      {% with paid=invoice.amount_paid %}
+      {% if paid and invoice.status != 'paid' %}
+      <tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">Rp{{ paid|floatformat:"0g" }}</td></tr>
+      <tr><td style="font-weight:700">Sisa Tagihan</td><td class="r" style="font-weight:700">Rp{{ invoice.amount_due|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      {% endwith %}
+    </table>
+  </div>
+
+  {% if invoice.notes %}
+  <div class="notes-section">
+    <div class="notes-label">Catatan</div>
+    <div class="notes-text">{{ invoice.notes }}</div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    <div class="footer-left">{{ invoice.store.name }}<br>Diterbitkan: {{ invoice.issued_on|date:"d M Y" }}</div>
+    <div class="footer-right">{{ invoice.number }}<br>Dokumen ini diterbitkan secara digital.</div>
+  </div>
+
+</div>
+{% endfor %}
+</body>
+</html>

@@ -1,0 +1,78 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Pembeli Marketplace{% endblock %}
+{% block content %}
+
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MARKETPLACE</p>
+    <h1 class="text-2xl font-bold text-gray-900 mb-1">Pembeli Marketplace</h1>
+    <p class="text-sm text-gray-500">Profil pembeli dari impor Shopee, Tokopedia, dan channel lainnya.</p>
+  </div>
+  <a class="text-sm text-indigo-600 hover:text-indigo-800 mt-2" href="{% url 'merchant-channels' %}">← Marketplace</a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pembeli</p>
+    <p class="text-2xl font-bold text-gray-900">{{ total_buyers }}</p>
+  </div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Member</p>
+    <p class="text-2xl font-bold text-gray-900">{{ member_count }}</p>
+  </div>
+</div>
+
+<form method="get" class="flex flex-wrap items-center gap-3 mb-5 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+  <select name="platform" aria-label="Platform" onchange="this.form.submit()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <option value="">Semua platform</option>
+    {% for code, label in platforms %}<option value="{{ code }}"{% if platform_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="member" aria-label="Member" onchange="this.form.submit()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <option value="">Semua pembeli</option>
+    <option value="1"{% if member_filter == "1" %} selected{% endif %}>Member saja</option>
+  </select>
+  <input name="q" value="{{ query }}" placeholder="Cari nama, username, kota…"
+         class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-48">
+  <button class="px-4 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">Cari</button>
+</form>
+
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-gray-50">
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nama / Username</th>
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Platform</th>
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Kota</th>
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Provinsi</th>
+        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pesanan</th>
+        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total Belanja</th>
+        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Member</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for b in buyers %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-5 py-3">
+          <div class="font-medium text-gray-800">{{ b.name|default:b.external_id }}</div>
+          {% if b.name %}<div class="text-xs text-gray-400">{{ b.external_id }}</div>{% endif %}
+        </td>
+        <td class="px-5 py-3 text-gray-600">{{ b.get_platform_display }}</td>
+        <td class="px-5 py-3 text-gray-600">{{ b.city|default:"—" }}</td>
+        <td class="px-5 py-3 text-gray-600">{{ b.province|default:"—" }}</td>
+        <td class="px-5 py-3 text-right text-gray-700">{{ b.order_count }}</td>
+        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_spent|floatformat:0 }}</td>
+        <td class="px-5 py-3">{% if b.is_member %}<span class="badge paid">Member</span>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="px-5 py-12 text-center text-sm text-gray-400">
+          Belum ada data pembeli. Import pesanan dari <a class="text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-channels' %}">Marketplace</a> untuk mulai mengisi data pembeli otomatis.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "storefront/pagination.html" %}
+{% endblock %}

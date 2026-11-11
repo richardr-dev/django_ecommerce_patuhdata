@@ -37,6 +37,13 @@ class ManualOrderForm(forms.Form):
     phone = forms.CharField(label="Nomor WhatsApp", max_length=30,
         widget=forms.TextInput(attrs={"inputmode": "tel", "placeholder": "081234567890"}))
     email = forms.EmailField(label="Email (opsional)", required=False)
+    channel = forms.ChoiceField(label="Channel penjualan", required=False,
+        choices=[("manual", "Manual / Chat"), ("abshop", "AB Shop (Reseller)")])
+    ab_shop_source = forms.ChoiceField(label="Sub-channel AB Shop", required=False,
+        choices=[("", "— pilih sub-channel —"), ("shopee", "Shopee AB Shop"),
+            ("tokopedia", "Tokopedia AB Shop"), ("tv", "TV Shopping")])
+    order_type = forms.ChoiceField(label="Tipe pesanan", required=False,
+        choices=[("direct", "Penjualan Langsung"), ("reseller_sell_in", "Jual ke Reseller")])
     fulfilment = forms.ChoiceField(label="Pengiriman", choices=[("ship", "Dikirim ke alamat")])
     shipping_address = forms.CharField(label="Alamat lengkap", required=False,
         widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Gedung/jalan, nomor, RT/RW"}))
@@ -187,7 +194,11 @@ def create_manual_order(store, user, data, rows):
         price = calculate_price(store=store, lines=lines, shipping_cost=shipping,
             additional_discount=data["discount"])
         deadline = timezone.now() + timedelta(days=data["valid_days"])
+        channel = data.get("channel") or "manual"
+        order_type = data.get("order_type") or "direct"
+        ab_shop_source = data.get("ab_shop_source") or ""
         order = Order.objects.create(store=store, source="manual", created_by=user,
+            channel=channel, order_type=order_type, ab_shop_source=ab_shop_source,
             subtotal=price.subtotal, tax=price.tax, shipping_cost=price.shipping,
             discount=price.discount, total=price.total,
             customer_name=data["customer_name"].strip(), email=data.get("email", "").strip(),

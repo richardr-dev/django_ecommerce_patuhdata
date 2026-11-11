@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.accounting.ledger import INPUT_VAT, VAT, account_balances, money
 from apps.orders.models import Order
 
-from .models import Invoice, InvoiceSequence, TaxProfile
+from .models import Invoice, InvoiceItem, InvoicePayment, InvoiceSequence, TaxProfile
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,30 @@ def _tax_rate(store, tax_base, tax):
     return (tax * 100 / tax_base).quantize(Decimal("0.01"))
 
 
+def _create_invoice_items(invoice, order):
+    """Copy OrderItems into InvoiceItems. Called inside the same transaction as the invoice."""
+    from apps.orders.models import OrderItem
+    for item in OrderItem.objects.filter(order=order).select_related("product"):
+        InvoiceItem.objects.create(
+            invoice=invoice,
+            product=item.product,
+            description=item.name,
+            sku=item.sku or "",
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            discount=getattr(item, "discount", Decimal(0)),
+            line_total=item.line_total,
+        )
+
+
+def _next_invoice_number(store, issued_on, profile):
+    sequence, _ = InvoiceSequence.objects.get_or_create(store=store, year=issued_on.year)
+    sequence = InvoiceSequence.objects.select_for_update().get(pk=sequence.pk)
+    sequence.last_number += 1
+    sequence.save(update_fields=["last_number"])
+    return f"{profile.invoice_prefix}/{issued_on.year}/{sequence.last_number:06d}"
+
+
 def issue_invoice(order):
     """Issue the invoice of a paid order once. Returns (invoice, created)."""
     existing = Invoice.objects.filter(order=order).first()
@@ -63,13 +87,10 @@ def issue_invoice(order):
     tax_base = max(Decimal(0), order.subtotal - order.discount)
     try:
         with transaction.atomic():
-            sequence, _ = InvoiceSequence.objects.get_or_create(store=store, year=issued_on.year)
-            sequence = InvoiceSequence.objects.select_for_update().get(pk=sequence.pk)
-            sequence.last_number += 1
-            sequence.save(update_fields=["last_number"])
             invoice = Invoice.objects.create(store=store, order=order,
-                number=f"{profile.invoice_prefix}/{issued_on.year}/{sequence.last_number:06d}",
-                issued_on=issued_on, seller_name=profile.legal_name or store.name,
+                number=_next_invoice_number(store, issued_on, profile),
+                issued_on=issued_on, status=Invoice.STATUS_PAID,
+                seller_name=profile.legal_name or store.name,
                 seller_npwp=profile.npwp, seller_address=profile.address,
                 seller_is_pkp=profile.is_pkp, buyer_name=order.customer_name,
                 buyer_address=order.shipping_address, subtotal=order.subtotal,
@@ -78,12 +99,79 @@ def issue_invoice(order):
                 shipping=order.shipping_cost,
                 other_charges=order.total - tax_base - order.tax - order.shipping_cost,
                 total=order.total)
-    except IntegrityError:  # issued concurrently; the rollback also returned the number
+            _create_invoice_items(invoice, order)
+    except IntegrityError:
         existing = Invoice.objects.filter(order=order).first()
         if existing:
             return existing, False
         raise
     return invoice, True
+
+
+def issue_invoice_for_order(order, issued_on=None, notes=""):
+    """Issue an invoice for any order regardless of payment gateway status.
+    Used for manual orders, marketplace imports, and mitra sell-through."""
+    existing = Invoice.objects.filter(order=order).first()
+    if existing:
+        return existing, False
+
+    store = order.store
+    profile = tax_profile(store)
+    if issued_on is None:
+        issued_on = timezone.localdate()
+    tax_base = max(Decimal(0), order.subtotal - order.discount)
+
+    # Determine status from order status
+    paid_statuses = {"paid", "confirmed", "delivered", "completed"}
+    inv_status = Invoice.STATUS_PAID if order.status in paid_statuses else Invoice.STATUS_ISSUED
+
+    try:
+        with transaction.atomic():
+            invoice = Invoice.objects.create(
+                store=store, order=order,
+                number=_next_invoice_number(store, issued_on, profile),
+                issued_on=issued_on, status=inv_status,
+                seller_name=profile.legal_name or store.name,
+                seller_npwp=profile.npwp, seller_address=profile.address,
+                seller_is_pkp=profile.is_pkp,
+                buyer_name=order.customer_name,
+                buyer_address=order.shipping_address or "",
+                subtotal=order.subtotal, discount=order.discount,
+                tax_base=tax_base,
+                tax_rate=_tax_rate(store, tax_base, order.tax),
+                tax=order.tax, shipping=order.shipping_cost,
+                other_charges=max(Decimal(0),
+                    order.total - tax_base - order.tax - order.shipping_cost),
+                total=order.total, notes=notes,
+            )
+            _create_invoice_items(invoice, order)
+    except IntegrityError:
+        existing = Invoice.objects.filter(order=order).first()
+        if existing:
+            return existing, False
+        raise
+    return invoice, True
+
+
+def record_payment(invoice, amount, paid_on, method, reference="", note="", user=None):
+    """Record a payment against an invoice and update its status."""
+    from decimal import Decimal as D
+    amount = D(str(amount))
+    if amount <= 0:
+        raise InvoiceError("Jumlah pembayaran harus lebih dari nol.")
+
+    with transaction.atomic():
+        payment = InvoicePayment.objects.create(
+            invoice=invoice, paid_on=paid_on, amount=amount,
+            method=method, reference=reference, note=note, recorded_by=user,
+        )
+        total_paid = sum(p.amount for p in invoice.payments.all())
+        if total_paid >= invoice.total:
+            invoice.status = Invoice.STATUS_PAID
+        elif total_paid > 0:
+            invoice.status = Invoice.STATUS_PARTIAL
+        invoice.save(update_fields=["status"])
+    return payment
 
 
 def issue_pending_invoices(limit=100):

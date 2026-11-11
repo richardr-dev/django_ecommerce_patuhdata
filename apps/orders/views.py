@@ -988,11 +988,14 @@ def _staff_store(request):
 
 
 def _merchant_context(request, store, **context):
+    from apps.shops.models import Customer as _Customer
     stores = (Store.objects.filter(owner=request.user) |
         Store.objects.filter(staff_members__user=request.user)).distinct().order_by("name")
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
+    pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
         "merchant_store_url": store_url(store), "merchant_preview_url": preview_url(store),
+        "pending_customers_count": pending_count,
         **context}
 
 
@@ -1629,6 +1632,30 @@ def merchant_stock(request):
         variant_range=variant_range, variant_query=variant_query, query=query))
 
 @login_required(login_url="/merchant/login/")
+def merchant_order_detail(request, order_id):
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
+    order = get_object_or_404(
+        Order.objects.prefetch_related("items__product", "items__variant",
+                                       "status_events").select_related("pickup_outlet"),
+        id=order_id, store=store,
+    )
+    from apps.channels.models import ChannelOrder
+    try:
+        channel_order = order.channel_order
+    except Exception:
+        channel_order = None
+    try:
+        invoice = order.invoice
+    except Exception:
+        invoice = None
+    order.available_statuses = allowed_order_transitions(order)
+    crm_customer = getattr(order, "customer", None)
+    return render(request, "merchant/order_detail.html", _merchant_context(request, store,
+        order=order, channel_order=channel_order, invoice=invoice, crm_customer=crm_customer))
+
+
+@login_required(login_url="/merchant/login/")
 def merchant_order_update(request, order_id):
     if request.method != "POST": raise Http404
     store = _staff_store(request)
@@ -1662,6 +1689,9 @@ def merchant_order_update(request, order_id):
         AuditLog.objects.create(store=store, actor=request.user, action="order.status_updated",
             object_type="Order", object_id=str(order.id), details={"from": old_status, "to": new_status})
     messages.success(request, "Pesanan diperbarui.")
+    next_url = request.POST.get("next", "")
+    if next_url and next_url.startswith("/merchant/"):
+        return redirect(next_url)
     return _back_to_orders(request)
 
 
@@ -1944,8 +1974,39 @@ def merchant_entity_edit(request, section, object_id=None):
                     "dan tidak dihapus.")
             messages.success(request, f"{title} berhasil disimpan.")
             return redirect("merchant-entity-list", section=section)
+    extra = {}
+    if section == "products":
+        # Channel platform list for the sidebar marketplace connections widget.
+        from apps.channels.models import SalesChannel
+        active_platforms = set(
+            SalesChannel.objects.filter(store=store, is_active=True)
+            .values_list("platform", flat=True)
+        )
+        linked_skus: set = set()
+        if instance and instance.pk:
+            linked_skus = set(
+                instance.channel_listings.values_list("channel__platform", flat=True)
+            )
+        PLATFORM_META = [
+            ("shopee",     "Shopee",      "#EE4D2D"),
+            ("tokopedia",  "Tokopedia",   "#42B549"),
+            ("tiktok_shop","TikTok Shop", "#010101"),
+            ("lazada",     "Lazada",      "#0F146D"),
+        ]
+        extra["channel_platform_list"] = [
+            {"code": code, "label": label, "color": color,
+             "linked": code in linked_skus, "active": code in active_platforms}
+            for code, label, color in PLATFORM_META
+        ]
+        if instance and instance.pk:
+            from apps.settlements.models import ConsignmentPartner, PartnerProductPrice
+            mitra_partners = list(ConsignmentPartner.objects.filter(store=store, is_active=True))
+            prices = {pp.partner_id: pp for pp in
+                      PartnerProductPrice.objects.filter(product=instance, partner__store=store)}
+            extra["mitra_partner_rows"] = [(p, prices.get(p.pk)) for p in mitra_partners]
     return render(request, "merchant/entity_form.html", _merchant_context(request, store,
-        section=section, title=title, form=form, editing=bool(instance), variants=variants))
+        section=section, title=title, form=form, editing=bool(instance), variants=variants,
+        **extra))
 
 
 def _save_entity(request, store, section, entity, form, instance, variants):
@@ -2017,13 +2078,56 @@ def merchant_customer_detail(request, customer_id):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
     customer = get_object_or_404(Customer, id=customer_id, store=store)
-    orders = Order.objects.filter(store=store, phone=customer.phone).order_by("-created_at")
-    stats = orders.exclude(status__in={"pending", "payment_failed", "cancelled"}).aggregate(
-        lifetime_spend=Sum("total"), order_count=Count("id"))
+
+    # FK-linked orders first; fall back to phone or channel_buyer matching
+    from apps.channels.models import ChannelOrder
+    orders = Order.objects.filter(store=store, customer=customer)
+    if not orders.exists():
+        if customer.phone:
+            orders = Order.objects.filter(store=store, phone=customer.phone)
+        elif customer.channel_buyer_id:
+            order_ids = ChannelOrder.objects.filter(
+                buyer_id=customer.channel_buyer_id
+            ).values_list("order_id", flat=True)
+            orders = Order.objects.filter(store=store, id__in=order_ids)
+    orders = orders.select_related("invoice").prefetch_related("items__product").order_by("-created_at")
+
+    UNSOLD_SET = {"pending", "payment_failed", "cancelled"}
+    paid_orders = orders.exclude(status__in=UNSOLD_SET)
+
+    stats = paid_orders.aggregate(lifetime_spend=Sum("total"), order_count=Count("id"))
     count = stats["order_count"] or 0
+    lifetime_spend = stats["lifetime_spend"] or 0
+    average_order = (lifetime_spend / count) if count else 0
+
+    # Channel breakdown
+    channel_label = dict(Order.CHANNELS)
+    channel_breakdown = list(
+        paid_orders.values("channel")
+        .annotate(orders=Count("id"), revenue=Sum("total"))
+        .order_by("-revenue")
+    )
+    for row in channel_breakdown:
+        row["label"] = channel_label.get(row["channel"], row["channel"])
+
+    # Top products this customer bought
+    top_products = list(
+        OrderItem.objects.filter(order__in=paid_orders)
+        .values("name", "sku")
+        .annotate(units=Sum("quantity"), revenue=Sum("line_total"))
+        .order_by("-revenue")[:8]
+    )
+
+    # Days since last order
+    last_order = paid_orders.order_by("-created_at").first()
+    from django.utils import timezone as tz
+    days_since = (tz.localdate() - last_order.created_at.date()).days if last_order else None
+
     return render(request, "merchant/customer_detail.html", _merchant_context(request, store,
-        customer=customer, orders=orders, lifetime_spend=stats["lifetime_spend"] or 0,
-        order_count=count, average_order=((stats["lifetime_spend"] or 0) / count if count else 0)))
+        customer=customer, orders=orders, lifetime_spend=lifetime_spend,
+        order_count=count, average_order=average_order,
+        channel_breakdown=channel_breakdown, top_products=top_products,
+        days_since=days_since))
 
 
 @login_required(login_url="/merchant/login/")

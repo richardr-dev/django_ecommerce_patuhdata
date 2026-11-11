@@ -1,0 +1,97 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Settlement {{ settlement.invoice_number|default:"(Draft)" }}{% endblock %}{% block content %}
+<div class="bo-heading"><div><span class="eyebrow">SETTLEMENT</span><h1>{{ settlement.invoice_number|default:"Settlement (Draft)" }}</h1><p><span class="badge {{ settlement.status }}">{{ settlement.get_status_display }}</span> · {{ settlement.partner.name }} · {{ settlement.period_start|date:"d M Y" }} – {{ settlement.period_end|date:"d M Y" }}</p></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'settlement-list' %}">← Semua Settlement</a></div></div>
+
+<div class="dashboard-grid">
+
+{# ── Summary card ──────────────────────────────────────────────────────── #}
+<section class="bo-card"><h2>Ringkasan</h2>
+<p><b>Mitra:</b> {{ settlement.partner.name }}</p>
+{% if settlement.partner.contact_name %}<p><b>Kontak:</b> {{ settlement.partner.contact_name }} · {{ settlement.partner.contact_phone }}</p>{% endif %}
+<p><b>Periode:</b> {{ settlement.period_start|date:"d M Y" }} – {{ settlement.period_end|date:"d M Y" }}</p>
+{% if settlement.due_date %}<p><b>Jatuh tempo:</b> {{ settlement.due_date|date:"d M Y" }}</p>{% endif %}
+<hr>
+<p><b>Subtotal penjualan:</b> Rp{{ settlement.subtotal|floatformat:0 }}</p>
+<p><b>Total ongkir:</b> Rp{{ settlement.shipping_total|floatformat:0 }}</p>
+<p><b>Total tagihan:</b> <b>Rp{{ settlement.total_due|floatformat:0 }}</b></p>
+<p><b>Sudah dibayar:</b> Rp{{ settlement.amount_paid|floatformat:0 }}</p>
+<p><b>Sisa:</b> <b>Rp{{ settlement.balance_due|floatformat:0 }}</b></p>
+{% if settlement.notes %}<hr><p>{{ settlement.notes }}</p>{% endif %}
+</section>
+
+{# ── Status actions ────────────────────────────────────────────────────── #}
+{% if merchant_role != "viewer" %}
+<section class="bo-card"><h2>Aksi</h2>
+{% if allowed_transitions %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transition">
+  <label>Ubah status ke<select name="new_status">{% for code, label in allowed_transitions %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+  <label>Catatan internal<textarea name="notes" rows="2" placeholder="(opsional)"></textarea></label>
+  {% if settlement.status == "sent" %}<label>Alasan dispute (jika disputed)<input name="dispute_reason" placeholder="Opsional jika bukan disputed"></label>{% endif %}
+  <button class="bo-button">Ubah Status</button>
+  </form>
+{% else %}
+  <p class="muted">Tidak ada transisi status yang tersedia untuk "{{ settlement.get_status_display }}".</p>
+{% endif %}
+
+{% if settlement.status in "invoiced,partially_paid,paid" %}
+<hr><h3>Catat Pembayaran</h3>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="record_payment">
+<div class="form-row">
+  <label>Jumlah (Rp)<input name="amount" placeholder="1000000" required></label>
+  <label>Tanggal<input type="date" name="payment_date" value="{{ today }}" required></label>
+</div>
+<div class="form-row">
+  <label>Metode<select name="method">{% for code, label in payment_methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+  <label>Referensi / No. Transfer<input name="reference" placeholder="(opsional)"></label>
+</div>
+<label>Catatan<textarea name="pay_notes" rows="1" placeholder="(opsional)"></textarea></label>
+<button class="bo-button">{% icon "check" %} Catat Pembayaran</button>
+</form>
+{% endif %}
+</section>
+{% endif %}
+
+</div>{# /dashboard-grid #}
+
+{# ── Lines table ────────────────────────────────────────────────────────── #}
+<section class="bo-card table-card">
+<div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+  <h2>Rincian Pesanan ({{ lines|length }})</h2>
+</div>
+<div class="data-table"><div class="data-row data-head" style="--cols:6"><span>Tanggal</span><span>Deskripsi</span><span>Channel</span><span>Total AB Shop</span><span>Ongkir</span><span>Pesanan</span></div>
+{% for line in lines %}
+<div class="data-row" style="--cols:6">
+  <span>{{ line.sale_date|date:"d M Y" }}</span>
+  <span>{{ line.description }}</span>
+  <span>{{ line.ab_shop_source|default:"—" }}</span>
+  <span>Rp{{ line.line_total|floatformat:0 }}</span>
+  <span>Rp{{ line.shipping_contribution|floatformat:0 }}</span>
+  <span>{% if line.order %}<a href="{% url 'merchant-orders' %}?q={{ line.order.invoice_number }}">{{ line.order.invoice_number|default:line.order.id|stringformat:"s"|slice:":8" }}</a>{% else %}—{% endif %}</span>
+</div>
+{% empty %}<div class="empty-state">Belum ada pesanan dalam settlement ini.</div>{% endfor %}
+</div>
+
+{# Add orders form for unlocked settlements #}
+{% if not settlement.is_locked and candidate_orders and merchant_role != "viewer" %}
+<form method="post" style="margin-top:16px">{% csrf_token %}<input type="hidden" name="action" value="add_orders">
+<h3>Tambah Pesanan</h3>
+<div class="data-table"><div class="data-row data-head" style="--cols:5"><span><input type="checkbox" id="check-all" onchange="document.querySelectorAll('.order-check').forEach(c=>c.checked=this.checked)"></span><span>No. Pesanan</span><span>Pembeli</span><span>Tanggal</span><span>Total</span></div>
+{% for o in candidate_orders %}<div class="data-row" style="--cols:5"><span><input class="order-check" type="checkbox" name="order_ids" value="{{ o.pk }}"></span><span>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</span><span>{{ o.customer_name }}</span><span>{{ o.created_at|date:"d M Y" }}</span><span>Rp{{ o.total|floatformat:0 }}</span></div>{% endfor %}
+</div>
+<button class="bo-button" style="margin-top:8px">{% icon "plus" %} Tambah Pesanan Terpilih</button>
+</form>
+{% endif %}
+</section>
+
+{# ── Payments ──────────────────────────────────────────────────────────── #}
+{% if payments %}
+<section class="bo-card table-card"><h2>Riwayat Pembayaran</h2>
+<div class="data-table"><div class="data-row data-head" style="--cols:5"><span>Tanggal</span><span>Metode</span><span>Referensi</span><span>Jumlah</span><span>Catatan</span></div>
+{% for pay in payments %}<div class="data-row" style="--cols:5"><span>{{ pay.payment_date|date:"d M Y" }}</span><span>{{ pay.get_method_display }}</span><span>{{ pay.reference|default:"—" }}</span><span>Rp{{ pay.amount|floatformat:0 }}</span><span>{{ pay.notes|default:"—" }}</span></div>{% endfor %}
+</div></section>
+{% endif %}
+
+{# ── Internal notes ───────────────────────────────────────────────────── #}
+{% if settlement.internal_notes %}
+<section class="bo-card"><h2>Catatan Internal</h2><pre style="white-space:pre-wrap">{{ settlement.internal_notes }}</pre></section>
+{% endif %}
+{% endblock %}

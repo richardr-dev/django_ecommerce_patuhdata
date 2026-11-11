@@ -1,1 +1,361 @@
-{% extends "merchant/base.html" %}{% block title %}{{ title }}{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">BACK OFFICE</span><h1>{% if editing %}Edit{% else %}Tambah{% endif %} {{ title }}</h1><p>Perubahan hanya berlaku untuk {{ merchant_store.name }}.</p></div>{% if section != 'settings' %}<a class="bo-link" href="{% url 'merchant-entity-list' section %}">← Kembali</a>{% endif %}</div>{% if section == 'settings' %}<section class="store-identity-preview bo-card"><div>{% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="Logo {{ merchant_store.name }}">{% else %}<span>{{ merchant_store.name|slice:':1' }}</span>{% endif %}</div><p><strong>Identitas toko</strong><small>Logo ini akan tampil di header, footer, dan dashboard merchant.</small></p><a class="bo-link" href="{{ merchant_store_url }}" target="_blank" rel="noopener">Pratinjau toko ↗</a></section>{% endif %}{% if section == 'reviews' %}{% with review=form.instance %}<section class="bo-card entity-form review-preview"><span class="eyebrow">{{ review.rating }} / 5 · {{ review.product.name }}</span><h2>{{ review.title|default:"Tanpa judul" }}</h2><p>{{ review.body|linebreaksbr }}</p><small>{{ review.display_name }} · {{ review.created_at|date:"d M Y" }}{% if review.order_id %} · pembelian terverifikasi{% endif %}</small></section>{% endwith %}{% endif %}{% if section == 'products' and form.instance.pk %}{% with product=form.instance %}<section class="bo-card product-photos"><h2>Foto produk</h2><div class="banner-manager">{% if product.primary_image_url %}<figure class="photo-thumb"><img src="{{ product.primary_image_url }}" alt=""><figcaption>Foto utama</figcaption></figure>{% endif %}{% for image in product.images.all %}<figure class="photo-thumb"><img src="{{ image.image_url }}" alt=""><figcaption><a class="bo-link" href="{% url 'merchant-entity-edit' 'images' image.id %}">Ubah</a></figcaption></figure>{% empty %}{% if not product.primary_image_url %}<p class="muted">Belum ada foto. Tambahkan beberapa sekaligus di kolom "Tambah foto produk".</p>{% endif %}{% endfor %}</div></section>{% endwith %}{% endif %}<form method="post" enctype="multipart/form-data" class="bo-card entity-form">{% csrf_token %}{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}{% for field in form.hidden_fields %}{{ field }}{% endfor %}{% if section == 'warehouses' %}{% include "merchant/warehouse_location.html" %}{% endif %}<div class="field-grid">{% for field in form.visible_fields %}{% if not field.field.wholesale %}<label {% if field.name == 'description' or field.name == 'return_policy' or field.name == 'attributes' or field.name == 'logo' or field.name == 'body' or field.name == 'merchant_reply' or field.name == 'address' %}class="span-2"{% endif %}>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</label>{% endif %}{% endfor %}</div>{% if form.wholesale_rows %}{% include "merchant/product_wholesale.html" %}{% endif %}{% if variants is not None %}{% include "merchant/product_variants.html" %}{% endif %}<div class="form-actions"><button class="bo-button">Simpan perubahan</button></div></form>{% endblock %}
+{% extends "merchant/base.html" %}{% load static %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+
+{% if section == 'products' %}
+
+{# Heading bar #}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">PRODUK</p>
+    <h1 class="text-2xl font-bold text-gray-900">{% if editing %}Edit Produk{% else %}Tambah Produk Baru{% endif %}</h1>
+  </div>
+  <div class="flex items-center gap-3">
+    <a class="text-sm text-gray-400 hover:text-gray-600" href="{% url 'merchant-entity-list' 'products' %}">← Kembali</a>
+    <button id="product-save-btn" form="product-form" class="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity" style="background:#4f46e5">
+      Simpan Produk
+    </button>
+  </div>
+</div>
+
+{# Tab bar (edit mode only) #}
+{% if editing %}
+<div class="flex border-b border-gray-200 mb-6">
+  <button type="button" onclick="switchProductTab('detail')" id="tab-btn-detail"
+          class="px-5 py-2.5 text-sm font-semibold text-indigo-600 border-b-2 border-indigo-500 -mb-px">
+    Detail Produk
+  </button>
+  <button type="button" onclick="switchProductTab('mitra')" id="tab-btn-mitra"
+          class="px-5 py-2.5 text-sm font-semibold text-gray-500 border-b-2 border-transparent -mb-px hover:text-gray-700">
+    Harga Mitra
+  </button>
+</div>
+{% endif %}
+
+<div id="tab-content-detail">
+<form id="product-form" method="post" enctype="multipart/form-data">
+{% csrf_token %}
+{% if form.non_field_errors %}<div class="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{{ form.non_field_errors }}</div>{% endif %}
+{% for field in form.hidden_fields %}{{ field }}{% endfor %}
+
+<div class="flex flex-col lg:flex-row gap-5">
+
+  {# ── Left main column ──────────────────────────────────────────────── #}
+  <div class="flex-1 min-w-0 space-y-5">
+
+    {# Photo gallery (existing product) #}
+    {% if editing and form.instance.pk %}
+    {% with product=form.instance %}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-50">
+        <h2 class="text-sm font-semibold text-gray-700">Foto Produk</h2>
+      </div>
+      <div class="p-5">
+        {% if product.primary_image_url or product.images.exists %}
+        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-4">
+          {% if product.primary_image_url %}
+          <div class="relative group">
+            <img src="{{ product.primary_image_url }}" alt="" class="w-full aspect-square object-cover rounded-xl border-2 border-indigo-400">
+            <span class="absolute top-1.5 left-1.5 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-md font-medium">Utama</span>
+          </div>
+          {% endif %}
+          {% for image in product.images.all %}
+          <div class="relative group">
+            <img src="{{ image.image_url }}" alt="" class="w-full aspect-square object-cover rounded-xl border border-gray-200 group-hover:border-indigo-300 transition-colors">
+            <a href="{% url 'merchant-entity-edit' 'images' image.id %}" class="absolute inset-0 flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span class="text-xs bg-black bg-opacity-60 text-white px-2 py-1 rounded-lg">Ubah</span>
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="flex flex-col items-center justify-center py-10 border-2 border-dashed border-gray-200 rounded-xl mb-4 text-gray-400">
+          <svg class="w-10 h-10 mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          <p class="text-sm font-medium text-gray-500">Belum ada foto produk</p>
+          <p class="text-xs text-gray-400 mt-1">Tambah foto di bawah ini</p>
+        </div>
+        {% endif %}
+        {# Photo upload field #}
+        <label class="block">
+          <span class="text-xs font-medium text-gray-600 block mb-1">{{ form.photos.label }}</span>
+          {{ form.photos }}
+          {% if form.photos.help_text %}<p class="text-xs text-gray-400 mt-1">{{ form.photos.help_text }}</p>{% endif %}
+          {% if form.photos.errors %}<p class="text-xs text-red-500 mt-1">{{ form.photos.errors.0 }}</p>{% endif %}
+        </label>
+      </div>
+    </div>
+    {% endwith %}
+    {% else %}
+    {# New product: photo upload as drag area #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <h2 class="text-sm font-semibold text-gray-700 mb-3">Foto Produk</h2>
+      <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center text-center hover:border-indigo-300 transition-colors mb-3">
+        <svg class="w-10 h-10 mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <p class="text-sm text-gray-500 font-medium mb-1">Drag & drop foto di sini</p>
+        <p class="text-xs text-gray-400 mb-3">atau klik untuk pilih dari komputer</p>
+        {{ form.photos }}
+      </div>
+      {% if form.photos.help_text %}<p class="text-xs text-gray-400">{{ form.photos.help_text }}</p>{% endif %}
+      {% if form.photos.errors %}<p class="text-xs text-red-500 mt-1">{{ form.photos.errors.0 }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {# Product name + description #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% if form.name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.description.label }}</label>
+        {{ form.description }}
+        {% if form.description.errors %}<p class="text-xs text-red-500 mt-1">{{ form.description.errors.0 }}</p>{% endif %}
+      </div>
+    </div>
+
+    {# SEO (collapsible) #}
+    <details class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none text-sm font-semibold text-gray-700 hover:bg-gray-50">
+        SEO & Meta
+        <span class="text-gray-400 text-xs">›</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-3 border-t border-gray-50 pt-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.seo_description.label }}</label>
+          {{ form.seo_description }}
+          {% if form.seo_description.errors %}<p class="text-xs text-red-500 mt-1">{{ form.seo_description.errors.0 }}</p>{% endif %}
+        </div>
+        {% if form.slug %}<div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.slug.label }}</label>
+          {{ form.slug }}
+          {% if form.slug.errors %}<p class="text-xs text-red-500 mt-1">{{ form.slug.errors.0 }}</p>{% endif %}
+        </div>{% endif %}
+      </div>
+    </details>
+
+    {# Wholesale pricing #}
+    {% if form.wholesale_rows %}{% include "merchant/product_wholesale.html" %}{% endif %}
+
+    {# Variants #}
+    {% if variants is not None %}{% include "merchant/product_variants.html" %}{% endif %}
+
+  </div>
+
+  {# ── Right sidebar ─────────────────────────────────────────────────── #}
+  <div class="w-full lg:w-72 xl:w-80 flex-shrink-0 space-y-4">
+
+    {# Status #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Status</h3>
+      <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm font-medium text-gray-700">Aktif di toko</span>
+        {{ form.is_active }}
+      </label>
+      {% if form.is_active.errors %}<p class="text-xs text-red-500 mt-1">{{ form.is_active.errors.0 }}</p>{% endif %}
+      {% if form.is_featured %}
+      <label class="flex items-center justify-between cursor-pointer mt-3">
+        <span class="text-sm text-gray-700">Produk unggulan</span>
+        {{ form.is_featured }}
+      </label>
+      {% endif %}
+    </div>
+
+    {# Pricing #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Harga</h3>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.price.label }} <span class="text-red-400">*</span></label>
+        {{ form.price }}
+        {% if form.price.errors %}<p class="text-xs text-red-500 mt-1">{{ form.price.errors.0 }}</p>{% endif %}
+      </div>
+      {% if form.compare_at_price %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.compare_at_price.label }}</label>
+        {{ form.compare_at_price }}
+        {% if form.compare_at_price.errors %}<p class="text-xs text-red-500 mt-1">{{ form.compare_at_price.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+      {% if form.cost_price %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.cost_price.label }}</label>
+        {{ form.cost_price }}
+        {% if form.cost_price.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.cost_price.help_text }}</p>{% endif %}
+        {% if form.cost_price.errors %}<p class="text-xs text-red-500 mt-1">{{ form.cost_price.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+    </div>
+
+    {# SKU, Category, Weight #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Identitas & Stok</h3>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.sku.label }}</label>
+        {{ form.sku }}
+        {% if form.sku.errors %}<p class="text-xs text-red-500 mt-1">{{ form.sku.errors.0 }}</p>{% endif %}
+      </div>
+      {% if form.category %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.category.label }}</label>
+        {{ form.category }}
+        {% if form.category.errors %}<p class="text-xs text-red-500 mt-1">{{ form.category.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.weight_grams.label }}</label>
+        {{ form.weight_grams }}
+        {% if form.weight_grams.errors %}<p class="text-xs text-red-500 mt-1">{{ form.weight_grams.errors.0 }}</p>{% endif %}
+      </div>
+      {% if form.preorder_days %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.preorder_days.label }}</label>
+        {{ form.preorder_days }}
+        {% if form.preorder_days.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.preorder_days.help_text }}</p>{% endif %}
+        {% if form.preorder_days.errors %}<p class="text-xs text-red-500 mt-1">{{ form.preorder_days.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+      {# Initial stock (new product only) #}
+      {% if form.warehouse %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.warehouse.label }}</label>
+        {{ form.warehouse }}
+        {% if form.warehouse.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.warehouse.help_text }}</p>{% endif %}
+      </div>{% endif %}
+      {% if form.initial_stock %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.initial_stock.label }}</label>
+        {{ form.initial_stock }}
+        {% if form.initial_stock.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.initial_stock.help_text }}</p>{% endif %}
+      </div>{% endif %}
+    </div>
+
+    {# Marketplace channels #}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Saluran Penjualan</h3>
+      <div class="space-y-1">
+        {% for pd in channel_platform_list %}
+        <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+          <div class="flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold" style="background:{{ pd.color }}">{{ pd.label|slice:':1' }}</span>
+            <span class="text-sm text-gray-700">{{ pd.label }}</span>
+          </div>
+          {% if pd.linked %}
+          <span class="text-xs font-medium text-green-500">✓ Aktif</span>
+          {% elif pd.active %}
+          <span class="text-xs text-amber-500">Channel ada</span>
+          {% else %}
+          <span class="text-xs text-gray-300">Belum</span>
+          {% endif %}
+        </div>
+        {% empty %}
+        {# Fallback: static list when view doesn't pass channel_platform_list #}
+        {% for label, color in "Shopee:#EE4D2D,Tokopedia:#42B549,TikTok Shop:#010101,Lazada:#0F146D" %}{% endfor %}
+        <div class="flex items-center justify-between py-2 border-b border-gray-50">
+          <div class="flex items-center gap-2.5"><span class="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold" style="background:#EE4D2D">S</span><span class="text-sm text-gray-700">Shopee</span></div>
+          <span class="text-xs text-gray-300">Belum</span>
+        </div>
+        <div class="flex items-center justify-between py-2 border-b border-gray-50">
+          <div class="flex items-center gap-2.5"><span class="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold" style="background:#42B549">T</span><span class="text-sm text-gray-700">Tokopedia</span></div>
+          <span class="text-xs text-gray-300">Belum</span>
+        </div>
+        <div class="flex items-center justify-between py-2 border-b border-gray-50">
+          <div class="flex items-center gap-2.5"><span class="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold" style="background:#010101">T</span><span class="text-sm text-gray-700">TikTok Shop</span></div>
+          <span class="text-xs text-gray-300">Belum</span>
+        </div>
+        <div class="flex items-center justify-between py-2">
+          <div class="flex items-center gap-2.5"><span class="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold" style="background:#0F146D">L</span><span class="text-sm text-gray-700">Lazada</span></div>
+          <span class="text-xs text-gray-300">Belum</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-xs text-gray-400 mt-3 leading-relaxed">Hubungkan SKU produk ini di masing-masing Seller Center agar pesanan dari marketplace masuk otomatis.</p>
+      <a href="{% url 'merchant-channels' %}" class="text-xs text-indigo-600 hover:text-indigo-800 mt-1 block">Kelola channel →</a>
+    </div>
+
+  </div>{# /sidebar #}
+
+</div>{# /two-col #}
+
+</form>
+</div>{# /tab-content-detail #}
+
+{% if editing %}
+<div id="tab-content-mitra" class="hidden">
+  <div id="mitra-price-section">
+    {% include "merchant/product_partner_prices_partial.html" with product=form.instance partner_rows=mitra_partner_rows saved=None %}
+  </div>
+</div>
+
+<script>
+function switchProductTab(tab) {
+  ['detail', 'mitra'].forEach(function(t) {
+    var content = document.getElementById('tab-content-' + t);
+    var btn = document.getElementById('tab-btn-' + t);
+    if (t === tab) {
+      content.classList.remove('hidden');
+      btn.classList.add('text-indigo-600', 'border-indigo-500');
+      btn.classList.remove('text-gray-500', 'border-transparent');
+    } else {
+      content.classList.add('hidden');
+      btn.classList.remove('text-indigo-600', 'border-indigo-500');
+      btn.classList.add('text-gray-500', 'border-transparent');
+    }
+  });
+  // hide the top-bar "Simpan Produk" button when on mitra tab
+  var saveBtn = document.getElementById('product-save-btn');
+  if (saveBtn) saveBtn.style.display = tab === 'detail' ? '' : 'none';
+}
+</script>
+{% endif %}
+
+{% else %}
+{# GENERIC ENTITY FORM (categories, warehouses, images, etc.) #}
+
+<div class="bo-heading">
+  <div>
+    <span class="eyebrow">BACK OFFICE</span>
+    <h1>{% if editing %}Edit{% else %}Tambah{% endif %} {{ title }}</h1>
+    <p>Perubahan hanya berlaku untuk {{ merchant_store.name }}.</p>
+  </div>
+  {% if section != 'settings' %}<a class="bo-link" href="{% url 'merchant-entity-list' section %}">← Kembali</a>{% endif %}
+</div>
+
+{% if section == 'settings' %}
+<section class="store-identity-preview bo-card">
+  <div>{% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="Logo {{ merchant_store.name }}">{% else %}<span>{{ merchant_store.name|slice:':1' }}</span>{% endif %}</div>
+  <p><strong>Identitas toko</strong><small>Logo ini akan tampil di header, footer, dan dashboard merchant.</small></p>
+  <a class="bo-link" href="{{ merchant_store_url }}" target="_blank" rel="noopener">Pratinjau toko ↗</a>
+</section>
+{% endif %}
+
+{% if section == 'reviews' %}
+{% with review=form.instance %}
+<section class="bo-card entity-form review-preview">
+  <span class="eyebrow">{{ review.rating }} / 5 · {{ review.product.name }}</span>
+  <h2>{{ review.title|default:"Tanpa judul" }}</h2>
+  <p>{{ review.body|linebreaksbr }}</p>
+  <small>{{ review.display_name }} · {{ review.created_at|date:"d M Y" }}{% if review.order_id %} · pembelian terverifikasi{% endif %}</small>
+</section>
+{% endwith %}
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="bo-card entity-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% if section == 'warehouses' %}{% include "merchant/warehouse_location.html" %}{% endif %}
+  <div class="field-grid">
+    {% for field in form.visible_fields %}
+    {% if not field.field.wholesale %}
+    <label {% if field.name == 'description' or field.name == 'return_policy' or field.name == 'attributes' or field.name == 'logo' or field.name == 'body' or field.name == 'merchant_reply' or field.name == 'address' %}class="span-2"{% endif %}>
+      {{ field.label }}{{ field }}
+      {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+      {{ field.errors }}
+    </label>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% if form.wholesale_rows %}{% include "merchant/product_wholesale.html" %}{% endif %}
+  {% if variants is not None %}{% include "merchant/product_variants.html" %}{% endif %}
+  <div class="form-actions">
+    <button class="bo-button">Simpan perubahan</button>
+  </div>
+</form>
+
+{% endif %}
+{% endblock %}

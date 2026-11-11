@@ -1,0 +1,46 @@
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:0 }}</p>
+  </div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Pesanan</p>
+    <p class="text-2xl font-bold text-gray-900">{{ order_count }}</p>
+  </div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Rata-rata / Pesanan</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:0 }}</p>
+  </div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Pelanggan Unik</p>
+    <p class="text-2xl font-bold text-gray-900">{{ unique_customers }}</p>
+  </div>
+  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Diskon</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:0 }}</p>
+  </div>
+</div>
+
+<div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+  <h2 class="text-sm font-semibold text-gray-700 mb-4">Penjualan per Channel</h2>
+  {% if channel_rows %}
+  <div class="space-y-3">
+    {% for row in channel_rows %}
+    <div>
+      <div class="flex justify-between items-center mb-1">
+        <span class="text-xs text-gray-700 font-medium">{{ row.label }}</span>
+        <span class="text-xs text-gray-500">{{ row.orders }} pst</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full bg-indigo-500 rounded-full" style="width:{{ row.pct }}%"></div>
+        </div>
+        <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:0 }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400 py-4 text-center">Belum ada data.</p>
+  {% endif %}
+</div>

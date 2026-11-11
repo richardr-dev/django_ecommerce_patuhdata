@@ -65,11 +65,108 @@ class ChannelListing(models.Model):
         return self.variant.available_stock if self.variant_id else self.product.available_stock
 
 
+class ChannelBuyer(models.Model):
+    """Buyer profile built from marketplace imports — one record per buyer per channel.
+
+    Shopee buyers are identified by username since phone/name are masked.
+    Records are upserted on every import so order_count and totals stay current.
+    """
+    PLATFORMS = [
+        ("shopee", "Shopee"),
+        ("tokopedia", "Tokopedia"),
+        ("tiktok", "TikTok Shop"),
+        ("lazada", "Lazada"),
+        ("manual", "Manual"),
+        ("other", "Lainnya"),
+    ]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="channel_buyers")
+    platform = models.CharField(max_length=20, choices=PLATFORMS, db_index=True)
+    # Shopee: username. Tokped: buyer_id. Manual: phone number.
+    external_id = models.CharField(max_length=160, db_index=True)
+    name = models.CharField(max_length=160, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    province = models.CharField(max_length=100, blank=True)
+    last_address = models.TextField(blank=True)
+    order_count = models.PositiveIntegerField(default=0)
+    total_spent = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    is_member = models.BooleanField(default=False)
+    loyalty_points = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_seen"]
+        constraints = [
+            models.UniqueConstraint(fields=["store", "platform", "external_id"],
+                name="unique_channel_buyer")
+        ]
+
+    def __str__(self):
+        return f"{self.name or self.external_id} ({self.get_platform_display()})"
+
+
+class ImportBatch(models.Model):
+    """One file upload — groups all orders created from that import.
+    Acts as the sales invoice record for marketplace order batches."""
+    import uuid as _uuid
+
+    CAT_REGULAR = "regular"
+    CAT_FLASH_SALE = "flash_sale"
+    CAT_HARBOLNAS = "harbolnas"
+    CAT_WHOLESALE = "wholesale"
+    CAT_CAMPAIGN = "campaign"
+    CAT_CONSIGNMENT = "consignment"
+    CAT_CHOICES = [
+        (CAT_REGULAR, "Penjualan Reguler"),
+        (CAT_FLASH_SALE, "Flash Sale"),
+        (CAT_HARBOLNAS, "Harbolnas / Hari Belanja"),
+        (CAT_WHOLESALE, "Grosir / Wholesale"),
+        (CAT_CAMPAIGN, "Promo / Kampanye"),
+        (CAT_CONSIGNMENT, "Konsinyasi"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="import_batches")
+    channel = models.ForeignKey(SalesChannel, on_delete=models.PROTECT,
+        related_name="import_batches")
+    imported_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="import_batches")
+    file_name = models.CharField(max_length=255, blank=True)
+    category = models.CharField(
+        max_length=20, choices=CAT_CHOICES, default=CAT_REGULAR,
+        help_text="Jenis penjualan untuk pengelompokan invoice.")
+    is_soft = models.BooleanField(default=False,
+        help_text="True when imported without stock deduction (historical mode).")
+    order_count = models.PositiveIntegerField(default=0)
+    duplicate_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-imported_at"]
+
+    def __str__(self):
+        return f"{self.channel} · {self.imported_at:%d %b %Y %H:%M} · {self.order_count} pesanan"
+
+    @property
+    def platform_label(self):
+        from .adapters import PLATFORMS
+        return PLATFORMS.get(self.channel.platform, type("P", (), {"label": self.channel.platform})()).label
+
+
 class ChannelOrder(models.Model):
     """Links an imported marketplace order to its Lakuin order; importing twice is a no-op."""
     channel = models.ForeignKey(SalesChannel, on_delete=models.PROTECT, related_name="orders")
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="channel_order")
     external_order_id = models.CharField(max_length=80)
+    batch = models.ForeignKey(ImportBatch, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="channel_orders")
+    buyer = models.ForeignKey(ChannelBuyer, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="channel_orders")
     # Set when the marketplace sold more than Lakuin had available: someone must act.
     attention = models.CharField(max_length=300, blank=True)
     imported_at = models.DateTimeField(auto_now_add=True)

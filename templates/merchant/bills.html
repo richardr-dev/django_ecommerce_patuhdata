@@ -1,0 +1,99 @@
+{% extends "merchant/base.html" %}
+{% block title %}Tagihan Supplier{% endblock %}
+{% block content %}
+
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — HUTANG (AP)</p>
+    <h1 class="text-2xl font-bold text-gray-900">Tagihan Supplier</h1>
+    <p class="text-sm text-gray-500 mt-1">Faktur dari supplier yang perlu dibayar.</p>
+  </div>
+  <a href="{% url 'merchant-bill-new' %}"
+     class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">
+    + Tagihan Baru
+  </a>
+</div>
+
+{# Summary card #}
+{% if totals.count %}
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Total Belum Lunas</p>
+    <p class="text-2xl font-bold text-red-600">Rp{{ totals.total_owed|floatformat:"0g" }}</p>
+    <p class="text-xs text-gray-400 mt-1">{{ totals.count }} tagihan</p>
+  </div>
+</div>
+{% endif %}
+
+{# Status filter tabs #}
+<div class="flex gap-2 mb-4 flex-wrap">
+  <a href="{% url 'merchant-bills' %}"
+     class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors {% if not status_filter %}bg-gray-900 text-white{% else %}border border-gray-300 text-gray-600 hover:bg-gray-50{% endif %}">
+    Semua
+  </a>
+  {% for key, label in status_choices %}
+  <a href="?status={{ key }}"
+     class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors {% if status_filter == key %}bg-gray-900 text-white{% else %}border border-gray-300 text-gray-600 hover:bg-gray-50{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+{# Bills table #}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+  {% if bills %}
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+      <tr>
+        <th class="px-5 py-3 text-left font-medium">Supplier</th>
+        <th class="px-3 py-3 text-left font-medium">No. Faktur</th>
+        <th class="px-3 py-3 text-left font-medium">Tgl Tagihan</th>
+        <th class="px-3 py-3 text-left font-medium">Jatuh Tempo</th>
+        <th class="px-3 py-3 text-left font-medium">Status</th>
+        <th class="px-3 py-3 text-right font-medium">Total</th>
+        <th class="px-3 py-3 text-right font-medium">Sisa</th>
+        <th class="px-3 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for b in bills %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-5 py-3">
+          <a href="{% url 'merchant-supplier-detail' b.supplier.id %}" class="font-medium text-gray-900 hover:underline">
+            {{ b.supplier.name }}
+          </a>
+        </td>
+        <td class="px-3 py-3 font-mono text-xs text-gray-600">{{ b.number|default:"—" }}</td>
+        <td class="px-3 py-3 text-gray-600">{{ b.bill_date|date:"d M Y" }}</td>
+        <td class="px-3 py-3 text-gray-500 text-xs">{{ b.due_date|date:"d M Y"|default:"—" }}</td>
+        <td class="px-3 py-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+            {% if b.status == 'paid' %}bg-green-100 text-green-700
+            {% elif b.status == 'open' %}bg-amber-100 text-amber-700
+            {% elif b.status == 'partial' %}bg-gray-100 text-gray-700
+            {% elif b.status == 'overdue' %}bg-red-100 text-red-700
+            {% elif b.status == 'draft' %}bg-gray-100 text-gray-500
+            {% else %}bg-gray-100 text-gray-400{% endif %}">
+            {{ b.get_status_display }}
+          </span>
+        </td>
+        <td class="px-3 py-3 text-right font-semibold text-gray-800">Rp{{ b.total|floatformat:"0g" }}</td>
+        <td class="px-3 py-3 text-right {% if b._amount_due > 0 %}text-red-600 font-semibold{% else %}text-gray-400{% endif %}">
+          {% if b._amount_due > 0 %}Rp{{ b._amount_due|floatformat:"0g" }}{% else %}—{% endif %}
+        </td>
+        <td class="px-3 py-3 text-right">
+          <a href="{% url 'merchant-bill-detail' b.id %}" class="text-xs text-gray-500 hover:text-gray-900">Detail →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="px-5 py-12 text-center text-sm text-gray-400">
+    Belum ada tagihan.
+    <a href="{% url 'merchant-bill-new' %}" class="text-gray-700 font-medium hover:underline ml-1">Buat tagihan pertama →</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

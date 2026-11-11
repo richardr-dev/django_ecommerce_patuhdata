@@ -1,0 +1,194 @@
+{% extends "merchant/base.html" %}
+{% block title %}Tagihan Baru{% endblock %}
+{% block content %}
+
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — AP</p>
+    <h1 class="text-2xl font-bold text-gray-900">Tagihan Supplier Baru</h1>
+    <p class="text-sm text-gray-500 mt-1">Catat faktur dari supplier/vendor.</p>
+  </div>
+  <a href="{% url 'merchant-bills' %}" class="text-sm text-gray-400 hover:text-gray-600">← Semua Tagihan</a>
+</div>
+
+<form method="post" class="space-y-5">
+{% csrf_token %}
+
+{# Supplier + header #}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+  <h2 class="text-sm font-semibold text-gray-700 mb-4">Informasi Tagihan</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Supplier <span class="text-red-500">*</span></label>
+      <select name="supplier_id" id="supplier-select"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+        <option value="">— Pilih supplier —</option>
+        {% for s in suppliers %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+        <option value="new">+ Supplier baru…</option>
+      </select>
+    </div>
+
+    <div id="new-supplier-wrap" class="hidden">
+      <label class="block text-xs font-medium text-gray-600 mb-1">Nama Supplier Baru</label>
+      <input type="text" name="supplier_name" id="supplier-name-input" maxlength="160"
+             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
+             placeholder="Nama supplier baru">
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">No. Faktur Supplier</label>
+      <input type="text" name="number" maxlength="40"
+             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
+             placeholder="mis. INV-2026-001">
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Tagihan</label>
+      <input type="date" name="bill_date" value="{{ today }}"
+             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Jatuh Tempo</label>
+      <input type="date" name="due_date"
+             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+    </div>
+
+    <div class="md:col-span-2">
+      <label class="block text-xs font-medium text-gray-600 mb-1">Catatan</label>
+      <textarea name="notes" rows="2"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                placeholder="Keterangan tambahan…"></textarea>
+    </div>
+  </div>
+</div>
+
+{# Line items #}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+  <h2 class="text-sm font-semibold text-gray-700 mb-4">Item Tagihan</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm" id="items-table">
+      <thead class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+        <tr>
+          <th class="pb-2 text-left font-medium">Deskripsi</th>
+          <th class="pb-2 px-2 text-right font-medium w-20">Qty</th>
+          <th class="pb-2 px-2 text-right font-medium w-32">Harga Satuan</th>
+          <th class="pb-2 px-2 text-right font-medium w-32">Total</th>
+          <th class="pb-2 w-8"></th>
+        </tr>
+      </thead>
+      <tbody id="items-body">
+        <tr class="item-row border-b border-gray-50">
+          <td class="py-2 pr-2">
+            <input type="text" name="description[]" placeholder="Nama barang / jasa"
+                   class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+          </td>
+          <td class="py-2 px-2">
+            <input type="number" name="qty[]" value="1" min="0.01" step="0.01"
+                   class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-right qty-input">
+          </td>
+          <td class="py-2 px-2">
+            <input type="text" name="unit_price[]" value=""
+                   class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-right price-input"
+                   placeholder="0">
+          </td>
+          <td class="py-2 px-2 text-right font-semibold text-gray-700">
+            <span class="line-total-display">Rp0</span>
+          </td>
+          <td class="py-2 pl-2">
+            <button type="button" onclick="removeRow(this)" class="text-gray-300 hover:text-red-500 text-lg leading-none">×</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <button type="button" onclick="addRow()"
+          class="mt-3 text-xs font-medium text-gray-600 hover:text-gray-900 border border-dashed border-gray-300 rounded-xl px-4 py-2 w-full hover:border-gray-500 transition-colors">
+    + Tambah Item
+  </button>
+</div>
+
+{# Totals #}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+  <div class="max-w-xs ml-auto space-y-2 text-sm">
+    <div class="flex justify-between text-gray-600">
+      <span>Subtotal</span>
+      <span id="subtotal-display" class="font-medium text-gray-800">Rp0</span>
+    </div>
+    <div class="flex items-center justify-between text-gray-600">
+      <span>PPN / Pajak</span>
+      <input type="text" name="tax" id="tax-input" value="0"
+             class="w-32 px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 text-right"
+             oninput="recalcTotals()">
+    </div>
+    <div class="flex justify-between border-t border-gray-200 pt-2 font-bold text-gray-900">
+      <span>Total</span>
+      <span id="total-display">Rp0</span>
+    </div>
+  </div>
+</div>
+
+<div class="flex gap-3 justify-end">
+  <a href="{% url 'merchant-bills' %}" class="px-5 py-2 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50">Batal</a>
+  <button type="submit" class="px-5 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">Simpan Tagihan</button>
+</div>
+
+</form>
+
+<script>
+function fmt(n) { return 'Rp' + Math.round(n).toLocaleString('id-ID'); }
+
+function wireRow(row) {
+  const qty = row.querySelector('.qty-input');
+  const price = row.querySelector('.price-input');
+  const display = row.querySelector('.line-total-display');
+  function calc() {
+    const q = parseFloat(qty.value) || 0;
+    const p = parseFloat((price.value || '').replace(/,/g, '')) || 0;
+    const lt = q * p;
+    display.textContent = fmt(lt);
+    recalcTotals();
+  }
+  qty.addEventListener('input', calc);
+  price.addEventListener('input', calc);
+}
+
+function recalcTotals() {
+  let sub = 0;
+  document.querySelectorAll('.item-row').forEach(row => {
+    const q = parseFloat(row.querySelector('.qty-input').value) || 0;
+    const p = parseFloat((row.querySelector('.price-input').value || '').replace(/,/g, '')) || 0;
+    sub += q * p;
+  });
+  const tax = parseFloat((document.getElementById('tax-input').value || '').replace(/,/g, '')) || 0;
+  document.getElementById('subtotal-display').textContent = fmt(sub);
+  document.getElementById('total-display').textContent = fmt(sub + tax);
+}
+
+function addRow() {
+  const tmpl = document.querySelector('.item-row').cloneNode(true);
+  tmpl.querySelector('.qty-input').value = '1';
+  tmpl.querySelector('.price-input').value = '';
+  tmpl.querySelector('.line-total-display').textContent = 'Rp0';
+  document.getElementById('items-body').appendChild(tmpl);
+  wireRow(tmpl);
+}
+
+function removeRow(btn) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length > 1) { btn.closest('tr').remove(); recalcTotals(); }
+}
+
+document.querySelectorAll('.item-row').forEach(wireRow);
+
+document.getElementById('supplier-select').addEventListener('change', function() {
+  const wrap = document.getElementById('new-supplier-wrap');
+  wrap.classList.toggle('hidden', this.value !== 'new');
+  document.getElementById('supplier-name-input').required = (this.value === 'new');
+});
+</script>
+
+{% endblock %}

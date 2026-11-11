@@ -1,7 +1,87 @@
 {% extends "merchant/base.html" %}{% load static %}{% block title %}Pelanggan{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
-<div class="bo-heading"><div><span class="eyebrow">CRM</span><h1>Pelanggan</h1><p>Saring pelanggan menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div>{% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="bo-button" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">Kirim email ke segmen ini ({{ audience }})</a>{% endif %}</div>
+
+{# ── Pending approval queue ──────────────────────────────────────────── #}
+{% if pending %}
+<div class="mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h2 class="text-base font-semibold text-gray-800">Antrean Konfirmasi Pelanggan Baru</h2>
+      <p class="text-xs text-gray-500 mt-0.5">{{ pending_count }} pelanggan baru dari marketplace menunggu persetujuan.</p>
+    </div>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="approve_all">
+      <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity" style="background:#4f46e5">
+        Setujui Semua ({{ pending_count }})
+      </button>
+    </form>
+  </div>
+
+  <div class="overflow-hidden rounded-2xl border border-amber-100 shadow-sm bg-amber-50">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-amber-100">
+          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Pelanggan</th>
+          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Platform</th>
+          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Lokasi</th>
+          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Pesanan</th>
+          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Total Belanja</th>
+          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-amber-50">
+        {% for customer in pending %}
+        <tr class="bg-white hover:bg-amber-50 transition-colors">
+          <td class="px-5 py-3">
+            <div class="font-medium text-gray-800">{{ customer.name }}</div>
+            {% if customer.channel_buyer %}<div class="text-xs text-gray-400">ID: {{ customer.channel_buyer.external_id|truncatechars:30 }}</div>{% endif %}
+          </td>
+          <td class="px-5 py-3">
+            {% if customer.channel_buyer %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+              {% if customer.channel_buyer.platform == 'tokopedia' %}bg-green-100 text-green-700
+              {% elif customer.channel_buyer.platform == 'shopee' %}bg-orange-100 text-orange-700
+              {% elif customer.channel_buyer.platform == 'tiktok' %}bg-gray-100 text-gray-700
+              {% else %}bg-indigo-100 text-indigo-700{% endif %}">
+              {{ customer.channel_buyer.get_platform_display }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-gray-500 text-xs">
+            {% if customer.channel_buyer.city %}{{ customer.channel_buyer.city }}{% if customer.channel_buyer.province %}, {{ customer.channel_buyer.province }}{% endif %}{% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-right text-gray-700">
+            {% if customer.channel_buyer %}{{ customer.channel_buyer.order_count }}{% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-right font-semibold text-gray-800">
+            {% if customer.channel_buyer and customer.channel_buyer.total_spent %}
+              Rp{{ customer.channel_buyer.total_spent|floatformat:"0g" }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-right">
+            <form method="post" class="inline-flex gap-2">{% csrf_token %}
+              <input type="hidden" name="customer_id" value="{{ customer.id }}">
+              <button type="submit" name="action" value="approve"
+                      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90" style="background:#22c55e">
+                Setujui
+              </button>
+              <button type="submit" name="action" value="block"
+                      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200">
+                Blokir
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Existing active customers ────────────────────────────────────────── #}
+<div class="bo-heading"><div><span class="eyebrow">CRM</span><h1>Pelanggan</h1><p>Saring pelanggan menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div><div class="flex items-center gap-3">{% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="bo-button" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">Kirim email ke segmen ini ({{ audience }})</a>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<form method="post" class="inline" onsubmit="return confirm('Sinkronkan semua pesanan ke profil pelanggan?')">{% csrf_token %}<button type="submit" name="action" value="sync_customers" class="bo-button secondary">↻ Sinkron Pesanan</button></form>{% endif %}</div></div>
 <form class="bo-card segment-filters"><div class="segment-grid"><label>Cari<input class="control" name="q" value="{{ segment.q|default:'' }}" placeholder="Nama, telepon, email"></label><label>Tag<input class="control" name="tag" list="customer-tags" value="{{ segment.tag|default:'' }}" placeholder="mis. reseller"></label><label>Min. pesanan<input class="control" type="number" min="0" name="min_orders" value="{{ segment.min_orders|default:'' }}"></label><label>Min. belanja (Rp)<input class="control" type="number" min="0" name="min_spend" value="{{ segment.min_spend|default:'' }}"></label><label>Belanja dalam (hari)<input class="control" type="number" min="0" name="active_days" value="{{ segment.active_days|default:'' }}" placeholder="mis. 30"></label><label>Tidak belanja ≥ (hari)<input class="control" type="number" min="0" name="inactive_days" value="{{ segment.inactive_days|default:'' }}" placeholder="mis. 60"></label></div><div class="segment-checks"><label class="check"><input type="checkbox" name="marketing" value="1" {% if segment.marketing %}checked{% endif %}> Setuju promo</label><label class="check"><input type="checkbox" name="has_email" value="1" {% if segment.has_email %}checked{% endif %}> Punya email</label><button class="bo-button">Terapkan</button><a class="bo-link" href="{% url 'merchant-customers' %}">Reset</a></div><datalist id="customer-tags">{% for tag in tags %}<option value="{{ tag }}">{% endfor %}</datalist></form>
-<p class="muted">{{ page_obj.paginator.count }} pelanggan · {{ segment_label }}</p>
+<p class="muted">{{ page_obj.paginator.count }} pelanggan aktif · {{ segment_label }}</p>
 {% if merchant_role != 'viewer' and merchant_role != 'ops' %}<form method="post" class="segment-tag-form">{% csrf_token %}{% for key, value in segment.items %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}<input class="control" name="add_tag" placeholder="Tag baru untuk semua hasil ini" list="customer-tags" required><button class="secondary">Tambahkan tag</button></form>{% endif %}
 <section class="bo-card table-card"><div class="data-table" style="--cols:6"><div class="data-row data-head"><span>Pelanggan</span><span>Pesanan</span><span>Total belanja</span><span>Terakhir belanja</span><span>Tag</span><span></span></div>{% for customer in customers %}<div class="data-row"><span><b>{{ customer.name }}</b><small class="muted">{{ customer.phone }}{% if customer.email %} · {{ customer.email }}{% endif %}{% if customer.accepts_marketing %} · setuju promo{% endif %}</small></span><span>{{ customer.order_count }}</span><span>Rp{{ customer.total_spent|floatformat:"0g" }}</span><span>{% if customer.last_order_at %}{{ customer.last_order_at|date:"d M Y" }}{% else %}—{% endif %}</span><span>{% for tag in customer.tag_list %}<span class="badge">{{ tag }}</span> {% endfor %}</span><span><a href="{% url 'merchant-customer-detail' customer.id %}">Profil →</a></span></div>{% empty %}<div class="empty-state">Tidak ada pelanggan di segmen ini.</div>{% endfor %}</div></section>
 {% include "storefront/pagination.html" %}

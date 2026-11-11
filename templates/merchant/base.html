@@ -1,15 +1,270 @@
-{% load icons %}{% load static %}<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Back Office{% endblock %} · {{ merchant_store.name }}</title>{% include "platform/favicon.html" %}<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap"><link rel="stylesheet" href="{% static 'css/backoffice.css' %}">{% block head_css %}{% endblock %}<link rel="stylesheet" href="{% static 'css/admin.css' %}"></head><body class="backoffice-body">
-<aside class="bo-sidebar"><a class="bo-brand" href="{% url 'merchant-dashboard' %}">{% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="Logo {{ merchant_store.name }}">{% else %}<span>{{ merchant_store.name|slice:':1' }}</span>{% endif %}<strong>{{ merchant_store.name }}</strong><small>Back office</small></a>
-<nav class="bo-nav">{% with p=request.path %}
-<a class="{% if p == '/merchant/' %}active{% endif %}" href="{% url 'merchant-dashboard' %}"><i>{% icon "home" %}</i>Beranda</a>
-<a class="{% if '/merchant/orders' in p %}active{% endif %}" href="{% url 'merchant-orders' %}"><i>{% icon "receipt" %}</i>Pesanan</a><a class="{% if '/merchant/delivery/recap' in p %}active{% endif %}" href="{% url 'merchant-production-recap' %}"><i>{% icon "clipboard" %}</i>Rekap produksi</a>
-<details {% if '/setup/products' in p or '/setup/categories' in p or '/setup/images' in p or '/merchant/stock' in p or '/setup/inventory' in p or '/setup/warehouses' in p or '/products/import' in p %}open{% endif %}><summary><i>{% icon "box" %}</i>Produk</summary><a href="{% url 'merchant-entity-list' 'products' %}">Semua produk</a><a href="{% url 'merchant-entity-list' 'categories' %}">Kategori</a><a href="{% url 'merchant-stock' %}">Stok</a><a href="{% url 'merchant-product-import' %}">Impor dari CSV</a><a href="{% url 'merchant-entity-list' 'images' %}">Foto produk</a><a href="{% url 'merchant-entity-list' 'warehouses' %}">Gudang & outlet</a><a href="{% url 'merchant-entity-list' 'inventory' %}">Lokasi stok</a></details>
-<details {% if '/merchant/customers' in p or '/merchant/engagement' in p or '/setup/reviews' in p or '/setup/subscribers' in p %}open{% endif %}><summary><i>{% icon "users" %}</i>Pelanggan</summary><a href="{% url 'merchant-customers' %}">Daftar pelanggan</a><a href="{% url 'merchant-engagement' %}">Keranjang tertinggal</a><a href="{% url 'merchant-broadcasts' %}">Broadcast email</a><a href="{% url 'merchant-entity-list' 'reviews' %}">Ulasan</a><a href="{% url 'merchant-entity-list' 'subscribers' %}">Newsletter</a></details>
-<details {% if '/setup/campaigns' in p or '/setup/flash-sales' in p or '/setup/coupons' in p or '/campaign-links' in p or '/merchant/feeds' in p or '/gift-cards' in p %}open{% endif %}><summary><i>{% icon "tag" %}</i>Promosi</summary><a href="{% url 'merchant-entity-list' 'campaigns' %}">Flash sale & popup</a><a href="{% url 'merchant-entity-list' 'flash-sales' %}">Produk flash sale</a><a href="{% url 'merchant-entity-list' 'coupons' %}">Voucher</a><a href="{% url 'merchant-gift-cards' %}">Gift card</a><a href="{% url 'merchant-campaign-links' %}">Link kampanye</a><a href="{% url 'merchant-feeds' %}">Feed & QR katalog</a></details>
-<details {% if '/merchant/settings' in p or '/setup/slides' in p or '/setup/pages' in p %}open{% endif %}><summary><i>{% icon "layout" %}</i>Tampilan toko</summary><a href="{% url 'merchant-settings' %}">Tema, logo & banner</a><a href="{% url 'merchant-entity-list' 'slides' %}">Atur banner</a><a href="{% url 'merchant-entity-list' 'pages' %}">Halaman brand</a></details>
-<a class="{% if '/merchant/marketplace' in p %}active{% endif %}" href="{% url 'merchant-channels' %}"><i>{% icon "link" %}</i>Marketplace</a>
-<details {% if '/merchant/finance' in p or '/merchant/expenses' in p or '/merchant/payouts' in p or '/merchant/tax' in p or '/merchant/invoices' in p %}open{% endif %}><summary><i>{% icon "wallet" %}</i>Keuangan</summary><a href="{% url 'merchant-finance' %}">Laporan & laba rugi</a><a href="{% url 'merchant-expenses' %}">Biaya operasional</a><a href="{% url 'merchant-payouts' %}">Pencairan dana</a>{% if merchant_store.payment_settings.use_platform_gateway %}<a href="{% url 'merchant-platform-balance' %}">Saldo DOKU Lakuin</a>{% endif %}<a href="{% url 'merchant-tax' %}">Pajak & invoice</a></details>
-<details {% if '/merchant/payments' in p or '/merchant/whatsapp' in p or '/merchant/delivery' in p or '/setup/shipping' in p or '/merchant/integrations' in p or '/merchant/billing' in p %}open{% endif %}><summary><i>{% icon "sliders" %}</i>Pengaturan</summary><a href="{% url 'merchant-payment-settings' %}">Pembayaran</a>{% if merchant_role == 'admin' %}<a href="{% url 'merchant-whatsapp' %}">WhatsApp</a>{% endif %}<a href="{% url 'merchant-entity-list' 'shipping' %}">Pengiriman</a><a href="{% url 'merchant-delivery' %}">Jadwal & pre-order</a><a href="{% url 'merchant-billing' %}">Paket langganan</a><a href="{% url 'merchant-billing' %}#ajak-teman">Ajak teman</a>{% if merchant_role == 'admin' %}<a href="{% url 'merchant-staff' %}">Staf & akses</a><a href="{% url 'merchant-activity' %}">Log aktivitas</a>{% endif %}<a href="{% url 'merchant-integrations' %}">Integrasi</a><a href="{% url 'merchant-tracking' %}">Pelacakan & pixel</a></details>
-<a class="view-store" href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener"><i>↗</i>Lihat toko</a>
-{% endwith %}</nav></aside>
-<div class="bo-shell"><header class="bo-topbar"><form method="get"><label for="store-switch">Brand</label><select id="store-switch" name="store" onchange="this.form.submit()">{% for choice in merchant_stores %}<option value="{{ choice.id }}" {% if choice.id == merchant_store.id %}selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></form><div><span class="status-dot"></span>{{ merchant_role|title }} · {{ request.user.username }} <form method="post" action="{% url 'merchant-logout' %}" class="bo-logout">{% csrf_token %}<button type="submit" class="bo-link">Keluar</button></form></div></header><main class="bo-main">{% if messages %}{% for message in messages %}<div class="bo-message">{{ message }}</div>{% endfor %}{% endif %}{% block content %}{% endblock %}</main></div></body></html>
+{% load icons %}{% load static %}<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Back Office{% endblock %} · {{ merchant_store.name }}</title>
+  {% include "platform/favicon.html" %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap">
+  <link rel="stylesheet" href="{% static 'css/backoffice.css' %}">
+  {% block head_css %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'css/admin.css' %}">
+  <script>tailwind.config={corePlugins:{preflight:false},theme:{extend:{colors:{brand:{'50':'#eef2ff','100':'#e0e7ff','500':'#6366f1','600':'#4f46e5','700':'#4338ca','900':'#1e1b4b'}}}}}</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-900 antialiased">
+
+<aside class="fixed inset-y-0 left-0 w-60 bg-gray-900 flex flex-col z-50 shadow-xl overflow-hidden">
+  <a href="{% url 'merchant-dashboard' %}" class="flex items-center gap-3 px-4 py-5 border-b border-gray-800 hover:bg-gray-800 transition-colors" style="text-decoration:none">
+    {% if merchant_store.logo %}
+    <img src="{{ merchant_store.logo.url }}" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0">
+    {% else %}
+    <span class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">{{ merchant_store.name|slice:':1' }}</span>
+    {% endif %}
+    <div class="min-w-0">
+      <strong class="text-white text-sm font-semibold truncate block">{{ merchant_store.name }}</strong>
+      <small class="text-gray-400 text-xs">Back office</small>
+    </div>
+  </a>
+
+  <nav class="flex-1 overflow-y-auto py-3 px-2 space-y-0.5" style="scrollbar-width:thin;scrollbar-color:#374151 transparent">
+    {% with p=request.path %}
+
+    <a href="{% url 'merchant-dashboard' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors {% if p == '/merchant/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">
+      <i class="flex-shrink-0 leading-none">{% icon "home" %}</i>Beranda
+    </a>
+
+    <div class="pt-1">
+      <div class="flex items-center gap-2.5 px-3 py-1.5">
+        <i class="flex-shrink-0 leading-none text-gray-600">{% icon "bar-chart" %}</i>
+        <span class="text-xs font-semibold uppercase tracking-widest text-gray-600">Penjualan</span>
+      </div>
+      <div class="space-y-0.5 pl-1">
+        <a href="{% url 'merchant-sales' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/sales/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Dashboard Penjualan</a>
+        <a href="{% url 'merchant-sales-report' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/sales/report' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Laporan Bulanan</a>
+
+        {# ── Invoice sub-group ─────────────────────────────────────── #}
+        <div class="pt-1 pb-0.5 pl-9 pr-3">
+          <span class="text-xs font-semibold text-gray-600 uppercase tracking-widest">Invoice</span>
+        </div>
+        <a href="{% url 'merchant-sales-invoices' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/sales/invoices' in p and '/invoices/new' not in p and '/invoices/batch' not in p and '/edit' not in p and '/duplicate' not in p or '/merchant/marketplace/invoices' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Semua Invoice</a>
+        <a href="{% url 'merchant-invoice-new' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/sales/invoices/new' in p or '/merchant/sales/invoices/batch' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">+ Tambah Invoice</a>
+
+        {# ── Channel & import ──────────────────────────────────────── #}
+        <div class="pt-1 pb-0.5 pl-9 pr-3">
+          <span class="text-xs font-semibold text-gray-600 uppercase tracking-widest">Channel</span>
+        </div>
+        <a href="{% url 'merchant-channel-stock' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/sales/channel-stock' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Stok per Channel</a>
+        <a href="{% url 'merchant-import' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/marketplace/import/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">↑ Impor Pesanan</a>
+      </div>
+    </div>
+
+    <details {% if '/merchant/orders' in p or '/merchant/returns' in p or '/merchant/delivery/recap' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "receipt" %}</i>Pesanan
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-orders' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/orders/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Semua pesanan</a>
+        <a href="{% url 'merchant-order-new' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">+ Tambah pesanan</a>
+        <a href="{% url 'merchant-returns' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/returns' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Retur &amp; Penukaran</a>
+        <a href="{% url 'merchant-production-recap' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/delivery/recap' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Rekap produksi</a>
+      </div>
+    </details>
+
+    <details {% if '/setup/products' in p or '/setup/categories' in p or '/setup/images' in p or '/merchant/stock' in p or '/setup/inventory' in p or '/setup/warehouses' in p or '/products/import' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "box" %}</i>Produk
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-entity-list' 'products' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Semua produk</a>
+        <a href="{% url 'merchant-entity-list' 'categories' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Kategori</a>
+        <a href="{% url 'merchant-stock' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Stok</a>
+        <a href="{% url 'merchant-product-import' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Impor dari CSV</a>
+        <a href="{% url 'merchant-entity-list' 'images' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Foto produk</a>
+        <a href="{% url 'merchant-entity-list' 'warehouses' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Gudang &amp; outlet</a>
+        <a href="{% url 'merchant-entity-list' 'inventory' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Lokasi stok</a>
+      </div>
+    </details>
+
+    <details {% if '/merchant/customers' in p or '/merchant/engagement' in p or '/setup/reviews' in p or '/setup/subscribers' in p or '/marketplace/buyers' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "users" %}</i>Pelanggan
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-customers' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Pelanggan toko{% if pending_customers_count %} <span class="ml-auto inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-xs font-bold" style="background:#f59e0b;font-size:10px">{{ pending_customers_count }}</span>{% endif %}</a>
+        <a href="{% url 'merchant-channel-buyers' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/marketplace/buyers' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Pembeli marketplace</a>
+        <a href="{% url 'merchant-engagement' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Keranjang tertinggal</a>
+        <a href="{% url 'merchant-broadcasts' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Broadcast</a>
+        <a href="{% url 'merchant-entity-list' 'reviews' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Ulasan</a>
+      </div>
+    </details>
+
+    <details {% if '/setup/campaigns' in p or '/setup/flash-sales' in p or '/setup/coupons' in p or '/campaign-links' in p or '/merchant/feeds' in p or '/gift-cards' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "tag" %}</i>Promosi
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-entity-list' 'campaigns' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Flash sale &amp; popup</a>
+        <a href="{% url 'merchant-entity-list' 'flash-sales' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Produk flash sale</a>
+        <a href="{% url 'merchant-entity-list' 'coupons' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Voucher</a>
+        <a href="{% url 'merchant-gift-cards' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Gift card</a>
+        <a href="{% url 'merchant-campaign-links' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Link kampanye</a>
+        <a href="{% url 'merchant-feeds' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Feed &amp; QR katalog</a>
+      </div>
+    </details>
+
+    <details {% if '/merchant/settings' in p or '/setup/slides' in p or '/setup/pages' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "layout" %}</i>Tampilan toko
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-settings' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Tema, logo &amp; banner</a>
+        <a href="{% url 'merchant-entity-list' 'slides' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Atur banner</a>
+        <a href="{% url 'merchant-entity-list' 'pages' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Halaman brand</a>
+      </div>
+    </details>
+
+    <details {% if '/merchant/marketplace' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "link" %}</i>Marketplace
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-import' %}" class="flex items-center gap-1.5 pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/marketplace/import/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none"><i class="leading-none">{% icon "upload" %}</i> Impor Pesanan</a>
+        <a href="{% url 'merchant-channels' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Kelola Channel</a>
+        <a href="{% url 'merchant-sales-invoices' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Invoice Penjualan</a>
+      </div>
+    </details>
+
+    <details {% if '/merchant/mitra' in p or '/merchant/settlements' in p or '/merchant/abshop' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "users" %}</i>Mitra
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'settlement-partners' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/mitra/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Daftar Mitra</a>
+        <a href="{% url 'merchant-abshop' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/abshop' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Pesanan Mitra</a>
+        <a href="{% url 'merchant-sales-invoices' %}?channel=abshop" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Invoice Mitra</a>
+        <a href="{% url 'settlement-list' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/settlements' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Settlement</a>
+      </div>
+    </details>
+
+    {# ── AKUNTANSI (MYOB-style, always visible) ─────────────────────────── #}
+    <div class="pt-3 pb-1">
+      <span class="px-3 text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
+        <i class="flex-shrink-0 leading-none">{% icon "wallet" %}</i>Akuntansi
+      </span>
+    </div>
+
+    <a href="{% url 'merchant-accounting' %}" class="flex items-center px-3 py-1.5 rounded-lg text-xs transition-colors {% if p == '/merchant/accounting/' %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Ringkasan</a>
+    <a href="{% url 'merchant-chart-of-accounts' %}" class="flex items-center px-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/accounts' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Chart of Accounts</a>
+    <a href="{% url 'merchant-finance' %}" class="flex items-center px-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/finance' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Jurnal &amp; Buku Besar</a>
+
+    {# AR — Piutang #}
+    <div class="pt-2 pb-0.5 pl-1">
+      <span class="px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest">Piutang (AR)</span>
+    </div>
+    <a href="{% url 'merchant-sales-invoices' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/marketplace/invoices' in p or '/merchant/sales/invoices' in p and 'edit' not in p and 'duplicate' not in p and 'new' not in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Invoice Penjualan</a>
+    <a href="{% url 'merchant-invoice-new' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/sales/invoices/new' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">+ Buat Invoice</a>
+
+    {# AP — Hutang #}
+    <div class="pt-2 pb-0.5 pl-1">
+      <span class="px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest">Hutang (AP)</span>
+    </div>
+    <a href="{% url 'merchant-suppliers' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/suppliers' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Supplier</a>
+    <a href="{% url 'merchant-bills' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/bills' in p and '/new' not in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Tagihan Supplier</a>
+    <a href="{% url 'merchant-bill-new' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/bills/new' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">+ Buat Tagihan</a>
+
+    {# Laporan #}
+    <div class="pt-2 pb-0.5 pl-1">
+      <span class="px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest">Laporan</span>
+    </div>
+    <a href="{% url 'merchant-finance' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Laba Rugi (P&amp;L)</a>
+    <a href="{% url 'merchant-balance-sheet' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/balance-sheet' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Neraca</a>
+    <a href="{% url 'merchant-trial-balance' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/accounting/trial-balance' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Neraca Saldo</a>
+    <a href="{% url 'merchant-expenses' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/expenses' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Biaya Operasional</a>
+    <a href="{% url 'merchant-payouts' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/payouts' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Pencairan Dana</a>
+    {% if merchant_store.payment_settings.use_platform_gateway %}
+    <a href="{% url 'merchant-platform-balance' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Saldo DOKU Lakuin</a>
+    {% endif %}
+    <a href="{% url 'merchant-tax' %}" class="flex items-center pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors {% if '/merchant/tax' in p %}bg-white text-gray-900 font-medium{% else %}text-gray-400 hover:text-white hover:bg-white/10{% endif %}" style="text-decoration:none">Pajak &amp; Invoice</a>
+
+    <details {% if '/merchant/payments' in p or '/merchant/whatsapp' in p or '/merchant/delivery' in p or '/setup/shipping' in p or '/merchant/integrations' in p or '/merchant/billing' in p %}open{% endif %} class="group">
+      <summary class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer list-none transition-colors select-none">
+        <i class="flex-shrink-0 leading-none">{% icon "sliders" %}</i>Pengaturan
+        <span class="ml-auto text-gray-600 text-xs">›</span>
+      </summary>
+      <div class="mt-0.5 space-y-0.5 pl-1">
+        <a href="{% url 'merchant-payment-settings' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Pembayaran</a>
+        {% if merchant_role == 'admin' %}<a href="{% url 'merchant-whatsapp' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">WhatsApp</a>{% endif %}
+        <a href="{% url 'merchant-entity-list' 'shipping' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Pengiriman</a>
+        <a href="{% url 'merchant-delivery' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Jadwal &amp; pre-order</a>
+        <a href="{% url 'merchant-billing' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Paket langganan</a>
+        <a href="{% url 'merchant-billing' %}#ajak-teman" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Ajak teman</a>
+        {% if merchant_role == 'admin' %}
+        <a href="{% url 'merchant-staff' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Staf &amp; akses</a>
+        <a href="{% url 'merchant-activity' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Log aktivitas</a>
+        {% endif %}
+        <a href="{% url 'merchant-integrations' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Integrasi</a>
+        <a href="{% url 'merchant-tracking' %}" class="flex items-center pl-9 pr-3 py-1.5 rounded-lg text-xs transition-colors text-gray-400 hover:text-white hover:bg-white/10" style="text-decoration:none">Pelacakan &amp; pixel</a>
+      </div>
+    </details>
+
+    {% endwith %}
+  </nav>
+
+  <div class="px-2 py-3 border-t border-gray-800 space-y-1">
+    <form method="post" action="{% url 'merchant-store-toggle' %}">
+      {% csrf_token %}
+      <button type="submit" title="{% if merchant_store.is_open %}Klik untuk tutup toko{% else %}Klik untuk buka toko{% endif %}"
+        class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors
+               {% if merchant_store.is_open %}text-green-400 hover:bg-white/10{% else %}text-red-400 hover:bg-white/10{% endif %}">
+        <span class="w-2 h-2 rounded-full flex-shrink-0 {% if merchant_store.is_open %}bg-green-400{% else %}bg-red-400{% endif %}"></span>
+        {% if merchant_store.is_open %}Toko Buka{% else %}Toko Tutup{% endif %}
+        <span class="ml-auto text-gray-600 text-xs">toggle</span>
+      </button>
+    </form>
+    <a href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 text-xs transition-colors" style="text-decoration:none">
+      ↗ Lihat toko
+    </a>
+  </div>
+</aside>
+
+<div class="ml-60 flex flex-col min-h-screen">
+  <header class="sticky top-0 z-40 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
+    <form method="get" class="flex items-center gap-2">
+      <label for="store-switch" class="text-xs text-gray-500">Brand</label>
+      <select id="store-switch" name="store" onchange="this.form.submit()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        {% for choice in merchant_stores %}
+        <option value="{{ choice.id }}"{% if choice.id == merchant_store.id %} selected{% endif %}>{{ choice.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <div class="flex items-center gap-3">
+      <span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+      <span class="text-xs text-gray-500">{{ merchant_role|title }} · {{ request.user.username }}</span>
+      <form method="post" action="{% url 'merchant-logout' %}" class="inline">{% csrf_token %}
+        <button type="submit" class="text-xs text-gray-400 hover:text-red-500 transition-colors bg-transparent border-0 cursor-pointer p-0 font-normal">Keluar</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="flex-1 p-6">
+    {% if messages %}
+    {% for message in messages %}
+    <div class="mb-4 px-4 py-3 rounded-xl bg-gray-900 border border-gray-700 text-white text-sm">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+</body>
+</html>

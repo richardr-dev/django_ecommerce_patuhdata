@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils.deconstruct import deconstructible
 
@@ -134,3 +136,111 @@ class JournalLine(models.Model):
     class Meta:
         constraints = [models.CheckConstraint(name="journal_line_one_sided",
             condition=models.Q(debit__gt=0, credit=0) | models.Q(credit__gt=0, debit=0))]
+
+
+# ---------------------------------------------------------------------------
+# Accounts Payable (AP) — supplier bills and payments
+# ---------------------------------------------------------------------------
+
+class Supplier(models.Model):
+    """A vendor or supplier the store buys from."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="suppliers")
+    name = models.CharField(max_length=160)
+    contact = models.CharField(max_length=120, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+    npwp = models.CharField(max_length=20, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["store", "name"], name="unique_store_supplier_name")]
+
+    def __str__(self):
+        return self.name
+
+
+class Bill(models.Model):
+    """A supplier invoice (AP invoice). Tracks money owed TO suppliers."""
+    STATUS_DRAFT   = "draft"
+    STATUS_OPEN    = "open"
+    STATUS_PAID    = "paid"
+    STATUS_PARTIAL = "partial"
+    STATUS_OVERDUE = "overdue"
+    STATUS_VOID    = "void"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT,   "Draft"),
+        (STATUS_OPEN,    "Belum Dibayar"),
+        (STATUS_PAID,    "Lunas"),
+        (STATUS_PARTIAL, "Bayar Sebagian"),
+        (STATUS_OVERDUE, "Jatuh Tempo"),
+        (STATUS_VOID,    "Dibatalkan"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="bills")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="bills")
+    number = models.CharField(max_length=40, blank=True, help_text="Nomor faktur dari supplier")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    bill_date = models.DateField()
+    due_date = models.DateField(null=True, blank=True)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-bill_date", "-created_at"]
+
+    def __str__(self):
+        return f"Bill {self.number or str(self.id)[:8]} — {self.supplier.name}"
+
+    @property
+    def amount_paid(self):
+        from decimal import Decimal
+        return sum((p.amount for p in self.payments.all()), Decimal("0"))
+
+    @property
+    def amount_due(self):
+        return self.total - self.amount_paid
+
+
+class BillItem(models.Model):
+    """One line on a supplier bill."""
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name="items")
+    description = models.CharField(max_length=200)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    line_total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.description} ×{self.quantity}"
+
+
+class BillPayment(models.Model):
+    """A payment made against a supplier bill."""
+    METHOD_CHOICES = [
+        ("transfer", "Transfer Bank"),
+        ("cash", "Tunai"),
+        ("other", "Lainnya"),
+    ]
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name="payments")
+    paid_on = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES, default="transfer")
+    reference = models.CharField(max_length=120, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    recorded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["paid_on", "id"]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="bill_payment_positive")]

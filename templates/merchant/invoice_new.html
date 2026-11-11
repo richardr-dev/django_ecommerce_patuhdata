@@ -1,0 +1,733 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Tambah Invoice Penjualan{% endblock %}
+{% block content %}
+
+<div class="mb-6 flex items-start justify-between gap-4">
+  <div>
+    <a href="{% url 'merchant-sales-invoices' %}" class="text-xs text-gray-500 hover:text-gray-700 mb-2 inline-block">← Semua Invoice</a>
+    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">PENJUALAN</p>
+    <h1 class="text-2xl font-bold text-gray-900">Tambah Invoice <span id="inv-counter" class="hidden text-base font-normal text-gray-500">— <span id="inv-count-num">1</span> invoice</span></h1>
+    <p class="text-sm text-gray-500 mt-1">Input manual penjualan dari channel manapun.</p>
+  </div>
+  <button type="button" id="add-another-btn"
+          class="flex-shrink-0 mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+    + Invoice Lain
+  </button>
+</div>
+
+<form method="post" id="invoice-form">
+  {% csrf_token %}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+    {# ── Left: line items ──────────────────────────────────────────── #}
+    <div class="md:col-span-2 space-y-5">
+
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-gray-800">Produk</h2>
+          <button type="button" id="add-line" class="text-xs text-gray-600 hover:text-gray-900 font-semibold">+ Tambah Baris</button>
+        </div>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 bg-gray-50">
+              <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Produk</th>
+              <th class="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-20">Qty</th>
+              <th class="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-36">Harga (Rp)</th>
+              <th class="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Subtotal</th>
+              <th class="w-8 px-2"></th>
+            </tr>
+          </thead>
+          <tbody id="line-body"></tbody>
+          <tfoot>
+            <tr class="border-t border-gray-100 bg-gray-50">
+              <td colspan="2" class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Total Produk</td>
+              <td class="px-4 py-3 text-right text-sm font-bold text-gray-900" id="subtotal-display">Rp0</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {# Product reference #}
+      <details class="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <summary class="px-5 py-4 text-sm font-semibold text-gray-700 cursor-pointer list-none flex items-center justify-between">
+          Referensi Produk <span class="text-xs text-gray-400 font-normal ml-2">klik untuk lihat & pilih</span>
+        </summary>
+        <div class="px-5 pb-4 max-h-64 overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead><tr class="border-b border-gray-100"><th class="text-left py-2 text-gray-500">SKU</th><th class="text-left py-2 text-gray-500">Nama</th><th class="text-right py-2 text-gray-500">Harga</th><th class="text-right py-2 text-gray-500">Berat</th><th class="text-right py-2 text-gray-500">P × L × T (cm)</th><th class="text-right py-2 text-gray-500">CBM</th></tr></thead>
+            <tbody>
+              {% for p in products %}
+              {% with dim=p.length_cm|stringformat:"s"|add:"×"|add:p.width_cm|stringformat:"s"|add:"×"|add:p.height_cm|stringformat:"s" %}
+              <tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer product-ref-row"
+                  data-sku="{{ p.sku }}" data-name="{{ p.name|escapejs }}" data-price="{{ p.price|floatformat:0 }}"
+                  data-weight="{{ p.weight_grams }}" data-dim="{{ p.length_cm }}x{{ p.width_cm }}x{{ p.height_cm }}">
+                <td class="py-1.5 font-mono text-gray-600">{{ p.sku }}</td>
+                <td class="py-1.5 text-gray-700">{{ p.name }}</td>
+                <td class="py-1.5 text-right text-gray-600">Rp{{ p.price|floatformat:"0g" }}</td>
+                <td class="py-1.5 text-right text-gray-400">{% if p.weight_grams %}{{ p.weight_grams }}g{% else %}—{% endif %}</td>
+                <td class="py-1.5 text-right text-gray-400 font-mono">{% if p.length_cm %}{{ p.length_cm }}×{{ p.width_cm }}×{{ p.height_cm }}{% else %}—{% endif %}</td>
+                <td class="py-1.5 text-right text-gray-400 font-mono cbm-cell" data-p="{{ p.length_cm|default:0 }}" data-l="{{ p.width_cm|default:0 }}" data-t="{{ p.height_cm|default:0 }}">—</td>
+              </tr>
+              {% endwith %}
+              {% empty %}
+              <tr><td colspan="3" class="py-3 text-center text-gray-400">Belum ada produk.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+    </div>
+
+    {# ── Right: invoice details ────────────────────────────────────── #}
+    <div class="space-y-5">
+
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h2 class="text-sm font-semibold text-gray-800">Detail Invoice</h2>
+
+        {# ── Customer lookup ──────────────────────────────────────────── #}
+        <div class="relative" id="customer-search-wrap">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cari Pelanggan <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <input type="text" id="customer-q" autocomplete="off" placeholder="Ketik nama, HP, atau kode pelanggan…"
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+          <div id="customer-dropdown"
+               class="hidden absolute z-20 w-full mt-1 bg-white rounded-xl border border-gray-200 shadow-lg max-h-56 overflow-y-auto text-sm"></div>
+          <input type="hidden" name="customer_id" id="customer-id-input">
+        </div>
+
+        {# ── Buyer type toggle ──────────────────────────────────────── #}
+        <div class="flex gap-3">
+          <label class="flex items-center gap-1.5 cursor-pointer text-sm text-gray-600">
+            <input type="radio" name="buyer_type" value="personal" checked class="accent-gray-900"> Perorangan
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer text-sm text-gray-600">
+            <input type="radio" name="buyer_type" value="company" class="accent-gray-900"> Perusahaan / B2B
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Channel Penjualan</label>
+          <select name="channel" id="channel-select" required
+                  class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+            {% for code, label in channel_choices %}
+            <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Invoice</label>
+          <input type="date" name="invoice_date" value="{{ today }}" required
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Nama Pembeli</label>
+          <input type="text" name="customer_name" id="inp-name" placeholder="Nama lengkap pembeli" required
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+
+        <div id="company-wrap" class="hidden">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Nama Perusahaan</label>
+          <input type="text" name="company_name" id="inp-company" placeholder="PT / CV / Koperasi"
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">No. HP</label>
+          <input type="text" name="phone" id="inp-phone" placeholder="08xx-xxxx-xxxx"
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+
+        <div id="npwp-wrap" class="hidden">
+          <label class="block text-xs font-medium text-gray-600 mb-1">NPWP <span class="text-gray-400 font-normal">(16 digit)</span></label>
+          <input type="text" name="buyer_npwp" id="inp-npwp" placeholder="00.000.000.0-000.000"
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Alamat Pengiriman / Tagihan</label>
+          <textarea name="address" id="inp-address" rows="2" placeholder="Jalan, kota, provinsi"
+                    class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"></textarea>
+        </div>
+
+        <div id="ext-id-wrap">
+          <label class="block text-xs font-medium text-gray-600 mb-1">No. Order Marketplace <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <input type="text" name="external_order_id" placeholder="mis. 231024xxxxx"
+                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Diskon (Rp)</label>
+            <input type="number" name="discount" value="0" min="0" id="discount-input"
+                   class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Ongkos Kirim (Rp)</label>
+            <input type="number" name="shipping" value="0" min="0" id="shipping-input"
+                   class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Catatan</label>
+          <textarea name="notes" rows="2" placeholder="Catatan internal..."
+                    class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"></textarea>
+        </div>
+
+        {# Totals #}
+        <div class="border-t border-gray-100 pt-4 space-y-1.5">
+          <div class="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span id="g-sub">Rp0</span></div>
+          <div class="flex justify-between text-xs text-gray-500"><span>Diskon</span><span id="g-disc">−Rp0</span></div>
+          <div class="flex justify-between text-xs text-gray-500"><span>Ongkos Kirim</span><span id="g-ship">Rp0</span></div>
+          <div class="flex justify-between text-xs text-gray-400"><span>Total CBM</span><span id="g-cbm">0 m³</span></div>
+          <div class="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-1.5"><span>Total</span><span id="g-total">Rp0</span></div>
+        </div>
+
+        <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">
+          {% icon "check" %} Simpan Invoice
+        </button>
+      </div>
+
+    </div>
+  </div>
+</form>
+
+{# ── Extra invoice cards (batch mode) ───────────────────────────── #}
+<div id="extra-invoices" class="space-y-4 mt-4" style="display:none"></div>
+
+{# ── Batch submit bar (appears when extra invoices added) ────────── #}
+<div id="batch-bar" style="display:none"
+     class="fixed bottom-0 left-60 right-0 z-40 bg-gray-900 text-white px-6 py-4 flex items-center justify-between shadow-2xl">
+  <div class="flex items-center gap-4">
+    <span class="text-sm font-semibold">Batch: <span id="batch-count">2</span> invoice</span>
+    <span class="text-sm text-gray-300">Total: <strong id="batch-total-bar">Rp0</strong></span>
+  </div>
+  <div class="flex items-center gap-3">
+    <button type="button" id="cancel-batch"
+            class="px-4 py-2 rounded-xl border border-gray-600 text-sm font-semibold text-gray-300 hover:border-gray-400 hover:text-white transition-colors">
+      Batal
+    </button>
+    <button type="button" id="submit-batch"
+            class="px-5 py-2 rounded-xl bg-white text-gray-900 text-sm font-bold hover:bg-gray-100 transition-colors">
+      Buat Semua Invoice →
+    </button>
+  </div>
+</div>
+
+{# Hidden batch form — submitted programmatically #}
+<form id="batch-form-hidden" method="post" action="{% url 'merchant-invoice-batch' %}" style="display:none">
+  {% csrf_token %}
+  <input type="hidden" name="invoices_json" id="batch-json-input">
+</form>
+
+<script>
+(function(){
+  // Build product catalog from the reference rows already in the DOM
+  function dimBadgeText(dim, weight){
+    // dim = "PxLxT" in cm, weight in grams
+    let badge = '';
+    if(dim && dim !== '0x0x0'){
+      const parts = dim.split('x').map(Number);
+      if(parts.length === 3 && parts.every(n => !isNaN(n) && n > 0)){
+        const [p, l, t] = parts;
+        const cbm = (p * l * t) / 1_000_000;
+        badge = `P×L×T: ${p}×${l}×${t} cm`;
+        badge += ` · CBM: ${cbm < 0.001 ? cbm.toFixed(6) : cbm.toFixed(4)} m³`;
+      }
+    }
+    if(weight && weight !== '0') badge += (badge ? ' · ' : '') + weight + 'g';
+    return badge;
+  }
+
+  const CATALOG = {};
+  document.querySelectorAll('.product-ref-row').forEach(r => {
+    CATALOG[r.dataset.sku] = {name: r.dataset.name, price: parseFloat(r.dataset.price)||0,
+      weight: r.dataset.weight||'', dim: r.dataset.dim||''};
+  });
+
+  // Populate CBM column in product reference table
+  document.querySelectorAll('.cbm-cell').forEach(td => {
+    const p = parseFloat(td.dataset.p)||0, l = parseFloat(td.dataset.l)||0, t = parseFloat(td.dataset.t)||0;
+    if(p > 0 && l > 0 && t > 0){
+      const cbm = (p * l * t) / 1_000_000;
+      td.textContent = cbm < 0.001 ? cbm.toFixed(6) : cbm.toFixed(4);
+    }
+  });
+
+  const tbody   = document.getElementById('line-body');
+  const gSub    = document.getElementById('g-sub');
+  const gDisc   = document.getElementById('g-disc');
+  const gShip   = document.getElementById('g-ship');
+  const gTotal  = document.getElementById('g-total');
+  const subDisp = document.getElementById('subtotal-display');
+  const discInp = document.getElementById('discount-input');
+  const shipInp = document.getElementById('shipping-input');
+
+  function fmt(n){ return 'Rp' + Math.round(n).toLocaleString('id-ID'); }
+
+  function recalc(){
+    let sub = 0, totalCbm = 0;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const q = parseFloat(tr.querySelector('.q-inp').value)||0;
+      const p = parseFloat(tr.querySelector('.p-inp').value)||0;
+      const lt = q * p;
+      tr.querySelector('.lt').textContent = fmt(lt);
+      sub += lt;
+      // CBM per row
+      const dimVal = (tr.querySelector('.dim-inp')||{}).value||'';
+      if(dimVal && dimVal !== '0x0x0'){
+        const parts = dimVal.split('x').map(Number);
+        if(parts.length === 3 && parts.every(n => !isNaN(n) && n > 0)){
+          totalCbm += (parts[0] * parts[1] * parts[2]) / 1_000_000 * q;
+        }
+      }
+    });
+    const disc  = parseFloat(discInp.value)||0;
+    const ship  = parseFloat(shipInp.value)||0;
+    const total = Math.max(sub - disc, 0) + ship;
+    subDisp.textContent = fmt(sub);
+    gSub.textContent   = fmt(sub);
+    gDisc.textContent  = '−' + fmt(disc);
+    gShip.textContent  = fmt(ship);
+    gTotal.textContent = fmt(total);
+    const cbmEl = document.getElementById('g-cbm');
+    if(cbmEl) cbmEl.textContent = (totalCbm < 0.001 ? totalCbm.toFixed(6) : totalCbm.toFixed(4)) + ' m³';
+  }
+
+  function wireRow(tr){
+    const skuInp = tr.querySelector('.sku-inp');
+    const priceInp = tr.querySelector('.p-inp');
+    const nameLabel = tr.querySelector('.name-label');
+
+    function lookupAndFill(){
+      const val = skuInp.value.trim();
+      const prod = CATALOG[val];
+      if(prod){
+        if(!priceInp.value || priceInp.value === '0') priceInp.value = prod.price;
+        if(nameLabel) nameLabel.textContent = prod.name;
+        const dimInp   = tr.querySelector('.dim-inp');
+        const dimBadge = tr.querySelector('.dim-badge');
+        if(dimInp && prod.dim && prod.dim !== '0x0x0'){
+          dimInp.value = prod.dim;
+          if(dimBadge){
+            const badge = dimBadgeText(prod.dim, prod.weight);
+            if(badge){ dimBadge.textContent = badge; dimBadge.classList.remove('hidden'); }
+          }
+        }
+        recalc();
+      }
+    }
+    skuInp.addEventListener('change', lookupAndFill);
+    skuInp.addEventListener('input', function(){
+      // fire immediately when value fully matches a catalog SKU
+      if(CATALOG[this.value.trim()]) lookupAndFill();
+    });
+    tr.querySelector('.q-inp').addEventListener('input', recalc);
+    priceInp.addEventListener('input', recalc);
+    tr.querySelector('.del').addEventListener('click', () => { tr.remove(); recalc(); });
+  }
+
+  function addRow(sku='', price='', name='', dim=''){
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-50';
+    const pid = 'pl-' + Date.now();
+    tr.innerHTML = `
+      <td class="px-3 py-2">
+        <input list="${pid}" type="text" name="sku[]" value="${sku}" placeholder="SKU produk" required
+               class="sku-inp w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900">
+        <span class="name-label block text-xs text-gray-400 mt-0.5 truncate">${name}</span>
+        <span class="dim-badge hidden text-xs text-gray-400 font-mono mt-0.5 block"></span>
+        <input type="hidden" name="dimension[]" class="dim-inp" value="${dim}">
+        <datalist id="${pid}">
+          {% for p in products %}<option value="{{ p.sku }}">{{ p.name }} — Rp{{ p.price|floatformat:"0g" }}</option>{% endfor %}
+        </datalist>
+      </td>
+      <td class="px-3 py-2">
+        <input type="number" name="qty[]" value="1" min="1" required
+               class="q-inp w-16 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-gray-900">
+      </td>
+      <td class="px-3 py-2">
+        <input type="number" name="unit_price[]" value="${price}" min="0" placeholder="0" required
+               class="p-inp w-32 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-gray-900">
+      </td>
+      <td class="px-3 py-2 text-right text-xs font-medium text-gray-700 lt">Rp0</td>
+      <td class="px-2 text-center">
+        <button type="button" class="del text-gray-300 hover:text-red-500 text-lg leading-none">×</button>
+      </td>`;
+    wireRow(tr);
+    tbody.appendChild(tr);
+    if(sku && price) recalc();
+  }
+
+  document.getElementById('add-line').addEventListener('click', () => addRow());
+  discInp.addEventListener('input', recalc);
+  shipInp.addEventListener('input', recalc);
+
+  document.querySelectorAll('.product-ref-row').forEach(r => {
+    r.addEventListener('click', () => addRow(r.dataset.sku, r.dataset.price, r.dataset.name));
+  });
+
+  // Show/hide external order ID for marketplace channels
+  const chanSel = document.getElementById('channel-select');
+  const mpChannels = new Set(['shopee','tokopedia','tiktok_shop','lazada']);
+  function toggleExtId(){
+    document.getElementById('ext-id-wrap').style.display =
+      mpChannels.has(chanSel.value) ? '' : 'none';
+  }
+  chanSel.addEventListener('change', toggleExtId);
+  toggleExtId();
+
+  addRow(); // start with one empty row
+
+  // ── Customer search autocomplete ────────────────────────────────────────
+  const cQ = document.getElementById('customer-q');
+  const cDrop = document.getElementById('customer-dropdown');
+  const cId = document.getElementById('customer-id-input');
+  let cTimer;
+
+  cQ.addEventListener('input', function(){
+    clearTimeout(cTimer);
+    const q = this.value.trim();
+    if(q.length < 2){ cDrop.classList.add('hidden'); return; }
+    cTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`{% url 'merchant-customer-search' %}?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if(!data.results.length){ cDrop.classList.add('hidden'); return; }
+        cDrop.innerHTML = data.results.map(c =>
+          `<div class="px-3 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 customer-opt"
+                data-id="${c.id}" data-name="${c.name}" data-company="${c.company_name}"
+                data-phone="${c.phone}" data-npwp="${c.npwp}" data-address="${c.address.replace(/"/g,'&quot;')}">
+            <p class="font-medium text-gray-800">${c.name}${c.company_name ? ' <span class=\'text-gray-400 font-normal\'>(' + c.company_name + ')</span>' : ''}</p>
+            ${c.phone ? `<p class="text-xs text-gray-400">${c.phone}</p>` : ''}
+          </div>`
+        ).join('');
+        cDrop.classList.remove('hidden');
+      } catch(e) { cDrop.classList.add('hidden'); }
+    }, 250);
+  });
+
+  cDrop.addEventListener('click', function(e){
+    const opt = e.target.closest('.customer-opt');
+    if(!opt) return;
+    // Fill form fields
+    document.getElementById('inp-name').value = opt.dataset.name;
+    document.getElementById('inp-phone').value = opt.dataset.phone;
+    document.getElementById('inp-address').value = opt.dataset.address;
+    document.getElementById('inp-npwp').value = opt.dataset.npwp;
+    document.getElementById('inp-company').value = opt.dataset.company;
+    cId.value = opt.dataset.id;
+    cQ.value = opt.dataset.name + (opt.dataset.company ? ` (${opt.dataset.company})` : '') +
+               (opt.dataset.phone ? ` · ${opt.dataset.phone}` : '');
+    cDrop.classList.add('hidden');
+    // Switch to company mode if company_name is set
+    if(opt.dataset.company){
+      document.querySelector('[name=buyer_type][value=company]').checked = true;
+      document.getElementById('company-wrap').classList.remove('hidden');
+      document.getElementById('npwp-wrap').classList.remove('hidden');
+    }
+  });
+
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('#customer-search-wrap')) cDrop.classList.add('hidden');
+  });
+
+  // ── Buyer type toggle: show/hide company & NPWP fields ─────────────────
+  document.querySelectorAll('[name=buyer_type]').forEach(r => {
+    r.addEventListener('change', function(){
+      const isCompany = this.value === 'company';
+      document.getElementById('company-wrap').classList.toggle('hidden', !isCompany);
+      document.getElementById('npwp-wrap').classList.toggle('hidden', !isCompany);
+    });
+  });
+
+  // ── Batch / multi-invoice ───────────────────────────────────────────────
+  const extraContainer  = document.getElementById('extra-invoices');
+  const batchBar        = document.getElementById('batch-bar');
+  const batchCountEl    = document.getElementById('batch-count');
+  const batchTotalBarEl = document.getElementById('batch-total-bar');
+  const invCounter      = document.getElementById('inv-counter');
+  const invCountNum     = document.getElementById('inv-count-num');
+  const SEARCH_URL      = '{% url "merchant-customer-search" %}';
+  const TODAY           = '{{ today }}';
+  const CHANNEL_OPTS    = `{% for code, label in channel_choices %}<option value="{{ code }}"{% if code == 'manual' %} selected{% endif %}>{{ label }}</option>{% endfor %}`;
+  let extraCount = 0;
+
+  function updateBatchBar(){
+    const cards = extraContainer.querySelectorAll('.extra-inv-card');
+    const total = Array.from(cards).reduce((s, c) => s + (parseFloat(c.dataset.total)||0), 0);
+    // Also add main invoice total
+    const mainTotal = parseFloat(document.getElementById('g-total').textContent.replace(/[^\d]/g,''))||0;
+    const grandTotal = mainTotal + total;
+    const count = 1 + cards.length;
+    batchCountEl.textContent  = count;
+    batchTotalBarEl.textContent = fmt(grandTotal);
+    invCountNum.textContent   = count;
+    if(cards.length > 0){
+      batchBar.style.display = '';
+      extraContainer.style.display = '';
+      invCounter.classList.remove('hidden');
+    } else {
+      batchBar.style.display = 'none';
+      extraContainer.style.display = 'none';
+      invCounter.classList.add('hidden');
+    }
+  }
+
+  function recalcExtra(card){
+    let sub = 0;
+    card.querySelectorAll('.ei-row').forEach(tr => {
+      const q = parseFloat(tr.querySelector('.q-inp').value)||0;
+      const p = parseFloat(tr.querySelector('.p-inp').value)||0;
+      const lt = q * p;
+      tr.querySelector('.lt-cell').textContent = fmt(lt);
+      sub += lt;
+    });
+    const disc  = parseFloat(card.querySelector('.disc-inp').value)||0;
+    const ship  = parseFloat(card.querySelector('.ship-inp').value)||0;
+    const total = Math.max(sub - disc, 0) + ship;
+    card.querySelector('.card-total').textContent = fmt(total);
+    card.dataset.total = total;
+    updateBatchBar();
+  }
+
+  function addExtraItemRow(tbody, card){
+    const tr = document.createElement('tr');
+    tr.className = 'ei-row border-b border-gray-50';
+    const pid = 'ei-' + Date.now() + Math.random().toString(36).slice(2,6);
+    tr.innerHTML = `
+      <td class="px-3 py-2">
+        <input list="${pid}" type="text" placeholder="SKU" class="sku-inp w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-900">
+        <span class="name-label block text-xs text-gray-400 mt-0.5 truncate"></span>
+        <span class="dim-badge hidden text-xs text-gray-400 font-mono mt-0.5 block"></span>
+        <input type="hidden" class="dim-inp" value="">
+        <datalist id="${pid}">${Object.entries(CATALOG).map(([s,p])=>`<option value="${s}">${p.name} — ${fmt(p.price)}</option>`).join('')}</datalist>
+      </td>
+      <td class="px-2 py-2"><input type="number" value="1" min="1" class="q-inp w-14 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-1 focus:ring-gray-900"></td>
+      <td class="px-2 py-2"><input type="number" value="" min="0" placeholder="0" class="p-inp w-28 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-1 focus:ring-gray-900"></td>
+      <td class="px-2 py-2 text-right text-xs font-medium text-gray-700 lt-cell">Rp0</td>
+      <td class="px-1 text-center"><button type="button" class="del-ei text-gray-300 hover:text-red-500 text-lg leading-none">×</button></td>`;
+    const skuI = tr.querySelector('.sku-inp'), pI = tr.querySelector('.p-inp');
+    skuI.addEventListener('change', ()=>{
+      const prod = CATALOG[skuI.value.trim()];
+      if(prod){
+        if(!pI.value||pI.value==='0') pI.value = prod.price;
+        tr.querySelector('.name-label').textContent = prod.name;
+        const di = tr.querySelector('.dim-inp'), db = tr.querySelector('.dim-badge');
+        if(di && prod.dim && prod.dim!=='0x0x0'){
+          di.value = prod.dim;
+          const b = dimBadgeText(prod.dim, prod.weight);
+          if(b&&db){db.textContent=b;db.classList.remove('hidden');}
+        }
+        recalcExtra(card);
+      }
+    });
+    tr.querySelector('.q-inp').addEventListener('input', ()=>recalcExtra(card));
+    pI.addEventListener('input', ()=>recalcExtra(card));
+    tr.querySelector('.del-ei').addEventListener('click', ()=>{ tr.remove(); recalcExtra(card); });
+    tbody.appendChild(tr);
+  }
+
+  function wireExtraCustomerSearch(card){
+    const qInp = card.querySelector('.ei-cust-q'), drop = card.querySelector('.ei-cust-drop'), idInp = card.querySelector('.ei-cust-id');
+    let timer;
+    qInp.addEventListener('input', function(){
+      clearTimeout(timer);
+      const q = this.value.trim();
+      if(q.length < 2){ drop.classList.add('hidden'); return; }
+      timer = setTimeout(async ()=>{
+        try {
+          const res = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          if(!data.results.length){ drop.classList.add('hidden'); return; }
+          drop.innerHTML = data.results.map(c=>
+            `<div class="px-3 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 ei-copt"
+                  data-id="${c.id}" data-name="${c.name}" data-company="${c.company_name}"
+                  data-phone="${c.phone}" data-npwp="${c.npwp}" data-address="${c.address.replace(/"/g,'&quot;')}">
+              <p class="font-medium text-gray-800 text-sm">${c.name}${c.company_name?` <span class='text-gray-400 text-xs'>(${c.company_name})</span>`:''}</p>
+              ${c.phone?`<p class="text-xs text-gray-400">${c.phone}</p>`:''}
+            </div>`).join('');
+          drop.classList.remove('hidden');
+          drop.querySelectorAll('.ei-copt').forEach(opt=>{
+            opt.addEventListener('click', ()=>{
+              idInp.value = opt.dataset.id;
+              qInp.value  = opt.dataset.name+(opt.dataset.company?` (${opt.dataset.company})`:'');
+              card.querySelector('.ei-name').value    = opt.dataset.name;
+              card.querySelector('.ei-phone').value   = opt.dataset.phone;
+              card.querySelector('.ei-addr').value    = opt.dataset.address;
+              if(opt.dataset.npwp)    card.querySelector('.ei-npwp').value    = opt.dataset.npwp;
+              if(opt.dataset.company) card.querySelector('.ei-company').value = opt.dataset.company;
+              drop.classList.add('hidden');
+            });
+          });
+        } catch(e){ drop.classList.add('hidden'); }
+      }, 250);
+    });
+    document.addEventListener('click', e=>{ if(!card.querySelector('.ei-cust-wrap').contains(e.target)) drop.classList.add('hidden'); });
+  }
+
+  function addExtraInvoiceCard(){
+    extraCount++;
+    const n = 1 + extraCount;
+    const card = document.createElement('div');
+    card.className = 'extra-inv-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden';
+    card.dataset.total = '0';
+    card.innerHTML = `
+      <div class="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
+        <span class="text-sm font-semibold text-gray-700">Invoice #${n}</span>
+        <div class="flex items-center gap-4">
+          <span class="card-total text-sm font-bold text-gray-900">Rp0</span>
+          <button type="button" class="remove-extra text-xs text-gray-400 hover:text-red-500 transition-colors">Hapus</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
+        <div class="md:col-span-2 space-y-3">
+          <table class="w-full text-xs">
+            <thead><tr class="border-b border-gray-100">
+              <th class="text-left py-1.5 text-gray-500">Produk / SKU</th>
+              <th class="text-right py-1.5 text-gray-500 w-14">Qty</th>
+              <th class="text-right py-1.5 text-gray-500 w-28">Harga</th>
+              <th class="text-right py-1.5 text-gray-500 w-24">Subtotal</th>
+              <th class="w-6"></th>
+            </tr></thead>
+            <tbody class="ei-tbody"></tbody>
+          </table>
+          <button type="button" class="add-ei-item text-xs text-gray-500 hover:text-gray-900 font-semibold">+ Tambah Produk</button>
+          <div class="flex flex-wrap gap-4 text-xs text-gray-500 border-t border-gray-100 pt-3">
+            <span>Diskon: <input type="number" value="0" min="0" class="disc-inp w-20 border border-gray-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-gray-900"></span>
+            <span>Ongkir: <input type="number" value="0" min="0" class="ship-inp w-20 border border-gray-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-gray-900"></span>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <div class="relative ei-cust-wrap">
+            <label class="block text-xs font-medium text-gray-600 mb-1">Cari Pelanggan</label>
+            <input type="text" class="ei-cust-q w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="Ketik nama / HP…" autocomplete="off">
+            <div class="ei-cust-drop hidden absolute z-30 w-full mt-1 bg-white rounded-xl border border-gray-200 shadow-lg max-h-48 overflow-y-auto"></div>
+            <input type="hidden" class="ei-cust-id">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Nama Pembeli <span class="text-red-400">*</span></label>
+            <input type="text" class="ei-name w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="Nama lengkap" required>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Perusahaan</label>
+            <input type="text" class="ei-company w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="PT / CV (opsional)">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">No. HP</label>
+              <input type="text" class="ei-phone w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="08xx…">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">NPWP</label>
+              <input type="text" class="ei-npwp w-full text-xs border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="opsional">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Alamat</label>
+            <textarea class="ei-addr w-full text-xs border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-gray-900" rows="2"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal</label>
+              <input type="date" class="ei-date w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900" value="${TODAY}">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Channel</label>
+              <select class="ei-chan w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900">${CHANNEL_OPTS}</select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">No. Order Ref.</label>
+            <input type="text" class="ei-ref w-full text-xs border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-gray-900" placeholder="Nomor PO / marketplace">
+          </div>
+        </div>
+      </div>`;
+    card.querySelector('.remove-extra').addEventListener('click', ()=>{ card.remove(); updateBatchBar(); });
+    const tbody = card.querySelector('.ei-tbody');
+    card.querySelector('.add-ei-item').addEventListener('click', ()=>addExtraItemRow(tbody, card));
+    card.querySelector('.disc-inp').addEventListener('input', ()=>recalcExtra(card));
+    card.querySelector('.ship-inp').addEventListener('input', ()=>recalcExtra(card));
+    wireExtraCustomerSearch(card);
+    addExtraItemRow(tbody, card);
+    extraContainer.appendChild(card);
+    updateBatchBar();
+    card.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  document.getElementById('add-another-btn').addEventListener('click', addExtraInvoiceCard);
+
+  document.getElementById('cancel-batch').addEventListener('click', ()=>{
+    extraContainer.querySelectorAll('.extra-inv-card').forEach(c=>c.remove());
+    updateBatchBar();
+  });
+
+  document.getElementById('submit-batch').addEventListener('click', ()=>{
+    const form = document.getElementById('invoice-form');
+    // Collect main invoice
+    const mainName = document.getElementById('inp-name').value.trim();
+    if(!mainName){ alert('Invoice #1: nama pembeli wajib diisi.'); return; }
+    const mainItems = [];
+    document.getElementById('line-body').querySelectorAll('tr').forEach(tr=>{
+      const sku = tr.querySelector('.sku-inp').value.trim();
+      const qty = parseFloat(tr.querySelector('.q-inp').value)||0;
+      const price = parseFloat(tr.querySelector('.p-inp').value)||0;
+      const dim = (tr.querySelector('.dim-inp')||{}).value||'';
+      if(sku && qty > 0) mainItems.push({sku, qty, unit_price: price, dimension: dim});
+    });
+    if(!mainItems.length){ alert('Invoice #1: tambahkan minimal satu produk.'); return; }
+    const main = {
+      customer_id: document.getElementById('customer-id-input').value,
+      customer_name: mainName,
+      company_name: (document.getElementById('inp-company').value||'').trim(),
+      phone: document.getElementById('inp-phone').value.trim(),
+      npwp: document.getElementById('inp-npwp').value.trim(),
+      address: document.getElementById('inp-address').value.trim(),
+      invoice_date: form.querySelector('[name=invoice_date]').value,
+      channel: form.querySelector('[name=channel]').value,
+      external_order_id: (form.querySelector('[name=external_order_id]')||{value:''}).value.trim(),
+      notes: (form.querySelector('[name=notes]')||{value:''}).value.trim(),
+      discount: parseFloat(document.getElementById('discount-input').value)||0,
+      shipping: parseFloat(document.getElementById('shipping-input').value)||0,
+      items: mainItems,
+    };
+    const invoices = [main];
+    let valid = true;
+    extraContainer.querySelectorAll('.extra-inv-card').forEach((card, ci)=>{
+      const name = card.querySelector('.ei-name').value.trim();
+      if(!name){ alert(`Invoice #${ci+2}: nama pembeli wajib diisi.`); valid=false; return; }
+      const items = [];
+      card.querySelectorAll('.ei-row').forEach(tr=>{
+        const sku = tr.querySelector('.sku-inp').value.trim();
+        const qty = parseFloat(tr.querySelector('.q-inp').value)||0;
+        const price = parseFloat(tr.querySelector('.p-inp').value)||0;
+        const dim = (tr.querySelector('.dim-inp')||{}).value||'';
+        if(sku && qty > 0) items.push({sku, qty, unit_price: price, dimension: dim});
+      });
+      if(!items.length){ alert(`Invoice #${ci+2}: tambahkan minimal satu produk.`); valid=false; return; }
+      invoices.push({
+        customer_id: card.querySelector('.ei-cust-id').value,
+        customer_name: name,
+        company_name: card.querySelector('.ei-company').value.trim(),
+        phone: card.querySelector('.ei-phone').value.trim(),
+        npwp: card.querySelector('.ei-npwp').value.trim(),
+        address: card.querySelector('.ei-addr').value.trim(),
+        invoice_date: card.querySelector('.ei-date').value,
+        channel: card.querySelector('.ei-chan').value,
+        external_order_id: card.querySelector('.ei-ref').value.trim(),
+        notes: '',
+        discount: parseFloat(card.querySelector('.disc-inp').value)||0,
+        shipping: parseFloat(card.querySelector('.ship-inp').value)||0,
+        items,
+      });
+    });
+    if(!valid) return;
+    document.getElementById('batch-json-input').value = JSON.stringify(invoices);
+    document.getElementById('batch-form-hidden').submit();
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Buat Settlement{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">SETTLEMENT</span><h1>Buat Settlement Baru</h1></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'settlement-list' %}">← Kembali</a></div></div>
+
+<form method="post">{% csrf_token %}
+<section class="bo-card">
+<h2>Detail Settlement</h2>
+<div class="form-row">
+  <label>Mitra Konsinyasi<select name="partner_id" required><option value="">Pilih mitra…</option>{% for p in partners %}<option value="{{ p.pk }}">{{ p.name }}</option>{% endfor %}</select></label>
+</div>
+<div class="form-row">
+  <label>Periode Mulai<input type="date" name="period_start" value="{{ today }}" required></label>
+  <label>Periode Selesai<input type="date" name="period_end" value="{{ today }}" required></label>
+</div>
+<label>Catatan (opsional)<textarea name="notes" rows="2" placeholder="Catatan untuk mitra…"></textarea></label>
+<p class="muted">Pesanan AB Shop dalam periode yang dipilih akan otomatis ditambahkan ke settlement.</p>
+<button class="bo-button">{% icon "plus" %} Buat Settlement</button>
+</section>
+</form>
+
+{% if unbilled_orders %}
+<section class="bo-card"><h2>Pesanan Belum Ditagih ({{ unbilled_orders|length }})</h2>
+<div class="data-table"><div class="data-row data-head" style="--cols:5"><span>No. Pesanan</span><span>Pembeli</span><span>Channel</span><span>Tanggal</span><span>Total</span></div>
+{% for o in unbilled_orders %}<div class="data-row" style="--cols:5"><span>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</span><span>{{ o.customer_name }}</span><span>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</span><span>{{ o.created_at|date:"d M Y" }}</span><span>Rp{{ o.total|floatformat:0 }}</span></div>{% endfor %}
+</div></section>
+{% endif %}
+{% endblock %}

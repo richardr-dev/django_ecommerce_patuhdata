@@ -8,9 +8,38 @@
 </div><button type="button" class="secondary" data-add-line>+ Tambah produk</button>
 <datalist id="sku-options">{% for option in sku_options %}<option value="{{ option.sku }}" data-price="{{ option.price|floatformat:0 }}">{{ option.label }} · Rp{{ option.price|floatformat:"0g" }}</option>{% endfor %}</datalist>
 <p class="muted"><small>Kosongkan harga untuk memakai harga normal produk. Produk pre-order tidak menyisihkan stok.</small></p></section>
+<section class="bo-card"><h2>Channel Penjualan</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.channel %}{% include "merchant/form_field.html" with field=form.order_type %}<div data-abshop-source style="display:none">{% include "merchant/form_field.html" with field=form.ab_shop_source %}</div></div></section>
 <section class="bo-card"><h2>Pelanggan</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.customer_name %}{% include "merchant/form_field.html" with field=form.phone %}{% include "merchant/form_field.html" with field=form.email %}</div></section>
 <section class="bo-card"><h2>Pengiriman</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.fulfilment %}<div data-ship-only class="span-2 field-grid manual-ship">{% include "merchant/form_field.html" with field=form.shipping_address %}{% include "merchant/form_field.html" with field=form.village %}{% include "merchant/form_field.html" with field=form.district %}{% include "merchant/form_field.html" with field=form.city %}{% include "merchant/form_field.html" with field=form.province %}{% include "merchant/form_field.html" with field=form.postal_code %}{% include "merchant/form_field.html" with field=form.shipping_name %}{% include "merchant/form_field.html" with field=form.shipping_cost %}</div></div></section>
 <section class="bo-card"><h2>Pembayaran</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.payment_method %}{% include "merchant/form_field.html" with field=form.valid_days %}{% include "merchant/form_field.html" with field=form.discount %}{% include "merchant/form_field.html" with field=form.note %}</div><div class="form-actions"><button class="bo-button">Buat pesanan & link pembayaran</button></div></section>
 </form>
-<script>(function(){var box=document.querySelector("[data-lines]");var add=document.querySelector("[data-add-line]");var options={};document.querySelectorAll("#sku-options option").forEach(function(o){options[o.value]=o.dataset.price});function blank(){var row=box.querySelector("[data-line]").cloneNode(true);row.querySelectorAll("input").forEach(function(i){i.value=i.name==="quantity"?"1":""});return row}add.addEventListener("click",function(){var row=blank();box.appendChild(row);row.querySelector("[data-sku]").focus()});box.addEventListener("click",function(e){if(!e.target.matches("[data-remove-line]"))return;var rows=box.querySelectorAll("[data-line]");var row=e.target.closest("[data-line]");if(rows.length>1)row.remove();else row.querySelectorAll("input").forEach(function(i){i.value=i.name==="quantity"?"1":""})});box.addEventListener("change",function(e){if(!e.target.matches("[data-sku]"))return;var price=e.target.closest("[data-line]").querySelector("[data-price]");if(options[e.target.value]&&!price.value)price.placeholder="Normal: Rp"+Number(options[e.target.value]).toLocaleString("id-ID")});var mode=document.querySelector("[name=fulfilment]");var ship=document.querySelector("[data-ship-only]");function sync(){ship.hidden=mode.value!=="ship"}mode.addEventListener("change",sync);sync()})()</script>
+<script>(function(){
+var box=document.querySelector("[data-lines]");
+var add=document.querySelector("[data-add-line]");
+// Build SKU→price map from datalist
+var options={};
+document.querySelectorAll("#sku-options option").forEach(function(o){options[o.value]=parseFloat(o.dataset.price)||0});
+function blank(){var row=box.querySelector("[data-line]").cloneNode(true);row.querySelectorAll("input").forEach(function(i){i.value=i.name==="quantity"?"1":""});return row}
+add.addEventListener("click",function(){var row=blank();box.appendChild(row);row.querySelector("[data-sku]").focus()});
+box.addEventListener("click",function(e){if(!e.target.matches("[data-remove-line]"))return;var rows=box.querySelectorAll("[data-line]");var row=e.target.closest("[data-line]");if(rows.length>1)row.remove();else row.querySelectorAll("input").forEach(function(i){i.value=i.name==="quantity"?"1":""})});
+// Auto-fill price when SKU is selected or changed
+function fillPrice(skuInp){
+  var val=skuInp.value.trim();
+  if(!options[val])return;
+  var priceInp=skuInp.closest("[data-line]").querySelector("[data-price]");
+  if(!priceInp.value||priceInp.value==="0"){
+    priceInp.value=options[val];
+    priceInp.placeholder="";
+  }
+}
+box.addEventListener("change",function(e){if(e.target.matches("[data-sku]"))fillPrice(e.target)});
+box.addEventListener("input",function(e){if(e.target.matches("[data-sku]")&&options[e.target.value.trim()])fillPrice(e.target)});
+var mode=document.querySelector("[name=fulfilment]");
+var ship=document.querySelector("[data-ship-only]");
+function sync(){ship.hidden=mode.value!=="ship"}mode.addEventListener("change",sync);sync();
+var ch=document.querySelector("[name=channel]");
+var abSrc=document.querySelector("[data-abshop-source]");
+function syncCh(){if(abSrc)abSrc.style.display=ch&&ch.value==="abshop"?"":"none"}
+if(ch){ch.addEventListener("change",syncCh);syncCh()}
+})()</script>
 {% endblock %}

@@ -15,6 +15,7 @@ dependencies = [
   "sentry-sdk[django]>=2.40,<3",
   "whitenoise>=6.8,<7",
   "openpyxl>=3.1,<4",
+  "weasyprint>=60,<71",
 ]
 
 [project.optional-dependencies]

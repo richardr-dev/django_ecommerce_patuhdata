@@ -1,0 +1,190 @@
+{% extends "merchant/base.html" %}
+{% block title %}{{ bill.number|default:"Tagihan" }} — Supplier{% endblock %}
+{% block content %}
+
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — AP</p>
+    <h1 class="text-2xl font-bold text-gray-900">{{ bill.number|default:"Tagihan" }}</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {{ bill.supplier.name }} · {{ bill.bill_date|date:"d M Y" }}
+      {% if bill.due_date %} · Jatuh tempo {{ bill.due_date|date:"d M Y" }}{% endif %}
+    </p>
+  </div>
+  <div class="flex items-center gap-3">
+    <a href="{% url 'merchant-bills' %}" class="text-sm text-gray-400 hover:text-gray-600">← Semua Tagihan</a>
+    {% if bill.status != 'void' and bill.status != 'paid' %}
+    <form method="post" onsubmit="return confirm('Batalkan tagihan ini?')">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="void">
+      <button type="submit" class="px-3 py-1.5 rounded-xl border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50">Batalkan</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{# Status + amount summary #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Status</p>
+    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold
+      {% if bill.status == 'paid' %}bg-green-100 text-green-700
+      {% elif bill.status == 'open' %}bg-amber-100 text-amber-700
+      {% elif bill.status == 'partial' %}bg-gray-100 text-gray-700
+      {% elif bill.status == 'overdue' %}bg-red-100 text-red-700
+      {% else %}bg-gray-100 text-gray-500{% endif %}">
+      {{ bill.get_status_display }}
+    </span>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Total Tagihan</p>
+    <p class="text-xl font-bold text-gray-900">Rp{{ bill.total|floatformat:"0g" }}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Sudah Dibayar</p>
+    <p class="text-xl font-bold text-green-600">Rp{{ amount_paid|floatformat:"0g" }}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Sisa Hutang</p>
+    <p class="text-xl font-bold {% if amount_due > 0 %}text-red-600{% else %}text-gray-400{% endif %}">
+      Rp{{ amount_due|floatformat:"0g" }}
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  {# Items + payment history #}
+  <div class="lg:col-span-2 space-y-5">
+
+    {# Line items #}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-700">Item Tagihan</h2>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+          <tr>
+            <th class="px-5 py-2 text-left font-medium">Deskripsi</th>
+            <th class="px-3 py-2 text-right font-medium">Qty</th>
+            <th class="px-3 py-2 text-right font-medium">Harga</th>
+            <th class="px-3 py-2 text-right font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for item in items %}
+          <tr>
+            <td class="px-5 py-3 text-gray-800">{{ item.description }}</td>
+            <td class="px-3 py-3 text-right text-gray-600">{{ item.quantity|floatformat:"-2" }}</td>
+            <td class="px-3 py-3 text-right text-gray-600">Rp{{ item.unit_price|floatformat:"0g" }}</td>
+            <td class="px-3 py-3 text-right font-semibold text-gray-800">Rp{{ item.line_total|floatformat:"0g" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="border-t border-gray-200 bg-gray-50 text-sm font-semibold">
+          <tr>
+            <td colspan="3" class="px-5 py-3 text-gray-600">Subtotal</td>
+            <td class="px-3 py-3 text-right text-gray-800">Rp{{ bill.subtotal|floatformat:"0g" }}</td>
+          </tr>
+          {% if bill.tax %}
+          <tr>
+            <td colspan="3" class="px-5 py-2 text-gray-600 text-xs">PPN / Pajak</td>
+            <td class="px-3 py-2 text-right text-gray-700">Rp{{ bill.tax|floatformat:"0g" }}</td>
+          </tr>
+          {% endif %}
+          <tr class="text-base">
+            <td colspan="3" class="px-5 py-3 text-gray-900 font-bold">Total</td>
+            <td class="px-3 py-3 text-right font-bold text-gray-900">Rp{{ bill.total|floatformat:"0g" }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {# Payment history #}
+    {% if payments %}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-700">Riwayat Pembayaran</h2>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+          <tr>
+            <th class="px-5 py-2 text-left font-medium">Tanggal</th>
+            <th class="px-3 py-2 text-left font-medium">Metode</th>
+            <th class="px-3 py-2 text-left font-medium">Referensi</th>
+            <th class="px-3 py-2 text-right font-medium">Jumlah</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for p in payments %}
+          <tr>
+            <td class="px-5 py-3 text-gray-700">{{ p.paid_on|date:"d M Y" }}</td>
+            <td class="px-3 py-3 text-gray-600">{{ p.get_method_display }}</td>
+            <td class="px-3 py-3 font-mono text-xs text-gray-500">{{ p.reference|default:"—" }}</td>
+            <td class="px-3 py-3 text-right font-semibold text-green-600">Rp{{ p.amount|floatformat:"0g" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# Record payment panel #}
+  <div class="lg:col-span-1">
+    {% if bill.status != 'void' and bill.status != 'paid' %}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+      <h2 class="text-sm font-semibold text-gray-700 mb-4">Catat Pembayaran</h2>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="pay">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Jumlah</label>
+          <input type="text" name="amount" value="{{ amount_due|floatformat:'0' }}" required
+                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-right font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Bayar</label>
+          <input type="date" name="paid_on" value="{{ today }}"
+                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Metode</label>
+          <select name="method" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+            <option value="transfer">Transfer Bank</option>
+            <option value="cash">Tunai</option>
+            <option value="other">Lainnya</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">No. Referensi</label>
+          <input type="text" name="reference" maxlength="120"
+                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
+                 placeholder="No. transfer / bukti bayar">
+        </div>
+        <button type="submit"
+                class="w-full px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">
+          Catat Pembayaran
+        </button>
+      </form>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 text-center">
+      <p class="text-sm {% if bill.status == 'paid' %}text-green-600 font-semibold{% else %}text-gray-400{% endif %}">
+        {% if bill.status == 'paid' %}Tagihan lunas{% else %}Tagihan dibatalkan{% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {% if bill.notes %}
+    <div class="mt-5 bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Catatan</h3>
+      <p class="text-sm text-gray-700 leading-relaxed">{{ bill.notes }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}
