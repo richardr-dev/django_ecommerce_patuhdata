@@ -940,3 +940,24 @@ button.is-loading::after { content: ""; position: absolute; inset: 0; margin: au
 .panel { margin-bottom: 16px; }
 .pd-main { padding-top: 20px; }
 @media (max-width: 640px) { .pd-main .pg-head, .pd-main .bo-heading, .bb-hero { padding: 14px 16px; } }
+
+/* ── Enterprise conveniences ─────────────────────────────────────────────────
+   Rows that open their record, compact density, the shortcut sheet. */
+.pd-main table.tbl tbody tr:has(a[href]), .pd-main table[data-rows-link] tbody tr:has(a[href]) { cursor: pointer; }
+.pd-main table.tbl tbody tr:has(a[href]):focus-within td { background: #eef4fe; }
+html[data-density="compact"] .tbl td, html[data-density="compact"] .dp-items td,
+html[data-density="compact"] .pd-main .data-table td { padding-top: 6px; padding-bottom: 6px; }
+html[data-density="compact"] .tbl th { padding-top: 7px; padding-bottom: 7px; }
+html[data-density="compact"] .pd-main table[data-rows-link] td { padding-top: 6px !important; padding-bottom: 6px !important; }
+html[data-density="compact"] .pd-main table[data-rows-link] td .h-9 { height: 28px; width: 28px; font-size: 12px; }
+html[data-density="compact"] .panel > header, html[data-density="compact"] .dp-card > header { padding-top: 11px; padding-bottom: 11px; }
+html[data-density="compact"] .tile { padding: 12px 16px; }
+html[data-density="compact"] .tile strong { font-size: 20px; }
+.pd-user .menu-panel button kbd, .pd-keys kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 6px; background: #f4f8ff; box-shadow: inset 0 0 0 1px #d3dcea, 0 1px 0 #d3dcea; color: var(--pd-ink);
+  font: 600 11.5px/1 Inter, system-ui, sans-serif; }
+.pd-keys { display: grid; gap: 2px !important; padding: 12px 20px 18px !important; }
+.pd-keys p { display: flex; align-items: center; gap: 4px; margin: 0; padding: 7px 0; border-bottom: 1px solid #eef2f8; font-size: 13px; }
+.pd-keys p:last-child { border-bottom: 0; }
+.pd-keys p span { margin-left: auto; color: var(--pd-muted); }
+.pd-user .menu-panel button { display: flex; width: 100%; align-items: center; gap: 10px; }

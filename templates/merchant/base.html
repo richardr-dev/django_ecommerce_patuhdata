@@ -77,6 +77,8 @@
           <a href="{% url 'merchant-billing' %}">{% icon "wallet" %}<span>Paket langganan</span></a>
           <a href="{% url 'merchant-billing' %}#ajak-teman">{% icon "gift" %}<span>Ajak teman</span></a>
           {% if merchant_is_owner %}<a href="{% url 'merchant-brand-new' %}">{% icon "store" %}<span>Tambah brand</span></a>{% endif %}
+          <button type="button" data-density-toggle>{% icon "layers" %}<span>Tampilan rapat / nyaman</span></button>
+          <button type="button" data-open-keys>{% icon "command" %}<span>Pintasan keyboard <kbd>?</kbd></span></button>
           <form method="post" action="{% url 'merchant-logout' %}">{% csrf_token %}
             <button type="submit">{% icon "logout" %}<span>Keluar</span></button>
           </form>
@@ -97,6 +99,26 @@
   </main>
 </div>
 
+<dialog id="pd-keys" class="pd-dialog" aria-labelledby="pd-keys-title" style="width:min(520px,calc(100vw - 32px))">
+  <form method="dialog">
+    <header><h2 id="pd-keys-title">Pintasan keyboard</h2><button type="submit" aria-label="Tutup">&times;</button></header>
+    <div class="pd-keys">
+      <p><kbd>/</kbd> atau <kbd>⌘</kbd><kbd>K</kbd><span>Cari menu, invoice, pelanggan, produk</span></p>
+      <p><kbd>n</kbd><span>Buat baru (invoice, tagihan, transaksi…)</span></p>
+      <p><kbd>g</kbd> <kbd>d</kbd><span>Beranda</span></p>
+      <p><kbd>g</kbd> <kbd>i</kbd><span>Invoice penjualan</span></p>
+      <p><kbd>g</kbd> <kbd>o</kbd><span>Pesanan</span></p>
+      <p><kbd>g</kbd> <kbd>p</kbd><span>Piutang pelanggan</span></p>
+      <p><kbd>g</kbd> <kbd>b</kbd><span>Tagihan supplier</span></p>
+      <p><kbd>g</kbd> <kbd>a</kbd><span>Ringkasan keuangan</span></p>
+      <p><kbd>g</kbd> <kbd>c</kbd><span>Pelanggan</span></p>
+      <p><kbd>g</kbd> <kbd>s</kbd><span>Stok</span></p>
+      <p><kbd>?</kbd><span>Tampilkan daftar ini</span></p>
+      <p><kbd>Esc</kbd><span>Tutup menu atau dialog</span></p>
+    </div>
+  </form>
+</dialog>
+<script id="pd-go" type="application/json">{"d": {"url": "{% url 'merchant-dashboard' %}"}, "i": {"url": "{% url 'merchant-sales-invoices' %}"}, "o": {"url": "{% url 'merchant-orders' %}"}, "p": {"url": "{% url 'merchant-receivables' %}"}, "b": {"url": "{% url 'merchant-bills' %}"}, "a": {"url": "{% url 'merchant-accounting' %}"}, "c": {"url": "{% url 'merchant-customers' %}"}, "s": {"url": "{% url 'merchant-stock' %}"}}</script>
 <dialog id="pd-confirm" aria-labelledby="pd-confirm-title">
   <form method="dialog">
     <div class="body"><h2 id="pd-confirm-title">Konfirmasi</h2><p data-confirm-text></p></div>
@@ -136,6 +158,9 @@
   var current = document.querySelector(".nav-link.is-active");
   if (current) current.scrollIntoView({block: "nearest"});
 
+  document.querySelectorAll("[data-open-keys]").forEach(function (el) {
+    el.addEventListener("click", function () { document.querySelector(".pd-user").removeAttribute("open"); document.getElementById("pd-keys").showModal(); });
+  });
   // Close header menus when clicking elsewhere.
   document.addEventListener("click", function (event) {
     document.querySelectorAll(".create-menu[open], .pd-user[open]").forEach(function (menu) {
@@ -150,10 +175,26 @@
     return {href: a.getAttribute("href"), label: a.textContent.trim(), group: a.dataset.group};
   });
   var selected = 0, shown = [], timer, token = 0;
+  function link(href, label, sub) {
+    var a = document.createElement("a"); a.href = href; a.setAttribute("role", "option");
+    var t = document.createElement("span"); t.textContent = label; a.appendChild(t);
+    if (sub) { var g = document.createElement("small"); g.textContent = sub; a.appendChild(g); }
+    results.appendChild(a); return a;
+  }
+  function renderStart() {
+    // An empty search box offers what you opened last and the most common actions.
+    results.innerHTML = "";
+    var recent = window.pdRecent ? window.pdRecent() : [];
+    if (recent.length) { addTitle("Terakhir dibuka"); recent.slice(0, 5).forEach(function (r) { link(r.href, r.label, r.kind); }); }
+    var actions = document.querySelectorAll(".create-menu a[href]");
+    if (actions.length) { addTitle("Buat baru"); Array.prototype.slice.call(actions, 0, 5).forEach(function (a) { link(a.getAttribute("href"), a.textContent.trim(), ""); }); }
+    var first = results.querySelector("a"); if (first) first.classList.add("is-selected");
+    results.hidden = !first;
+  }
   function render() {
     var q = input.value.trim().toLowerCase();
     window.clearTimeout(timer);
-    if (!q) { results.hidden = true; return; }
+    if (!q) { renderStart(); return; }
     shown = links.filter(function (l) {
       return (l.label + " " + l.group).toLowerCase().indexOf(q) !== -1;
     }).slice(0, 6);
@@ -213,7 +254,8 @@
     else if (event.key === "ArrowUp") { event.preventDefault(); move(-1); }
     else if (event.key === "Enter") {
       var pick = results.querySelector("a.is-selected") || results.querySelector("a");
-      if (pick) { event.preventDefault(); window.location = (window.pdWithStore ? window.pdWithStore(pick.getAttribute("href")) : pick.href); }
+      if (pick) { event.preventDefault(); results.hidden = true; input.blur();
+        if (window.pdNavigate) window.pdNavigate(pick.getAttribute("href")); else window.location = pick.href; }
     }
     else if (event.key === "Escape") { input.value = ""; render(); input.blur(); }
   });

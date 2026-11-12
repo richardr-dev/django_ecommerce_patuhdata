@@ -11,7 +11,7 @@
   <a href="{% url 'merchant-bills' %}" class="text-sm text-gray-400 hover:text-gray-600">← Semua Tagihan</a>
 </div>
 
-<form method="post" class="space-y-5">
+<form method="post" data-unsaved class="space-y-5">
 {% csrf_token %}
 
 {# Supplier + header #}

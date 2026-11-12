@@ -141,6 +141,15 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
     for client-side ones.
   - Submit buttons show a spinner and cannot be double-clicked (opt out with `data-no-loading`).
   - A thin progress bar runs on htmx requests and navigation.
+  - `<form data-unsaved>` warns before leaving with unsaved edits (soft navigation and tab
+    close). Put it on every data-entry form (invoice, quote, bill, journal, cash, credit note).
+  - Rows of `table.tbl` and `table[data-rows-link]` open their first link when clicked anywhere
+    (⌘/Ctrl-click opens a new tab); mark a cell `data-no-row` to opt out.
+  - Keyboard: `/` or ⌘K search (empty box shows "Terakhir dibuka" and "Buat baru"), `n` Buat baru,
+    `g`+`d/i/o/p/b/a/c/s` jump (map in `#pd-go` in `base.html`), `?` shortcut sheet.
+  - Density "rapat/nyaman" lives in the user menu (`html[data-density=compact]`); size new
+    table paddings so the compact rules in `merchant-shell.css` apply.
+  - htmx filters push clean URLs (empty parameters dropped).
 - **htmx pattern for filters and search:** the list page includes a partial
   (`_bills_table.html`); the form has `hx-get`, `hx-target="#list"`, `hx-push-url="true"`; the
   view returns the partial through `render_partial()` in `accounting/views.py` (full page on a
@@ -305,7 +314,8 @@ Documents:
 - [ ] Activity timeline on every document (created, edited, sent, viewed, paid, by whom).
 
 Navigation and feedback:
-- [x] Global search across records (topbar, `/` or ⌘K). Still to do: recent items.
+- [x] Global search across records (topbar, `/` or ⌘K), with recent records and quick actions.
+- [x] Keyboard shortcuts, clickable rows, compact density, unsaved-changes guard.
 - [x] Toasts, styled confirm dialogs, loading states, progress bar.
 - [ ] Onboarding checklist: tax profile, bank accounts, opening balances, first import
       (Beranda has a store-setup checklist but nothing for the books).

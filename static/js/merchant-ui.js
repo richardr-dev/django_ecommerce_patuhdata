@@ -77,6 +77,7 @@
       } else { pending = null; }
     });
   }
+  window.pdAsk = function (text, ok, run, danger) { ask(text, ok, run, danger); };
   function ask(text, ok, run, danger) {
     if (!dialog || !dialog.showModal) { if (window.confirm(text)) run(); return; }
     dialog.querySelector("[data-confirm-text]").textContent = text;
@@ -225,6 +226,7 @@
       if (push) history.pushState({soft: 1}, "", res.url);
       window.scrollTo(0, 0);
       document.body.classList.remove("nav-open");
+      rememberVisit();
       wireRupiah(mainBox);
       wireToasts();
       if (window.htmx) window.htmx.process(mainBox);
@@ -245,14 +247,113 @@
       if (href.indexOf("#") > -1 && samePath(href.split("#")[0] || location.pathname, location.href)) return;
       event.preventDefault();
       if (samePath(href, location.href)) { window.scrollTo(0, 0); return; }
-      softLoad(href, true);
+      leaveIfClean(function () { softLoad(href, true); });
     });
     // Capture phase: also takes over history entries htmx pushed for filters, so Back restores the
     // whole page (list, filter form, tab counts) from the server instead of a stale snapshot.
     window.addEventListener("popstate", function (event) { event.stopImmediatePropagation(); softLoad(location.href, false); }, true);
     history.replaceState({soft: 1}, "", location.href);
   }
+  window.pdNavigate = function (url) {
+    leaveIfClean(function () {
+      if (navBox && mainBox && window.fetch && url.indexOf("/merchant/") === 0) softLoad(withStore(url), true);
+      else location.href = url;
+    });
+  };
 
-  function ready() { wireRupiah(document); wireToasts(); ensureDialog(); }
+  /* ── Unsaved changes: <form data-unsaved> warns before you leave with edits ──── */
+  var dirty = false;
+  document.addEventListener("input", function (event) {
+    if (event.target.closest && event.target.closest("form[data-unsaved]")) dirty = true;
+  });
+  document.addEventListener("submit", function (event) {
+    if (event.target.matches && event.target.matches("form[data-unsaved]")) dirty = false;
+  });
+  function leaveIfClean(go) {
+    if (!dirty || !document.querySelector(".pd-main form[data-unsaved]")) { dirty = false; go(); return; }
+    ask("Perubahan di halaman ini belum disimpan. Tinggalkan halaman?", "Tinggalkan", function () {
+      dirty = false; go();
+    }, true);
+  }
+  window.addEventListener("beforeunload", function (event) {
+    if (dirty && document.querySelector(".pd-main form[data-unsaved]")) { event.preventDefault(); event.returnValue = ""; }
+  });
+
+  /* ── Recent records: detail pages you opened, offered again in the search box ── */
+  var RECENT = "pd-recent";
+  function rememberVisit() {
+    var path = location.pathname;
+    if (!/\/(\d+|[0-9a-f]{8}-[0-9a-f-]{27})\/(edit\/)?$/.test(path)) return;
+    var heading = document.querySelector(".pd-main h1"), label = document.title.split(" · ")[0];
+    if (heading) {   // the title without its status pill
+      var copy = heading.cloneNode(true);
+      copy.querySelectorAll(".pill, .badge, small").forEach(function (el) { el.remove(); });
+      label = copy.textContent || label;
+    }
+    label = label.replace(/\s+/g, " ").trim().slice(0, 80);
+    var crumb = document.querySelector(".pd-main .dp-crumb a");
+    var item = {href: path, label: label, kind: crumb ? crumb.textContent.trim() : ""};
+    try {
+      var list = JSON.parse(window.localStorage.getItem(RECENT) || "[]").filter(function (r) { return r.href !== path; });
+      list.unshift(item);
+      window.localStorage.setItem(RECENT, JSON.stringify(list.slice(0, 8)));
+    } catch (e) { /* private mode */ }
+  }
+  window.pdRecent = function () {
+    try { return JSON.parse(window.localStorage.getItem(RECENT) || "[]"); } catch (e) { return []; }
+  };
+
+  /* ── Whole table rows open their record (tables with .tbl or [data-rows-link]) ─── */
+  document.addEventListener("click", function (event) {
+    var row = event.target.closest && event.target.closest(".pd-main table.tbl tbody tr, .pd-main table[data-rows-link] tbody tr");
+    if (!row || event.target.closest("a, button, input, select, textarea, label, summary, details, [data-no-row]")) return;
+    if (String(window.getSelection && window.getSelection()) !== "") return;
+    var link = row.querySelector("a.rowlink[href], a[href]");
+    if (!link) return;
+    if (event.metaKey || event.ctrlKey) { window.open(withStore(link.getAttribute("href")), "_blank"); return; }
+    link.click();
+  });
+
+  /* ── Density: comfortable or compact tables, remembered per device ───────────── */
+  function applyDensity(value) { document.documentElement.dataset.density = value === "compact" ? "compact" : ""; }
+  try { applyDensity(window.localStorage.getItem("pd-density")); } catch (e) { /* default */ }
+  document.addEventListener("click", function (event) {
+    var toggle = event.target.closest && event.target.closest("[data-density-toggle]");
+    if (!toggle) return;
+    var next = document.documentElement.dataset.density === "compact" ? "" : "compact";
+    applyDensity(next);
+    try { window.localStorage.setItem("pd-density", next); } catch (e) { /* private mode */ }
+    pdToast(next ? "Tampilan rapat aktif." : "Tampilan nyaman aktif.", "success");
+  });
+
+  /* ── Filter URLs stay readable: htmx-pushed addresses drop empty parameters ──── */
+  document.addEventListener("htmx:pushedIntoHistory", function () {
+    var url = new URL(location.href), changed = false;
+    Array.from(url.searchParams.keys()).forEach(function (key) {
+      if (url.searchParams.get(key) === "") { url.searchParams.delete(key); changed = true; }
+    });
+    if (changed) history.replaceState({soft: 1}, "", url.pathname + (url.search ? url.search : "") + url.hash);
+  });
+
+  /* ── Keyboard: ? shows the shortcuts, n opens "Buat baru", g + key jumps to a page ── */
+  var goKeys = {}, waitingForG = false, gTimer;
+  try { goKeys = JSON.parse((document.getElementById("pd-go") || {}).textContent || "{}"); } catch (e) { goKeys = {}; }
+  document.addEventListener("keydown", function (event) {
+    var el = document.activeElement, typing = el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+    if (typing || event.metaKey || event.ctrlKey || event.altKey || document.querySelector("dialog[open]")) return;
+    if (waitingForG) {
+      waitingForG = false; window.clearTimeout(gTimer);
+      if (goKeys[event.key]) { event.preventDefault(); window.pdNavigate(goKeys[event.key].url); }
+      return;
+    }
+    if (event.key === "?") { event.preventDefault(); var keys = document.getElementById("pd-keys"); if (keys) keys.showModal(); }
+    else if (event.key === "g") { waitingForG = true; gTimer = window.setTimeout(function () { waitingForG = false; }, 1200); }
+    else if (event.key === "n") {
+      var menu = document.querySelector(".create-menu");
+      if (menu) { event.preventDefault(); menu.open = true; var first = menu.querySelector("a"); if (first) first.focus(); }
+    }
+  });
+
+  function ready() { wireRupiah(document); wireToasts(); ensureDialog(); rememberVisit(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ready); else ready();
 })();

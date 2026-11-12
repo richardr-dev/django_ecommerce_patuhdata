@@ -4,7 +4,7 @@
 <nav class="dp-crumb"><a href="{% if kind == 'quote' %}{% url 'merchant-quotes' %}{% else %}{% url 'merchant-recurring' %}{% endif %}">{% if kind == 'quote' %}Penawaran{% else %}Invoice berulang{% endif %}</a> › <span>{% if quote %}Ubah{% else %}Baru{% endif %}</span></nav>
 <div class="mb-5"><h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{% if kind == 'quote' %}{% if quote %}Ubah {{ quote.number }}{% else %}Penawaran baru{% endif %}{% else %}{% if quote %}Ubah jadwal{% else %}Invoice berulang baru{% endif %}{% endif %}</h1>
   <p class="mt-1 max-w-2xl text-sm text-slate-500">{% if kind == 'quote' %}Pilih produk dan harga yang ditawarkan. PPN dihitung otomatis jika toko Anda PKP.{% else %}Invoice diterbitkan otomatis (belum dibayar) pada setiap tanggal jadwal, lalu tanggal berikutnya dihitung sendiri.{% endif %}</p></div>
-<form method="post" id="doc-form" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">{% csrf_token %}
+<form method="post" id="doc-form" data-unsaved class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">{% csrf_token %}
  <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
  <section class="panel !mb-0">
   <header><div class="flex items-center gap-3"><span class="bb-bubble step">1</span><div><h2>{% if kind == 'quote' %}Pelanggan & tanggal{% else %}Jadwal & pelanggan{% endif %}</h2><p>Pilih dari CRM, atau ketik data pembeli.</p></div></div></header>

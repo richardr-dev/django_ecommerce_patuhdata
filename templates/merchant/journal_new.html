@@ -6,7 +6,7 @@
   <p>{% if opening %}Masukkan saldo akun saat mulai memakai pembukuan di sini, misalnya kas, utang, dan modal pemilik. Total debit harus sama dengan total kredit.{% else %}Untuk transaksi yang tidak berasal dari penjualan, tagihan, atau biaya: setoran modal, penyusutan, dan koreksi. Total debit harus sama dengan total kredit.{% endif %}</p></div>
   <nav class="kind-switch"><a href="?" class="{% if not opening %}on{% endif %}">Jurnal umum</a><a href="?opening=1" class="{% if opening %}on{% endif %}">Saldo awal</a></nav></div>
 {% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup: gunakan tanggal setelahnya.</span></div>{% endif %}
-<form method="post" class="panel">{% csrf_token %}
+<form method="post" data-unsaved class="panel">{% csrf_token %}
   <div class="form-grid">
     <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label>
     <label class="field" style="grid-column:span 3"><span>Keterangan</span><input name="memo" maxlength="300" required value="{% if opening %}Saldo awal{% endif %}" placeholder="mis. Setoran modal pemilik"></label>

@@ -4,7 +4,7 @@
 <nav class="dp-crumb"><a href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a> › <a href="{% url 'merchant-invoice-detail' invoice.id %}">{{ invoice.number }}</a> › <span>Nota kredit</span></nav>
 <div class="pg-head"><div><h1>Nota kredit untuk {{ invoice.number }}</h1>
   <p>{{ invoice.buyer_name }} · total invoice {{ invoice.total|rp }} · sisa tagihan {{ due|rp }}. Isi jumlah yang dikreditkan pada baris yang berubah.</p></div></div>
-<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="invoice" value="{{ invoice.id }}">
+<form method="post" data-unsaved class="panel">{% csrf_token %}<input type="hidden" name="invoice" value="{{ invoice.id }}">
   <div class="form-grid">
     <label class="field"><span>Tanggal</span><input type="date" name="issued_on" value="{{ post.issued_on|default:today }}" required></label>
     <label class="field"><span>Alasan</span><select name="reason">{% for code, label in reasons %}<option value="{{ code }}" {% if post.reason == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

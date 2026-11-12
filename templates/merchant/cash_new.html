@@ -15,7 +15,7 @@
 
 {% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup. Gunakan tanggal setelahnya.</span></div>{% endif %}
 
-<form method="post" class="panel" id="cash-form">
+<form method="post" data-unsaved class="panel" id="cash-form">
   {% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}">
   <div class="form-grid">
     <label class="field"><span>{% if kind == 'receive' %}Masuk ke rekening{% else %}Dari rekening{% endif %}</span>
