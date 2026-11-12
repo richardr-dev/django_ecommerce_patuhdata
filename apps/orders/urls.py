@@ -127,4 +127,5 @@ urlpatterns = [
     path("merchant/abshop/", views.merchant_abshop, name="merchant-abshop"),
     path("merchant/returns/", views.merchant_returns, name="merchant-returns"),
     path("merchant/returns/<int:return_id>/", views.merchant_return_detail, name="merchant-return-detail"),
+    path("merchant/orders/<uuid:order_id>/return/", views.merchant_return_create, name="merchant-return-create"),
 ]

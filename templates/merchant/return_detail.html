@@ -1,28 +1,128 @@
-{% extends "merchant/base.html" %}{% load icons %}{% block title %}Retur #{{ ret.pk }}{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">RETUR</span><h1>Retur #{{ ret.pk }}</h1><p><span class="badge {{ ret.status }}">{{ ret.get_status_display }}</span> · {{ ret.get_request_type_display }}</p></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'merchant-returns' %}">← Semua retur</a></div></div>
-<div class="dashboard-grid">
-<section class="bo-card"><h2>Detail Pesanan</h2><p><b>No. pesanan:</b> <a href="{% url 'merchant-orders' %}?q={{ ret.order.invoice_number }}">{{ ret.order.invoice_number|default:ret.order.id|stringformat:"s"|slice:":8" }}</a></p><p><b>Pembeli:</b> {{ ret.order.customer_name }}</p><p><b>No. HP:</b> {{ ret.order.phone }}</p>{% if ret.order_item %}<p><b>Produk:</b> {{ ret.order_item.name }}{% if ret.order_item.variant_name %} · {{ ret.order_item.variant_name }}{% endif %} ({{ ret.order_item.quantity }}×)</p>{% endif %}</section>
-<section class="bo-card"><h2>Detail Retur</h2><p><b>Tipe:</b> {{ ret.get_request_type_display }}</p><p><b>Alasan:</b> {{ ret.get_reason_display }}</p>{% if ret.reason_detail %}<p><b>Keterangan:</b> {{ ret.reason_detail }}</p>{% endif %}{% if ret.replacement_variant %}<p><b>Varian pengganti diminta:</b> {{ ret.replacement_variant.name }}</p>{% endif %}{% if ret.photo %}<p><b>Foto bukti:</b> <a href="{{ ret.photo.url }}" target="_blank" rel="noopener">Lihat foto</a></p>{% else %}<p class="muted">Belum ada foto bukti.</p>{% endif %}{% if ret.admin_notes %}<p><b>Catatan admin:</b> {{ ret.admin_notes }}</p>{% endif %}</section>
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Retur #{{ ret.pk }}{% endblock %}
+{% block content %}
+{% with editable=merchant_role %}
+<nav class="dp-crumb"><a href="{% url 'merchant-returns' %}">Retur & penukaran</a> › <span>Retur #{{ ret.pk }}</span></nav>
+<div class="dp-head">
+  <div>
+    <h1 class="dp-title">Retur #{{ ret.pk }} <span class="pill pill-{{ ret.status }}">{{ ret.get_status_display }}</span></h1>
+    <p class="dp-sub">{{ ret.get_request_type_display }} · pesanan <b>{{ ret.order.invoice_number|default:ret.order.id|stringformat:"s"|slice:":8" }}</b> · {{ ret.order.customer_name }} · diminta {{ ret.created_at|date:"d M Y" }}</p>
+  </div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-order-detail' ret.order.id %}">Lihat pesanan</a></div>
+</div>
 
-{% if ret.return_tracking_number or ret.replacement_tracking_number %}<section class="bo-card"><h2>Resi Pengiriman</h2>{% if ret.return_tracking_number %}<p><b>Retur dari pembeli:</b> {{ ret.return_courier }} · {{ ret.return_tracking_number }}</p>{% endif %}{% if ret.replacement_tracking_number %}<p><b>Pengganti ke pembeli:</b> {{ ret.replacement_courier }} · {{ ret.replacement_tracking_number }}</p>{% endif %}</section>{% endif %}
+{# ── Progress ─────────────────────────────────────────────────────────────── #}
+<ol class="mb-5 flex flex-wrap items-center gap-2 text-sm">
+  {% for key, label in steps %}
+  <li class="flex items-center gap-2"><span class="bb-bubble {% if key in done %}ok{% elif key == ret.status %}step{% endif %} !h-7 !w-7 !text-xs">{% if key in done %}✓{% else %}{{ forloop.counter }}{% endif %}</span><span class="{% if key == ret.status %}font-bold text-slate-900{% else %}text-slate-500{% endif %}">{{ label }}</span>{% if not forloop.last %}<span class="mx-1 h-px w-6 bg-slate-200"></span>{% endif %}</li>
+  {% endfor %}
+</ol>
 
-<section class="bo-card"><h2>Aksi</h2>
-{% if ret.status == "requested" and merchant_role != "viewer" %}
-<form method="post" style="display:inline-block;margin-right:8px">{% csrf_token %}<input type="hidden" name="action" value="approve"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2" style="width:100%;margin-bottom:8px"></textarea><button class="bo-button">{% icon "check" %} Setujui Retur</button></form>
-<form method="post" style="display:inline-block">{% csrf_token %}<input type="hidden" name="action" value="reject"><textarea name="admin_notes" placeholder="Alasan penolakan" rows="2" style="width:100%;margin-bottom:8px"></textarea><button class="bo-button secondary">Tolak</button></form>
-{% elif ret.status == "approved" and merchant_role != "viewer" %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_received"><p>Masukkan resi pengiriman balik dari pembeli:</p><label>Kurir retur<input name="return_courier" value="{{ ret.return_courier }}" placeholder="jne, jnt..."></label><label>No. resi retur<input name="return_tracking_number" value="{{ ret.return_tracking_number }}" placeholder="Nomor resi" required></label><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2" style="width:100%;margin:8px 0"></textarea><button class="bo-button">{% icon "box" %} Barang Diterima</button></form>
-{% elif ret.status == "item_received" and merchant_role != "viewer" %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_inspected"><textarea name="admin_notes" placeholder="Hasil inspeksi barang" rows="2" style="width:100%;margin-bottom:8px"></textarea><button class="bo-button">Sudah Diperiksa</button></form>
-{% elif ret.status == "inspected" and merchant_role != "viewer" %}
-{% if ret.request_type == "exchange" %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_sent">{% if available_variants %}<label>Varian dikirim<select name="replacement_variant_id">{% for v in available_variants %}<option value="{{ v.id }}"{% if ret.replacement_variant_id == v.id %} selected{% endif %}>{{ v.name }}</option>{% endfor %}</select></label>{% endif %}<label>Kurir pengganti<input name="replacement_courier" value="{{ ret.replacement_courier }}" placeholder="jne, jnt..."></label><label>No. resi pengganti<input name="replacement_tracking_number" value="{{ ret.replacement_tracking_number }}" placeholder="Nomor resi" required></label><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2" style="width:100%;margin:8px 0"></textarea><button class="bo-button">{% icon "truck" %} Kirim Pengganti</button></form>
-{% else %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="refunded"><textarea name="admin_notes" placeholder="Catatan refund (referensi transfer, dll.)" rows="2" style="width:100%;margin-bottom:8px"></textarea><button class="bo-button">Proses Refund</button></form>
-{% endif %}
-{% elif ret.status == "replacement_sent" and merchant_role != "viewer" %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="complete"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2" style="width:100%;margin-bottom:8px"></textarea><button class="bo-button secondary">Selesai</button></form>
-{% else %}
-<p class="muted">Status: {{ ret.get_status_display }}. Tidak ada aksi yang tersedia.</p>
-{% endif %}
-</section>
-</div>{% endblock %}
+<div class="dp-grid">
+  <div class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Barang & alasan</h2></header>
+      <div class="dp-card-body">
+        <dl class="kv">
+          {% if ret.order_item %}<div><span>Produk</span><span>{{ ret.order_item.name }}{% if ret.order_item.variant_name %} · {{ ret.order_item.variant_name }}{% endif %} ({{ ret.order_item.quantity }}×)</span></div>{% endif %}
+          <div><span>Alasan</span><span>{{ ret.get_reason_display }}</span></div>
+          {% if ret.reason_detail %}<div><span>Keterangan</span><span>{{ ret.reason_detail }}</span></div>{% endif %}
+          {% if ret.condition %}<div><span>Kondisi saat diperiksa</span><span><b>{{ ret.get_condition_display }}</b></span></div>{% endif %}
+          {% if ret.replacement_variant %}<div><span>Varian pengganti</span><span>{{ ret.replacement_variant.name }}</span></div>{% endif %}
+          {% if ret.return_tracking_number %}<div><span>Resi dari pembeli</span><span>{{ ret.return_courier }} · {{ ret.return_tracking_number }}</span></div>{% endif %}
+          {% if ret.replacement_tracking_number %}<div><span>Resi pengganti</span><span>{{ ret.replacement_courier }} · {{ ret.replacement_tracking_number }}</span></div>{% endif %}
+          {% if ret.admin_notes %}<div><span>Catatan</span><span>{{ ret.admin_notes }}</span></div>{% endif %}
+        </dl>
+        {% if ret.photo %}<p class="mt-3"><a class="btn" href="{{ ret.photo.url }}" target="_blank" rel="noopener">Lihat foto bukti</a></p>{% else %}<p class="dp-help">Belum ada foto bukti dari pembeli.</p>{% endif %}
+      </div>
+    </section>
+
+    {% if ret.request_type == "return_refund" and ret.status == "inspected" and editable != "viewer" %}
+    <section class="dp-card">
+      <header><div><h2>Selesaikan retur</h2><small>Satu langkah: nota kredit, uang, dan stok.</small></div></header>
+      <form method="post" class="dp-card-body" style="display:grid;gap:16px">{% csrf_token %}
+        <input type="hidden" name="action" value="settle_refund">
+        <div class="scroll-x"><table class="tbl">
+          <thead><tr><th>Barang di pesanan</th><th class="num">Dibeli</th><th class="num">Bisa dikembalikan</th><th class="num" style="width:130px">Dikembalikan</th></tr></thead>
+          <tbody>{% for row in lines %}<tr><td><b class="rowlink">{{ row.line.name }}</b>{% if row.line.variant_name %}<small>{{ row.line.variant_name }}</small>{% endif %}</td><td class="num">{{ row.line.quantity }}</td><td class="num">{{ row.left }}</td>
+            <td class="num">{% if row.left %}<input type="number" name="qty_{{ row.line.pk }}" min="0" max="{{ row.left }}" value="{{ row.suggested }}" style="width:90px;text-align:right">{% else %}–{% endif %}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <div class="notice {% if ret.condition == 'good' %}ok{% else %}info{% endif %}">{% icon "box" %}<span>{% if ret.condition == "good" %}<b>Layak jual:</b> barang kembali ke stok gudang dan ke Persediaan sebesar harga pokoknya.{% else %}<b>Rusak:</b> barang tidak masuk stok. Harga pokoknya tetap di HPP sebagai kerugian.{% endif %}</span></div>
+        <div class="form-grid" style="padding:0;grid-template-columns:repeat(2,minmax(0,1fr))">
+          <label class="field"><span>Uang pembeli</span>
+            <select name="refund_method" id="refund-method"><option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang (transfer)</option></select></label>
+          <label class="field" id="bank-wrap" hidden><span>Dari rekening</span>
+            <select name="bank_account">{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>
+          <label class="field"><span>Tanggal</span><input type="date" name="issued_on" value="{{ today|date:'Y-m-d' }}"></label>
+        </div>
+        <p class="dp-help">Bila invoice belum dibayar, nilai retur lebih dulu mengurangi piutang; hanya kelebihan yang dikembalikan atau jadi kredit. Pesanan tanpa invoice akan diterbitkan invoicenya dulu.</p>
+        <div><button class="btn-primary" data-confirm="Selesaikan retur? Nota kredit dibuat dan stok diperbarui." data-confirm-tone="neutral" data-confirm-ok="Selesaikan">{% icon "check" %} Selesaikan retur</button></div>
+      </form>
+      <script>(function(){var m=document.getElementById("refund-method"),w=document.getElementById("bank-wrap");m.addEventListener("change",function(){w.hidden=m.value!=="refund";});})();</script>
+    </section>
+    {% endif %}
+
+    {% if ret.request_type == "exchange" and ret.status == "inspected" and editable != "viewer" %}
+    <section class="dp-card">
+      <header><div><h2>Kirim barang pengganti</h2><small>Stok pengganti keluar{% if ret.condition == "good" %}, barang tukar kembali ke stok{% endif %}.</small></div></header>
+      <form method="post" class="dp-card-body" style="display:grid;gap:16px">{% csrf_token %}
+        <input type="hidden" name="action" value="settle_exchange">
+        <div class="form-grid" style="padding:0;grid-template-columns:repeat(2,minmax(0,1fr))">
+          <label class="field"><span>Varian pengganti</span>
+            <select name="replacement_variant_id" required>{% for v in available_variants %}{% if v.pk != ret.original_variant_id and v.pk != ret.order_item.variant_id %}<option value="{{ v.id }}"{% if ret.replacement_variant_id == v.id %} selected{% endif %}>{{ v.name }} · stok {{ v.stock }}</option>{% endif %}{% endfor %}</select></label>
+          <label class="field"><span>Jumlah</span><input type="number" name="quantity" min="1" max="{{ ret.order_item.quantity }}" value="{{ ret.order_item.quantity }}"></label>
+          <label class="field"><span>Kurir pengganti</span><input name="replacement_courier" placeholder="jne, jnt…"></label>
+          <label class="field"><span>No. resi pengganti</span><input name="replacement_tracking_number"></label>
+        </div>
+        <div class="notice {% if ret.condition == 'good' %}ok{% else %}info{% endif %}">{% icon "box" %}<span>{% if ret.condition == "good" %}Barang yang dikembalikan layak jual: masuk lagi ke stok, jadi stok total tidak berubah selain selisih varian.{% else %}Barang rusak: tidak masuk stok. Harga pokok pengganti dibukukan sebagai kerugian (HPP) agar pembukuan sama dengan stok.{% endif %}</span></div>
+        <div><button class="btn-primary" data-confirm="Kirim pengganti dan catat pergerakan stok?" data-confirm-tone="neutral" data-confirm-ok="Kirim">{% icon "truck" %} Kirim pengganti</button></div>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Langkah berikutnya</h2></header>
+      <div class="dp-card-body">
+      {% if editable == "viewer" %}<p class="dp-help">Anda hanya bisa melihat.</p>
+      {% elif ret.status == "requested" %}
+        <form method="post" style="display:grid;gap:8px">{% csrf_token %}<input type="hidden" name="action" value="approve"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2"></textarea><button class="btn-primary justify-center">{% icon "check" %} Setujui retur</button></form>
+        <form method="post" style="display:grid;gap:8px;margin-top:12px">{% csrf_token %}<input type="hidden" name="action" value="reject"><textarea name="admin_notes" placeholder="Alasan penolakan" rows="2"></textarea><button class="btn btn-danger justify-center">Tolak</button></form>
+      {% elif ret.status == "approved" %}
+        <form method="post" style="display:grid;gap:10px">{% csrf_token %}<input type="hidden" name="action" value="mark_received">
+          <label class="field"><span>Kurir pengembalian</span><input name="return_courier" value="{{ ret.return_courier }}" placeholder="jne, jnt…"></label>
+          <label class="field"><span>No. resi pengembalian</span><input name="return_tracking_number" value="{{ ret.return_tracking_number }}"></label>
+          <textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2"></textarea>
+          <button class="btn-primary justify-center">{% icon "box" %} Barang sudah diterima</button></form>
+      {% elif ret.status == "item_received" %}
+        <form method="post" style="display:grid;gap:10px">{% csrf_token %}<input type="hidden" name="action" value="mark_inspected">
+          <fieldset style="border:0;padding:0;margin:0;display:grid;gap:8px"><legend class="field"><span style="font-size:12.5px;font-weight:600">Kondisi barang</span></legend>
+            <label style="display:flex;gap:8px;align-items:center"><input type="radio" name="condition" value="good" checked> Layak jual kembali <small class="dp-help">(masuk stok)</small></label>
+            <label style="display:flex;gap:8px;align-items:center"><input type="radio" name="condition" value="damaged"> Rusak / tidak layak jual <small class="dp-help">(tidak masuk stok)</small></label></fieldset>
+          <textarea name="admin_notes" placeholder="Hasil pemeriksaan" rows="2"></textarea>
+          <button class="btn-primary justify-center">Simpan hasil pemeriksaan</button></form>
+      {% elif ret.status == "inspected" %}
+        <p class="dp-help">Selesaikan di kartu di sebelah kiri.</p>
+      {% elif ret.status == "replacement_sent" %}
+        <form method="post" style="display:grid;gap:8px">{% csrf_token %}<input type="hidden" name="action" value="complete"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2"></textarea><button class="btn-primary justify-center">Tandai selesai</button></form>
+      {% else %}
+        <p class="dp-help">Tidak ada langkah lanjutan.</p>
+      {% endif %}
+      </div>
+    </section>
+
+    <section class="dp-card">
+      <header><h2>Pembukuan & stok</h2><small>Hasil penyelesaian retur</small></header>
+      <div class="dp-card-body">
+        {% if ret.credit_note %}<p class="mb-3 text-sm">Nota kredit <a href="{% url 'merchant-credit-note-detail' ret.credit_note.id %}"><b>{{ ret.credit_note.number }}</b></a> · {{ ret.credit_note.total|rp }}</p>{% endif %}
+        {% for m in movements %}
+        <div class="kv"><div><span>{{ m.created_at|date:"d M H:i" }} · {{ m.get_kind_display }}</span><span><b>{% if m.new_on_hand >= m.previous_on_hand %}+{% else %}−{% endif %}{{ m.quantity }}</b> {% if m.variant %}{{ m.variant.name }}{% else %}{{ m.inventory_level.product.name }}{% endif %}</span></div></div>
+        {% empty %}<p class="dp-help">Belum ada pergerakan stok. Stok dan jurnal dicatat saat retur diselesaikan.</p>{% endfor %}
+        {% if ret.credit_note %}<p class="mt-3"><a class="btn" href="{% url 'merchant-credit-note-detail' ret.credit_note.id %}">Lihat jurnal nota kredit</a></p>{% endif %}
+      </div>
+    </section>
+  </aside>
+</div>
+{% endwith %}
+{% endblock %}

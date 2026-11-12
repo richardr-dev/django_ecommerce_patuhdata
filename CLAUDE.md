@@ -61,6 +61,11 @@ Four test files failed before this work and still do: `test_digital_products`,
   invoice follow it, and re-importing the same file corrects older imports. A new parser must set
   `placed_at`. Marketplace fees are split by charge into accounts 6110–6150 (`ledger.FEE_ACCOUNTS`,
   `Payout.fee_breakdown`); a missing invoice is issued later by the books worker.
+- **A return is settled in one step** (`tax/returns.py`): inspection records the condition; settling
+  creates the credit note (refund or customer credit) and moves stock together. Good goods go back
+  on the shelf and to Persediaan at their cost; damaged goods stay out and their cost stays in HPP.
+  An exchange takes the replacement variant off the shelf, returns the original if good, and books
+  HPP against Persediaan when the original is damaged. Never flip a return to `refunded` by hand.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -80,6 +85,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
 | Credit notes | `tax/credit_notes.py` | `tax/sales_views.py` |
+| Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |
 | Receipts, customer credit | `tax/receipts.py` | `tax/sales_views.py` |
 | Quotes, recurring invoices | `tax/quotes.py`, `tax/recurring.py` | `tax/sales_views.py` |
 | Invoice recap per channel (Shopee, Tokopedia…) | `channels/invoice_recap.py` | `channels/report_views.py` |

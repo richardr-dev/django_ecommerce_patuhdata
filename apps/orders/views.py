@@ -969,7 +969,7 @@ def request_return(request, order_id):
     order = get_customer_order_or_404(request, order_id)
     reason = request.POST.get("reason", "").strip()
     if reason and order.status in {"paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered", "completed"}:
-        ReturnRequest.objects.create(order=order, reason=reason)
+        ReturnRequest.objects.create(order=order, reason="other", reason_detail=reason[:1000])
         messages.success(request, "Permintaan pengembalian telah dikirim.")
     else: messages.error(request, "Permintaan pengembalian belum dapat diproses.")
     return redirect("order-detail", order_id=order.id)
@@ -1292,6 +1292,9 @@ def merchant_return_detail(request, return_id):
     _require_roles(request, store, {"admin", "manager", "ops"})
     ret = get_object_or_404(ReturnRequest, pk=return_id, order__store=store)
 
+    from apps.accounting.bank import bank_accounts
+    from apps.tax import returns as return_service
+
     if request.method == "POST":
         action = request.POST.get("action")
         STATUS_TRANSITIONS = {
@@ -1299,13 +1302,17 @@ def merchant_return_detail(request, return_id):
             "reject": ("requested", "rejected"),
             "mark_received": ("approved", "item_received"),
             "mark_inspected": ("item_received", "inspected"),
-            "mark_sent": ("inspected", "replacement_sent"),
             "complete": ("replacement_sent", "completed"),
-            "refunded": ("inspected", "refunded"),
         }
         if action in STATUS_TRANSITIONS:
             from_status, to_status = STATUS_TRANSITIONS[action]
             if ret.status == from_status:
+                if action == "mark_inspected":
+                    condition = request.POST.get("condition", "")
+                    if condition not in dict(ReturnRequest.CONDITIONS):
+                        messages.error(request, "Pilih kondisi barang: layak jual atau rusak.")
+                        return redirect("merchant-return-detail", return_id=return_id)
+                    ret.condition = condition
                 ret.status = to_status
                 admin_notes = request.POST.get("admin_notes", "").strip()
                 if admin_notes:
@@ -1314,16 +1321,46 @@ def merchant_return_detail(request, return_id):
                     ret.return_tracking_number = request.POST.get("return_tracking_number",
                         ret.return_tracking_number)
                     ret.return_courier = request.POST.get("return_courier", ret.return_courier)
-                if action == "mark_sent":
-                    ret.replacement_tracking_number = request.POST.get("replacement_tracking_number",
-                        ret.replacement_tracking_number)
-                    ret.replacement_courier = request.POST.get("replacement_courier",
-                        ret.replacement_courier)
                 ret.save()
                 messages.success(request, f"Status retur diperbarui: {ret.get_status_display()}")
                 AuditLog.objects.create(store=store, actor=request.user,
                     action="return.status_updated", object_type="ReturnRequest",
                     object_id=str(ret.pk), details={"from": from_status, "to": to_status})
+        elif action in {"settle_refund", "settle_exchange"}:
+            try:
+                if action == "settle_refund":
+                    quantities = {}
+                    for line in ret.order.items.all():
+                        try:
+                            quantities[line.pk] = int(request.POST.get(f"qty_{line.pk}") or 0)
+                        except ValueError:
+                            quantities[line.pk] = 0
+                    bank = next((b for b in bank_accounts(store)
+                        if str(b.pk) == request.POST.get("bank_account")), None)
+                    try:
+                        issued_on = date.fromisoformat(request.POST.get("issued_on", ""))
+                    except ValueError:
+                        issued_on = timezone.localdate()
+                    note = return_service.settle_refund(ret, quantities=quantities,
+                        issued_on=issued_on, bank_account=bank, actor=request.user,
+                        excess_action="refund" if request.POST.get("refund_method") == "refund"
+                        else "credit")
+                    messages.success(request, f"Retur diselesaikan: nota kredit {note.number}"
+                        f"{' dan stok kembali ke gudang' if ret.condition == 'good' else ''}.")
+                else:
+                    variant = ProductVariant.objects.filter(
+                        pk=request.POST.get("replacement_variant_id") or 0,
+                        product__store=store).first()
+                    ret.replacement_courier = request.POST.get("replacement_courier", "")[:60]
+                    ret.replacement_tracking_number = request.POST.get("replacement_tracking_number", "")[:100]
+                    ret.save(update_fields=["replacement_courier", "replacement_tracking_number"])
+                    return_service.settle_exchange(ret, replacement_variant=variant,
+                        quantity=request.POST.get("quantity") or None, actor=request.user)
+                    messages.success(request, "Barang pengganti dicatat keluar dari stok.")
+                AuditLog.objects.create(store=store, actor=request.user, action=f"return.{action}",
+                    object_type="ReturnRequest", object_id=str(ret.pk), details={})
+            except return_service.ReturnError as error:
+                messages.error(request, str(error))
         return redirect("merchant-return-detail", return_id=return_id)
 
     available_variants = []
@@ -1331,9 +1368,44 @@ def merchant_return_detail(request, return_id):
         available_variants = list(
             ret.order_item.product.variants.filter(is_active=True).order_by("name")
         )
-
+    ret = ReturnRequest.objects.select_related("credit_note", "order", "order_item",
+        "replacement_variant", "original_variant").get(pk=ret.pk)
+    labels = dict(ReturnRequest.STATUS)
+    keys = (["requested", "rejected"] if ret.status == "rejected" else
+        ["requested", "approved", "item_received", "inspected"] +
+        (["replacement_sent", "completed"] if ret.request_type == "exchange" else ["refunded"]))
+    position = keys.index(ret.status) if ret.status in keys else len(keys)
+    final = ret.status in {"refunded", "completed", "rejected"}
+    done = keys[:position + 1] if final else keys[:position]
     return render(request, "merchant/return_detail.html", _merchant_context(request, store,
-        ret=ret, available_variants=available_variants))
+        ret=ret, available_variants=available_variants, steps=[(k, labels[k]) for k in keys],
+        done=done,
+        lines=return_service.returnable_lines(ret) if ret.request_type == "return_refund" else [],
+        banks=list(bank_accounts(store)), today=timezone.localdate(),
+        movements=return_service.movements(ret)))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_return_create(request, order_id):
+    """Record a return the seller received outside the storefront (WhatsApp, marketplace, counter)."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops"})
+    order = get_object_or_404(Order, id=order_id, store=store)
+    line = order.items.filter(pk=request.POST.get("order_item") or 0).first()
+    kind = request.POST.get("request_type", "return_refund")
+    if kind not in dict(ReturnRequest.TYPES):
+        kind = "return_refund"
+    reason = request.POST.get("reason", "other")
+    ret = ReturnRequest.objects.create(order=order, order_item=line, request_type=kind,
+        reason=reason if reason in dict(ReturnRequest.REASONS) else "other",
+        reason_detail=request.POST.get("reason_detail", "")[:1000], status="approved",
+        original_variant=line.variant if line else None)
+    AuditLog.objects.create(store=store, actor=request.user, action="return.created",
+        object_type="ReturnRequest", object_id=str(ret.pk), details={"order": str(order.id)})
+    messages.success(request, "Retur dicatat. Catat resi atau terima barangnya untuk lanjut.")
+    return redirect("merchant-return-detail", return_id=ret.pk)
 
 
 def _whatsapp_link(phone, text):

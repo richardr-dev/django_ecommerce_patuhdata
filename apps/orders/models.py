@@ -586,6 +586,13 @@ class ReturnRequest(models.Model):
     replacement_courier = models.CharField(max_length=60, blank=True)
     # Admin notes
     admin_notes = models.TextField(blank=True)
+    # Inspection and settlement: what condition the goods came back in decides whether they go
+    # back on the shelf; the credit note (refund) or the stock movements (exchange) are the record.
+    CONDITIONS = [("good", "Layak jual kembali"), ("damaged", "Rusak / tidak layak jual")]
+    condition = models.CharField(max_length=10, choices=CONDITIONS, blank=True)
+    credit_note = models.ForeignKey("tax.CreditNote", on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="return_requests")
+    settled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

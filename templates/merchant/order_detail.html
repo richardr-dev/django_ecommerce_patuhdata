@@ -17,6 +17,19 @@
       <button type="submit" class="btn-primary">{% icon "receipt" %} Terbitkan invoice</button>
     </form>
     {% endif %}
+    {% if merchant_role != 'viewer' and merchant_role != 'customer_service' and order.status != 'cancelled' %}
+    <details class="dp-more"><summary class="btn">Catat retur ▾</summary>
+      <div class="menu-panel" style="min-width:300px;padding:14px">
+        <form method="post" action="{% url 'merchant-return-create' order.id %}" style="display:grid;gap:10px">{% csrf_token %}
+          <label class="field"><span>Barang</span><select name="order_item">{% for it in order.items.all %}<option value="{{ it.id }}">{{ it.name }}{% if it.variant_name %} · {{ it.variant_name }}{% endif %} ({{ it.quantity }}×)</option>{% endfor %}</select></label>
+          <label class="field"><span>Jenis</span><select name="request_type"><option value="return_refund">Retur & refund</option><option value="exchange">Tukar ukuran / barang</option></select></label>
+          <label class="field"><span>Alasan</span><select name="reason"><option value="wrong_size">Ukuran tidak sesuai</option><option value="defective">Produk cacat / rusak</option><option value="wrong_item">Produk berbeda</option><option value="not_as_described">Tidak sesuai deskripsi</option><option value="other">Lainnya</option></select></label>
+          <label class="field"><span>Keterangan <em>(opsional)</em></span><input name="reason_detail" maxlength="1000"></label>
+          <button class="btn-primary justify-center">Catat retur</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
   </div>
 </div>
 
