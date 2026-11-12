@@ -169,6 +169,87 @@
     });
   }
 
+
+  /* ── Soft navigation for the sidebar ────────────────────────────────────────
+     Clicking a sidebar item loads the page in the background and swaps only <main>: the sidebar
+     is never re-rendered, so its scroll position and every group you opened stay exactly as
+     they are, and nothing flashes. Anything unexpected (login redirect, error, non-HTML,
+     modifier keys, new tab) falls back to a normal page load. */
+  var navBox = document.getElementById("pd-nav"), mainBox = document.querySelector(".pd-main");
+  var softToken = 0;
+  function samePath(a, b) {
+    try { var x = new URL(a, location.origin), y = new URL(b, location.origin); return x.pathname === y.pathname && x.search.replace(/[?&]store=\d+/, "") === y.search.replace(/[?&]store=\d+/, ""); }
+    catch (e) { return false; }
+  }
+  function markActive(doc) {
+    var wanted = doc.querySelector("#pd-nav .nav-link.is-active"), home = doc.querySelector("#pd-nav .nav-home.is-active");
+    navBox.querySelectorAll(".is-active").forEach(function (el) { el.classList.remove("is-active"); el.removeAttribute("aria-current"); });
+    var target = null;
+    if (wanted) {
+      var href = wanted.getAttribute("href");
+      navBox.querySelectorAll(".nav-link").forEach(function (a) { if (!target && samePath(a.getAttribute("href"), href)) target = a; });
+    } else if (home) target = navBox.querySelector(".nav-home");
+    if (target) {
+      target.classList.add("is-active"); target.setAttribute("aria-current", "page");
+      var group = target.closest("details"); if (group) group.open = true;   // open the group, never close the others
+      target.scrollIntoView({block: "nearest"});
+    }
+  }
+  function runScripts(root) {
+    root.querySelectorAll("script").forEach(function (old) {
+      var fresh = document.createElement("script");
+      Array.prototype.forEach.call(old.attributes, function (attr) { fresh.setAttribute(attr.name, attr.value); });
+      fresh.textContent = old.textContent;
+      old.parentNode.replaceChild(fresh, old);
+    });
+  }
+  function softLoad(url, push) {
+    var token = ++softToken;
+    progress(true);
+    fetch(url, {credentials: "same-origin", headers: {"X-Requested-With": "pd-soft-nav"}}).then(function (r) {
+      var type = r.headers.get("content-type") || "";
+      if (!r.ok || type.indexOf("text/html") === -1 || r.url.indexOf("/login") > -1) throw new Error("hard");
+      return r.text().then(function (html) { return {html: html, url: r.url}; });
+    }).then(function (res) {
+      if (token !== softToken) return;
+      var doc = new DOMParser().parseFromString(res.html, "text/html"), fresh = doc.querySelector(".pd-main");
+      if (!fresh || !doc.querySelector("#pd-nav")) throw new Error("hard");
+      doc.querySelectorAll("head link[rel=stylesheet]").forEach(function (link) {   // page-specific css
+        var href = link.getAttribute("href");
+        if (!document.querySelector('link[rel=stylesheet][href="' + href + '"]')) document.head.appendChild(link.cloneNode());
+      });
+      mainBox.innerHTML = fresh.innerHTML;
+      runScripts(mainBox);
+      document.title = doc.title;
+      markActive(doc);
+      if (push) history.pushState({soft: 1}, "", res.url);
+      window.scrollTo(0, 0);
+      document.body.classList.remove("nav-open");
+      wireRupiah(mainBox);
+      wireToasts();
+      if (window.htmx) window.htmx.process(mainBox);
+      progress(false);
+    }).catch(function () { progress(false); location.href = url; });
+  }
+  if (navBox && mainBox && window.fetch && window.DOMParser) {
+    var SKIP = /(pdf|print|csv|xlsx|export|download|label|logout|toggle|\.json|[?&]format=)/i;
+    document.addEventListener("click", function (event) {
+      var a = event.target.closest && event.target.closest(".pd-nav a[href], .pd-main a[href], .pd-brand, .create-menu a[href]");
+      if (!a || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (a.target && a.target !== "_self" || a.hasAttribute("download") || a.hasAttribute("data-no-soft")) return;
+      if (a.closest("[hx-get],[hx-post],[hx-boost]") || a.hasAttribute("data-confirm") || a.hasAttribute("data-open")
+          || a.hasAttribute("onclick") || a.hasAttribute("hx-get")) return;
+      var href = a.getAttribute("href");
+      if (!href || href.charAt(0) !== "/" || href.indexOf("/merchant/") !== 0 || SKIP.test(href)) return;
+      if (href.indexOf("#") > -1 && samePath(href.split("#")[0] || location.pathname, location.href)) return;
+      event.preventDefault();
+      if (samePath(href, location.href)) { window.scrollTo(0, 0); return; }
+      softLoad(href, true);
+    });
+    window.addEventListener("popstate", function () { softLoad(location.href, false); });
+    history.replaceState({soft: 1}, "", location.href);
+  }
+
   function ready() { wireRupiah(document); wireToasts(); ensureDialog(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ready); else ready();
 })();

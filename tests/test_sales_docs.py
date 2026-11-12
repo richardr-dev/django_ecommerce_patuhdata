@@ -1449,3 +1449,14 @@ class SidebarStaysOnTheRightItemTests(Base):
         }
         for path, label in cases.items():
             self.assertEqual([item[1] for item in self.active(path)], [label], path)
+
+
+class SoftNavigationContractTests(Base):
+    """The sidebar swaps only <main> on click (merchant-ui.js); every page must keep that shape."""
+
+    def test_pages_expose_nav_and_main_for_soft_navigation(self):
+        self.client.force_login(self.owner)
+        for name in ("merchant-dashboard", "merchant-sales-invoices", "merchant-bills", "merchant-invoice-new"):
+            html = self.client.get(reverse(name)).content.decode()
+            self.assertEqual(html.count('id="pd-nav"'), 1, name)
+            self.assertEqual(html.count('<main class="pd-main">'), 1, name)

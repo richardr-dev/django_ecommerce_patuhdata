@@ -103,6 +103,12 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
   light up its sidebar item: when you add a URL outside an existing link's prefix, add it to
   that link's `match=` (`SidebarStaysOnTheRightItemTests` pins this). The sidebar keeps its
   scroll position and opened groups across page loads (`pd-nav-state` in sessionStorage).
+  Sidebar, topbar-menu and in-page links navigate softly (`merchant-ui.js`, "Soft navigation"):
+  the response's `<main>` replaces the current one, so the sidebar never re-renders or folds a
+  group. Keep `#pd-nav` and `<main class="pd-main">` in `base.html`; scripts inside `<main>` re-run
+  on every visit, so never add `document`/`window` listeners there (bind to elements). Opt a
+  link out with `data-no-soft`. Links with `hx-*`, `data-confirm`, `onclick`, pdf/csv/print stay
+  normal.
 - Invoice lines carry optional enterprise columns: Kode (`code[]` → `InvoiceItem.sku` for
   services), Satuan (`unit[]`), Keterangan (`note[]`), Diskon Rp and a Diskon % helper. The form's
   "Kolom" menu shows them (remembered per device); detail and PDF show them when filled.
