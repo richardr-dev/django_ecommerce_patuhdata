@@ -1,0 +1,89 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ txn.get_kind_display }} {{ txn.date|date:"d M Y" }}{% endblock %}
+{% block content %}
+
+<nav class="dp-crumb" aria-label="Breadcrumb"><a href="{% url 'merchant-bank-accounts' %}">Kas & Bank</a> › <a href="{% url 'merchant-bank-account' txn.bank_account.id %}">{{ txn.bank_account.name }}</a> › <span>{{ txn.get_kind_display }}</span></nav>
+
+<div class="dp-head">
+  <div>
+    <h1 class="dp-title">{{ txn.get_kind_display }} {{ txn.total|rp }}
+      {% if txn.voided %}<span class="pill pill-void">Dibatalkan</span>{% elif matched %}<span class="pill pill-paid">Cocok dengan bank</span>{% else %}<span class="pill pill-issued">Tercatat</span>{% endif %}</h1>
+    <p class="dp-sub">{{ txn.date|date:"d M Y" }} · {% if txn.kind == 'transfer' %}<b>{{ txn.bank_account.name }}</b> → <b>{{ txn.to_bank_account.name }}</b>{% else %}{% if txn.kind == 'receive' %}Masuk ke{% else %}Dari{% endif %} <b>{{ txn.bank_account.name }}</b>{% if txn.contact %} · {% if txn.kind == 'receive' %}dari{% else %}ke{% endif %} <b>{{ txn.contact }}</b>{% endif %}{% endif %}</p>
+  </div>
+  <div class="dp-actions">
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind={{ txn.kind }}&bank={{ txn.bank_account.id }}">{% icon "plus" %} Transaksi baru</a>
+    <details class="dp-more">
+      <summary class="btn" aria-label="Tindakan lain">Lainnya ▾</summary>
+      <div class="menu-panel">
+        <button type="button" onclick="window.print()">{% icon "printer" %}<span>Cetak bukti</span></button>
+        <a href="{% url 'merchant-account-ledger' txn.bank_account.account.code %}">{% icon "book" %}<span>Buku besar rekening</span></a>
+        {% if can_edit and not txn.voided %}
+        <hr>
+        <form method="post" data-confirm="Batalkan transaksi ini? Jurnalnya dibalik di buku besar.">
+          {% csrf_token %}<input type="hidden" name="action" value="void">
+          <button type="submit" class="danger">{% icon "alert" %}<span>Batalkan transaksi</span></button>
+        </form>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+</div>
+
+<div class="dp-grid">
+  <article class="dp-paper">
+    <div class="dp-paper-head">
+      <div class="dp-seller">
+        {% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="">{% else %}<span class="mark">{{ merchant_store.name|slice:':1' }}</span>{% endif %}
+        <div><strong>{{ merchant_store.name }}</strong><p>{{ txn.bank_account.name }}{% if txn.bank_account.account_number %} · {{ txn.bank_account.bank_name }} {{ txn.bank_account.account_number }}{% endif %}</p></div>
+      </div>
+      <div class="dp-doc-type"><span>{% if txn.kind == 'receive' %}BUKTI KAS MASUK{% elif txn.kind == 'spend' %}BUKTI KAS KELUAR{% else %}BUKTI TRANSFER{% endif %}</span><small>{{ txn.reference|default:"" }}</small></div>
+    </div>
+    <dl class="dp-meta">
+      <div><dt>Tanggal</dt><dd>{{ txn.date|date:"d M Y" }}</dd></div>
+      <div><dt>{% if txn.kind == 'receive' %}Diterima dari{% elif txn.kind == 'spend' %}Dibayar ke{% else %}Ke rekening{% endif %}</dt><dd>{% if txn.kind == 'transfer' %}{{ txn.to_bank_account.name }}{% else %}{{ txn.contact|default:"—" }}{% endif %}</dd></div>
+      <div><dt>Referensi</dt><dd>{{ txn.reference|default:"—" }}</dd></div>
+      <div><dt>Dicatat oleh</dt><dd>{{ txn.created_by.username|default:"—" }}</dd></div>
+    </dl>
+    {% if txn.description %}<div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Keterangan</h4><p style="color:var(--pd-text)">{{ txn.description }}</p></div></div>{% else %}<div style="height:18px"></div>{% endif %}
+    {% if txn.kind != 'transfer' %}
+    <div class="scroll-x">
+    <table class="dp-items">
+      <thead><tr><th>Akun</th><th>Keterangan</th><th class="num">Jumlah</th></tr></thead>
+      <tbody>
+      {% for item in items %}
+        <tr><td><strong>{{ item.account.name }}</strong><small>{{ item.account.code }}</small></td><td>{{ item.description|default:"—" }}</td><td class="num"><strong>{{ item.amount|rp }}</strong></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+    <div class="dp-foot">
+      <div class="dp-notes"></div>
+      <div class="dp-totals">
+        {% if txn.kind != 'transfer' %}<div><span>Subtotal</span><span>{{ txn.subtotal|rp }}</span></div>{% endif %}
+        {% if txn.tax %}<div><span>PPN {% if txn.kind == 'receive' %}keluaran{% else %}masukan{% endif %}</span><span>{{ txn.tax|rp }}</span></div>{% endif %}
+        <div class="grand"><span>Total</span><span>{{ txn.total|rp }}</span></div>
+      </div>
+    </div>
+    {% if txn.voided %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
+  </article>
+
+  <aside class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Rekonsiliasi bank</h2></header>
+      <div class="dp-card-body">
+        {% if matched %}
+        <p style="margin:0;font-size:13px;color:#067647;font-weight:600">✓ Cocok dengan mutasi bank</p>
+        <p class="dp-help">{{ matched.date|date:"d M Y" }} · {{ matched.description|truncatechars:60 }}</p>
+        {% elif txn.voided %}
+        <p class="dp-help" style="margin:0">Transaksi dibatalkan.</p>
+        {% else %}
+        <p class="dp-help" style="margin:0">Belum dicocokkan dengan mutasi bank. Impor mutasi di halaman rekening untuk mencocokkannya.</p>
+        <a class="btn btn-block" style="margin-top:12px" href="{% url 'merchant-bank-account' txn.bank_account.id %}">Buka rekonsiliasi</a>
+        {% endif %}
+      </div>
+    </section>
+    {% include "merchant/_journal_card.html" %}
+  </aside>
+</div>
+{% endblock %}

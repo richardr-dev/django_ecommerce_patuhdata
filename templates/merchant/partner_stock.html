@@ -1,0 +1,91 @@
+{% extends "merchant/base.html" %}
+{% block title %}Stok di Mitra{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">KONSINYASI</p>
+  <h1 class="text-2xl font-bold text-gray-900 mb-1">Stok di Mitra</h1>
+  <p class="text-sm text-gray-500">Barang yang dititipkan ke mitra tetap milik toko sampai terjual. Mengirim barang ke mitra tidak dihitung sebagai penjualan; penjualan tercatat saat settlement ditagihkan.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Nilai stok di mitra</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ total_value|floatformat:"0g" }}</p>
+    <p class="text-xs text-gray-400 mt-1">pada harga pokok, masuk persediaan toko</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <p class="text-xs text-gray-500 mb-1">Jenis barang</p>
+    <p class="text-2xl font-bold text-gray-900">{{ rows|length }}</p>
+    <p class="text-xs text-gray-400 mt-1">item yang masih dipegang mitra</p>
+  </div>
+</div>
+
+{% if can_edit and partners %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+  <h2 class="text-sm font-semibold text-gray-800 mb-3">Kirim atau retur barang</h2>
+  <form method="post" class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+    {% csrf_token %}
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Mitra</span>
+      <select name="partner" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2">
+        {% for partner in partners %}<option value="{{ partner.id }}">{{ partner.name }}</option>{% endfor %}
+      </select></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU</span>
+      <input name="sku" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Jumlah</span>
+      <input type="number" name="quantity" min="1" value="1" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Tanggal</span>
+      <input type="date" name="date" value="{{ today }}" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Catatan</span>
+      <input name="note" maxlength="200" placeholder="No. surat jalan" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <div class="flex gap-2">
+      <button name="action" value="send" class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Kirim</button>
+      <button name="action" value="return" class="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm">Retur</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+      <th class="text-left px-4 py-2">Mitra</th><th class="text-left px-4 py-2">Barang</th>
+      <th class="text-left px-4 py-2">SKU</th><th class="text-right px-4 py-2">Jumlah</th>
+      <th class="text-right px-4 py-2">Nilai</th></tr></thead>
+    <tbody>
+    {% for item in rows %}
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-2">{{ item.row.partner.name }}</td>
+        <td class="px-4 py-2">{{ item.row.label }}</td>
+        <td class="px-4 py-2 text-gray-500">{{ item.row.sku }}</td>
+        <td class="px-4 py-2 text-right {% if item.row.quantity < 0 %}text-red-600 font-semibold{% endif %}">{{ item.row.quantity }}
+          {% if item.row.quantity < 0 %}<span class="block text-xs font-normal">Mitra melaporkan terjual lebih banyak daripada yang tercatat dikirim. Periksa pengiriman.</span>{% endif %}</td>
+        <td class="px-4 py-2 text-right">Rp{{ item.value|floatformat:"0g" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Belum ada barang yang dititipkan ke mitra.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <h2 class="text-sm font-semibold text-gray-800 px-4 py-3">Riwayat pergerakan</h2>
+  <table class="w-full text-sm">
+    <tbody>
+    {% for move in recent %}
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-2 text-gray-500">{{ move.date|date:"d/m/Y" }}</td>
+        <td class="px-4 py-2">{{ move.stock.partner.name }}</td>
+        <td class="px-4 py-2">{{ move.stock.label }}</td>
+        <td class="px-4 py-2">{{ move.get_kind_display }}</td>
+        <td class="px-4 py-2 text-right">{{ move.quantity }}</td>
+        <td class="px-4 py-2 text-gray-400">{{ move.note }}</td>
+      </tr>
+    {% empty %}
+      <tr><td class="px-4 py-6 text-center text-gray-400">Belum ada pergerakan.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

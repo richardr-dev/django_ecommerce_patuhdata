@@ -1,0 +1,18 @@
+{% load books %}<section class="dp-card">
+  <header><h2>Jurnal</h2><small>Buku besar</small></header>
+  {% for entry in journal %}
+  <table class="journal">
+    <colgroup><col><col class="c-debit"><col class="c-credit"></colgroup>
+    <caption><a href="{% url 'merchant-journal-detail' entry.id %}" style="color:inherit">{{ entry.memo }}</a>{% if entry.reverses_id %}<span class="tag">pembalikan</span>{% elif entry.superseded %}<span class="tag">dibatalkan</span>{% endif %}<small>{{ entry.date|date:"d M Y" }} · JU-{{ entry.id }}</small></caption>
+    <tbody>
+    {% for line in entry.rows %}
+      <tr><td class="{% if line.credit %}credit-name{% endif %}"><small>{{ line.account.code }}</small><a href="{% url 'merchant-account-ledger' line.account.code %}" style="color:inherit">{{ line.account.name }}</a></td>
+        <td class="amt">{% if line.debit %}{{ line.debit|rp }}{% endif %}</td><td class="amt">{% if line.credit %}{{ line.credit|rp }}{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if forloop.last %}<p class="dp-help" style="padding:0 18px 14px">Debit di kolom kiri, kredit di kanan (menjorok).</p>{% endif %}
+  {% empty %}
+  <p class="dp-empty">Belum masuk buku besar.</p>
+  {% endfor %}
+</section>

@@ -1,0 +1,12 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penerimaan Pembayaran{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Penerimaan pembayaran</h1><p>Setiap uang masuk dari pelanggan yang dialokasikan ke satu atau beberapa invoice.</p></div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "plus" %} Terima pembayaran</a></div>{% endif %}</div>
+<div class="tiles"><div class="tile accent"><small>Total diterima</small><strong>{{ total|rp }}</strong></div></div>
+<section class="panel">{% if page.object_list %}<div class="scroll-x"><table class="tbl">
+  <thead><tr><th>Nomor</th><th>Tanggal</th><th>Pelanggan</th><th>Rekening</th><th class="num">Diterima</th><th class="num">Jadi kredit</th></tr></thead>
+  <tbody>{% for r in page %}<tr class="{% if r.voided %}void{% endif %}"><td><a class="rowlink" href="{% url 'merchant-receipt-detail' r.id %}">{{ r.number }}</a></td><td>{{ r.date|date:"d M Y" }}</td><td>{{ r.buyer_name }}</td><td>{{ r.bank_account.name|default:"Kas utama" }}</td><td class="num"><strong>{{ r.amount|rp }}</strong></td><td class="num">{% if r.deposit %}{{ r.deposit|rp }}{% else %}<span class="muted">–</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  <footer><span>{{ page.paginator.count }} penerimaan</span><span class="pager">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">‹</a>{% endif %}<span>{{ page.number }}/{{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?page={{ page.next_page_number }}">›</a>{% endif %}</span></footer>
+  {% else %}<div class="empty-box"><strong>Belum ada penerimaan</strong>Gunakan “Terima pembayaran” saat satu transfer melunasi beberapa invoice.</div>{% endif %}</section>
+{% endblock %}

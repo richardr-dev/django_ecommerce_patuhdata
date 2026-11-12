@@ -68,7 +68,7 @@
         <td class="px-5 py-3 text-gray-600">{{ p.payment_term_days }} hari</td>
         <td class="px-5 py-3 text-right text-gray-600">{{ p.total_settlements }}</td>
         <td class="px-5 py-3 text-right {% if p.open_total_due %}font-semibold text-amber-600{% else %}text-gray-400{% endif %}">
-          {% if p.open_total_due %}Rp{{ p.open_total_due|floatformat:0 }}{% else %}—{% endif %}
+          {% if p.open_total_due %}Rp{{ p.open_total_due|floatformat:"0g" }}{% else %}—{% endif %}
         </td>
       </tr>
       {% empty %}

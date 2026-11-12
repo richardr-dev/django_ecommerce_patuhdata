@@ -60,7 +60,7 @@
         <td class="px-5 py-3 text-gray-600">{{ b.city|default:"—" }}</td>
         <td class="px-5 py-3 text-gray-600">{{ b.province|default:"—" }}</td>
         <td class="px-5 py-3 text-right text-gray-700">{{ b.order_count }}</td>
-        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_spent|floatformat:0 }}</td>
+        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_spent|floatformat:"0g" }}</td>
         <td class="px-5 py-3">{% if b.is_member %}<span class="badge paid">Member</span>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
       </tr>
       {% empty %}

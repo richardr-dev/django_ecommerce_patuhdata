@@ -1,0 +1,105 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}{% if kind == 'receive' %}Terima uang{% elif kind == 'transfer' %}Transfer antar rekening{% else %}Kirim uang{% endif %}{% endblock %}
+{% block content %}
+
+<nav class="dp-crumb" aria-label="Breadcrumb"><a href="{% url 'merchant-bank-accounts' %}">Kas & Bank</a> › <span>Transaksi baru</span></nav>
+<div class="pg-head">
+  <div>
+    <h1>{% if kind == 'receive' %}Terima uang{% elif kind == 'transfer' %}Transfer antar rekening{% else %}Kirim uang{% endif %}</h1>
+    <p>{% if kind == 'receive' %}Uang masuk yang bukan pembayaran invoice: setoran modal, pinjaman, bunga bank, penjualan aset, atau pendapatan lain.{% elif kind == 'transfer' %}Memindahkan uang antar rekening sendiri, misalnya tarik tunai ke kas kecil. Tidak memengaruhi laba rugi.{% else %}Uang keluar yang bukan pembayaran tagihan supplier: biaya admin bank, pembelian tunai, prive, cicilan pinjaman.{% endif %}</p>
+  </div>
+  <nav class="kind-switch" aria-label="Jenis transaksi">
+    {% for code, label in kinds %}<a href="?kind={{ code }}{% if selected_bank %}&bank={{ selected_bank }}{% endif %}" class="{% if code == kind %}on{% endif %}">{{ label }}</a>{% endfor %}
+  </nav>
+</div>
+
+{% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup. Gunakan tanggal setelahnya.</span></div>{% endif %}
+
+<form method="post" class="panel" id="cash-form">
+  {% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}">
+  <div class="form-grid">
+    <label class="field"><span>{% if kind == 'receive' %}Masuk ke rekening{% else %}Dari rekening{% endif %}</span>
+      <select name="bank_account" required>{% for bank in banks %}<option value="{{ bank.id }}" {% if bank.id|stringformat:"s" == selected_bank|stringformat:"s" %}selected{% endif %}>{{ bank.name }}</option>{% endfor %}</select></label>
+    {% if kind == 'transfer' %}
+    <label class="field"><span>Ke rekening</span>
+      <select name="to_bank_account" required><option value="">— pilih —</option>{% for bank in banks %}{% if bank.id|stringformat:"s" != selected_bank|stringformat:"s" %}<option value="{{ bank.id }}">{{ bank.name }}</option>{% endif %}{% endfor %}</select></label>
+    <label class="field"><span>Jumlah</span><input name="amount" inputmode="decimal" data-rupiah required placeholder="0" value="{{ post.amount }}"></label>
+    {% else %}
+    <label class="field"><span>{% if kind == 'receive' %}Diterima dari{% else %}Dibayar ke{% endif %} <em>(opsional)</em></span><input name="contact" maxlength="160" value="{{ post.contact }}" placeholder="{% if kind == 'receive' %}mis. Pemilik, Bank BCA{% else %}mis. Toko Bangunan Jaya{% endif %}"></label>
+    <label class="field"><span>No. referensi <em>(opsional)</em></span><input name="reference" maxlength="120" value="{{ post.reference }}"></label>
+    {% endif %}
+    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ post.date|default:today }}" required></label>
+    <label class="field wide"><span>Keterangan</span><input name="description" maxlength="300" value="{{ post.description }}" placeholder="{% if kind == 'transfer' %}mis. Tarik tunai untuk kas kecil{% else %}Ringkasan transaksi{% endif %}"></label>
+  </div>
+
+  {% if kind != 'transfer' %}
+  <div class="scroll-x">
+  <table class="editor">
+    <thead><tr><th style="width:38%">Akun</th><th>Keterangan baris</th><th class="num" style="width:180px">Jumlah</th><th class="x"></th></tr></thead>
+    <tbody id="rows">
+      {% for n in "12" %}
+      <tr>
+        <td><select name="account[]" aria-label="Akun">
+          <option value="">— pilih akun —</option>
+          {% for label, group in accounts %}<optgroup label="{{ label }}">{% for account in group %}<option value="{{ account.code }}" {% if forloop.parentloop.parentloop.first and account.code == suggested %}selected{% endif %}>{{ account.code }} · {{ account.name }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select></td>
+        <td><input name="line_description[]" maxlength="200" aria-label="Keterangan baris"></td>
+        <td class="num"><input name="amount[]" inputmode="decimal" data-rupiah placeholder="0" aria-label="Jumlah" data-amount></td>
+        <td class="x"><button type="button" data-remove aria-label="Hapus baris">×</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="editor-foot">
+    <button type="button" class="add-line" id="add-line">+ Tambah baris</button>
+    <div class="sum">
+      <div><span>Subtotal</span><span id="subtotal">Rp0</span></div>
+      <div><span>PPN {% if kind == 'receive' %}keluaran{% else %}masukan{% endif %} <em style="font-style:normal;color:var(--pd-faint)">(jika ada)</em></span><input name="tax" inputmode="decimal" data-rupiah placeholder="0" data-amount id="tax" value="{{ post.tax }}"></div>
+      <div class="grand"><span>Total {% if kind == 'receive' %}diterima{% else %}dibayar{% endif %}</span><span id="grand">Rp0</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions-bar">
+    <a class="btn" href="{% url 'merchant-bank-accounts' %}">Batal</a>
+    <button type="submit" name="next" value="new" class="btn">Simpan & buat lagi</button>
+    <button type="submit" class="btn-primary">{% icon "check" %} Simpan</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  var rows = document.getElementById("rows");
+  if (!rows) return;
+  function num(text) {
+    text = (text || "").replace(/\s/g, "");
+    if (!text) return 0;
+    if (text.indexOf(",") > -1 && text.lastIndexOf(",") > text.lastIndexOf(".")) text = text.replace(/\./g, "").replace(",", ".");
+    else if ((text.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(text)) text = text.replace(/\./g, "");
+    else text = text.replace(/,/g, "");
+    return parseFloat(text) || 0;
+  }
+  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function total() {
+    var sum = 0;
+    rows.querySelectorAll("[data-amount]").forEach(function (el) { sum += num(el.value); });
+    document.getElementById("subtotal").textContent = fmt(sum);
+    document.getElementById("grand").textContent = fmt(sum + num(document.getElementById("tax").value));
+  }
+  document.getElementById("cash-form").addEventListener("input", total);
+  document.getElementById("add-line").addEventListener("click", function () {
+    var row = rows.querySelector("tr").cloneNode(true);
+    row.querySelectorAll("input").forEach(function (el) { el.value = ""; });
+    row.querySelector("select").selectedIndex = 0;
+    rows.appendChild(row);
+  });
+  rows.addEventListener("click", function (event) {
+    if (event.target.matches("[data-remove]") && rows.children.length > 1) {
+      event.target.closest("tr").remove(); total();
+    }
+  });
+  total();
+})();
+</script>
+{% endblock %}

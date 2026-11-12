@@ -1,37 +1,22 @@
 {% extends "merchant/base.html" %}{% load icons %}{% block title %}Pesanan #{{ order.id|stringformat:"s"|slice:":8" }}{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
+<nav class="dp-crumb" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-sales' %}">Penjualan</a> › <a href="{% url 'merchant-orders' %}">Pesanan</a> › <span>{{ order.invoice_number|default:"Pesanan" }}</span>
+</nav>
+<div class="dp-head">
   <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">PESANAN</p>
-    <h1 class="text-2xl font-bold text-gray-900 font-mono">#{{ order.invoice_number|default:order.id }}</h1>
-    <p class="text-sm text-gray-400 mt-1">{{ order.created_at|date:"d M Y, H:i" }} · <span class="text-indigo-600">{{ order.get_channel_display }}</span></p>
+    <h1 class="dp-title">{{ order.invoice_number|default:"Pesanan" }} <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span></h1>
+    <p class="dp-sub"><b>{{ order.customer_name }}</b> · {{ order.created_at|date:"d M Y, H:i" }} · {{ order.get_channel_display }}{% if order.external_order_id %} · Ref {{ order.external_order_id }}{% endif %} · Total <b>Rp{{ order.total|floatformat:"0g" }}</b></p>
   </div>
-  <div class="flex items-center gap-2 flex-wrap justify-end">
-    <a class="text-sm text-gray-400 hover:text-gray-600" href="{% url 'merchant-orders' %}">← Semua pesanan</a>
+  <div class="dp-actions">
     {% if invoice %}
-    <a href="{% url 'merchant-invoice-detail' invoice.id %}"
-       class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:border-indigo-300 transition-colors">
-      {% icon "receipt" %} Invoice {{ invoice.number }}
-    </a>
+    <a class="btn" href="{% url 'merchant-invoice-detail' invoice.id %}">{% icon "receipt" %} Invoice {{ invoice.number }}</a>
     {% else %}
-    <form method="post" action="{% url 'merchant-invoice-issue' order.id %}" class="inline">
-      {% csrf_token %}
-      <button type="submit"
-              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:border-indigo-300 transition-colors">
-        {% icon "receipt" %} Terbitkan Invoice
-      </button>
+    <form method="post" action="{% url 'merchant-invoice-issue' order.id %}">{% csrf_token %}
+      <button type="submit" class="btn-primary">{% icon "receipt" %} Terbitkan invoice</button>
     </form>
     {% endif %}
-    <span class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold
-      {% if order.status == 'paid' or order.status == 'completed' %}bg-green-100 text-green-700
-      {% elif order.status == 'pending' %}bg-yellow-100 text-yellow-800
-      {% elif order.status == 'cancelled' %}bg-red-100 text-red-700
-      {% elif order.status == 'shipped' or order.status == 'delivered' %}bg-blue-100 text-blue-700
-      {% elif order.status == 'packed' or order.status == 'picking' %}bg-purple-100 text-purple-700
-      {% else %}bg-gray-100 text-gray-600{% endif %}">
-      {{ order.get_status_display }}
-    </span>
   </div>
 </div>
 
@@ -61,7 +46,7 @@
 
   {% elif status_key == 'cancelled' %}
   <form method="post" action="{% url 'merchant-order-update' order.id %}"
-        onsubmit="return confirm('Batalkan pesanan ini?')">
+        data-confirm="Batalkan pesanan ini?">
     {% csrf_token %}
     <input type="hidden" name="status" value="cancelled">
     <input type="hidden" name="next" value="{{ request.path }}">
@@ -173,6 +158,11 @@
     {% if order.discount %}
     <div class="flex justify-between text-sm text-green-600">
       <span>Diskon</span><span>−Rp{{ order.discount|floatformat:"0g" }}</span>
+    </div>
+    {% endif %}
+    {% if order.tax %}
+    <div class="flex justify-between text-sm text-gray-600">
+      <span>PPN</span><span>Rp{{ order.tax|floatformat:"0g" }}</span>
     </div>
     {% endif %}
     {% if order.shipping_cost %}

@@ -1,0 +1,19 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ receipt.number }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-receipts' %}">Penerimaan</a> › <span>{{ receipt.number }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">{{ receipt.number }} {% if receipt.voided %}<span class="pill pill-void">Dibatalkan</span>{% else %}<span class="pill pill-paid">Diterima</span>{% endif %}</h1>
+  <p class="dp-sub">{{ receipt.buyer_name }} · {{ receipt.date|date:"d M Y" }} · <b>{{ receipt.amount|rp }}</b></p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button>
+  {% if can_edit and not receipt.voided %}<form method="post" data-confirm="Batalkan penerimaan ini? Pembayaran di setiap invoice dihapus dan jurnalnya dibalik.">{% csrf_token %}<input type="hidden" name="action" value="void"><button class="btn btn-danger">Batalkan</button></form>{% endif %}</div></div>
+<div class="dp-grid"><article class="dp-paper">
+  <div class="dp-paper-head"><div class="dp-seller"><span class="mark">{{ receipt.store.name|slice:':1' }}</span><div><strong>{{ receipt.store.name }}</strong></div></div><div class="dp-doc-type"><span>BUKTI PENERIMAAN</span><small>{{ receipt.number }}</small></div></div>
+  <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ receipt.date|date:"d M Y" }}</dd></div><div><dt>Metode</dt><dd>{{ receipt.get_method_display }}</dd></div><div><dt>Rekening</dt><dd>{{ receipt.bank_account.name|default:"Kas utama" }}</dd></div><div><dt>Referensi</dt><dd>{{ receipt.reference|default:"—" }}</dd></div></dl>
+  <div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Diterima dari</h4><strong>{{ receipt.buyer_name }}</strong></div></div>
+  <div class="scroll-x"><table class="dp-items"><thead><tr><th>Dialokasikan ke</th><th class="num">Jumlah</th></tr></thead><tbody>
+    {% for p in allocations %}<tr><td><strong><a href="{% url 'merchant-invoice-detail' p.invoice_id %}" style="color:inherit">{{ p.invoice.number }}</a></strong></td><td class="num"><strong>{{ p.amount|rp }}</strong></td></tr>{% endfor %}
+    {% if receipt.deposit %}<tr><td><strong>Kredit pelanggan (uang muka)</strong><small>Dapat dipakai untuk invoice berikutnya</small></td><td class="num"><strong>{{ receipt.deposit|rp }}</strong></td></tr>{% endif %}</tbody></table></div>
+  <div class="dp-foot"><div class="dp-notes">{% if receipt.note %}<h4>Catatan</h4><p>{{ receipt.note }}</p>{% endif %}</div><div class="dp-totals"><div class="grand"><span>Total diterima</span><span>{{ receipt.amount|rp }}</span></div></div></div>
+  {% if receipt.voided %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}</article>
+  <aside class="dp-stack">{% include "merchant/_journal_card.html" %}</aside></div>
+{% endblock %}

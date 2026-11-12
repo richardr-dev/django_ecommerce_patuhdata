@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.accounting.ledger import post_pending_entries
+from apps.accounting.ledger import post_backlog, post_pending_entries
 from apps.billing.renewals import run_renewals
 from apps.channels.services import pull_channel_orders, push_stock_updates
 from apps.integrations.models import OutboxEvent, WorkerHeartbeat
@@ -155,6 +155,8 @@ def run_cycle(batch_size):
         _run_task("channel_stock", lambda: push_stock_updates(limit=batch_size), errors)
     _run_task("ledger_posting", lambda: post_pending_entries(limit=batch_size), errors)
     _run_task("invoicing", lambda: issue_pending_invoices(limit=batch_size), errors)
+    if _due("ledger_backlog", 3600):
+        _run_task("ledger_backlog", post_backlog, errors)
     if _due("renewals", 3600):
         _run_task("renewals", run_renewals, errors)
     from apps.shops.segments import send_broadcast_batch

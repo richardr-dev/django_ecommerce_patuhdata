@@ -1,303 +1,274 @@
-{% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Semua Invoice{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Invoice Penjualan{% endblock %}
 {% block content %}
 
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">PENJUALAN</p>
-    <h1 class="text-2xl font-bold text-gray-900">Semua Invoice</h1>
-    <p class="text-sm text-gray-500 mt-1">Penjualan dari semua channel — Toko Online, Shopee, Tokopedia, TikTok Shop, Mitra, dan Manual.</p>
-  </div>
-  <div class="flex items-center gap-2 flex-wrap justify-end">
-    <a href="{% url 'merchant-invoices-csv' %}{% if channel_filter or month_filter or query %}&{% endif %}{% if channel_filter %}channel={{ channel_filter }}&{% endif %}{% if month_filter %}month={{ month_filter }}&{% endif %}{% if query %}q={{ query }}{% endif %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-600 text-sm font-semibold hover:border-gray-400 hover:text-gray-900 transition-colors">
-      ↓ Ekspor CSV
-    </a>
-    <form method="post" class="inline" onsubmit="return confirm('Terbitkan invoice untuk semua pesanan yang belum punya invoice?')">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="bulk_issue">
-      <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-600 text-sm font-semibold hover:border-gray-400 hover:text-gray-900 transition-colors">
-        {% icon "receipt" %} Terbitkan Semua
-      </button>
-    </form>
-    <a href="{% url 'merchant-invoice-batch' %}"
-       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
-      {% icon "copy" %} Buat Beberapa Invoice
-    </a>
-    <a href="{% url 'merchant-invoice-new' %}"
-       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">
-      {% icon "plus" %} Tambah Invoice
-    </a>
-  </div>
-</div>
-
-{# ── Summary cards ──────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Invoice</p>
-    <p class="text-2xl font-bold text-gray-900">{{ order_count }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Diskon</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ total_disc|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Rata-rata / Invoice</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{% if order_count %}{{ aov|floatformat:"0g" }}{% else %}0{% endif %}</p>
-  </div>
-</div>
-
-{# ── Invoice status breakdown ───────────────────────────────────────────── #}
-{% if invoice_stats %}
-<div class="flex flex-wrap gap-2 mb-5">
-  {% for stat in invoice_stats %}
-  <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center min-w-24">
-    <span class="text-lg font-bold text-gray-900">{{ stat.count }}</span>
-    <span class="text-xs text-gray-500 mt-0.5
-      {% if stat.status == 'paid' %}text-green-600
-      {% elif stat.status == 'overdue' %}text-red-500
-      {% elif stat.status == 'void' %}text-gray-400
-      {% elif stat.status == 'partial' %}text-amber-600
-      {% endif %}">
-      {% if stat.status == 'paid' %}Lunas
-      {% elif stat.status == 'issued' %}Diterbitkan
-      {% elif stat.status == 'draft' %}Draft
-      {% elif stat.status == 'partial' %}Sebagian
-      {% elif stat.status == 'overdue' %}Jatuh Tempo
-      {% elif stat.status == 'void' %}Dibatalkan
-      {% else %}{{ stat.status }}{% endif %}
-    </span>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{# ── Channel breakdown ──────────────────────────────────────────────────── #}
-{% if channel_rows %}
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
-  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Penjualan per Channel</p>
-  <div class="space-y-3">
-    {% for row in channel_rows %}
-    <div class="flex items-center gap-3">
-      <a href="?channel={{ row.channel }}" class="w-32 text-sm text-gray-600 hover:text-gray-900 flex-shrink-0 truncate">{{ row.label }}</a>
-      <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div class="h-2 rounded-full bg-gray-900" style="width:{{ row.pct }}%"></div>
-      </div>
-      <span class="w-32 text-right text-sm font-semibold text-gray-800 flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
-      <span class="w-20 text-right text-xs text-gray-400 flex-shrink-0">{{ row.orders }} invoice</span>
+{# ── Hero ─────────────────────────────────────────────────────────────────── #}
+<section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-600 to-sky-500 px-6 pb-16 pt-6 text-white shadow-lg shadow-blue-600/20 sm:px-8">
+  <span class="pointer-events-none absolute -right-10 -top-14 h-52 w-52 rounded-full bg-white/10"></span>
+  <span class="pointer-events-none absolute right-40 top-20 h-24 w-24 rounded-full bg-white/10"></span>
+  <span class="pointer-events-none absolute -bottom-16 left-1/3 h-44 w-44 rounded-full bg-sky-300/20"></span>
+  <div class="relative flex flex-wrap items-end justify-between gap-4">
+    <div class="min-w-0">
+      <p class="mb-1 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold tracking-wide backdrop-blur">Penjualan</p>
+      <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">Invoice penjualan</h1>
+      <p class="mt-1 max-w-xl text-sm text-blue-50/90">Semua invoice dari Toko Online, Shopee, TikTok Shop, Lazada, Mitra, dan penjualan manual dalam satu tempat.</p>
     </div>
-    {% endfor %}
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'merchant-receive-payment' %}" class="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "cash" %}</span>Terima pembayaran</a>
+      <a href="{% url 'merchant-invoice-new' %}" class="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-bold text-blue-700 shadow-md shadow-blue-900/10 transition hover:-translate-y-0.5 hover:shadow-lg"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "plus" %}</span>Buat invoice</a>
+      <details class="relative">
+        <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">Lainnya <span class="text-xs">▾</span></summary>
+        <div class="absolute right-0 z-30 mt-2 w-64 rounded-2xl bg-white p-1.5 text-sm text-slate-700 shadow-xl ring-1 ring-slate-900/5">
+          <a href="{% url 'merchant-quote-new' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "note" %}</span>Buat penawaran</a>
+          <a href="{% url 'merchant-recurring-new' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "calendar" %}</span>Jadwalkan invoice berulang</a>
+          <a href="{% url 'merchant-import' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "upload" %}</span>Impor pesanan marketplace</a>
+          <hr class="my-1.5 border-slate-100">
+          <a href="{% url 'merchant-channel-recap' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "bar-chart" %}</span>Rekap invoice per channel</a>
+          <a href="{% url 'merchant-sales-export' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor data penjualan lengkap</a>
+          <a href="{% url 'merchant-receivables' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "clock" %}</span>Piutang & surat tagihan</a>
+          <a href="{% url 'merchant-credit-notes' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "undo" %}</span>Nota kredit</a>
+          <hr class="my-1.5 border-slate-100">
+          <a href="{% url 'merchant-invoices-pdf' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "file" %}</span>Ekspor PDF (terfilter)</a>
+          <a href="{% url 'merchant-invoices-xlsx' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor Excel</a>
+          <a href="{% url 'merchant-invoices-csv' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor CSV</a>
+        </div>
+      </details>
+    </div>
   </div>
-</div>
-{% endif %}
+</section>
 
-{# ── Channel tabs ───────────────────────────────────────────────────────── #}
-<div class="flex gap-1 mb-4 flex-wrap">
-  {% for tab_code, tab_label, tab_count in channel_tabs %}
-  <a href="{% if tab_code %}?channel={{ tab_code }}{% else %}{% url 'merchant-sales-invoices' %}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors
-       {% if channel_filter == tab_code %}bg-gray-900 text-white{% else %}bg-white border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900{% endif %}">
-    {{ tab_label }}
-    {% if tab_count %}<span class="{% if channel_filter == tab_code %}bg-white text-gray-900{% else %}bg-gray-100 text-gray-500{% endif %} rounded-full px-1.5 text-xs font-bold">{{ tab_count }}</span>{% endif %}
+{# ── KPI bubbles (overlap the hero) ──────────────────────────────────────── #}
+<div class="relative -mt-10 grid grid-cols-2 gap-3 px-1 sm:px-4 lg:grid-cols-4">
+  <a href="?inv=awaiting" class="group rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+    <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "clock" %}</span>
+      <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Belum dibayar</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ outstanding|rp }}</p></div></div>
   </a>
-  {% endfor %}
+  <a href="?inv=overdue" class="group rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+    <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "alert" %}</span>
+      <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Jatuh tempo</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal {% if overdue_total %}text-rose-600{% else %}text-slate-900{% endif %}">{{ overdue_total|rp }}</p></div></div>
+  </a>
+  <a href="?inv=paid" class="group rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+    <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "check-circle" %}</span>
+      <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Lunas</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ paid_total|rp }}</p></div></div>
+  </a>
+  <div class="rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+    <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "trend-down" %}</span>
+      <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Penjualan dibayar</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ revenue|rp }}</p><p class="text-[11px] text-slate-400">{{ order_count }} pesanan</p></div></div>
+  </div>
 </div>
 
-{# ── Secondary filters ──────────────────────────────────────────────────── #}
-<form method="get" class="flex flex-wrap gap-3 mb-5 items-end">
-  {% if channel_filter %}<input type="hidden" name="channel" value="{{ channel_filter }}">{% endif %}
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Cari</label>
-    <input type="text" name="q" value="{{ query }}" placeholder="Nama pembeli / no. invoice"
-           class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white w-52 focus:outline-none focus:ring-2 focus:ring-gray-900">
-  </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Status</label>
-    <select name="status" onchange="this.form.submit()"
-            class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
-      <option value="">Semua status</option>
-      {% for code, label in status_choices %}
-      <option value="{{ code }}"{% if status_filter == code %} selected{% endif %}>{{ label }}</option>
+{# Orders without an invoice: only when there are some #}
+{% for code, label, count in invoice_tabs %}{% if code == 'none' and count %}
+<div class="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900 ring-1 ring-blue-100">
+  <span class="grid h-8 w-8 place-items-center rounded-full bg-white text-blue-600 [&>svg]:h-4 [&>svg]:w-4">{% icon "alert" %}</span>
+  <span class="flex-1"><b>{{ count }} pesanan</b> belum punya invoice.</span>
+  <form method="post" data-confirm="Terbitkan invoice untuk semua pesanan yang belum punya invoice?" data-confirm-tone="neutral" data-confirm-ok="Terbitkan">
+    {% csrf_token %}<input type="hidden" name="action" value="bulk_issue">
+    <button type="submit" class="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-600/30 hover:bg-blue-700">Terbitkan semua</button>
+  </form>
+  <a class="text-xs font-semibold text-blue-700 hover:underline" href="?inv=none">Lihat</a>
+</div>
+{% endif %}{% endfor %}
+
+{# ── Status pills + channel chips ───────────────────────────────────────── #}
+<div class="mt-6 flex flex-col gap-3">
+  <div class="-mx-1 overflow-x-auto px-1 pb-1">
+    <nav class="inline-flex gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-slate-200" aria-label="Status invoice">
+      {% for code, label, count in invoice_tabs %}
+      <a href="?{% if code %}inv={{ code }}&{% endif %}{{ filter_query }}"
+         class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-semibold transition {% if inv_filter == code %}bg-blue-600 text-white shadow-md shadow-blue-600/25{% else %}text-slate-600 hover:bg-blue-50 hover:text-blue-700{% endif %}">
+        {{ label }}<span class="rounded-full px-1.5 text-[11px] font-bold {% if inv_filter == code %}bg-white/25 text-white{% else %}bg-slate-100 text-slate-500{% endif %}">{{ count }}</span>
+      </a>
       {% endfor %}
-    </select>
+    </nav>
   </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Bulan</label>
-    <input type="month" name="month" value="{{ month_filter }}" onchange="this.form.submit()"
-           class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
+
+  {% if channel_chips|length > 1 or channel_filter %}
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="?{{ other_query }}" class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition {% if not channel_filter %}bg-blue-50 text-blue-700 ring-blue-200{% else %}bg-white text-slate-600 ring-slate-200 hover:ring-blue-200{% endif %}">Semua channel <span class="text-slate-400">{{ channel_total }}</span></a>
+    {% for chip in channel_chips %}
+    <a href="?channel={{ chip.code }}{% if other_query %}&{{ other_query }}{% endif %}" class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition {% if chip.active %}bg-blue-50 text-blue-700 ring-blue-200{% else %}bg-white text-slate-600 ring-slate-200 hover:ring-blue-200{% endif %}">
+      <span class="h-2 w-2 rounded-full {% if chip.code == 'shopee' %}bg-orange-500{% elif chip.code == 'tokopedia' %}bg-emerald-500{% elif chip.code == 'tiktok_shop' %}bg-slate-800{% elif chip.code == 'lazada' %}bg-indigo-500{% elif chip.code == 'web' %}bg-blue-500{% else %}bg-slate-400{% endif %}"></span>{{ chip.label }} <span class="text-slate-400">{{ chip.count }}</span></a>
+    {% endfor %}
+    <a href="{% url 'merchant-channel-recap' %}" class="ml-1 text-xs font-semibold text-blue-700 hover:underline">Rekap per channel →</a>
   </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Dari</label>
-    <input type="date" name="date_from" value="{{ date_from }}"
-           class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
-  </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Sampai</label>
-    <input type="date" name="date_to" value="{{ date_to }}"
-           class="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900">
-  </div>
-  <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">Filter</button>
-  {% if channel_filter or status_filter or month_filter or date_from or date_to or query %}
-  <a href="{% url 'merchant-sales-invoices' %}" class="text-sm text-gray-600 hover:text-gray-900 py-2">Reset</a>
   {% endif %}
-</form>
+
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    {% if inv_filter %}<input type="hidden" name="inv" value="{{ inv_filter }}">{% endif %}
+    <div class="relative w-full sm:w-80">
+      <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "search" %}</span>
+      <input type="search" name="q" value="{{ query }}" placeholder="Cari no. invoice, ref, atau pelanggan"
+        class="w-full rounded-full border-0 bg-white py-2 pl-10 pr-4 text-sm shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500">
+    </div>
+    <select name="channel" aria-label="Channel" class="rounded-full border-0 bg-white py-2 pl-4 pr-9 text-sm text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">
+      <option value="">Semua channel</option>
+      {% for code, label in channel_choices %}<option value="{{ code }}"{% if channel_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="status" aria-label="Status pesanan" class="rounded-full border-0 bg-white py-2 pl-4 pr-9 text-sm text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">
+      <option value="">Semua status pesanan</option>
+      {% for code, label in status_choices %}<option value="{{ code }}"{% if status_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <details class="relative">
+      <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:ring-blue-300">{% icon "calendar" %}<span>Tanggal</span>{% if month_filter or date_from or date_to %}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{% endif %}</summary>
+      <div class="absolute left-0 z-20 mt-2 grid w-72 gap-3 rounded-2xl bg-white p-4 shadow-xl ring-1 ring-slate-900/5">
+        <label class="grid gap-1 text-xs font-semibold text-slate-500">Bulan<input type="month" name="month" value="{{ month_filter }}" class="rounded-xl border-0 text-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1 text-xs font-semibold text-slate-500">Dari tanggal<input type="date" name="date_from" value="{{ date_from }}" class="rounded-xl border-0 text-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1 text-xs font-semibold text-slate-500">Sampai tanggal<input type="date" name="date_to" value="{{ date_to }}" class="rounded-xl border-0 text-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></label>
+      </div>
+    </details>
+    <button class="rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-md shadow-blue-600/25 transition hover:bg-blue-700">Terapkan</button>
+    {% if channel_filter or status_filter or month_filter or date_from or date_to or query or inv_filter %}
+    <a href="{% url 'merchant-sales-invoices' %}" class="rounded-full px-3 py-2 text-sm font-medium text-slate-500 hover:bg-white hover:text-slate-800">Reset</a>
+    {% endif %}
+  </form>
+</div>
 
 {# ── Invoice table ──────────────────────────────────────────────────────── #}
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+<div class="mt-4 overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_-16px_rgba(26,102,217,.3)] ring-1 ring-slate-900/5">
+  <div class="overflow-x-auto">
   <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-gray-100 bg-gray-50">
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tanggal</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">No. Invoice</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Channel</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pembeli</th>
-        <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtotal</th>
-        <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Diskon</th>
-        <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Invoice</th>
-        <th class="px-4 py-3"></th>
+    <thead class="sticky top-0 bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 backdrop-blur">
+      <tr>
+        <th class="w-10 py-3 pl-5"><input type="checkbox" id="chk-all" aria-label="Pilih semua" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"></th>
+        <th class="px-3 py-3 text-left font-semibold">Invoice</th>
+        <th class="px-3 py-3 text-left font-semibold">Pelanggan</th>
+        <th class="px-3 py-3 text-left font-semibold">Tanggal</th>
+        <th class="px-3 py-3 text-left font-semibold">Jatuh tempo</th>
+        <th class="px-3 py-3 text-right font-semibold">Dibayar</th>
+        <th class="px-3 py-3 text-right font-semibold">Sisa tagihan</th>
+        <th class="px-3 py-3 text-left font-semibold">Status</th>
+        <th class="w-24 py-3 pr-5"></th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-50">
+    <tbody class="divide-y divide-slate-100">
       {% for order in orders %}
-      <tr class="hover:bg-gray-50 transition-colors">
-        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ order.created_at|date:"d M Y" }}</td>
-        <td class="px-4 py-3">
-          <span class="font-mono text-xs font-semibold text-gray-800">
-            {{ order.invoice_number|default:order.external_order_id|default:"—" }}
-          </span>
-        </td>
-        <td class="px-4 py-3">
-          <a href="?channel={{ order.channel }}"
-             class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity
-               {% if order.channel == 'tokopedia' %}bg-green-100 text-green-700
-               {% elif order.channel == 'shopee' %}bg-orange-100 text-orange-700
-               {% elif order.channel == 'tiktok_shop' %}bg-gray-900 text-white
-               {% elif order.channel == 'lazada' %}bg-blue-100 text-blue-800
-               {% elif order.channel == 'abshop' %}bg-purple-100 text-purple-700
-               {% elif order.channel == 'manual' %}bg-pink-100 text-pink-700
-               {% else %}bg-gray-100 text-gray-700{% endif %}">
-            {{ order.get_channel_display }}
-          </a>
-        </td>
-        <td class="px-4 py-3">
-          {% if order.customer %}
-          <a href="{% url 'merchant-customer-detail' order.customer.id %}"
-             class="font-medium text-gray-800 hover:text-gray-900 truncate max-w-[140px] block">{{ order.customer_name }}</a>
-          {% else %}
-          <div class="font-medium text-gray-800 truncate max-w-[140px]">{{ order.customer_name }}</div>
-          {% endif %}
-          {% if order.phone and order.phone != "-" %}<div class="text-xs text-gray-400">{{ order.phone }}</div>{% endif %}
-        </td>
-        <td class="px-4 py-3 text-right text-sm text-gray-700">Rp{{ order.subtotal|floatformat:"0g" }}</td>
-        <td class="px-4 py-3 text-right text-sm text-gray-400">{% if order.discount %}−Rp{{ order.discount|floatformat:"0g" }}{% else %}—{% endif %}</td>
-        <td class="px-4 py-3 text-right text-sm font-semibold text-gray-900">Rp{{ order.total|floatformat:"0g" }}</td>
-        <td class="px-4 py-3">
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-            {% if order.status == 'completed' or order.status == 'delivered' %}bg-green-100 text-green-700
-            {% elif order.status == 'paid' or order.status == 'confirmed' %}bg-blue-100 text-blue-700
-            {% elif order.status in 'packed shipped picking allocated' %}bg-yellow-100 text-yellow-700
-            {% elif order.status == 'cancelled' or order.status == 'refunded' %}bg-red-100 text-red-600
-            {% else %}bg-gray-100 text-gray-600{% endif %}">
-            {{ order.get_status_display }}
-          </span>
-        </td>
-        <td class="px-4 py-3">
-          {% if order.invoice %}
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-            {% if order.invoice.status == 'paid' %}bg-green-100 text-green-700
-            {% elif order.invoice.status == 'partial' %}bg-yellow-100 text-yellow-700
-            {% elif order.invoice.status == 'void' %}bg-gray-200 text-gray-400
-            {% elif order.invoice.status == 'overdue' %}bg-red-100 text-red-600
-            {% else %}bg-gray-100 text-gray-700{% endif %}">
-            {{ order.invoice.get_status_display }}
-          </span>
-          {% else %}
-          <span class="text-xs text-gray-300">—</span>
-          {% endif %}
-        </td>
-        <td class="px-4 py-3 text-right">
-          {% if order.invoice %}
-          <div class="flex items-center gap-2 justify-end">
-            <a href="{% url 'merchant-invoice-detail' order.invoice.id %}" class="text-xs text-gray-600 hover:text-gray-900 font-medium">Invoice →</a>
-            <a href="{% url 'merchant-invoice-duplicate' order.invoice.id %}" class="text-xs text-gray-400 hover:text-gray-700 font-medium border border-gray-200 hover:border-gray-400 rounded-lg px-2 py-0.5 transition-colors">Duplikat</a>
+      {% with inv=order.invoice %}
+      <tr class="group transition-colors hover:bg-blue-50/40">
+        <td class="py-3.5 pl-5">{% if inv %}<input type="checkbox" class="inv-chk h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" value="{{ inv.id }}" aria-label="Pilih {{ inv.number }}">{% endif %}</td>
+        <td class="whitespace-nowrap px-3 py-3.5">
+          {% if inv %}<a href="{% url 'merchant-invoice-detail' inv.id %}" class="font-bold text-blue-700 hover:underline">{{ inv.number }}</a>
+          {% else %}<a href="{% url 'merchant-order-detail' order.id %}" class="font-medium text-slate-500 hover:text-blue-700">{{ order.invoice_number|default:"Pesanan" }}</a>{% endif %}
+          <div class="mt-1 flex items-center gap-1.5">
+            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"><span class="h-1.5 w-1.5 rounded-full {% if order.channel == 'shopee' %}bg-orange-500{% elif order.channel == 'tokopedia' %}bg-emerald-500{% elif order.channel == 'tiktok_shop' %}bg-slate-800{% elif order.channel == 'lazada' %}bg-indigo-500{% elif order.channel == 'web' %}bg-blue-500{% else %}bg-slate-400{% endif %}"></span>{{ order.get_channel_display }}</span>
+            {% if order.external_order_id %}<span class="max-w-[9rem] truncate text-[11px] text-slate-400" title="{{ order.external_order_id }}">{{ order.external_order_id }}</span>{% endif %}
           </div>
-          {% else %}
-          <div class="flex items-center gap-2 justify-end">
-            <a href="{% url 'merchant-order-detail' order.id %}" class="text-xs text-gray-600 hover:text-gray-900 font-medium">Detail →</a>
-            <form method="post" action="{% url 'merchant-invoice-issue' order.id %}" class="inline">
-              {% csrf_token %}
-              <button type="submit" class="text-xs text-gray-400 hover:text-gray-700 font-medium border border-gray-200 hover:border-gray-400 rounded-lg px-2 py-0.5 transition-colors">+ Invoice</button>
-            </form>
+        </td>
+        <td class="px-3 py-3.5">
+          <div class="flex items-center gap-3">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-500 to-sky-400 text-sm font-bold text-white shadow-sm shadow-blue-500/30">{{ order.customer_name|slice:":1"|upper }}</span>
+            <div class="min-w-0">
+              {% if order.customer %}<a href="{% url 'merchant-customer-detail' order.customer.id %}" class="block max-w-[14rem] truncate font-semibold text-slate-800 hover:text-blue-700">{{ order.customer_name }}</a>
+              {% else %}<span class="block max-w-[14rem] truncate font-semibold text-slate-800">{{ order.customer_name }}</span>{% endif %}
+              <span class="text-xs text-slate-400">{% if order.customer %}Di CRM{% else %}Tanpa data CRM{% endif %}</span>
+            </div>
           </div>
+        </td>
+        <td class="whitespace-nowrap px-3 py-3.5 text-slate-600">{% if inv %}{{ inv.issued_on|date:"d M Y" }}{% else %}{{ order.created_at|date:"d M Y" }}{% endif %}</td>
+        <td class="whitespace-nowrap px-3 py-3.5">{% if inv.due_date %}<span class="text-slate-600">{{ inv.due_date|date:"d M Y" }}</span>{% if order.overdue_days %}<span class="ml-1 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-600 ring-1 ring-rose-100">{{ order.overdue_days }} hari</span>{% endif %}{% else %}<span class="text-slate-300">—</span>{% endif %}</td>
+        <td class="whitespace-nowrap px-3 py-3.5 text-right text-slate-500">{% if inv %}{{ order.inv_paid|rp }}{% else %}—{% endif %}</td>
+        <td class="whitespace-nowrap px-3 py-3.5 text-right font-bold {% if order.inv_due %}text-slate-900{% else %}text-slate-300{% endif %}">{% if order.inv_due is not None %}{{ order.inv_due|rp }}{% else %}{{ order.total|rp }}{% endif %}</td>
+        <td class="whitespace-nowrap px-3 py-3.5">
+          {% if inv %}
+          <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1
+            {% if inv.status == 'paid' %}bg-emerald-50 text-emerald-700 ring-emerald-600/15
+            {% elif inv.status == 'partial' %}bg-amber-50 text-amber-700 ring-amber-600/15
+            {% elif inv.status == 'overdue' %}bg-rose-50 text-rose-700 ring-rose-600/15
+            {% elif inv.status == 'void' or inv.status == 'draft' %}bg-slate-100 text-slate-500 ring-slate-300/40
+            {% else %}bg-blue-50 text-blue-700 ring-blue-600/15{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>{{ inv.get_status_display }}</span>
+          {% else %}<span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">Belum diterbitkan</span>{% endif %}
+        </td>
+        <td class="whitespace-nowrap py-3.5 pr-5 text-right">
+          {% if inv %}
+          <span class="inline-flex gap-1 opacity-60 transition group-hover:opacity-100">
+            <a href="{% url 'merchant-invoice-pdf' inv.id %}" title="Unduh PDF" aria-label="PDF {{ inv.number }}" class="grid h-8 w-8 place-items-center rounded-full text-slate-500 hover:bg-blue-50 hover:text-blue-700 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</a>
+            <a href="{% url 'merchant-invoice-duplicate' inv.id %}" title="Duplikat" aria-label="Duplikat {{ inv.number }}" class="grid h-8 w-8 place-items-center rounded-full text-slate-500 hover:bg-blue-50 hover:text-blue-700 [&>svg]:h-4 [&>svg]:w-4">{% icon "copy" %}</a>
+          </span>
+          {% else %}
+          <form method="post" action="{% url 'merchant-invoice-issue' order.id %}" class="inline">{% csrf_token %}
+            <button type="submit" class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100">Terbitkan</button>
+          </form>
           {% endif %}
         </td>
       </tr>
+      {% endwith %}
       {% empty %}
       <tr>
-        <td colspan="10" class="px-4 py-10 text-center text-gray-400 text-sm">
-          Belum ada invoice{% if channel_filter %} untuk channel ini{% endif %}.
-          <a href="{% url 'merchant-invoice-new' %}" class="text-gray-600 hover:text-gray-900 font-medium ml-1">Tambah invoice →</a>
+        <td colspan="9" class="px-4 py-16 text-center">
+          <span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-blue-50 text-blue-600 [&>svg]:h-6 [&>svg]:w-6">{% icon "file" %}</span>
+          <p class="mt-3 font-semibold text-slate-800">Tidak ada invoice di tampilan ini</p>
+          <p class="mt-1 text-sm text-slate-500">Ubah filter, atau buat invoice pertama Anda.</p>
+          <a href="{% url 'merchant-invoice-new' %}" class="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-md shadow-blue-600/25 hover:bg-blue-700">Buat invoice</a>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
-{% include "storefront/pagination.html" %}
+<div class="mt-4">{% include "storefront/pagination.html" %}</div>
 
 {# ── Recent import batches ──────────────────────────────────────────────── #}
 {% if recent_batches %}
-<div class="mt-6">
-  <div class="flex items-center justify-between mb-3">
-    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Riwayat Impor Terakhir</p>
-    <a href="{% url 'merchant-import' %}" class="text-xs text-gray-600 hover:text-gray-900">+ Impor baru →</a>
+<section class="mt-8">
+  <div class="mb-3 flex items-center justify-between">
+    <h2 class="text-sm font-bold text-slate-800">Riwayat impor terakhir</h2>
+    <a href="{% url 'merchant-import' %}" class="text-xs font-semibold text-blue-700 hover:underline">+ Impor baru →</a>
   </div>
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-gray-100 bg-gray-50">
-          <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tanggal Impor</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Platform</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">File</th>
-          <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pesanan</th>
-          <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Kategori</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-        {% for b in recent_batches %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3 text-xs text-gray-500">{{ b.imported_at|date:"d M Y H:i" }}</td>
-          <td class="px-4 py-3 font-medium text-gray-800">{{ b.channel.get_platform_display }}<div class="text-xs text-gray-400">{{ b.channel.name }}</div></td>
-          <td class="px-4 py-3 text-xs text-gray-500">{{ b.file_name|default:"—" }}</td>
-          <td class="px-4 py-3 text-right text-gray-700">{{ b.order_count }}</td>
-          <td class="px-4 py-3 text-right font-semibold text-gray-800">Rp{{ b.total_amount|floatformat:"0g" }}</td>
-          <td class="px-4 py-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-              {% if b.category == 'flash_sale' %}bg-yellow-100 text-yellow-700
-              {% elif b.category == 'harbolnas' %}bg-pink-100 text-pink-700
-              {% elif b.category == 'wholesale' %}bg-blue-100 text-blue-700
-              {% elif b.category == 'campaign' %}bg-purple-100 text-purple-700
-              {% elif b.category == 'consignment' %}bg-amber-100 text-amber-700
-              {% else %}bg-gray-100 text-gray-600{% endif %}">
-              {{ b.get_category_display }}
-            </span>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for b in recent_batches %}
+    <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-900/5">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0"><p class="font-bold text-slate-800">{{ b.channel.get_platform_display }}</p><p class="truncate text-xs text-slate-400">{{ b.channel.name }} · {{ b.file_name|default:"—" }}</p></div>
+        <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{{ b.get_category_display }}</span>
+      </div>
+      <div class="mt-3 flex items-end justify-between"><p class="text-lg font-bold text-slate-900">{{ b.total_amount|rp }}</p><p class="text-xs text-slate-400">{{ b.order_count }} pesanan · {{ b.imported_at|date:"d M Y" }}</p></div>
+    </div>
+    {% endfor %}
   </div>
-</div>
+</section>
 {% endif %}
 
-<p class="text-xs text-gray-400 mt-4">
-  Tagihan ke mitra konsinyasi → <a href="{% url 'settlement-list' %}" class="text-gray-600 hover:text-gray-900">Settlement Mitra →</a>
-</p>
+{# ── Floating selection bar ─────────────────────────────────────────────── #}
+<div id="export-toolbar" class="pointer-events-none fixed inset-x-0 bottom-6 z-40 hidden justify-center px-4">
+  <div class="pointer-events-auto flex items-center gap-4 rounded-full bg-blue-600 px-5 py-3 text-white shadow-2xl shadow-blue-900/30">
+    <span id="sel-count" class="text-sm font-bold"></span>
+    <a id="btn-pdf-sel" href="#" class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold hover:bg-white/25">PDF</a>
+    <a id="btn-xlsx-sel" href="#" class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold hover:bg-white/25">Excel</a>
+    <button id="btn-desel" type="button" class="text-xs font-semibold text-blue-100 hover:text-white">Batal</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const chkAll   = document.getElementById('chk-all');
+  const toolbar  = document.getElementById('export-toolbar');
+  const selCount = document.getElementById('sel-count');
+  const btnPdf   = document.getElementById('btn-pdf-sel');
+  const btnXlsx  = document.getElementById('btn-xlsx-sel');
+  const btnDesel = document.getElementById('btn-desel');
+  const PDF_URL  = '{% url "merchant-invoices-pdf" %}';
+  const XLSX_URL = '{% url "merchant-invoices-xlsx" %}';
+  function getChecked(){ return Array.from(document.querySelectorAll('.inv-chk:checked')).map(c => c.value); }
+  function updateToolbar(){
+    const ids = getChecked();
+    if(ids.length > 0){
+      selCount.textContent = ids.length + ' invoice dipilih';
+      const qs = '?ids=' + ids.join(',');
+      btnPdf.href = PDF_URL + qs; btnXlsx.href = XLSX_URL + qs;
+      toolbar.classList.remove('hidden'); toolbar.classList.add('flex');
+    } else { toolbar.classList.add('hidden'); toolbar.classList.remove('flex'); }
+  }
+  chkAll.addEventListener('change', function(){
+    document.querySelectorAll('.inv-chk').forEach(c => c.checked = this.checked); updateToolbar();
+  });
+  document.querySelectorAll('.inv-chk').forEach(c => c.addEventListener('change', function(){
+    chkAll.checked = document.querySelectorAll('.inv-chk').length === getChecked().length; updateToolbar();
+  }));
+  btnDesel.addEventListener('click', function(){
+    chkAll.checked = false; document.querySelectorAll('.inv-chk').forEach(c => c.checked = false); updateToolbar();
+  });
+})();
+</script>
 {% endblock %}

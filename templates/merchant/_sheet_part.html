@@ -1,0 +1,21 @@
+{% load books %}<section class="panel">
+  <div class="scroll-x"><table class="stmt">
+    <thead><tr><th>{{ title }}</th><th>{{ as_of|date:"d/m/Y" }}</th><th>{{ compare|date:"d/m/Y" }}</th></tr></thead>
+    <tbody>
+    <tr class="section"><td colspan="3">{{ first_label }}</td></tr>
+    {% for r in sheet.sections|get:first %}<tr class="line"><td>{% if r.code %}<a href="{% url 'merchant-account-ledger' r.code %}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>
+    {% empty %}<tr class="line"><td class="muted" colspan="3">Tidak ada.</td></tr>{% endfor %}
+    <tr class="total"><td>Total {{ first_label|lower }}</td><td class="num">{{ sheet.totals|get:first|get:"amount"|rp }}</td><td class="num">{{ sheet.totals|get:first|get:"previous"|rp }}</td></tr>
+    <tr class="section"><td colspan="3">{{ second_label }}</td></tr>
+    {% for r in sheet.sections|get:second %}<tr class="line"><td>{% if r.code %}<a href="{% url 'merchant-account-ledger' r.code %}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>
+    {% empty %}<tr class="line"><td class="muted" colspan="3">Tidak ada.</td></tr>{% endfor %}
+    <tr class="total"><td>Total {{ second_label|lower }}</td><td class="num">{{ sheet.totals|get:second|get:"amount"|rp }}</td><td class="num">{{ sheet.totals|get:second|get:"previous"|rp }}</td></tr>
+    {% if third %}
+    <tr class="section"><td colspan="3">{{ third_label }}</td></tr>
+    {% for r in sheet.sections|get:third %}<tr class="line"><td>{% if r.code %}<a href="{% url 'merchant-account-ledger' r.code %}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="total"><td>Total {{ third_label|lower }}</td><td class="num">{{ sheet.totals|get:third|get:"amount"|rp }}</td><td class="num">{{ sheet.totals|get:third|get:"previous"|rp }}</td></tr>
+    {% endif %}
+    <tr class="bottom"><td>{{ grand_label }}</td><td class="num">{{ grand.amount|rp }}</td><td class="num">{{ grand.previous|rp }}</td></tr>
+    </tbody>
+  </table></div>
+</section>

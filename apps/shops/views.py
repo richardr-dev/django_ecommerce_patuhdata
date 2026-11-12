@@ -2,9 +2,10 @@
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
+from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.templatetags.static import static
 from django.utils.text import slugify
@@ -120,14 +121,18 @@ def store_signup(request):
 
 
 @transaction.atomic
-def _create_store(form, plan, referrer=None):
+def _create_store(form, plan, referrer=None, organization=None):
+    """Open a store for ``form``'s user (a new account when they have none). It joins
+    ``organization`` when given (another brand of the same owner), else gets its own."""
     data = form.cleaned_data
     user = form.user or get_user_model().objects.create_user(username=form.login_name(),
         email=data["email"], password=data["password1"], first_name=data["full_name"])
-    org_slug, suffix = data["slug"], 2
-    while Organization.objects.filter(slug=org_slug).exists():
-        org_slug, suffix = f"{slugify(data['slug'])[:44]}-{suffix}", suffix + 1
-    organization = Organization.objects.create(name=data["store_name"], slug=org_slug, owner=user)
+    if organization is None:
+        org_slug, suffix = data["slug"], 2
+        while Organization.objects.filter(slug=org_slug).exists():
+            org_slug, suffix = f"{slugify(data['slug'])[:44]}-{suffix}", suffix + 1
+        organization = Organization.objects.create(name=data["store_name"], slug=org_slug,
+            owner=user)
     store = Store.objects.create(owner=user, organization=organization, name=data["store_name"],
         slug=data["slug"], support_phone=data["phone"], support_email=user.email or "",
         instagram=data.get("instagram", ""))
@@ -167,3 +172,34 @@ def _serves(domain):
     store = Store.objects.filter(domain=domain, is_active=True).select_related(
         "subscription__plan").first()
     return bool(store) and custom_domain_allowed(store)
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_brand_new(request):
+    """Tambah brand: another store for an owner, in the same Organization as their current one."""
+    from apps.orders.views import _merchant_context, _staff_store
+
+    current = _staff_store(request)
+    if not Store.objects.filter(owner=request.user).exists():
+        raise Http404  # staff cannot open stores; only an owner adds a brand
+    organization = (current.organization if current.organization_id
+        and current.organization.owner_id == request.user.id
+        else Organization.objects.filter(owner=request.user).order_by("id").first())
+    form = StoreSignupForm(request.POST or None, user=request.user)
+    plan = default_plan()
+    if request.method == "POST" and form.is_valid():
+        if not plan:
+            form.add_error(None, "Pembukaan toko baru belum dibuka. Hubungi pengelola platform.")
+        else:
+            try:
+                _, store = _create_store(form, plan, organization=organization)
+            except IntegrityError:
+                form.add_error("slug", "Alamat ini baru saja dipakai. Pilih alamat lain.")
+            else:
+                request.session["merchant_store_id"] = store.id
+                messages.success(request, f"Brand {store.name} dibuat dan sekarang aktif. "
+                    "Pakai menu brand di atas untuk berpindah antar brand.")
+                return redirect("merchant-settings")
+    return render(request, "merchant/brand_new.html", _merchant_context(request, current,
+        form=form, plan=plan, trial_days=settings.TRIAL_DAYS, organization=organization,
+        brands=Store.objects.filter(owner=request.user).order_by("name")))

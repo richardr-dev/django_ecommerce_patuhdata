@@ -1,0 +1,33 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Buku besar {{ account.code }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-chart-of-accounts' %}">Bagan akun</a> › <span>{{ account.code }}</span></nav>
+<div class="pg-head">
+  <div><span class="pg-kicker">Buku besar · {{ type_label }}</span><h1>{{ account.code }} · {{ account.name }}</h1>
+    <p>Saldo normal di sisi {% if debit_normal %}debit{% else %}kredit{% endif %}. {% if bank %}Rekening kas/bank: <a href="{% url 'merchant-bank-account' bank.id %}" style="color:var(--pd-primary)">buka rekonsiliasi</a>.{% endif %}</p></div>
+  <div class="dp-actions"><a class="btn" href="?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv">{% icon "download" %} Ekspor CSV</a></div>
+</div>
+<form class="toolbar" method="get">
+  <select onchange="location='{% url 'merchant-account-ledger' 'X' %}'.replace('X', this.value)" aria-label="Akun">{% for a in accounts %}<option value="{{ a.code }}" {% if a.id == account.id %}selected{% endif %}>{{ a.code }} · {{ a.name }}</option>{% endfor %}</select>
+  <input type="date" name="start" value="{{ start|date:'Y-m-d' }}" aria-label="Dari"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}" aria-label="Sampai"><button class="btn">Terapkan</button>
+</form>
+<div class="tiles">
+  <div class="tile"><small>Saldo awal</small><strong>{{ ledger.opening|rp }}</strong><span>{{ start|date:"d M Y" }}</span></div>
+  <div class="tile"><small>Total debit</small><strong>{{ ledger.debit|rp }}</strong></div>
+  <div class="tile"><small>Total kredit</small><strong>{{ ledger.credit|rp }}</strong></div>
+  <div class="tile accent"><small>Saldo akhir</small><strong>{{ ledger.closing|rp }}</strong><span>{{ end|date:"d M Y" }}</span></div>
+</div>
+<section class="panel">
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Tanggal</th><th>No.</th><th>Keterangan</th><th class="num">Debit</th><th class="num">Kredit</th><th class="num">Saldo</th></tr></thead>
+    <tbody>
+      <tr class="sub"><td colspan="5">Saldo awal</td><td class="num">{{ ledger.opening|rp }}</td></tr>
+      {% for line in ledger.lines %}<tr>
+        <td>{{ line.entry.date|date:"d M Y" }}</td><td><a class="rowlink" href="{% url 'merchant-journal-detail' line.entry_id %}">JU-{{ line.entry_id }}</a></td>
+        <td>{{ line.entry.memo|truncatechars:80 }}</td><td class="num">{% if line.debit %}{{ line.debit|rp }}{% endif %}</td><td class="num">{% if line.credit %}{{ line.credit|rp }}{% endif %}</td><td class="num"><strong>{{ line.running|rp }}</strong></td></tr>
+      {% empty %}<tr><td colspan="6"><div class="empty-box">Tidak ada transaksi pada periode ini.</div></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% if ledger.truncated %}<footer><span>Menampilkan 1.000 baris pertama. Persempit periode atau ekspor CSV.</span></footer>{% endif %}
+</section>
+{% endblock %}

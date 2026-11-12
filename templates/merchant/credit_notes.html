@@ -1,0 +1,25 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Nota Kredit{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Penjualan</span><h1>Nota Kredit</h1>
+    <p>Koreksi atas invoice yang sudah terbit: barang diretur, harga dikoreksi, atau diskon susulan. Invoice tetap berlaku; pendapatan, PPN, dan piutang disesuaikan.</p></div>
+  <div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-sales-invoices' %}">{% icon "file" %} Pilih invoice</a></div>
+</div>
+<div class="tiles">
+  <div class="tile accent"><small>Total nota kredit</small><strong>{{ totals.total|rp }}</strong><span>{{ count }} nota aktif</span></div>
+  <div class="tile"><small>PPN keluaran dikoreksi</small><strong>{{ totals.tax|rp }}</strong></div>
+</div>
+<form class="toolbar" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Cari nomor, pelanggan, invoice…"><button class="btn">Cari</button></form>
+<section class="panel">
+  {% if page.object_list %}<div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Nota kredit</th><th>Tanggal</th><th>Pelanggan</th><th>Invoice</th><th>Alasan</th><th class="num">Jumlah</th><th>Status</th></tr></thead>
+    <tbody>{% for n in page %}<tr class="{% if n.status == 'void' %}void{% endif %}">
+      <td><a class="rowlink" href="{% url 'merchant-credit-note-detail' n.id %}">{{ n.number }}</a></td><td>{{ n.issued_on|date:"d M Y" }}</td><td>{{ n.buyer_name }}</td>
+      <td><a href="{% url 'merchant-invoice-detail' n.invoice_id %}" style="color:var(--pd-primary)">{{ n.invoice.number }}</a></td><td>{{ n.get_reason_display }}</td>
+      <td class="num"><strong>{{ n.total|rp }}</strong></td><td><span class="pill {% if n.status == 'void' %}pill-void{% else %}pill-issued{% endif %}">{{ n.get_status_display }}</span></td></tr>{% endfor %}</tbody>
+  </table></div>
+  <footer><span>{{ page.paginator.count }} nota</span><span class="pager">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">‹</a>{% endif %}<span>{{ page.number }}/{{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?page={{ page.next_page_number }}">›</a>{% endif %}</span></footer>
+  {% else %}<div class="empty-box"><strong>Belum ada nota kredit</strong>Buka sebuah invoice lalu pilih “Buat nota kredit” dari menu Lainnya.</div>{% endif %}
+</section>
+{% endblock %}

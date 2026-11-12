@@ -2,7 +2,7 @@ import json
 
 from django.db import models
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import Bundle, Product, ProductVariant
 from apps.integrations.secrets import decrypt, encrypt
 from apps.orders.models import Order
 from apps.shops.models import Store
@@ -141,6 +141,8 @@ class ImportBatch(models.Model):
         help_text="True when imported without stock deduction (historical mode).")
     order_count = models.PositiveIntegerField(default=0)
     duplicate_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)  # existing orders whose status moved
+    cancelled_count = models.PositiveIntegerField(default=0)  # cancelled or returned orders
     skipped_count = models.PositiveIntegerField(default=0)
     error_count = models.PositiveIntegerField(default=0)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
@@ -174,3 +176,78 @@ class ChannelOrder(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["channel", "external_order_id"],
             name="unique_channel_order")]
+
+
+class ChannelSku(models.Model):
+    """What a marketplace calls an item, mapped to the store's own item or bundle. Needed when
+    the SKU typed in Shopee or TikTok differs from the master SKU."""
+    channel = models.ForeignKey(SalesChannel, on_delete=models.CASCADE, related_name="sku_map")
+    external_sku = models.CharField(max_length=120)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="+")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="+")
+    bundle = models.ForeignKey(Bundle, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="+")
+
+    class Meta:
+        ordering = ["external_sku"]
+        constraints = [
+            models.UniqueConstraint(fields=["channel", "external_sku"], name="unique_channel_sku_map"),
+            models.CheckConstraint(name="channel_sku_has_one_target", condition=(
+                models.Q(product__isnull=False, bundle__isnull=True)
+                | models.Q(product__isnull=True, bundle__isnull=False))),
+        ]
+
+    @property
+    def target_label(self):
+        if self.bundle_id:
+            return f"Paket {self.bundle.sku} · {self.bundle.name}"
+        item = self.variant if self.variant_id else self.product
+        return f"{item.sku} · {self.product.name}"
+
+
+class UnmappedSku(models.Model):
+    """A marketplace SKU that matched nothing in the catalog: the review queue. In strict mode
+    its order was refused; in historical mode a placeholder product was created for it."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="unmapped_skus")
+    channel = models.ForeignKey(SalesChannel, on_delete=models.CASCADE, related_name="unmapped_skus")
+    sku = models.CharField(max_length=120, blank=True)
+    name = models.CharField(max_length=200, blank=True)
+    placeholder = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    times_seen = models.PositiveIntegerField(default=1)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+    resolved = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["resolved", "-last_seen"]
+        constraints = [models.UniqueConstraint(fields=["channel", "sku", "name"],
+            name="unique_unmapped_sku")]
+
+
+class ChannelOrderIncome(models.Model):
+    """What the marketplace actually paid out for one order, and what it kept: commission,
+    service and admin fees, shipping, vouchers and affiliate commission. Built from the
+    marketplace's income report, so each order has a real net revenue and margin."""
+    FEE_FIELDS = ["commission", "service_fee", "admin_fee", "shipping_fee", "voucher",
+        "affiliate", "other_fee"]
+    channel_order = models.OneToOneField(ChannelOrder, on_delete=models.CASCADE,
+        related_name="income")
+    commission = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    service_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    admin_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    shipping_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    voucher = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    affiliate = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # Whatever the marketplace deducted that its report does not itemise.
+    other_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    net_released = models.DecimalField(max_digits=14, decimal_places=2)
+    released_on = models.DateField(null=True, blank=True)
+    payout_reference = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def total_fees(self):
+        return sum((getattr(self, name) for name in self.FEE_FIELDS), 0)

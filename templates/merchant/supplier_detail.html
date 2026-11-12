@@ -1,141 +1,71 @@
-{% extends "merchant/base.html" %}
-{% block title %}{{ supplier.name }} — Supplier{% endblock %}
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}{{ supplier.name }} · Supplier{% endblock %}
 {% block content %}
 
-<div class="flex items-start justify-between mb-6">
+<nav class="dp-crumb" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-bills' %}">Pembelian</a> › <a href="{% url 'merchant-suppliers' %}">Supplier</a> › <span>{{ supplier.name }}</span>
+</nav>
+
+<div class="dp-head">
   <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — SUPPLIER</p>
-    <h1 class="text-2xl font-bold text-gray-900">{{ supplier.name }}</h1>
-    {% if supplier.phone or supplier.email %}
-    <p class="text-sm text-gray-500 mt-1">
-      {% if supplier.phone %}{{ supplier.phone }}{% endif %}
-      {% if supplier.phone and supplier.email %} · {% endif %}
-      {% if supplier.email %}{{ supplier.email }}{% endif %}
-    </p>
-    {% endif %}
-  </div>
-  <a href="{% url 'merchant-suppliers' %}" class="text-sm text-gray-400 hover:text-gray-600">← Semua Supplier</a>
-</div>
-
-{# KPI #}
-<div class="grid grid-cols-3 gap-4 mb-6">
-  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Total Tagihan</p>
-    <p class="text-2xl font-bold text-gray-900">{{ bills|length }}</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Hutang Belum Lunas</p>
-    <p class="text-2xl font-bold {% if total_owed %}text-red-600{% else %}text-gray-900{% endif %}">
-      Rp{{ total_owed|floatformat:"0g" }}
+    <h1 class="dp-title">{{ supplier.name }} {% if not supplier.is_active %}<span class="pill pill-void">Nonaktif</span>{% endif %}</h1>
+    <p class="dp-sub">
+      {% if supplier.contact %}<b>{{ supplier.contact }}</b> · {% endif %}{{ supplier.phone|default:"" }}{% if supplier.phone and supplier.email %} · {% endif %}{{ supplier.email|default:"" }}
+      {% if not supplier.phone and not supplier.email and not supplier.contact %}Belum ada kontak{% endif %}
     </p>
   </div>
-  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">NPWP</p>
-    <p class="text-sm font-mono text-gray-700">{{ supplier.npwp|default:"—" }}</p>
+  <div class="dp-actions">
+    <a class="btn-primary" href="{% url 'merchant-bill-new' %}">{% icon "plus" %} Tagihan baru</a>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sisa utang</p><div class="dp-amount {% if total_owed %}alert{% endif %}" style="font-size:22px">Rp{{ total_owed|floatformat:"0g" }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Lewat jatuh tempo</p><div class="dp-amount {% if overdue %}alert{% endif %}" style="font-size:22px">Rp{{ overdue|floatformat:"0g" }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Total pembelian</p><div class="dp-amount" style="font-size:22px">Rp{{ total_billed|floatformat:"0g" }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sudah dibayar</p><div class="dp-amount" style="font-size:22px">Rp{{ total_paid|floatformat:"0g" }}</div></div>
+</div>
 
-  {# Bill list #}
-  <div class="lg:col-span-2">
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-700">Riwayat Tagihan</h2>
-        <a href="{% url 'merchant-bill-new' %}?supplier={{ supplier.id }}"
-           class="text-xs font-semibold text-gray-700 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50">
-          + Tagihan Baru
-        </a>
-      </div>
-      {% if bills %}
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-          <tr>
-            <th class="px-5 py-2 text-left font-medium">No. Faktur</th>
-            <th class="px-3 py-2 text-left font-medium">Tanggal</th>
-            <th class="px-3 py-2 text-left font-medium">Status</th>
-            <th class="px-3 py-2 text-right font-medium">Total</th>
-            <th class="px-3 py-2 text-right font-medium">Sisa</th>
-            <th class="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for b in bills %}
-          <tr class="hover:bg-gray-50">
-            <td class="px-5 py-3 font-mono text-xs text-gray-700">{{ b.number|default:b.id|stringformat:"s"|slice:":8" }}</td>
-            <td class="px-3 py-3 text-gray-600">{{ b.bill_date|date:"d M Y" }}</td>
-            <td class="px-3 py-3">
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                {% if b.status == 'paid' %}bg-green-100 text-green-700
-                {% elif b.status == 'open' %}bg-amber-100 text-amber-700
-                {% elif b.status == 'partial' %}bg-gray-100 text-gray-700
-                {% elif b.status == 'overdue' %}bg-red-100 text-red-700
-                {% else %}bg-gray-100 text-gray-500{% endif %}">
-                {{ b.get_status_display }}
-              </span>
-            </td>
-            <td class="px-3 py-3 text-right font-semibold text-gray-800">Rp{{ b.total|floatformat:"0g" }}</td>
-            <td class="px-3 py-3 text-right {% if b._amount_due > 0 %}text-red-600 font-semibold{% else %}text-gray-400{% endif %}">
-              {% if b._amount_due > 0 %}Rp{{ b._amount_due|floatformat:"0g" }}{% else %}—{% endif %}
-            </td>
-            <td class="px-3 py-3 text-right">
-              <a href="{% url 'merchant-bill-detail' b.id %}" class="text-xs text-gray-500 hover:text-gray-900">Detail →</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div class="px-5 py-10 text-center text-sm text-gray-400">Belum ada tagihan dari supplier ini.</div>
-      {% endif %}
+<div class="dp-grid">
+  <section class="dp-card" style="overflow:hidden">
+    <header><h2>Tagihan</h2><small>{{ bills|length }} tagihan</small></header>
+    <div style="overflow-x:auto">
+    <table class="dp-items">
+      <thead><tr><th>No. faktur</th><th>Tanggal</th><th>Jatuh tempo</th><th>Status</th><th class="num">Total</th><th class="num">Sisa</th></tr></thead>
+      <tbody>
+      {% for b in bills %}
+        <tr>
+          <td><a href="{% url 'merchant-bill-detail' b.id %}" class="font-semibold text-indigo-700 hover:underline whitespace-nowrap">{{ b.number|default:"Tanpa nomor" }}</a><small>{{ b.get_category_display }}</small></td>
+          <td class="whitespace-nowrap">{{ b.bill_date|date:"d M Y" }}</td>
+          <td class="whitespace-nowrap">{{ b.due_date|date:"d M Y"|default:"—" }}</td>
+          <td><span class="pill pill-{{ b.status }}">{{ b.get_status_display }}</span></td>
+          <td class="num">Rp{{ b.total|floatformat:"0g" }}</td>
+          <td class="num"><strong {% if b.amount_due > 0 and b.status != 'void' %}style="color:#b42318"{% endif %}>{% if b.status == 'void' %}—{% else %}Rp{{ b.amount_due|floatformat:"0g" }}{% endif %}</strong></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="dp-empty">Belum ada tagihan dari supplier ini. <a href="{% url 'merchant-bill-new' %}" class="text-indigo-700">Catat tagihan pertama →</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
     </div>
-  </div>
+  </section>
 
-  {# Edit supplier info #}
-  <div class="lg:col-span-1">
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-      <h2 class="text-sm font-semibold text-gray-700 mb-4">Info Supplier</h2>
-      <form method="post" class="space-y-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="edit">
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Nama Kontak</label>
-          <input type="text" name="contact" value="{{ supplier.contact }}" maxlength="120"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+  <aside class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Data supplier</h2></header>
+      <form method="post" class="dp-card-body" style="display:grid;gap:12px">
+        {% csrf_token %}<input type="hidden" name="action" value="edit">
+        <label class="field"><span>Nama kontak</span><input name="contact" value="{{ supplier.contact }}" maxlength="120"></label>
+        <div class="field-row">
+          <label class="field"><span>Telepon</span><input name="phone" value="{{ supplier.phone }}" maxlength="30"></label>
+          <label class="field"><span>NPWP</span><input name="npwp" value="{{ supplier.npwp }}" maxlength="20"></label>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Telepon</label>
-          <input type="text" name="phone" value="{{ supplier.phone }}" maxlength="30"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Email</label>
-          <input type="email" name="email" value="{{ supplier.email }}"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">NPWP</label>
-          <input type="text" name="npwp" value="{{ supplier.npwp }}" maxlength="20"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Alamat</label>
-          <textarea name="address" rows="3"
-                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none">{{ supplier.address }}</textarea>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Catatan</label>
-          <textarea name="notes" rows="2"
-                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none">{{ supplier.notes }}</textarea>
-        </div>
-        <button type="submit"
-                class="w-full px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">
-          Simpan Perubahan
-        </button>
+        <label class="field"><span>Email</span><input type="email" name="email" value="{{ supplier.email }}"></label>
+        <label class="field"><span>Alamat</span><textarea name="address" rows="3">{{ supplier.address }}</textarea></label>
+        <label class="field"><span>Catatan <em>(internal)</em></span><textarea name="notes" rows="2">{{ supplier.notes }}</textarea></label>
+        <button type="submit" class="btn-primary btn-block">Simpan perubahan</button>
       </form>
-    </div>
-  </div>
-
+    </section>
+  </aside>
 </div>
-
 {% endblock %}

@@ -1,0 +1,46 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ asset.name }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-assets' %}">Aset tetap</a> › <span>{{ asset.name }}</span></nav>
+<div class="dp-head">
+  <div><h1 class="dp-title">{{ asset.name }} <span class="pill {% if asset.status == 'active' %}pill-paid{% else %}pill-void{% endif %}">{{ asset.get_status_display }}</span></h1>
+    <p class="dp-sub">Diperoleh <b>{{ asset.acquired_on|date:"d M Y" }}</b> · {{ asset.get_group_display }}{% if asset.number %} · {{ asset.number }}{% endif %}</p></div>
+  {% if can_edit and asset.status == 'active' %}<div class="dp-actions"><button type="button" class="btn btn-danger" data-open="disp-dialog">Lepas / jual aset</button></div>{% endif %}
+</div>
+<div class="dp-grid">
+  <div class="dp-stack">
+    <div class="tiles" style="margin:0">
+      <div class="tile"><small>Harga perolehan</small><strong>{{ asset.cost|rp }}</strong><span>Nilai sisa {{ asset.residual_value|rp }}</span></div>
+      <div class="tile"><small>Akumulasi penyusutan</small><strong>{{ accumulated|rp }}</strong><span>{{ months_posted }} dari {{ asset.useful_life_months }} bulan</span></div>
+      <div class="tile accent"><small>Nilai buku</small><strong>{{ book_value|rp }}</strong><span>{{ monthly|rp }} per bulan</span></div>
+    </div>
+    <section class="panel" style="margin:0">
+      <header><div><h2>Jadwal penyusutan</h2><p>Garis lurus, mulai bulan perolehan.</p></div><div class="progress" style="width:160px;margin:0"><span style="width:{{ pct }}%"></span></div></header>
+      <div class="scroll-x" style="max-height:460px;overflow-y:auto"><table class="tbl">
+        <thead><tr><th>Bulan</th><th class="num">Beban</th><th class="num">Akumulasi</th><th class="num">Nilai buku</th><th>Jurnal</th></tr></thead>
+        <tbody>{% for row in plan %}<tr><td>{{ row.month|date:"F Y" }}</td><td class="num">{{ row.amount|rp }}</td><td class="num">{{ row.accumulated|rp }}</td><td class="num">{{ row.book_value|rp }}</td>
+          <td>{% if row.posted %}<span class="pill pill-paid">Tercatat</span>{% else %}<span class="muted">Belum</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+  </div>
+  <aside class="dp-stack">
+    <section class="dp-card"><header><h2>Rincian</h2></header><div class="dp-card-body"><div class="kv">
+      <div><span>Dibayar dari</span><span>{{ asset.paid_from.name }}</span></div>
+      <div><span>Masa manfaat</span><span>{{ asset.useful_life_months }} bulan</span></div>
+      {% if asset.status == 'disposed' %}<div><span>Dilepas</span><span>{{ asset.disposed_on|date:"d M Y" }}</span></div><div><span>Hasil penjualan</span><span>{{ asset.disposal_amount|rp }}</span></div>{% endif %}
+      <div><span>Dicatat oleh</span><span>{{ asset.created_by.username|default:"—" }}</span></div></div>
+      {% if asset.notes %}<p class="dp-help">{{ asset.notes }}</p>{% endif %}</div></section>
+    {% include "merchant/_journal_card.html" %}
+  </aside>
+</div>
+{% if can_edit and asset.status == 'active' %}
+<dialog id="disp-dialog" class="pd-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="dispose">
+  <header><h2>Lepas aset</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Tanggal pelepasan</span><input type="date" name="disposed_on" value="{{ today }}" required></label>
+    <div class="field-row"><label class="field"><span>Hasil penjualan</span><input name="proceeds" inputmode="decimal" data-rupiah placeholder="0"></label>
+      <label class="field"><span>Diterima ke</span><select name="received_into">{% for code, label in funding %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label></div>
+    <p class="dp-help">Penyusutan dicatat sampai bulan sebelumnya. Selisih hasil penjualan dengan nilai buku menjadi laba atau rugi pelepasan. Isi 0 jika aset dibuang.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Lepas aset</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

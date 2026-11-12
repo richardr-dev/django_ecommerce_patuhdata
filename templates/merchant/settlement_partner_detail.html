@@ -10,9 +10,9 @@
 </div>
 
 <div class="dashboard-stats">
-  <div class="stat-card"><small>Total Ditagih</small><b>Rp{{ total_invoiced|floatformat:0 }}</b></div>
-  <div class="stat-card"><small>Sudah Dibayar</small><b>Rp{{ total_paid|floatformat:0 }}</b></div>
-  <div class="stat-card"><small>Sisa Tagihan</small><b>Rp{{ balance_due|floatformat:0 }}</b></div>
+  <div class="stat-card"><small>Total Ditagih</small><b>Rp{{ total_invoiced|floatformat:"0g" }}</b></div>
+  <div class="stat-card"><small>Sudah Dibayar</small><b>Rp{{ total_paid|floatformat:"0g" }}</b></div>
+  <div class="stat-card"><small>Sisa Tagihan</small><b>Rp{{ balance_due|floatformat:"0g" }}</b></div>
 </div>
 
 <div class="dashboard-grid">
@@ -56,9 +56,9 @@
   <span><a href="{% url 'settlement-detail' s.pk %}">{{ s.invoice_number|default:"(Draft)" }}</a></span>
   <span>{{ s.period_start|date:"d M Y" }} – {{ s.period_end|date:"d M Y" }}</span>
   <span><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></span>
-  <span>Rp{{ s.total_due|floatformat:0 }}</span>
-  <span>Rp{{ s.amount_paid|floatformat:0 }}</span>
-  <span>Rp{{ s.balance_due|floatformat:0 }}</span>
+  <span>Rp{{ s.total_due|floatformat:"0g" }}</span>
+  <span>Rp{{ s.amount_paid|floatformat:"0g" }}</span>
+  <span>Rp{{ s.balance_due|floatformat:"0g" }}</span>
 </div>
 {% empty %}<div class="empty-state">Belum ada settlement untuk mitra ini. <a href="{% url 'settlement-new' %}">Buat sekarang →</a></div>{% endfor %}
 </div>

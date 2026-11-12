@@ -1,0 +1,50 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Aset Tetap{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Aset Tetap</h1>
+    <p>Laptop, kendaraan, mesin, dan peralatan yang dipakai bertahun-tahun. Nilainya disusutkan setiap bulan (garis lurus) sebagai beban di laba rugi.</p></div>
+  {% if can_edit %}<div class="dp-actions">
+    <button type="button" class="btn" data-open="dep-dialog">{% icon "calendar" %} Catat penyusutan</button>
+    <button type="button" class="btn-primary" data-open="asset-dialog">{% icon "plus" %} Tambah aset</button></div>{% endif %}
+</div>
+{% if due %}<div class="notice info">{% icon "alert" %}<span>Penyusutan sampai {{ last_month_end|date:"d M Y" }} belum dicatat sebesar <b>{{ due|rp }}</b>. Klik “Catat penyusutan” agar laba rugi akurat.</span></div>{% endif %}
+<div class="tiles">
+  <div class="tile"><small>Harga perolehan</small><strong>{{ totals.cost|rp }}</strong></div>
+  <div class="tile"><small>Akumulasi penyusutan</small><strong>{{ totals.accumulated|rp }}</strong></div>
+  <div class="tile accent"><small>Nilai buku</small><strong>{{ totals.book|rp }}</strong></div>
+</div>
+<section class="panel">
+  {% if assets %}<div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Aset</th><th>Diperoleh</th><th class="num">Harga perolehan</th><th class="num">Per bulan</th><th class="num">Akumulasi</th><th class="num">Nilai buku</th><th>Status</th></tr></thead>
+    <tbody>{% for a in assets %}<tr class="{% if a.status == 'disposed' %}void{% endif %}">
+      <td><a class="rowlink" href="{% url 'merchant-asset-detail' a.id %}">{{ a.name }}</a><small>{% if a.number %}{{ a.number }} · {% endif %}{{ a.useful_life_months }} bulan</small></td>
+      <td>{{ a.acquired_on|date:"d M Y" }}</td><td class="num">{{ a.cost|rp }}</td><td class="num">{{ a.monthly|rp }}</td><td class="num">{{ a.accumulated|rp }}</td><td class="num"><strong>{{ a.book_value|rp }}</strong></td>
+      <td><span class="pill {% if a.status == 'active' %}pill-paid{% else %}pill-void{% endif %}">{{ a.get_status_display }}</span></td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty-box"><strong>Belum ada aset tetap</strong>Catat pembelian laptop, motor pengantar, atau mesin agar nilainya tampil di neraca dan disusutkan otomatis.</div>{% endif %}
+</section>
+{% if can_edit %}
+<dialog id="dep-dialog" class="pd-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="depreciate">
+  <header><h2>Catat penyusutan</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Sampai tanggal</span><input type="date" name="through" value="{{ last_month_end|date:'Y-m-d' }}" required></label>
+  <p class="dp-help">Satu jurnal per aset per bulan. Bulan yang sudah tercatat dilewati, jadi aman dijalankan berulang.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Catat</button></footer></form></dialog>
+<dialog id="asset-dialog" class="pd-dialog" style="width:min(560px,calc(100vw - 32px))"><form method="post">{% csrf_token %}
+  <header><h2>Tambah aset tetap</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div>
+    <label class="field"><span>Nama aset</span><input name="name" required maxlength="160" placeholder="mis. Laptop Lenovo ThinkPad"></label>
+    <div class="field-row"><label class="field"><span>Tanggal perolehan</span><input type="date" name="acquired_on" value="{{ today }}" required></label>
+      <label class="field"><span>Harga perolehan</span><input name="cost" inputmode="decimal" data-rupiah required placeholder="0"></label></div>
+    <label class="field"><span>Kelompok (masa manfaat pajak)</span><select name="group" id="grp">{% for code, label, years in groups %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+    <div class="field-row" id="custom-life"><label class="field"><span>Masa manfaat (bulan)</span><input name="useful_life_months" type="number" min="1" placeholder="mis. 36"></label>
+      <label class="field"><span>Nilai sisa <em>(opsional)</em></span><input name="residual_value" inputmode="decimal" data-rupiah placeholder="0"></label></div>
+    <div class="field-row"><label class="field"><span>Dibayar dari</span><select name="paid_from">{% for code, label in funding %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+      <label class="field"><span>No. aset <em>(opsional)</em></span><input name="number" maxlength="40"></label></div>
+  </div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan aset</button></footer></form></dialog>
+<script>(function(){var g=document.getElementById("grp"),c=document.getElementById("custom-life").querySelector("input");
+function s(){c.required=g.value==="x";c.closest(".field").style.opacity=g.value==="x"?1:.45;}g.addEventListener("change",s);s();})();</script>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

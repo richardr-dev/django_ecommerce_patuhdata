@@ -67,7 +67,7 @@ class ChannelTestCase(TestCase):
 
 
 class ImportTests(ChannelTestCase):
-    def test_import_creates_paid_order_and_reserves_stock(self):
+    def test_import_creates_paid_order_and_takes_stock_out(self):
         order, created = import_order(self.channel, _order(quantity=2))
 
         self.level.refresh_from_db()
@@ -75,7 +75,8 @@ class ImportTests(ChannelTestCase):
         self.assertEqual(order.status, "paid")
         self.assertEqual(order.total, Decimal(30000))
         self.assertEqual(order.email, "")
-        self.assertEqual(self.level.reserved, 2)
+        # A marketplace sale is already paid and packed: the stock leaves the shelf at once.
+        self.assertEqual((self.level.on_hand, self.level.reserved), (3, 0))
 
     def test_reimport_is_a_no_op(self):
         import_order(self.channel, _order())
@@ -92,11 +93,11 @@ class ImportTests(ChannelTestCase):
         self.assertFalse(Order.objects.exists())
         self.assertEqual(self.level.reserved, 0)
 
-    def test_variant_sku_reserves_the_variant(self):
+    def test_variant_sku_takes_the_variant_stock_out(self):
         import_order(self.channel, _order(sku="TEH-M", quantity=2))
 
         self.teh_m.refresh_from_db()
-        self.assertEqual(self.teh_m.reserved, 2)
+        self.assertEqual((self.teh_m.stock, self.teh_m.reserved), (1, 0))
 
     def test_parent_sku_of_a_product_with_variants_is_rejected(self):
         with self.assertRaisesMessage(ChannelImportError, "SKU varian"):

@@ -231,3 +231,84 @@ class ProductImportCostTests(TestCase):
         self.assertEqual(Product.objects.get(store=store).cost_price, Decimal(30000))
         with self.assertRaisesMessage(ValueError, "cost_price"):
             parse_import_rows([{**row, "cost_price": "abc"}])
+
+
+class PayoutBankAccountTests(PayoutTestCase):
+    def setUp(self):
+        super().setUp()
+        from apps.accounting import bank
+        self.bank = bank
+        self.main = bank.bank_accounts(self.store)[0]
+        self.mandiri = bank.add_bank_account(self.store, name="Mandiri Operasional")
+
+    def _land(self, reference="PO-1", account=None):
+        self._gateway_order("NK1")
+        post_pending_entries()
+        return import_payout(self.store, "xendit", reference, {"paid_on": date(2026, 11, 2),
+            "lines": [{"number": 2, "order": "NK1", "amount": Decimal(100000), "fee": Decimal(2000)}]},
+            bank_account=account)[0]
+
+    def test_payout_lands_in_the_chosen_account_not_the_main_cash(self):
+        payout = self._land(account=self.mandiri)
+        balances = _balances(self.store)
+        self.assertEqual(payout.bank_account, self.mandiri)
+        self.assertEqual(balances[self.mandiri.account.code], Decimal(98000))
+        self.assertEqual(balances.get(CASH, 0), 0)
+
+    def test_without_an_account_it_still_goes_to_the_main_cash(self):
+        self._land()
+        self.assertEqual(_balances(self.store)[CASH], Decimal(98000))
+
+    def test_the_bank_statement_line_matches_the_payout_and_the_quoted_reference_ranks_first(self):
+        from apps.accounting.models import BankStatementLine
+        self._land(reference="XND-20261102-A", account=self.mandiri)
+        rows, _ = self.bank.parse_statement(
+            "Tanggal,Keterangan,Debit,Kredit,Saldo\n02/11/2026,CR XENDIT XND-20261102-A,,98.000,98.000\n")
+        self.bank.import_statement(self.mandiri, rows)
+        line = BankStatementLine.objects.get()
+        found = self.bank.suggestions(line)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].entry.payout.reference, "XND-20261102-A")
+        self.bank.match_line(line, found[0])
+        summary = self.bank.reconciliation_summary(self.mandiri)
+        self.assertEqual((summary["unmatched_count"], summary["matched_count"]), (0, 1))
+        self.assertEqual(summary["book_balance"], summary["statement_balance"])
+
+    def test_a_reference_in_the_description_breaks_a_tie_between_same_amount_payouts(self):
+        from apps.accounting.models import BankStatementLine
+        first = self._land(reference="REF-AAA", account=self.mandiri)
+        self._gateway_order("NK2")
+        post_pending_entries()
+        second = import_payout(self.store, "xendit", "REF-BBB", {"paid_on": date(2026, 11, 2),
+            "lines": [{"number": 2, "order": "NK2", "amount": Decimal(100000), "fee": Decimal(2000)}]},
+            bank_account=self.mandiri)[0]
+        rows, _ = self.bank.parse_statement(
+            "Tanggal,Keterangan,Debit,Kredit,Saldo\n02/11/2026,TRSF REF-BBB,,98.000,98.000\n")
+        self.bank.import_statement(self.mandiri, rows)
+        found = self.bank.suggestions(BankStatementLine.objects.get())
+        self.assertEqual([f.entry.payout_id for f in found], [second.id, first.id])
+
+    def test_income_import_and_upload_form_only_offer_this_stores_accounts(self):
+        from apps.accounting.models import BankAccount
+        from apps.channels.income_views import IncomeUploadForm
+        other = Store.objects.create(owner=self.owner, name="Lain", slug="lain-y")
+        foreign = self.bank.bank_accounts(other)[0]
+        form = IncomeUploadForm(store=self.store)
+        allowed = set(form.fields["bank_account"].queryset.values_list("pk", flat=True))
+        self.assertIn(self.mandiri.pk, allowed)
+        self.assertNotIn(foreign.pk, allowed)
+        self.assertTrue(BankAccount.objects.filter(pk=foreign.pk).exists())
+
+    def test_mitra_payment_lands_in_the_chosen_account(self):
+        from datetime import timedelta
+
+        from apps.settlements.models import ConsignmentPartner, Settlement
+        from apps.settlements.services import record_payment
+        partner = ConsignmentPartner.objects.create(store=self.store, name="Toko Mitra")
+        settlement = Settlement.objects.create(store=self.store, partner=partner,
+            period_start=date(2026, 10, 1), period_end=date(2026, 10, 31) + timedelta(days=0),
+            status=Settlement.STATUS_INVOICED, invoice_number="SET-1", total_due=Decimal(500000))
+        record_payment(settlement, Decimal(200000), date(2026, 11, 3), bank_account=self.mandiri)
+        balances = _balances(self.store)
+        self.assertEqual(balances[self.mandiri.account.code], Decimal(200000))
+        self.assertEqual(balances.get(CASH, 0), 0)

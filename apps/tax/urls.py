@@ -1,11 +1,37 @@
 from django.urls import path
 
-from . import views
+from . import receivable_views, sales_views, views
 
 urlpatterns = [
     path("merchant/tax/", views.merchant_tax, name="merchant-tax"),
     path("merchant/tax/invoices.csv", views.merchant_invoice_register,
         name="merchant-invoice-register"),
+    path("merchant/sales/piutang/", receivable_views.merchant_receivables,
+        name="merchant-receivables"),
+    path("merchant/sales/credit-notes/", sales_views.merchant_credit_notes,
+        name="merchant-credit-notes"),
+    path("merchant/sales/credit-notes/new/", sales_views.merchant_credit_note_new,
+        name="merchant-credit-note-new"),
+    path("merchant/sales/credit-notes/<uuid:note_id>/", sales_views.merchant_credit_note_detail,
+        name="merchant-credit-note-detail"),
+    path("merchant/sales/receive/", sales_views.merchant_receive_payment,
+        name="merchant-receive-payment"),
+    path("merchant/sales/receipts/", sales_views.merchant_receipts, name="merchant-receipts"),
+    path("merchant/sales/receipts/<uuid:receipt_id>/", sales_views.merchant_receipt_detail,
+        name="merchant-receipt-detail"),
+    path("merchant/sales/credit/", sales_views.merchant_customer_credit,
+        name="merchant-customer-credit"),
+    path("merchant/sales/quotes/", sales_views.merchant_quotes, name="merchant-quotes"),
+    path("merchant/sales/quotes/new/", sales_views.merchant_quote_edit, name="merchant-quote-new"),
+    path("merchant/sales/quotes/<uuid:quote_id>/", sales_views.merchant_quote_detail,
+        name="merchant-quote-detail"),
+    path("merchant/sales/quotes/<uuid:quote_id>/edit/", sales_views.merchant_quote_edit,
+        name="merchant-quote-edit"),
+    path("merchant/sales/recurring/", sales_views.merchant_recurring, name="merchant-recurring"),
+    path("merchant/sales/recurring/new/", sales_views.merchant_recurring_edit,
+        name="merchant-recurring-new"),
+    path("merchant/sales/recurring/<int:recurring_id>/edit/", sales_views.merchant_recurring_edit,
+        name="merchant-recurring-edit"),
     path("merchant/invoices/<uuid:invoice_id>/", views.merchant_invoice, name="merchant-invoice"),
     path("orders/<uuid:order_id>/invoice/", views.order_invoice, name="order-invoice"),
 ]

@@ -1,0 +1,23 @@
+{% load icons books %}<section class="panel">
+  {% if bills %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Supplier</th><th>No. faktur</th><th>Tanggal</th><th>Jatuh tempo</th><th>Status</th><th class="num">Total</th><th class="num">Sisa</th></tr></thead>
+    <tbody>
+    {% for b in bills %}
+      <tr>
+        <td><a class="rowlink" href="{% url 'merchant-bill-detail' b.id %}">{{ b.supplier.name }}</a></td>
+        <td>{{ b.number|default:"—" }}</td>
+        <td>{{ b.bill_date|date:"d M Y" }}</td>
+        <td>{{ b.due_date|date:"d M Y"|default:"—" }}{% if b.late %} <span class="pill pill-overdue">Lewat</span>{% endif %}</td>
+        <td><span class="pill pill-{{ b.status }}">{{ b.get_status_display }}</span></td>
+        <td class="num">{{ b.total|rp }}</td>
+        <td class="num">{% if b.amount_due > 0 and b.status != 'void' %}<strong>{{ b.amount_due|rp }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <footer><span>{{ bills|length }} tagihan{% if query or status_filter %} (difilter){% endif %}</span></footer>
+  {% else %}
+  <div class="empty-box"><strong>{% if query or status_filter %}Tidak ada tagihan yang cocok{% else %}Belum ada tagihan{% endif %}</strong>{% if query or status_filter %}Ubah kata kunci atau status.{% else %}Catat faktur dari supplier agar utang dan stok masuk tercatat.<br><a class="btn-primary" href="{% url 'merchant-bill-new' %}">{% icon "plus" %} Buat tagihan pertama</a>{% endif %}</div>
+  {% endif %}
+</section>

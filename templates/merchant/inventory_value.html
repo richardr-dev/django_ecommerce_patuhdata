@@ -1,0 +1,45 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Nilai Persediaan{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Nilai persediaan</h1>
+    <p>Stok di gudang dan di mitra dinilai dengan harga pokok, dibandingkan dengan akun Persediaan di pembukuan. Setiap penjualan mengurangi stok dan mencatat HPP-nya sekaligus; selisih biasanya berasal dari stok awal yang belum dicatat.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-stock' %}">{% icon "box" %} Stok gudang</a><a class="btn" href="?format=csv">{% icon "download" %} CSV</a></div>
+</div>
+
+{% if data.difference == 0 and data.difference_mitra == 0 %}
+<div class="notice ok">{% icon "check-circle" %}<span>Persediaan di buku sama dengan nilai stok.</span></div>
+{% else %}
+<div class="notice">{% icon "alert" %}<span>Persediaan di buku {% if data.difference > 0 %}lebih besar{% else %}lebih kecil{% endif %} <b>{{ data.difference|abs|rp }}</b> dari nilai stok{% if data.in_transit %} (sudah memperhitungkan barang tagihan yang belum diterima {{ data.in_transit|rp }}){% endif %}. {% if can_edit %}Sesuaikan di bawah, atau cari penyebabnya lebih dulu.{% endif %}</span></div>
+{% endif %}
+{% if data.missing_cost %}<div class="notice info">{% icon "alert" %}<span>{{ data.missing_cost }} barang belum punya harga pokok, jadi dinilai Rp0. Isi harga pokoknya di data produk agar nilai persediaan dan HPP akurat.</span></div>{% endif %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Nilai stok di gudang</small><strong>{{ data.shelf_value|rp }}</strong><span>Dinilai dengan harga pokok</span></div>
+  <div class="tile"><small>Persediaan di buku (1400)</small><strong>{{ data.book|rp }}</strong><span>{% if data.in_transit %}Termasuk {{ data.in_transit|rp }} barang belum diterima{% else %}Akun Persediaan barang{% endif %}</span></div>
+  <div class="tile {% if data.difference %}warn{% endif %}"><small>Selisih</small><strong>{{ data.difference|rp }}</strong><span>Buku dikurangi stok</span></div>
+  <div class="tile"><small>Di mitra (konsinyasi)</small><strong>{{ data.mitra_value|rp }}</strong><span>Buku: {{ data.book_mitra|rp }}{% if data.difference_mitra %} · selisih {{ data.difference_mitra|rp }}{% endif %}</span></div>
+</div>
+
+{% if can_edit and data.difference or can_edit and data.difference_mitra %}
+<section class="panel"><header><div><h2>Sesuaikan buku dengan stok</h2><p>Mencatat jurnal umum sebesar selisih di atas, sehingga akun Persediaan sama dengan nilai stok.</p></div></header>
+  <form method="post" class="form-grid" style="grid-template-columns:1fr 1fr auto;align-items:end">{% csrf_token %}
+    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label>
+    <label class="field"><span>Lawan akun</span><select name="contra">{% for code, label in contras %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+    <button class="btn-primary" data-confirm="Catat jurnal penyesuaian persediaan sebesar selisih?" data-confirm-tone="neutral" data-confirm-ok="Catat jurnal" type="submit">Catat penyesuaian</button>
+  </form>
+  <footer><span>Pilih “Saldo awal” untuk stok yang sudah ada sebelum pembukuan dimulai, “Selisih persediaan” untuk kehilangan atau salah hitung.</span></footer>
+</section>
+{% endif %}
+
+<section class="panel">
+  <header><div><h2>Nilai per barang</h2><p>{{ data.rows|length }} barang bersaldo{% if data.rows|length > 300 %} (300 terbesar){% endif %}.</p></div></header>
+  {% if rows %}<div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Barang</th><th class="num">Di gudang</th><th class="num">Di mitra</th><th class="num">Harga pokok</th><th class="num">Nilai gudang</th><th class="num">Nilai di mitra</th></tr></thead>
+    <tbody>{% for r in rows %}<tr><td><strong>{{ r.name }}</strong><small>{{ r.sku }}</small></td><td class="num">{{ r.shelf }}</td><td class="num">{% if r.mitra %}{{ r.mitra }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{% if r.no_cost %}<span class="pill pill-partial">Belum diisi</span>{% else %}{{ r.cost|rp }}{% endif %}</td><td class="num"><strong>{{ r.shelf_value|rp }}</strong></td><td class="num">{% if r.mitra_value %}{{ r.mitra_value|rp }}{% else %}<span class="muted">–</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>Total</td><td colspan="3"></td><td class="num">{{ data.shelf_value|rp }}</td><td class="num">{{ data.mitra_value|rp }}</td></tr></tfoot>
+  </table></div>
+  {% else %}<div class="empty-box"><strong>Belum ada stok</strong>Tambah stok lewat tagihan supplier (terima barang) atau stok opname.</div>{% endif %}
+</section>
+{% endblock %}

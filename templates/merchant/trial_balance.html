@@ -1,77 +1,24 @@
-{% extends "merchant/base.html" %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Neraca Saldo{% endblock %}
 {% block content %}
-
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — LAPORAN</p>
-    <h1 class="text-2xl font-bold text-gray-900">Neraca Saldo (Trial Balance)</h1>
-    <p class="text-sm text-gray-500 mt-1">Semua akun buku besar dengan total debit dan kredit.</p>
-  </div>
-  <div class="flex items-center gap-3">
-    <a href="?format=csv" class="px-3 py-1.5 rounded-xl border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50">↓ Ekspor CSV</a>
-    <a href="{% url 'merchant-accounting' %}" class="text-sm text-gray-400 hover:text-gray-600">← Akuntansi</a>
-  </div>
+<div class="pg-head">
+  <div><span class="pg-kicker">Laporan keuangan</span><h1>Neraca saldo</h1><p>Semua akun buku besar dengan total debit dan kredit. Klik akun untuk melihat transaksinya.</p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?format=csv">{% icon "download" %} CSV</a></div>
 </div>
-
-{% if balanced %}
-<div class="mb-5 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2">
-  <span class="font-bold">✓</span> Neraca saldo seimbang — total debit = total kredit
-</div>
-{% else %}
-<div class="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
-  <span class="font-bold">!</span> Neraca tidak seimbang!
-  Debit: Rp{{ total_debit|floatformat:"0g" }} — Kredit: Rp{{ total_credit|floatformat:"0g" }}
-</div>
-{% endif %}
-
-<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-gray-900 text-white text-xs uppercase tracking-wide">
-      <tr>
-        <th class="px-5 py-3 text-left font-medium">Kode</th>
-        <th class="px-3 py-3 text-left font-medium">Nama Akun</th>
-        <th class="px-3 py-3 text-left font-medium">Tipe</th>
-        <th class="px-3 py-3 text-right font-medium">Debit</th>
-        <th class="px-3 py-3 text-right font-medium">Kredit</th>
-        <th class="px-3 py-3 text-right font-medium">Saldo</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for a in accounts %}
-      <tr class="hover:bg-gray-50 {% if not a.total_debit and not a.total_credit %}opacity-40{% endif %}">
-        <td class="px-5 py-2.5 font-mono text-xs text-gray-500">{{ a.code }}</td>
-        <td class="px-3 py-2.5 text-gray-800 font-medium">{{ a.name }}</td>
-        <td class="px-3 py-2.5">
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-            {{ a.get_type_display }}
-          </span>
-        </td>
-        <td class="px-3 py-2.5 text-right {% if a.total_debit %}text-gray-800{% else %}text-gray-300{% endif %}">
-          {% if a.total_debit %}Rp{{ a.total_debit|floatformat:"0g" }}{% else %}—{% endif %}
-        </td>
-        <td class="px-3 py-2.5 text-right {% if a.total_credit %}text-gray-800{% else %}text-gray-300{% endif %}">
-          {% if a.total_credit %}Rp{{ a.total_credit|floatformat:"0g" }}{% else %}—{% endif %}
-        </td>
-        <td class="px-3 py-2.5 text-right font-semibold {% if a.balance > 0 %}text-gray-900{% elif a.balance < 0 %}text-red-600{% else %}text-gray-300{% endif %}">
-          {% if a.balance %}Rp{{ a.balance|floatformat:"0g" }}{% else %}—{% endif %}
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="6" class="px-5 py-10 text-center text-gray-400">Belum ada posting jurnal.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot class="border-t-2 border-gray-900 bg-gray-900 text-white font-bold text-sm">
-      <tr>
-        <td class="px-5 py-3" colspan="3">TOTAL</td>
-        <td class="px-3 py-3 text-right">Rp{{ total_debit|floatformat:"0g" }}</td>
-        <td class="px-3 py-3 text-right">Rp{{ total_credit|floatformat:"0g" }}</td>
-        <td class="px-3 py-3 text-right">—</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-
+{% if balanced %}<div class="notice ok">{% icon "check-circle" %}<span>Neraca saldo seimbang: total debit sama dengan total kredit.</span></div>
+{% else %}<div class="notice">{% icon "alert" %}<span>Tidak seimbang. Debit {{ total_debit|rp }} · kredit {{ total_credit|rp }}. Periksa jurnal manual.</span></div>{% endif %}
+<section class="panel">
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Kode</th><th>Akun</th><th>Tipe</th><th class="num">Debit</th><th class="num">Kredit</th><th class="num">Saldo</th></tr></thead>
+    <tbody>{% for a in accounts %}<tr {% if not a.total_debit and not a.total_credit %}style="opacity:.45"{% endif %}>
+      <td><span class="code">{{ a.code }}</span></td>
+      <td><a class="rowlink" href="{% url 'merchant-account-ledger' a.code %}">{{ a.name }}</a></td>
+      <td><span class="pill pill-draft">{{ a.get_type_display }}</span></td>
+      <td class="num">{% if a.total_debit %}{{ a.total_debit|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{% if a.total_credit %}{{ a.total_credit|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num {% if a.balance < 0 %}neg{% endif %}">{% if a.balance %}<strong>{{ a.balance|rp }}</strong>{% else %}<span class="muted">–</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="6"><div class="empty-box"><strong>Belum ada jurnal</strong>Jurnal dibuat otomatis dari penjualan, tagihan, dan kas & bank.</div></td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td colspan="3">Total</td><td class="num">{{ total_debit|rp }}</td><td class="num">{{ total_credit|rp }}</td><td></td></tr></tfoot>
+  </table></div>
+</section>
 {% endblock %}

@@ -1,0 +1,24 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Tambah Brand{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pengaturan</span><h1>Tambah brand</h1>
+  <p>Buka toko lain di bawah akun yang sama. Setiap brand punya pembukuan, stok, pelanggan, dan alamat sendiri; Anda berpindah antar brand lewat menu di bagian atas.</p></div></div>
+<div class="dp-grid">
+  <form method="post" class="panel">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="notice">{% icon "alert" %}<span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <label class="field"><span>Nama brand</span>{{ form.store_name }}{% for e in form.store_name.errors %}<small style="color:#b42318">{{ e }}</small>{% endfor %}</label>
+      <label class="field"><span>Alamat toko</span>{{ form.slug }}<small style="color:var(--pd-muted)">{{ form.slug.help_text }}</small>{% for e in form.slug.errors %}<small style="color:#b42318">{{ e }}</small>{% endfor %}</label>
+      <label class="field"><span>Nomor WhatsApp toko</span>{{ form.phone }}{% for e in form.phone.errors %}<small style="color:#b42318">{{ e }}</small>{% endfor %}</label>
+      <label class="field"><span>Instagram <em>(opsional)</em></span>{{ form.instagram }}{% for e in form.instagram.errors %}<small style="color:#b42318">{{ e }}</small>{% endfor %}</label>
+    </div>
+    <div style="padding:0 18px 4px"><label style="display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--pd-text)">{{ form.accept_terms }} <span>{{ form.accept_terms.label }}</span></label>{% for e in form.accept_terms.errors %}<small style="color:#b42318">{{ e }}</small>{% endfor %}</div>
+    <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-dashboard' %}">Batal</a><button class="btn-primary">{% icon "plus" %} Buat brand</button></div>
+  </form>
+  <aside class="dp-stack">
+    <section class="dp-card"><header><h2>Brand Anda</h2><small>{{ brands|length }}</small></header>
+      <div class="dp-links">{% for b in brands %}<a href="?store={{ b.id }}"><span>{{ b.name }}<small style="display:block">{{ b.slug }}</small></span><small>{% if b.id == merchant_store.id %}aktif{% else %}→{% endif %}</small></a>{% endfor %}</div></section>
+    <section class="dp-card"><header><h2>Perlu diketahui</h2></header><div class="dp-card-body"><p class="dp-help" style="margin:0">Brand baru memulai {% if plan.is_paid %}masa coba {{ trial_days }} hari{% else %}paket gratis{% endif %} sendiri{% if plan %} ({{ plan.name }}){% endif %}: langganan dihitung per brand. Laporan keuangan dibuat per brand.</p></div></section>
+  </aside>
+</div>
+{% endblock %}

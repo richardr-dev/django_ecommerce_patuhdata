@@ -32,7 +32,7 @@
             {% if partner.contact_name %}<div class="text-xs text-gray-400">{{ partner.contact_name }}</div>{% endif %}
           </td>
           <td class="px-5 py-3 text-right text-gray-500">
-            Rp{{ product.price|floatformat:0 }}
+            Rp{{ product.price|floatformat:"0g" }}
           </td>
           <td class="px-5 py-3">
             <div class="relative">

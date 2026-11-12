@@ -121,10 +121,10 @@ class Settlement(models.Model):
     due_date = models.DateField(null=True, blank=True)
 
     # Totals (computed and stored when lines are saved; recalculated on line changes until confirmed)
-    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    shipping_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    total_due = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
+    shipping_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
+    total_due = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
 
     # Notes visible to the partner (shown on settlement statement)
     notes = models.TextField(blank=True)
@@ -176,8 +176,8 @@ class Settlement(models.Model):
             sub=models.Sum("line_total"),
             ship=models.Sum("shipping_contribution"),
         )
-        self.subtotal = agg["sub"] or Decimal("0")
-        self.shipping_total = agg["ship"] or Decimal("0")
+        self.subtotal = agg["sub"] or Decimal(0)
+        self.shipping_total = agg["ship"] or Decimal(0)
         self.total_due = self.subtotal + self.shipping_total
 
 
@@ -195,7 +195,7 @@ class SettlementLine(models.Model):
     # Totals for this order at AB Shop prices
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
     # Shipping charged to partner for this order
-    shipping_contribution = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    shipping_contribution = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
 
     class Meta:
         ordering = ["sale_date", "id"]
@@ -224,6 +224,9 @@ class SettlementPayment(models.Model):
     method = models.CharField(max_length=20, choices=METHODS, default="bank_transfer")
     reference = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
+    # Which money account received it (the main cash account when empty).
+    bank_account = models.ForeignKey("accounting.BankAccount", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+")
     recorded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -236,3 +239,53 @@ class SettlementPayment(models.Model):
 
     def __str__(self):
         return f"Rp{self.amount} · {self.payment_date} · {self.get_method_display()}"
+
+
+class ConsignmentStock(models.Model):
+    """Goods a mitra holds for the store on consignment. They stay the store's property (and in
+    its inventory value) until the mitra sells them. The count may go negative: the mitra
+    reported selling more than was recorded as sent, which someone must reconcile."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="consignment_stock")
+    partner = models.ForeignKey(ConsignmentPartner, on_delete=models.CASCADE,
+        related_name="stock")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
+    quantity = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["partner__name", "product__name"]
+        constraints = [models.UniqueConstraint(fields=["partner", "product", "variant"],
+            name="unique_partner_stock_item"),
+            models.UniqueConstraint(fields=["partner", "product"], condition=models.Q(variant__isnull=True),
+                name="unique_partner_stock_product")]
+
+    @property
+    def sku(self):
+        return (self.variant.sku if self.variant_id else self.product.sku) or ""
+
+    @property
+    def label(self):
+        return f"{self.product.name} · {self.variant.name}" if self.variant_id else self.product.name
+
+
+class ConsignmentMovement(models.Model):
+    """Every change of a mitra's stock, so what the mitra holds can always be explained."""
+    KINDS = [("send", "Kirim ke mitra"), ("return", "Retur dari mitra"),
+        ("sold", "Terjual (settlement)"), ("adjust", "Penyesuaian")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="+")
+    stock = models.ForeignKey(ConsignmentStock, on_delete=models.CASCADE,
+        related_name="movements")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    quantity = models.IntegerField(help_text="Positif menambah stok di mitra, negatif mengurangi.")
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    settlement = models.ForeignKey(Settlement, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="stock_movements")
+    note = models.CharField(max_length=200, blank=True)
+    date = models.DateField()
+    actor = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]

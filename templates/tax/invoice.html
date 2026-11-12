@@ -6,26 +6,26 @@
 <meta name="robots" content="noindex">
 <title>Invoice {{ invoice.number }}</title>{% include "platform/favicon.html" %}
 <style>
-  body { margin: 0; background: #f4f4f5; color: #18181b; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
-  .sheet { max-width: 760px; margin: 24px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  header { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 2px solid #18181b; padding-bottom: 16px; }
-  h1 { margin: 0; font-size: 26px; letter-spacing: .04em; }
-  h2 { margin: 0 0 4px; font-size: 12px; color: #71717a; text-transform: uppercase; letter-spacing: .06em; }
+  body { margin: 0; background: #f5f8fd; color: #0f1f38; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
+  .sheet { max-width: 760px; margin: 24px auto; background: #fff; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px -18px rgba(26,102,217,.35), 0 0 0 1px rgba(15,23,42,.05); }
+  header { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 3px solid #2563eb; padding-bottom: 16px; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: .04em; color: #1a66d9; }
+  h2 { margin: 0 0 4px; font-size: 12px; color: #6a7a92; text-transform: uppercase; letter-spacing: .06em; }
   .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
   .parties p, header p { margin: 0; white-space: pre-line; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #e4e4e7; vertical-align: top; }
-  th { font-size: 12px; color: #71717a; text-transform: uppercase; }
+  th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid #e3e9f3; vertical-align: top; }
+  th { font-size: 11px; color: #1a66d9; background: #eef4fe; text-transform: uppercase; letter-spacing: .06em; }
   .num { text-align: right; white-space: nowrap; }
   .totals { margin-left: auto; width: min(100%, 340px); margin-top: 16px; }
   .totals td { border: 0; padding: 4px 6px; }
-  .totals .grand td { border-top: 2px solid #18181b; font-weight: 700; font-size: 16px; padding-top: 10px; }
-  .muted { color: #71717a; font-size: 12px; }
+  .totals .grand td { border-top: 2px solid #2563eb; font-weight: 700; color: #1a66d9; font-size: 16px; padding-top: 10px; }
+  .muted { color: #6a7a92; font-size: 12px; }
   .actions { max-width: 760px; margin: 0 auto; display: flex; gap: 12px; align-items: end; flex-wrap: wrap; padding: 0 16px; }
   .actions form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
-  .actions label { display: grid; font-size: 12px; color: #52525b; }
-  input, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #d4d4d8; }
-  button { background: #18181b; color: #fff; border-color: #18181b; cursor: pointer; }
+  .actions label { display: grid; font-size: 12px; color: #33445e; }
+  input, button { font: inherit; padding: 8px 12px; border-radius: 99px; border: 0; box-shadow: inset 0 0 0 1px #d3dcea; }
+  button { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 8px 18px -8px rgba(37,99,235,.7); font-weight: 650; cursor: pointer; }
   .errorlist { color: #b91c1c; margin: 0; padding: 0; list-style: none; font-size: 12px; }
   @media (max-width: 600px) { .sheet { padding: 20px; margin: 16px; } .parties { grid-template-columns: 1fr; } }
   @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; max-width: none; padding: 0; } .actions { display: none; } }

@@ -4,14 +4,21 @@ Parse Tokopedia Seller Center XLSX exports into MarketplaceOrder objects.
 Tokopedia exports have two header rows: row 1 is column names, row 2 is
 descriptions. Data starts at row 3. Phone numbers, names, and addresses are
 masked by Tokopedia. Buyer Username (also partially masked) is used as the
-ChannelBuyer external_id. Cancelled orders are silently skipped.
+ChannelBuyer external_id. Unpaid orders are skipped; cancelled and returned ones are imported so their state is tracked.
 """
 from collections import OrderedDict
 from decimal import Decimal
 
 import openpyxl
 
-from apps.channels.adapters import MarketplaceOrder, OrderLine
+from apps.channels.adapters import (
+    STATE_CANCELLED,
+    STATE_UNPAID,
+    MarketplaceOrder,
+    OrderLine,
+    normalize_state,
+    parse_marketplace_time,
+)
 from apps.channels.services import ChannelImportError, parse_amount
 
 _COLS = {
@@ -32,9 +39,16 @@ _COLS = {
     "province":        "Province",
     "city":            "Regency and City",
     "address":         "Detail Address",
+    "return_type":     "Cancelation/Return Type",
+    "return_qty":      "Sku Quantity of return",
+    "created":         "Created Time",
+    "paid":            "Paid Time",
 }
 
-_SKIP_STATUSES = {"Dibatalkan", "Cancelled", "Return/Refund"}
+# Orders nobody paid for are not sales, so they are not imported. Cancelled and returned
+# orders are imported: they show the cancellation rate and take back a sale already booked.
+def _is_unpaid(status):
+    return normalize_state(status) == STATE_UNPAID
 
 _REQUIRED_KEYS = {"order_id", "product_name", "quantity", "unit_price"}
 
@@ -124,7 +138,7 @@ def parse_tokopedia_xlsx(upload):
             continue
 
         status = _get(row, index, "status")
-        if status in _SKIP_STATUSES:
+        if _is_unpaid(status):
             skipped_ids.add(order_id)
             continue
 
@@ -148,9 +162,16 @@ def parse_tokopedia_xlsx(upload):
             "row": row,
             "lines": [],
             "status": status,
-            "seller_discount": Decimal("0"),
+            "seller_discount": Decimal(0),
+            "sold": 0, "returned": 0, "return_type": "",
         })
         head["lines"].append(line)
+        head["sold"] += quantity
+        head["return_type"] = head["return_type"] or _get(row, index, "return_type")
+        try:
+            head["returned"] += int(parse_amount(_get(row, index, "return_qty") or "0"))
+        except ChannelImportError:
+            pass
 
         # Accumulate per-line seller discounts into order-level total
         raw_discount = _get(row, index, "seller_discount") or "0"
@@ -164,6 +185,10 @@ def parse_tokopedia_xlsx(upload):
     orders = []
     for order_id, head in grouped.items():
         row = head["row"]
+        # A finished order whose every unit came back is a return; a part-return stays a sale.
+        if ("return" in head["return_type"].lower() and head["returned"] >= head["sold"] > 0
+                and normalize_state(head["status"]) not in {STATE_CANCELLED, STATE_UNPAID}):
+            head["status"] = "Pengembalian"
         orders.append(MarketplaceOrder(
             external_id=order_id[:80],
             buyer_name=_buyer_name(row, index),
@@ -174,6 +199,9 @@ def parse_tokopedia_xlsx(upload):
             discount=head["seller_discount"],
             courier=_get(row, index, "courier"),
             tracking_number=_get(row, index, "tracking"),
+            status_text=head["status"],
+            placed_at=parse_marketplace_time(row[index["created"]]) if "created" in index else None,
+            paid_at=parse_marketplace_time(row[index["paid"]]) if "paid" in index else None,
             raw={
                 "tokopedia_status": head["status"],
                 "tokopedia_username": _get(row, index, "buyer_username"),

@@ -24,12 +24,12 @@ class Order(models.Model):
         ("exception", "Kendala pengiriman"),
         ("unknown", "Status belum dikenali"),
     ]
-    STATUS = [("pending", "Pending Payment"), ("payment_failed", "Payment Failed"),
-        ("paid", "Paid"), ("confirmed", "Confirmed"), ("allocated", "Allocated"),
-        ("picking", "Picking"), ("packed", "Packed"), ("shipped", "Shipped"),
-        ("delivered", "Delivered"), ("completed", "Completed"), ("cancelled", "Cancelled"),
-        ("refund_requested", "Refund Requested"), ("partially_refunded", "Partially Refunded"),
-        ("refunded", "Refunded"), ("returned", "Returned")]
+    STATUS = [("pending", "Menunggu pembayaran"), ("payment_failed", "Pembayaran gagal"),
+        ("paid", "Dibayar"), ("confirmed", "Dikonfirmasi"), ("allocated", "Stok dialokasikan"),
+        ("picking", "Diambil dari rak"), ("packed", "Dikemas"), ("shipped", "Dikirim"),
+        ("delivered", "Diterima pembeli"), ("completed", "Selesai"), ("cancelled", "Dibatalkan"),
+        ("refund_requested", "Refund diajukan"), ("partially_refunded", "Refund sebagian"),
+        ("refunded", "Direfund"), ("returned", "Diretur")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     access_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="orders")
@@ -344,6 +344,8 @@ class OrderItem(models.Model):
     is_preorder = models.BooleanField(default=False)
     # The shopper's note for this item, e.g. the writing on a cake.
     note = models.CharField(max_length=200, blank=True)
+    # The bundle SKU this line was sold as, when it is one component of a bundle.
+    bundle_sku = models.CharField(max_length=80, blank=True)
     # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     # ABShop reseller price charged to AB Shop; different from regular retail unit_price.
@@ -383,7 +385,10 @@ class InventoryAllocation(models.Model):
 
 class InventoryMovement(models.Model):
     KIND = [("reserve", "Reserve"), ("release", "Release"), ("commit", "Commit"),
-        ("adjust", "Adjust"), ("return", "Return")]
+        ("adjust", "Adjust"), ("return", "Return"), ("receipt", "Barang masuk"),
+        ("transfer_in", "Transfer masuk"), ("transfer_out", "Transfer keluar"),
+        ("consign_out", "Kirim ke mitra"), ("consign_in", "Kembali dari mitra"),
+        ("opname", "Stok opname")]
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="inventory_movements")
     order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="inventory_movements",
         null=True, blank=True)
@@ -399,6 +404,10 @@ class InventoryMovement(models.Model):
     new_on_hand = models.PositiveIntegerField()
     previous_reserved = models.PositiveIntegerField()
     new_reserved = models.PositiveIntegerField()
+    # The document behind a movement that no order caused (goods receipt, transfer, mitra...).
+    source_type = models.CharField(max_length=40, blank=True)
+    source_id = models.CharField(max_length=64, blank=True)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

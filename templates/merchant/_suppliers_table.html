@@ -1,0 +1,15 @@
+{% load icons books %}<section class="panel">
+  {% if suppliers %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Supplier</th><th>Kontak</th><th class="num">Tagihan</th><th class="num">Sisa utang</th></tr></thead>
+    <tbody>{% for s in suppliers %}<tr>
+      <td><a class="rowlink" href="{% url 'merchant-supplier-detail' s.id %}">{{ s.name }}</a>{% if s.npwp %}<small>NPWP {{ s.npwp }}</small>{% endif %}</td>
+      <td>{% if s.contact %}{{ s.contact }}{% endif %}{% if s.phone %}<small>{{ s.phone }}</small>{% endif %}{% if s.email %}<small>{{ s.email }}</small>{% endif %}{% if not s.contact and not s.phone and not s.email %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num">{{ s.bill_count }}</td>
+      <td class="num">{% if s.total_owed %}<strong>{{ s.total_owed|rp }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <footer><span>{{ suppliers|length }} supplier</span></footer>
+  {% else %}
+  <div class="empty-box"><strong>{% if query %}Tidak ada supplier yang cocok{% else %}Belum ada supplier{% endif %}</strong>{% if not query %}Tambahkan supplier pertama untuk mulai mencatat tagihan.{% endif %}</div>
+  {% endif %}
+</section>

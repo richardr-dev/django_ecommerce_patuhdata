@@ -39,6 +39,16 @@ def tax_profile(store):
     return TaxProfile.objects.filter(store=store).first() or TaxProfile(store=store)
 
 
+def vat_for(store, tax_base, *, is_pkp=None):
+    """PPN to charge on a sale of ``tax_base``: ``(rate, amount)``. Only a PKP seller charges
+    PPN, at the store's rate; everyone else charges none."""
+    if is_pkp is None:
+        is_pkp = tax_profile(store).is_pkp
+    if not is_pkp or not store.tax_rate or tax_base <= 0:
+        return Decimal(0), Decimal(0)
+    return store.tax_rate, money(tax_base * store.tax_rate / 100)
+
+
 def _tax_rate(store, tax_base, tax):
     """The rate the order was charged: the store's current rate if it reproduces the tax,
     otherwise the rate implied by the amounts (the store changed its rate since)."""
@@ -150,27 +160,40 @@ def issue_invoice_for_order(order, issued_on=None, notes=""):
         if existing:
             return existing, False
         raise
+    from .posting import sync_invoice_safely
+    sync_invoice_safely(invoice)
     return invoice, True
 
 
-def record_payment(invoice, amount, paid_on, method, reference="", note="", user=None):
-    """Record a payment against an invoice and update its status."""
-    from decimal import Decimal as D
-    amount = D(str(amount))
+def record_payment(invoice, amount, paid_on, method, reference="", note="", user=None,
+        bank_account=None, receipt=None):
+    """Record a payment against an invoice, book it, and update the invoice status."""
+    from apps.accounting.ledger import LedgerError
+
+    from .posting import booked_by_invoice, post_invoice, post_invoice_payment, refresh_status
+
+    amount = Decimal(str(amount))
     if amount <= 0:
         raise InvoiceError("Jumlah pembayaran harus lebih dari nol.")
-
+    if invoice.status in {Invoice.STATUS_DRAFT, Invoice.STATUS_VOID}:
+        raise InvoiceError("Invoice ini tidak bisa menerima pembayaran.")
     with transaction.atomic():
+        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if amount > invoice.amount_due:
+            raise InvoiceError("Pembayaran melebihi sisa tagihan "
+                f"(Rp{invoice.amount_due:,.0f}).".replace(",", "."))
         payment = InvoicePayment.objects.create(
             invoice=invoice, paid_on=paid_on, amount=amount,
             method=method, reference=reference, note=note, recorded_by=user,
+            bank_account=bank_account, receipt=receipt,
         )
-        total_paid = sum(p.amount for p in invoice.payments.all())
-        if total_paid >= invoice.total:
-            invoice.status = Invoice.STATUS_PAID
-        elif total_paid > 0:
-            invoice.status = Invoice.STATUS_PARTIAL
-        invoice.save(update_fields=["status"])
+        try:
+            if booked_by_invoice(invoice):
+                post_invoice(invoice, actor=user)  # invoices older than ledger posting
+                post_invoice_payment(payment, strict=True, actor=user)
+        except LedgerError as error:
+            raise InvoiceError(str(error)) from error
+        refresh_status(invoice)
     return payment
 
 

@@ -1,0 +1,37 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Ekspor Data Penjualan{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Penjualan</span><h1>Ekspor data penjualan lengkap</h1>
+    <p>Semua data penjualan semua channel dalam satu berkas: setiap barang terjual, setiap pesanan lengkap dengan invoice, pembayaran, biaya marketplace dan pencairannya. Cocok untuk akuntan, auditor, atau analisis di Excel.</p></div>
+</div>
+
+<form class="toolbar" method="get">
+  <nav class="seg">{% for code, label in presets %}<a href="?period={{ code }}{% if channel %}&channel={{ channel }}{% endif %}{% if only_sold %}&sold=1{% endif %}" class="{% if preset == code %}on{% endif %}">{{ label }}</a>{% endfor %}</nav>
+  <input type="date" name="start" value="{{ start|date:'Y-m-d' }}" aria-label="Dari"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}" aria-label="Sampai">
+  <select name="channel" aria-label="Channel"><option value="">Semua channel</option>{% for code, label in channels %}<option value="{{ code }}" {% if channel == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="sold" value="1" {% if only_sold %}checked{% endif %} style="width:auto;height:auto"> Hanya yang terjual</label>
+  <button class="btn">Terapkan</button>
+</form>
+
+<div class="tiles">
+  <div class="tile accent"><small>Pesanan</small><strong>{{ counts.orders }}</strong><span>{{ label }}{% if channel %} · {{ channel }}{% endif %}</span></div>
+  <div class="tile"><small>Baris barang</small><strong>{{ counts.lines }}</strong></div>
+  <div class="tile"><small>Catatan pembayaran</small><strong>{{ counts.payments }}</strong></div>
+  <div class="tile"><small>Total nilai pesanan</small><strong>{{ totals.total|default:0|rp }}</strong><span>PPN {{ totals.tax|default:0|rp }} · ongkir {{ totals.shipping|default:0|rp }}</span></div>
+</div>
+
+<section class="panel">
+  <header><div><h2>Unduh</h2><p>Satu berkas Excel berisi ketiga lembar, atau CSV per jenis data. Kolom "No. pesanan", "No. pesanan marketplace" dan "No. invoice" menghubungkan ketiganya.</p></div>
+    <a class="btn-primary" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}format=xlsx">{% icon "download" %} Excel (3 lembar)</a></header>
+  <table class="tbl"><tbody>
+    <tr><td><strong>{{ datasets.lines.0 }}</strong><small style="white-space:normal">Satu baris per barang terjual: SKU, nama, varian, qty, harga, jumlah, HPP dan laba kotor per baris, harga mitra, pengiriman dan resi.</small></td>
+      <td class="num">{{ counts.lines }} baris</td><td class="num"><a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}dataset=lines&format=csv">CSV</a></td></tr>
+    <tr><td><strong>{{ datasets.orders.0 }}</strong><small style="white-space:normal">Satu baris per pesanan: subtotal, diskon, ongkir, PPN, total, pembayaran, refund, invoice (status, nota kredit, dibayar, sisa), HPP, semua biaya marketplace, dana cair, tanggal dan referensi pencairan, serta margin setelah biaya.</small></td>
+      <td class="num">{{ counts.orders }} baris</td><td class="num"><a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}dataset=orders&format=csv">CSV</a></td></tr>
+    <tr><td><strong>{{ datasets.payments.0 }}</strong><small style="white-space:normal">Pembayaran gateway dan marketplace, refund, serta pembayaran invoice manual, dengan status, kecocokan dengan pesanan, dan pencairan.</small></td>
+      <td class="num">{{ counts.payments }} baris</td><td class="num"><a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}dataset=payments&format=csv">CSV</a></td></tr>
+  </tbody></table>
+  <footer><span>Semua status ikut terekspor (termasuk batal dan retur) dan tiap baris menyebut statusnya, supaya bisa disaring di Excel; centang "Hanya yang terjual" untuk membuangnya. Untuk Excel berbahasa Indonesia, pakai berkas .xlsx agar angka desimal terbaca benar.</span></footer>
+</section>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Umur Utang{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Umur Utang</h1>
+    <p>Berapa yang harus dibayar ke setiap supplier dan sudah berapa lama, dihitung dari tanggal jatuh tempo tagihan.</p></div>
+  <div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-bill-new' %}">{% icon "plus" %} Buat tagihan</a></div>
+</div>
+<form class="toolbar" method="get">
+  <label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label>
+  <button class="btn">Terapkan</button>
+</form>
+{% if unitemised > 1 or unitemised < -1 %}
+<div class="notice info">{% icon "alert" %}<span>Utang usaha di buku <b>{{ book_balance|rp }}</b>, rincian tagihan di bawah <b>{{ totals.total|rp }}</b>. Selisih <b>{{ unitemised|rp }}</b> berasal dari saldo awal atau jurnal manual dan belum dirinci per tagihan. Pelunasannya dicatat lewat <a href="{% url 'merchant-cash-new' %}?kind=spend" style="text-decoration:underline">Kirim uang</a> dengan akun Utang usaha. <a href="{% url 'merchant-account-ledger' '2300' %}" style="text-decoration:underline">Lihat buku besar</a></span></div>
+{% endif %}
+<div class="tiles">
+  <div class="tile accent"><small>Total utang</small><strong>{{ totals.total|rp }}</strong></div>
+  <div class="tile"><small>Belum jatuh tempo</small><strong>{{ totals.current|rp }}</strong></div>
+  <div class="tile {% if totals.overdue %}warn{% endif %}"><small>Sudah lewat jatuh tempo</small><strong>{{ totals.overdue|rp }}</strong></div>
+</div>
+{% if soon %}
+<section class="panel"><header><div><h2>Segera dibayar</h2><p>Jatuh tempo dalam 7 hari atau sudah lewat.</p></div></header>
+  <table class="tbl"><tbody>{% for bill in soon %}<tr>
+    <td><a class="rowlink" href="{% url 'merchant-bill-detail' bill.id %}">{{ bill.supplier.name }}</a><small>{{ bill.number|default:"Tanpa nomor" }}</small></td>
+    <td>{{ bill.due_date|date:"d M Y" }}{% if bill.due_date < as_of %} <span class="pill pill-overdue">Lewat</span>{% endif %}</td>
+    <td class="num"><strong>{{ bill.amount_due|rp }}</strong></td></tr>{% endfor %}</tbody></table></section>
+{% endif %}
+{% if supplier %}
+<section class="panel"><header><div><h2>Tagihan {{ supplier.name }}</h2></div><a class="link-btn" href="?as_of={{ as_of|date:'Y-m-d' }}">← Semua supplier</a></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Tagihan</th><th>Tanggal</th><th>Jatuh tempo</th><th class="num">Total</th><th class="num">Dibayar</th><th class="num">Sisa</th><th class="num">Terlambat</th></tr></thead>
+  <tbody>{% for l in lines %}<tr><td><a class="rowlink" href="{% url 'merchant-bill-detail' l.bill.id %}">{{ l.bill.number|default:"Tanpa nomor" }}</a></td>
+    <td>{{ l.bill.bill_date|date:"d M Y" }}</td><td>{{ l.bill.due_date|date:"d M Y"|default:"–" }}</td><td class="num">{{ l.bill.total|rp }}</td><td class="num">{{ l.paid|rp }}</td><td class="num"><strong>{{ l.due|rp }}</strong></td>
+    <td class="num {% if l.late_days %}neg{% endif %}">{% if l.late_days %}{{ l.late_days }} hari{% else %}–{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7"><div class="empty-box">Tidak ada tagihan terbuka.</div></td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}
+<section class="panel">
+  {% if rows %}<div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Supplier</th>{% for key, label in buckets %}<th class="num">{{ label }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+    <tbody>{% for row in rows %}<tr>
+      <td><a class="rowlink" href="?supplier={{ row.supplier_id }}&as_of={{ as_of|date:'Y-m-d' }}">{{ row.name }}</a><small>{{ row.bills }} tagihan</small></td>
+      <td class="num">{% if row.current %}{{ row.current|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{% if row.d30 %}{{ row.d30|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{% if row.d60 %}{{ row.d60|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num {% if row.d90 %}neg{% endif %}">{% if row.d90 %}{{ row.d90|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num {% if row.over %}neg{% endif %}">{% if row.over %}{{ row.over|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num"><strong>{{ row.total|rp }}</strong></td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>Total</td><td class="num">{{ totals.current|rp }}</td><td class="num">{{ totals.d30|rp }}</td><td class="num">{{ totals.d60|rp }}</td><td class="num">{{ totals.d90|rp }}</td><td class="num">{{ totals.over|rp }}</td><td class="num">{{ totals.total|rp }}</td></tr></tfoot>
+  </table></div>
+  {% else %}<div class="empty-box"><strong>Tidak ada utang</strong>Semua tagihan supplier sudah lunas.</div>{% endif %}
+</section>
+{% endblock %}

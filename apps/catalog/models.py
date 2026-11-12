@@ -392,3 +392,51 @@ class WishlistItem(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "product"], name="unique_wishlist_item")]
+
+
+class Bundle(models.Model):
+    """Paket: one sellable SKU made of several stock items, e.g. "Paket Kopi + Teh". Selling one
+    takes each component off the shelf; the sale price is shared between the components."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="bundles")
+    sku = models.CharField(max_length=80)
+    name = models.CharField(max_length=160)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["store", "sku"], name="unique_bundle_sku")]
+
+    def __str__(self):
+        return f"{self.sku} · {self.name}"
+
+    @property
+    def available_stock(self):
+        """How many complete bundles the components allow."""
+        counts = []
+        for item in self.items.select_related("product", "variant"):
+            stock = item.variant.available_stock if item.variant_id else item.product.available_stock
+            counts.append(stock // item.quantity)
+        return min(counts) if counts else 0
+
+
+class BundleItem(models.Model):
+    bundle = models.ForeignKey(Bundle, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.CheckConstraint(condition=models.Q(quantity__gt=0),
+            name="bundle_item_quantity_positive")]
+
+    @property
+    def sku(self):
+        return self.variant.sku if self.variant_id else self.product.sku
+
+    @property
+    def unit_price(self):
+        return self.variant.price if self.variant_id and getattr(self.variant, "price", None) \
+            else self.product.price

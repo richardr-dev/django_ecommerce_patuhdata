@@ -7,11 +7,13 @@ from .models import InventoryAllocation, InventoryMovement
 
 
 def record_movement(*, store, kind, quantity, reason, order_item=None, inventory_level=None,
-    variant=None, previous_on_hand, new_on_hand, previous_reserved, new_reserved, actor=None):
+    variant=None, previous_on_hand, new_on_hand, previous_reserved, new_reserved, actor=None,
+    source_type="", source_id="", unit_cost=None):
     return InventoryMovement.objects.create(store=store, order_item=order_item,
         inventory_level=inventory_level, variant=variant, kind=kind, quantity=quantity, reason=reason,
         actor=actor, previous_on_hand=previous_on_hand, new_on_hand=new_on_hand,
-        previous_reserved=previous_reserved, new_reserved=new_reserved)
+        previous_reserved=previous_reserved, new_reserved=new_reserved,
+        source_type=source_type, source_id=str(source_id), unit_cost=unit_cost)
 
 
 def reserve_variant(order_item, variant, quantity):
@@ -112,3 +114,97 @@ def commit_order_inventory(order, *, actor=None):
             quantity=item.quantity, reason="order_packed", actor=actor,
             previous_on_hand=previous_on_hand, new_on_hand=variant.stock,
             previous_reserved=previous_reserved, new_reserved=variant.reserved)
+
+
+def stock_shortages(store, wants):
+    """``wants`` is ``[(product, quantity)]``. Returns ``[(product, wanted, available)]`` for the
+    stock-tracked products (those with an inventory level) the shelf cannot cover. Products with
+    no inventory level (services, digital goods) are not tracked and never short."""
+    from apps.catalog.models import InventoryLevel
+    need = {}
+    for product, quantity in wants:
+        held = need.setdefault(product.pk, [product, 0])
+        held[1] += int(quantity)
+    short = []
+    for product, quantity in need.values():
+        levels = list(InventoryLevel.objects.filter(product=product, warehouse__store=store,
+            warehouse__is_active=True))
+        if levels and sum(level.available for level in levels) < quantity:
+            short.append((product, quantity, sum(level.available for level in levels)))
+    return short
+
+
+def deduct_invoice_stock(order):
+    """Reserve then immediately commit stock for all items on a manual paid invoice.
+    Net effect: on_hand decreases by quantity sold.
+    Silently skips items without inventory levels (services, digital products).
+    Returns list of (sku, wanted, available) shortages for display."""
+    from apps.catalog.models import InventoryLevel
+    from apps.catalog.models import ProductVariant as _PV
+    shortages = []
+    with transaction.atomic():
+        for item in order.items.select_related("product").all():
+            if not item.product_id:
+                continue
+            qty = int(item.quantity)
+            if item.variant_id:
+                try:
+                    variant = _PV.objects.select_for_update().get(id=item.variant_id)
+                    if variant.available_stock >= qty:
+                        reserve_variant(item, variant, qty)
+                    else:
+                        shortages.append((item.sku, qty, variant.available_stock))
+                        continue
+                except _PV.DoesNotExist:
+                    continue
+            else:
+                levels = list(InventoryLevel.objects.select_for_update().filter(
+                    product=item.product,
+                    warehouse__store=order.store,
+                    warehouse__is_active=True,
+                ).order_by("warehouse__priority", "warehouse_id"))
+                if not levels:
+                    continue  # product not tracked in inventory
+                available = sum(level.available for level in levels)
+                if available < qty:
+                    shortages.append((item.sku, qty, available))
+                    continue
+                reserve_from_levels(item, levels, qty, reason="manual_invoice")
+        commit_order_inventory(order)
+    return shortages
+
+
+@transaction.atomic
+def return_order_inventory(order, *, actor=None, reason="pesanan_dibatalkan"):
+    """Give an order's stock back: still-reserved stock is released and stock already taken out
+    is added back to the shelf. Safe to call again; each item returns once."""
+    release_order_inventory(order, actor=actor, reason=reason)
+    allocations = InventoryAllocation.objects.select_for_update().filter(
+        order_item__order=order, committed_at__isnull=False).select_related(
+        "inventory_level", "order_item")
+    for allocation in allocations:
+        if InventoryMovement.objects.filter(order_item=allocation.order_item,
+                inventory_level=allocation.inventory_level, kind="return").exists():
+            continue
+        level = allocation.inventory_level
+        previous_on_hand = level.on_hand
+        level.on_hand += allocation.quantity
+        level.save(update_fields=["on_hand", "updated_at"])
+        record_movement(store=order.store, order_item=allocation.order_item,
+            inventory_level=level, kind="return", quantity=allocation.quantity, reason=reason,
+            actor=actor, previous_on_hand=previous_on_hand, new_on_hand=level.on_hand,
+            previous_reserved=level.reserved, new_reserved=level.reserved)
+    for item in order.items.select_for_update().exclude(variant_id=None).exclude(is_preorder=True):
+        variant = ProductVariant.objects.select_for_update().get(id=item.variant_id)
+        committed = InventoryMovement.objects.filter(order_item=item, variant=variant,
+            kind="commit").exists()
+        if not committed or InventoryMovement.objects.filter(order_item=item, variant=variant,
+                kind="return").exists():
+            continue
+        previous_on_hand = variant.stock
+        variant.stock += item.quantity
+        variant.save(update_fields=["stock"])
+        record_movement(store=order.store, order_item=item, variant=variant, kind="return",
+            quantity=item.quantity, reason=reason, actor=actor, previous_on_hand=previous_on_hand,
+            new_on_hand=variant.stock, previous_reserved=variant.reserved,
+            new_reserved=variant.reserved)

@@ -19,7 +19,7 @@
 {% if unbilled_orders %}
 <section class="bo-card"><h2>Pesanan Belum Ditagih ({{ unbilled_orders|length }})</h2>
 <div class="data-table"><div class="data-row data-head" style="--cols:5"><span>No. Pesanan</span><span>Pembeli</span><span>Channel</span><span>Tanggal</span><span>Total</span></div>
-{% for o in unbilled_orders %}<div class="data-row" style="--cols:5"><span>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</span><span>{{ o.customer_name }}</span><span>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</span><span>{{ o.created_at|date:"d M Y" }}</span><span>Rp{{ o.total|floatformat:0 }}</span></div>{% endfor %}
+{% for o in unbilled_orders %}<div class="data-row" style="--cols:5"><span>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</span><span>{{ o.customer_name }}</span><span>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</span><span>{{ o.created_at|date:"d M Y" }}</span><span>Rp{{ o.total|floatformat:"0g" }}</span></div>{% endfor %}
 </div></section>
 {% endif %}
 {% endblock %}

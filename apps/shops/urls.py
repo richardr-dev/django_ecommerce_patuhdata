@@ -5,6 +5,8 @@ from config.ratelimit import rate_limit
 from . import activity, campaign_views, shortlinks, staff_views, tracking, views
 
 urlpatterns = [
+    path("merchant/brands/new/", rate_limit("brand-new", limit=10, window=3600)(views.merchant_brand_new),
+        name="merchant-brand-new"),
     path("start/", rate_limit("store-signup", limit=10, window=3600)(views.store_signup),
         name="store-signup"),
     path("stores/", views.store_directory, name="store-directory"),

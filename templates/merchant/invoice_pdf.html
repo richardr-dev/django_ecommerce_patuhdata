@@ -14,15 +14,15 @@
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9.5pt; color: #111827; line-height: 1.4; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9.5pt; color: #0f1f38; line-height: 1.4; }
   .page-break { page-break-before: always; }
 
   /* ── Header ── */
   .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24pt; }
-  .store-name { font-size: 18pt; font-weight: 700; color: #111827; letter-spacing: -0.3pt; }
+  .store-name { font-size: 18pt; font-weight: 700; color: #0f1f38; letter-spacing: -0.3pt; }
   .store-meta { font-size: 8pt; color: #6b7280; margin-top: 3pt; white-space: pre-line; }
   .inv-title-block { text-align: right; }
-  .inv-title { font-size: 20pt; font-weight: 800; color: #111827; letter-spacing: -0.5pt; }
+  .inv-title { font-size: 20pt; font-weight: 800; color: #0f1f38; letter-spacing: -0.5pt; }
   .inv-number { font-size: 10pt; font-weight: 600; color: #374151; margin-top: 2pt; font-family: 'Courier New', monospace; }
   .status-badge { display: inline-block; margin-top: 5pt; padding: 2pt 7pt; border-radius: 20pt; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5pt; }
   .status-draft    { background: #f3f4f6; color: #6b7280; }
@@ -33,29 +33,29 @@
   .status-void     { background: #f3f4f6; color: #9ca3af; }
 
   /* ── Divider ── */
-  .divider { border: none; border-top: 1.5pt solid #111827; margin: 10pt 0; }
+  .divider { border: none; border-top: 1.5pt solid #0f1f38; margin: 10pt 0; }
   .divider-light { border: none; border-top: 0.5pt solid #e5e7eb; margin: 8pt 0; }
 
   /* ── Addresses ── */
   .addr-row { display: flex; gap: 20pt; margin-bottom: 18pt; }
   .addr-block { flex: 1; }
   .addr-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8pt; color: #9ca3af; margin-bottom: 3pt; }
-  .addr-name { font-size: 10pt; font-weight: 700; color: #111827; }
+  .addr-name { font-size: 10pt; font-weight: 700; color: #0f1f38; }
   .addr-detail { font-size: 8.5pt; color: #374151; white-space: pre-line; margin-top: 2pt; }
   .meta-block { flex: 0 0 auto; text-align: right; }
   .meta-row { font-size: 8.5pt; color: #374151; margin-bottom: 2pt; }
-  .meta-row strong { color: #111827; }
+  .meta-row strong { color: #0f1f38; }
 
   /* ── Items table ── */
   table.items { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
-  table.items thead tr { background: #111827; }
+  table.items thead tr { background: #1a66d9; }
   table.items thead th { color: #fff; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4pt; padding: 5pt 7pt; text-align: left; }
   table.items thead th.r { text-align: right; }
   table.items tbody tr { border-bottom: 0.5pt solid #f3f4f6; }
   table.items tbody tr:last-child { border-bottom: none; }
   table.items tbody td { padding: 6pt 7pt; font-size: 9pt; color: #374151; vertical-align: top; }
   table.items tbody td.r { text-align: right; }
-  table.items tbody .item-name { font-weight: 600; color: #111827; }
+  table.items tbody .item-name { font-weight: 600; color: #0f1f38; }
   table.items tbody .item-sku { font-size: 7.5pt; color: #9ca3af; font-family: 'Courier New', monospace; margin-top: 1pt; }
   table.items tbody .item-dim { font-size: 7.5pt; color: #9ca3af; margin-top: 1pt; }
 
@@ -64,10 +64,10 @@
   .totals-table { width: 200pt; }
   .totals-table td { font-size: 9pt; padding: 2pt 0; color: #374151; }
   .totals-table td.r { text-align: right; }
-  .totals-table .grand td { font-size: 11pt; font-weight: 800; color: #111827; border-top: 1.5pt solid #111827; padding-top: 5pt; }
+  .totals-table .grand td { font-size: 11pt; font-weight: 800; color: #0f1f38; border-top: 1.5pt solid #0f1f38; padding-top: 5pt; }
 
   /* ── Notes & footer ── */
-  .notes-section { margin-top: 18pt; padding: 8pt 10pt; background: #f9fafb; border-left: 3pt solid #111827; border-radius: 2pt; }
+  .notes-section { margin-top: 18pt; padding: 8pt 10pt; background: #f9fafb; border-left: 3pt solid #1a66d9; border-radius: 2pt; }
   .notes-label { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5pt; color: #9ca3af; margin-bottom: 2pt; }
   .notes-text { font-size: 8.5pt; color: #374151; white-space: pre-line; }
   .footer { margin-top: 24pt; padding-top: 8pt; border-top: 0.5pt solid #e5e7eb; display: flex; justify-content: space-between; }
@@ -147,9 +147,9 @@
         <td>
           <div class="item-name">{{ item.description }}</div>
           {% if item.sku %}<div class="item-sku">{{ item.sku }}</div>{% endif %}
-          {% if item.dimension %}<div class="item-dim">{{ item.dimension }}</div>{% endif %}
+          {% if item.dimension %}<div class="item-dim">{{ item.dimension }}</div>{% endif %}{% if item.note %}<div class="item-dim">{{ item.note }}</div>{% endif %}
         </td>
-        <td class="r">{{ item.quantity|floatformat:"-2" }}</td>
+        <td class="r">{{ item.quantity|floatformat:"-2" }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
         <td class="r">Rp{{ item.unit_price|floatformat:"0g" }}</td>
         {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
         <td class="r">{% if item.discount %}−Rp{{ item.discount|floatformat:"0g" }}{% else %}—{% endif %}</td>
@@ -176,9 +176,12 @@
       <tr><td>Biaya Lain</td><td class="r">Rp{{ invoice.other_charges|floatformat:"0g" }}</td></tr>
       {% endif %}
       <tr class="grand"><td>TOTAL</td><td class="r">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
-      {% with paid=invoice.amount_paid %}
-      {% if paid and invoice.status != 'paid' %}
-      <tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">Rp{{ paid|floatformat:"0g" }}</td></tr>
+      {% with paid=invoice.amount_paid credited=invoice.credited %}
+      {% if credited %}
+      <tr><td style="font-size:8pt;color:#6b7280">Nota Kredit</td><td class="r" style="font-size:8pt;color:#6b7280">−Rp{{ credited|floatformat:"0g" }}</td></tr>
+      {% endif %}
+      {% if paid and invoice.status != 'paid' or credited and invoice.status != 'paid' %}
+      {% if paid %}<tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">−Rp{{ paid|floatformat:"0g" }}</td></tr>{% endif %}
       <tr><td style="font-weight:700">Sisa Tagihan</td><td class="r" style="font-weight:700">Rp{{ invoice.amount_due|floatformat:"0g" }}</td></tr>
       {% endif %}
       {% endwith %}

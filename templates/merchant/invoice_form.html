@@ -1,0 +1,406 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{% if mode == 'edit' %}Ubah invoice {{ source.number }}{% elif mode == 'duplicate' %}Duplikat invoice{% else %}Buat invoice{% endif %}{% endblock %}
+{% block content %}
+<style>
+  /* optional line columns: shown only while ticked in "Kolom" */
+  #lines:not([data-cols~="code"]) [data-col="code"],
+  #lines:not([data-cols~="unit"]) [data-col="unit"],
+  #lines:not([data-cols~="pct"]) [data-col="pct"],
+  #lines:not([data-cols~="disc"]) [data-col="disc"],
+  #lines:not([data-cols~="note"]) [data-col="note"] { display: none; }
+  #inv-form label { min-width: 0; }
+  #inv-form label > input, #inv-form label > select, #inv-form label > textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+  #lines input { border: 0; background: transparent; width: 100%; }
+  #lines tbody tr { transition: background .12s; }
+  #lines .cell { border-radius: 12px; background: #f8fafc; box-shadow: inset 0 0 0 1px #e2e8f0; height: 40px; padding: 0 12px; }
+  #lines .cell:focus-within { background: #fff; box-shadow: inset 0 0 0 2px #2563eb; }
+  #lines input:focus { outline: none; box-shadow: none; }
+  .bubble-radio:checked + span { background: #2563eb; color: #fff; box-shadow: 0 6px 14px -6px rgba(37, 99, 235, .7); }
+</style>
+
+<nav class="mb-2 flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-sales-invoices' %}" class="font-medium text-blue-700 hover:underline">Invoice penjualan</a><span>›</span>
+  {% if source and mode == 'edit' %}<a href="{% url 'merchant-invoice-detail' source.id %}" class="font-medium text-blue-700 hover:underline">{{ source.number }}</a><span>›</span><span>Ubah</span>
+  {% elif source %}<span>Duplikat {{ source.number }}</span>{% else %}<span>Invoice baru</span>{% endif %}
+</nav>
+<div class="mb-5">
+  <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{% if mode == 'edit' %}Ubah invoice {{ source.number }}{% elif mode == 'duplicate' %}Duplikat invoice {{ source.number }}{% else %}Buat invoice{% endif %}</h1>
+  <p class="mt-1 max-w-2xl text-sm text-slate-500">{% if mode == 'edit' %}Perbaiki data pembeli, tanggal, dan isi invoice. Stok dan pembukuan menyesuaikan otomatis.{% elif mode == 'duplicate' %}Isinya disalin dari invoice lama; ganti pelanggan atau tanggal lalu simpan sebagai invoice baru.{% else %}Satu halaman untuk semua penjualan: pilih atau tambah pelanggan, isi barang atau jasa, lalu simpan. Stok, piutang, dan pajak mengikuti.{% endif %}</p>
+</div>
+
+{% if locks %}
+<div class="mb-5 flex items-start gap-3 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900 ring-1 ring-blue-100">
+  <span class="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-blue-600 [&>svg]:h-4 [&>svg]:w-4">{% icon "lock" %}</span>
+  <span><b>Isi invoice terkunci</b> karena {{ locks|join:", " }}. Data pembeli, tanggal, jatuh tempo, dan catatan tetap bisa diubah. Untuk mengoreksi jumlahnya, buat <a href="{% url 'merchant-credit-note-new' %}?invoice={{ source.id }}" class="font-semibold underline">nota kredit</a>.</span>
+</div>
+{% endif %}
+
+<form method="post" id="inv-form" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+  {% csrf_token %}
+  <input type="hidden" name="customer_id" id="customer-id" value="{{ initial.customer.id|default:'' }}">
+
+  <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
+    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+      <header class="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+        <span class="grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/30">1</span>
+        <div><h2 class="font-bold text-slate-900">Pelanggan</h2><p class="text-xs text-slate-500">Pilih dari CRM atau tambah pelanggan baru; otomatis tersimpan di CRM.</p></div>
+      </header>
+      <div class="space-y-3 px-5 pt-4">
+        <div class="flex flex-wrap items-stretch gap-2">
+          <div class="relative min-w-[220px] flex-1">
+            <input type="search" id="cust-q" autocomplete="off" placeholder="Cari nama, perusahaan, no. HP, atau kode pelanggan…" aria-label="Cari pelanggan"
+              class="h-11 w-full rounded-full border-0 bg-slate-50 px-4 text-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500">
+            <div id="cust-results" class="pd-search-results" hidden style="top:48px"></div>
+          </div>
+          <button type="button" data-open="customer-dialog" class="inline-flex h-11 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "plus" %}</span>Pelanggan baru</button>
+        </div>
+        <div id="cust-chip" class="items-center gap-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-100" style="display:{% if initial.customer %}flex{% else %}none{% endif %}">
+          <span id="cust-chip-av" class="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-400 text-sm font-bold text-white">{{ initial.customer.name|slice:":1"|upper }}</span>
+          <span class="flex-1">Terhubung ke pelanggan <b id="cust-chip-name">{{ initial.customer.name }}</b> di CRM</span>
+          <button type="button" id="cust-clear" class="rounded-full px-3 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100">Lepas</button>
+        </div>
+      </div>
+      <div class="grid gap-4 px-5 pb-5 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Nama pembeli<input name="buyer_name" id="f-name" required maxlength="160" value="{{ initial.buyer_name }}" placeholder="Nama lengkap" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Perusahaan <span class="font-normal text-slate-400">(opsional)</span></span><input name="company_name" id="f-company" maxlength="160" value="{{ initial.company_name }}" placeholder="PT / CV / toko" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>NPWP <span class="font-normal text-slate-400">(opsional)</span></span><input name="buyer_npwp" id="f-npwp" maxlength="20" value="{{ initial.npwp }}" placeholder="16 digit" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600">No. HP<input name="phone" id="f-phone" maxlength="30" value="{{ initial.phone }}" placeholder="08xx-xxxx-xxxx" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2 xl:col-span-4">Alamat tagihan / pengiriman<input name="address" id="f-address" value="{{ initial.address }}" placeholder="Jalan, kota, provinsi" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+      </div>
+    </section>
+
+    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div class="flex items-center gap-3">
+          <span class="grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/30">2</span>
+          <div><h2 class="font-bold text-slate-900">Barang & jasa</h2><p class="text-xs text-slate-500">Ketik nama atau SKU untuk produk (stok ikut berkurang); teks lain menjadi jasa atau biaya.</p></div>
+        </div>
+        <details class="relative">
+          <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-200 hover:ring-blue-300">Kolom <span class="text-slate-400">▾</span></summary>
+          <div class="absolute right-0 z-20 mt-2 w-64 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-900/5">
+            <p class="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Tampilkan kolom</p>
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-blue-50"><input type="checkbox" data-colbox="code" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><span class="flex-1"><b class="font-semibold">Kode / SKU</b><small class="block text-xs text-slate-400">Kode barang di invoice</small></span></label>
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-blue-50"><input type="checkbox" data-colbox="unit" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><span class="flex-1"><b class="font-semibold">Satuan</b><small class="block text-xs text-slate-400">pcs, box, kg, jam…</small></span></label>
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-blue-50"><input type="checkbox" data-colbox="pct" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><span class="flex-1"><b class="font-semibold">Diskon %</b><small class="block text-xs text-slate-400">Hitung diskon dari persen</small></span></label>
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-blue-50"><input type="checkbox" data-colbox="disc" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><span class="flex-1"><b class="font-semibold">Diskon Rp</b><small class="block text-xs text-slate-400">Diskon per baris</small></span></label>
+            <label class="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-blue-50"><input type="checkbox" data-colbox="note" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"><span class="flex-1"><b class="font-semibold">Keterangan baris</b><small class="block text-xs text-slate-400">Detail di bawah nama barang</small></span></label>
+            <p class="mt-2 px-1 text-[11px] text-slate-400">Pilihan Anda diingat di perangkat ini.</p>
+          </div>
+        </details>
+      </header>
+      <div class="overflow-x-auto px-2 pb-2">
+        <table class="w-full min-w-[720px] text-sm" id="lines" data-cols="disc">
+          <thead><tr class="text-[11px] uppercase tracking-wider text-slate-400">
+            <th class="px-3 py-3 text-left font-semibold">Barang / jasa</th>
+            <th data-col="code" class="w-28 px-1 py-3 text-left font-semibold">Kode</th>
+            <th class="w-24 px-1 py-3 text-right font-semibold">Qty</th>
+            <th data-col="unit" class="w-24 px-1 py-3 text-left font-semibold">Satuan</th>
+            <th class="w-36 px-1 py-3 text-right font-semibold">Harga satuan</th>
+            <th data-col="pct" class="w-20 px-1 py-3 text-right font-semibold">Diskon %</th>
+            <th data-col="disc" class="w-32 px-1 py-3 text-right font-semibold">Diskon Rp</th>
+            <th class="w-32 px-3 py-3 text-right font-semibold">Jumlah</th>
+            <th class="w-9"></th>
+          </tr></thead>
+          {% if locks %}
+          <tbody>{% for r in initial.lines %}<tr class="border-t border-slate-100"><td class="px-3 py-3"><b class="font-semibold text-slate-800">{{ r.text }}</b>{% if r.note %}<span class="block text-xs text-slate-400">{{ r.note }}</span>{% endif %}</td><td data-col="code" class="px-1 py-3 text-slate-500">{{ r.code }}</td><td class="px-1 py-3 text-right">{{ r.qty }}</td><td data-col="unit" class="px-1 py-3 text-slate-500">{{ r.unit }}</td><td class="px-1 py-3 text-right">{{ r.price|floatformat:"0g" }}</td><td data-col="pct"></td><td data-col="disc" class="px-1 py-3 text-right">{% if r.discount %}{{ r.discount|floatformat:"0g" }}{% else %}–{% endif %}</td><td class="px-3 py-3 text-right font-bold text-slate-900">{{ r.net|floatformat:"0g" }}</td><td></td></tr>{% endfor %}</tbody>
+          {% else %}<tbody id="rows"></tbody>{% endif %}
+        </table>
+      </div>
+      <datalist id="catalog"></datalist>
+      <datalist id="units"><option value="pcs"><option value="unit"><option value="box"><option value="pak"><option value="lusin"><option value="kg"><option value="gram"><option value="liter"><option value="meter"><option value="set"><option value="paket"><option value="jam"><option value="hari"><option value="bulan"></datalist>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
+        {% if not locks %}<button type="button" id="add-line" class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100">+ Tambah baris</button>{% else %}<span></span>{% endif %}
+        <p class="text-xs font-medium text-slate-500" id="stock-note"></p>
+      </div>
+    </section>
+  </div>
+
+  <aside class="grid gap-5 lg:sticky lg:top-20">
+    <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 to-sky-500 p-5 text-white shadow-xl shadow-blue-600/25">
+      <span class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10"></span>
+      <span class="pointer-events-none absolute -bottom-12 left-6 h-28 w-28 rounded-full bg-white/10"></span>
+      <p class="relative text-xs font-bold uppercase tracking-wider text-blue-100">Total invoice</p>
+      <p class="relative mt-1 text-3xl font-extrabold tracking-tight" id="s-total">Rp0</p>
+      <div class="relative mt-4 grid gap-2 text-sm">
+        <div class="flex justify-between text-blue-50"><span>Subtotal</span><span id="s-sub" class="font-semibold">Rp0</span></div>
+        <div class="flex items-center justify-between gap-3 text-blue-50"><span>Diskon invoice</span>
+          {% if locks %}<span class="font-semibold">{{ initial.discount|default:"0" }}</span>{% else %}<input name="discount" id="i-disc" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.discount }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
+        {% if vat_rate %}<div class="flex justify-between text-blue-50"><span>PPN {{ vat_rate|floatformat:"-2" }}%</span><span id="s-vat" class="font-semibold">Rp0</span></div>{% endif %}
+        <div class="flex items-center justify-between gap-3 text-blue-50"><span>Ongkos kirim</span>
+          {% if locks %}<span class="font-semibold">{{ initial.shipping|default:"0" }}</span>{% else %}<input name="shipping" id="i-ship" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.shipping }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
+      </div>
+    </section>
+
+    <section class="rounded-3xl bg-white p-5 shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+      <div class="grid gap-4">
+        {% if mode != 'edit' %}
+        <div>
+          <p class="mb-1.5 text-xs font-semibold text-slate-600">Pembayaran</p>
+          <div class="grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1 text-center text-sm font-bold">
+            <label class="cursor-pointer"><input type="radio" name="payment_status" value="paid" class="bubble-radio sr-only" {% if not initial.on_credit %}checked{% endif %}><span class="block rounded-full px-3 py-2 text-slate-600 transition">Lunas</span></label>
+            <label class="cursor-pointer"><input type="radio" name="payment_status" value="credit" class="bubble-radio sr-only" {% if initial.on_credit %}checked{% endif %}><span class="block rounded-full px-3 py-2 text-slate-600 transition">Tempo</span></label>
+          </div>
+        </div>
+        {% endif %}
+        <label id="due-wrap" class="grid gap-1.5 text-xs font-semibold text-slate-600" {% if mode != 'edit' and not initial.on_credit %}hidden{% endif %}{% if mode == 'edit' and not initial.on_credit and not initial.due_date %}hidden{% endif %}>Jatuh tempo
+          <span class="flex gap-2"><select id="f-terms" aria-label="Termin" class="h-11 w-32 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for days, label in terms %}<option value="{{ days }}">{{ label }}</option>{% endfor %}</select>
+          <input type="date" name="due_date" id="f-due" value="{{ initial.due_date|date:'Y-m-d' }}" class="h-11 min-w-0 flex-1 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></span></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Tanggal invoice<input type="date" name="issued_on" id="f-date" value="{{ initial.issued_on|date:'Y-m-d' }}" required class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        {% if mode != 'edit' %}
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Channel penjualan<select name="channel" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for code, label in channels %}<option value="{{ code }}" {% if initial.channel == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        {% endif %}
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>No. referensi <span class="font-normal text-slate-400">(PO pelanggan / pesanan marketplace)</span></span><input name="reference" maxlength="100" value="{{ initial.reference }}" placeholder="mis. PO-2026-118" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Catatan di invoice <span class="font-normal text-slate-400">(opsional)</span></span><input name="notes" maxlength="500" value="{{ initial.notes }}" placeholder="mis. Pembayaran ke BCA 123-456-7890" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
+      </div>
+      <div class="mt-5 grid gap-2">
+        <button type="submit" class="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-b from-blue-500 to-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 hover:shadow-xl"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "check" %}</span>{% if mode == 'edit' %}Simpan perubahan{% else %}Simpan invoice{% endif %}</button>
+        {% if mode != 'edit' %}<button type="submit" name="next" value="new" class="h-11 rounded-full bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100">Simpan & buat lagi</button>{% endif %}
+        <a href="{% if source and mode == 'edit' %}{% url 'merchant-invoice-detail' source.id %}{% else %}{% url 'merchant-sales-invoices' %}{% endif %}" class="grid h-10 place-items-center rounded-full text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-800">Batal</a>
+      </div>
+    </section>
+  </aside>
+</form>
+
+<dialog id="customer-dialog" class="pd-dialog" style="width:min(540px,calc(100vw - 32px))">
+  <form id="customer-form" method="post" action="{% url 'merchant-customer-quick-add' %}" data-no-loading>
+    {% csrf_token %}
+    <header><h2>Pelanggan baru</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>Nama</span><input name="name" required maxlength="120"></label>
+      <div class="field-row"><label class="field"><span>Perusahaan <em>(opsional)</em></span><input name="company_name" maxlength="160"></label><label class="field"><span>No. HP</span><input name="phone" maxlength="30"></label></div>
+      <div class="field-row"><label class="field"><span>Email <em>(opsional)</em></span><input type="email" name="email"></label><label class="field"><span>NPWP <em>(opsional)</em></span><input name="npwp" maxlength="20"></label></div>
+      <label class="field"><span>Alamat</span><textarea name="address" rows="2"></textarea></label>
+      <p class="dp-help" id="customer-error" style="color:#b42318;margin:0" hidden></p>
+      <p class="dp-help" style="margin:0">Pelanggan disimpan di CRM dan langsung dipakai untuk invoice ini. Bila nomor HP sudah terdaftar, pelanggan yang ada yang dipilih.</p>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan pelanggan</button></footer>
+  </form>
+</dialog>
+
+{{ catalog|json_script:"catalog-data" }}
+{{ initial.lines|json_script:"initial-lines" }}
+<script>
+(function () {
+  var catalog = JSON.parse(document.getElementById("catalog-data").textContent);
+  var initialLines = JSON.parse(document.getElementById("initial-lines").textContent);
+  var vatRate = parseFloat("{{ vat_rate|default:0|stringformat:'s' }}") || 0;
+  var locked = {% if locks %}true{% else %}false{% endif %};
+  var byLabel = {}, byId = {};
+  var list = document.getElementById("catalog");
+  catalog.forEach(function (p) {
+    var label = p.sku + " — " + p.name;
+    byLabel[label.toLowerCase()] = p; byId[p.id] = p;
+    var o = document.createElement("option"); o.value = label;
+    o.textContent = "Rp" + Math.round(p.price).toLocaleString("id-ID") + (p.stock === null ? "" : " · stok " + p.stock);
+    list.appendChild(o);
+  });
+  function num(t) { t = String(t || "").replace(/\s/g, ""); if (!t) return 0;
+    if (t.indexOf(",") > -1 && t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
+    else if ((t.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(t)) t = t.replace(/\./g, ""); else t = t.replace(/,/g, "");
+    return parseFloat(t) || 0; }
+  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+
+  /* ── optional columns, remembered per device ───────────────────────────── */
+  var table = document.getElementById("lines"), KEY = "pd-invoice-columns";
+  var ALL = ["code", "unit", "pct", "disc", "note"];
+  function loadCols() {
+    try { var saved = JSON.parse(window.localStorage.getItem(KEY)); if (Array.isArray(saved)) return saved; } catch (e) { /* private mode */ }
+    return ["disc"];
+  }
+  function applyCols(cols) {
+    // a column that already holds data stays visible, so nothing typed is ever hidden
+    var used = {};
+    document.querySelectorAll("#lines tbody tr").forEach(function (tr) {
+      [["code", "code[]"], ["unit", "unit[]"], ["note", "note[]"], ["disc", "line_discount[]"]].forEach(function (c) {
+        var el = tr.querySelector("[name='" + c[1] + "']");
+        if (el && num(el.value) !== 0 || el && c[0] !== "disc" && el.value) used[c[0]] = 1;
+      });
+    });
+    if (locked) initialLines.forEach(function (r) { if (r.code) used.code = 1; if (r.unit) used.unit = 1; if (r.note) used.note = 1; if (r.discount) used.disc = 1; });
+    var shown = ALL.filter(function (c) { return cols.indexOf(c) > -1 || used[c]; });
+    table.dataset.cols = shown.join(" ");
+    document.querySelectorAll("[data-colbox]").forEach(function (box) { box.checked = shown.indexOf(box.dataset.colbox) > -1; });
+  }
+  document.querySelectorAll("[data-colbox]").forEach(function (box) {
+    box.addEventListener("change", function () {
+      var cols = ALL.filter(function (c) { var b = document.querySelector("[data-colbox='" + c + "']"); return b && b.checked; });
+      try { window.localStorage.setItem(KEY, JSON.stringify(cols)); } catch (e) { /* private mode */ }
+      applyCols(cols);
+    });
+  });
+
+  /* ── lines ─────────────────────────────────────────────────────────────── */
+  var rows = document.getElementById("rows");
+  function addRow(d) {
+    d = d || {};
+    var tr = document.createElement("tr");
+    tr.className = "border-t border-slate-100 align-top";
+    tr.innerHTML =
+      '<td class="px-3 py-2.5"><div class="cell flex items-center"><input class="item" list="catalog" autocomplete="off" placeholder="Ketik produk (nama / SKU) atau jasa…" aria-label="Barang atau jasa"></div>' +
+      '<input type="hidden" name="product[]"><input type="hidden" name="description[]">' +
+      '<div data-col="note" class="cell mt-1.5 flex items-center"><input name="note[]" maxlength="300" placeholder="Keterangan baris (opsional)" aria-label="Keterangan baris"></div>' +
+      '<small class="hint mt-1 block pl-3 text-[11px] text-slate-400"></small></td>' +
+      '<td data-col="code" class="px-1 py-2.5"><div class="cell flex items-center"><input name="code[]" maxlength="60" placeholder="Kode" aria-label="Kode"></div></td>' +
+      '<td class="px-1 py-2.5"><div class="cell flex items-center"><input name="qty[]" inputmode="decimal" placeholder="1" aria-label="Qty" data-qty class="text-right"></div></td>' +
+      '<td data-col="unit" class="px-1 py-2.5"><div class="cell flex items-center"><input name="unit[]" list="units" maxlength="20" placeholder="pcs" aria-label="Satuan"></div></td>' +
+      '<td class="px-1 py-2.5"><div class="cell flex items-center"><input name="unit_price[]" inputmode="decimal" data-rupiah placeholder="0" aria-label="Harga satuan" data-price class="text-right"></div></td>' +
+      '<td data-col="pct" class="px-1 py-2.5"><div class="cell flex items-center"><input inputmode="decimal" placeholder="0" aria-label="Diskon persen" data-pct class="text-right"></div></td>' +
+      '<td data-col="disc" class="px-1 py-2.5"><div class="cell flex items-center"><input name="line_discount[]" inputmode="decimal" data-rupiah placeholder="0" aria-label="Diskon baris" data-disc class="text-right"></div></td>' +
+      '<td class="px-3 py-2.5 text-right font-bold text-slate-900" data-line style="line-height:40px"></td>' +
+      '<td class="py-2.5 pr-2"><button type="button" data-remove aria-label="Hapus baris" class="grid h-10 w-8 place-items-center rounded-full text-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600">×</button></td>';
+    rows.appendChild(tr);
+    tr.querySelector(".item").value = d.text || "";
+    tr.querySelector("[name='product[]']").value = d.product_id || "";
+    tr.querySelector("[name='description[]']").value = d.product_id ? "" : (d.text || "");
+    tr.querySelector("[data-qty]").value = d.qty || "";
+    tr.querySelector("[data-price]").value = d.price || "";
+    tr.querySelector("[data-disc]").value = d.discount || "";
+    tr.querySelector("[name='code[]']").value = d.code || "";
+    tr.querySelector("[name='unit[]']").value = d.unit || "";
+    tr.querySelector("[name='note[]']").value = d.note || "";
+    hint(tr);
+    return tr;
+  }
+  function hint(tr) {
+    var id = tr.querySelector("[name='product[]']").value, h = tr.querySelector(".hint");
+    var p = id && byId[id];
+    h.textContent = p ? (p.stock === null ? "Produk · stok tidak dilacak" : "Produk · stok tersedia " + p.stock) :
+      (tr.querySelector(".item").value.trim() ? "Jasa / biaya lain (tanpa stok)" : "");
+  }
+  function pick(tr) {
+    var item = tr.querySelector(".item"), p = byLabel[item.value.trim().toLowerCase()];
+    tr.querySelector("[name='product[]']").value = p ? p.id : "";
+    tr.querySelector("[name='description[]']").value = p ? "" : item.value.trim();
+    if (p) {
+      var price = tr.querySelector("[data-price]"), qty = tr.querySelector("[data-qty]");
+      if (!price.value || num(price.value) === 0) price.value = Math.round(p.price).toLocaleString("id-ID");
+      if (!qty.value) qty.value = 1;
+      var code = tr.querySelector("[name='code[]']"); if (!code.value) code.value = p.sku;
+    }
+    hint(tr); calc();
+  }
+  function calc() {
+    if (locked) return;
+    var sub = 0, short = [];
+    rows.querySelectorAll("tr").forEach(function (tr) {
+      var q = num(tr.querySelector("[data-qty]").value), p = num(tr.querySelector("[data-price]").value),
+          d = num(tr.querySelector("[data-disc]").value), net = Math.max(q * p - d, 0);
+      tr.querySelector("[data-line]").textContent = q && p ? fmt(net) : "";
+      sub += net;
+      var prod = byId[tr.querySelector("[name='product[]']").value];
+      if (prod && prod.stock !== null && q > prod.stock) short.push(prod.name + " (butuh " + q + ", ada " + prod.stock + ")");
+    });
+    var disc = num(document.getElementById("i-disc").value), ship = num(document.getElementById("i-ship").value);
+    var base = Math.max(sub - disc, 0), vat = Math.round(base * vatRate / 100);
+    document.getElementById("s-sub").textContent = fmt(sub);
+    var v = document.getElementById("s-vat"); if (v) v.textContent = fmt(vat);
+    document.getElementById("s-total").textContent = fmt(base + vat + ship);
+    var note = document.getElementById("stock-note");
+    note.textContent = short.length ? "⚠ Stok tidak cukup: " + short.join("; ") + ". Invoice akan ditolak." : "";
+    note.style.color = short.length ? "#e11d48" : "";
+  }
+  if (!locked) {
+    rows.addEventListener("input", function (e) {
+      var tr = e.target.closest("tr");
+      if (e.target.classList.contains("item")) { pick(tr); return; }
+      if (e.target.matches("[data-pct]")) {             // a percent becomes the rupiah discount
+        var gross = num(tr.querySelector("[data-qty]").value) * num(tr.querySelector("[data-price]").value);
+        tr.querySelector("[data-disc]").value = Math.round(gross * num(e.target.value) / 100).toLocaleString("id-ID");
+      } else if (e.target.matches("[data-disc]")) tr.querySelector("[data-pct]").value = "";
+      calc();
+    });
+    rows.addEventListener("change", function (e) { if (e.target.classList.contains("item")) pick(e.target.closest("tr")); });
+    rows.addEventListener("click", function (e) {
+      if (e.target.matches("[data-remove]") && rows.children.length > 1) { e.target.closest("tr").remove(); calc(); }
+    });
+    document.getElementById("add-line").addEventListener("click", function () { addRow().querySelector(".item").focus(); });
+    document.getElementById("inv-form").addEventListener("input", function (e) { if (e.target.id === "i-disc" || e.target.id === "i-ship") calc(); });
+    (initialLines.length ? initialLines : [{}, {}]).forEach(addRow);
+    applyCols(loadCols());
+    calc();
+  } else {
+    var tot = {{ source.total|default:0|stringformat:"s" }}; document.getElementById("s-total").textContent = fmt(tot);
+    document.getElementById("s-sub").textContent = fmt({{ source.subtotal|default:0|stringformat:"s" }});
+    var lv = document.getElementById("s-vat"); if (lv) lv.textContent = fmt({{ source.tax|default:0|stringformat:"s" }});
+    applyCols(loadCols());
+  }
+
+  /* ── payment terms ─────────────────────────────────────────────────────── */
+  var payRadios = document.querySelectorAll("input[name='payment_status']"), due = document.getElementById("f-due"),
+      terms = document.getElementById("f-terms"), wrap = document.getElementById("due-wrap"), date = document.getElementById("f-date");
+  function setDue() {
+    if (!terms.value || terms.value === "0") return;
+    var d = new Date(date.value || Date.now()); d.setDate(d.getDate() + parseInt(terms.value, 10));
+    due.value = d.toISOString().slice(0, 10);
+  }
+  payRadios.forEach(function (r) {
+    r.addEventListener("change", function () {
+      if (!r.checked) return;
+      wrap.hidden = r.value !== "credit";
+      if (!wrap.hidden && !due.value) { terms.value = "30"; setDue(); }
+    });
+  });
+  terms.addEventListener("change", setDue);
+  date.addEventListener("change", function () { if (!wrap.hidden && terms.value !== "0") setDue(); });
+
+  /* ── customer picker and quick add ─────────────────────────────────────── */
+  var q = document.getElementById("cust-q"), box = document.getElementById("cust-results"), timer;
+  function applyCustomer(c) {
+    document.getElementById("customer-id").value = c.id;
+    document.getElementById("f-name").value = c.name || "";
+    document.getElementById("f-company").value = c.company_name || "";
+    document.getElementById("f-npwp").value = c.npwp || "";
+    document.getElementById("f-phone").value = c.phone || "";
+    document.getElementById("f-address").value = c.address || "";
+    document.getElementById("cust-chip-name").textContent = c.name;
+    document.getElementById("cust-chip-av").textContent = (c.name || "?").charAt(0).toUpperCase();
+    document.getElementById("cust-chip").style.display = "flex";
+    q.value = ""; box.hidden = true;
+  }
+  q.addEventListener("input", function () {
+    clearTimeout(timer);
+    var text = q.value.trim();
+    if (text.length < 2) { box.hidden = true; return; }
+    timer = setTimeout(function () {
+      fetch("{% url 'merchant-customer-search' %}?q=" + encodeURIComponent(text){% if merchant_stores|length > 1 %} + "&store={{ merchant_store.id }}"{% endif %}, {credentials: "same-origin"})
+        .then(function (r) { return r.json(); }).then(function (data) {
+          box.innerHTML = "";
+          (data.results || []).forEach(function (c) {
+            var a = document.createElement("a"); a.href = "#"; a.setAttribute("role", "option");
+            var t = document.createElement("span"); t.textContent = c.label || c.name;
+            var s = document.createElement("small"); s.textContent = c.phone || "";
+            a.appendChild(t); a.appendChild(s);
+            a.addEventListener("click", function (e) { e.preventDefault(); applyCustomer(c); });
+            box.appendChild(a);
+          });
+          if (!box.children.length) {
+            var none = document.createElement("div"); none.className = "empty";
+            none.textContent = "Tidak ditemukan. Klik “Pelanggan baru” untuk menambahkannya.";
+            box.appendChild(none);
+          }
+          box.hidden = false;
+        });
+    }, 200);
+  });
+  q.addEventListener("blur", function () { setTimeout(function () { box.hidden = true; }, 180); });
+  document.getElementById("cust-clear").addEventListener("click", function () {
+    document.getElementById("customer-id").value = "";
+    document.getElementById("cust-chip").style.display = "none";
+  });
+  document.getElementById("customer-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var form = e.target, err = document.getElementById("customer-error"); err.hidden = true;
+    fetch(form.action, {method: "POST", body: new FormData(form), credentials: "same-origin"})
+      .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, json: j}; }); })
+      .then(function (res) {
+        if (!res.ok) { err.textContent = res.json.error || "Gagal menyimpan pelanggan."; err.hidden = false; return; }
+        applyCustomer(res.json.customer);
+        document.getElementById("customer-dialog").close(); form.reset();
+        window.pdToast(res.json.created ? "Pelanggan " + res.json.customer.name + " ditambahkan ke CRM." :
+          "Nomor HP sudah terdaftar: memakai pelanggan " + res.json.customer.name + ".", "success");
+      });
+  });
+})();
+</script>
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

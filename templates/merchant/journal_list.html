@@ -1,0 +1,39 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Jurnal{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Jurnal</h1>
+    <p>Semua pencatatan di buku besar, otomatis dari penjualan, tagihan, kas & bank, maupun manual. Klik jurnal untuk melihat dokumen sumbernya.</p></div>
+  <div class="dp-actions">
+    <a class="btn" href="?{% if filter_query %}{{ filter_query }}&{% endif %}format=csv">{% icon "download" %} Ekspor CSV</a>
+    <a class="btn-primary" href="{% url 'merchant-journal-new' %}">{% icon "plus" %} Jurnal umum</a>
+  </div>
+</div>
+<form class="toolbar" method="get">
+  <input type="search" name="q" value="{{ query }}" placeholder="Cari keterangan atau nomor dokumen…" aria-label="Cari">
+  <select name="type" aria-label="Sumber"><option value="">Semua sumber</option><option value="manual" {% if kind == 'manual' %}selected{% endif %}>Jurnal umum (manual)</option>{% for code, label in types %}{% if code != 'journal' %}<option value="{{ code }}" {% if kind == code %}selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select>
+  <input type="date" name="start" value="{{ start|date:'Y-m-d' }}" aria-label="Dari tanggal">
+  <input type="date" name="end" value="{{ end|date:'Y-m-d' }}" aria-label="Sampai tanggal">
+  <button class="btn">Terapkan</button>
+  {% if query or kind or start or end %}<a class="link-btn" href="{% url 'merchant-journal-list' %}">Reset</a>{% endif %}
+</form>
+<section class="panel">
+  {% if page.object_list %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Tanggal</th><th>No.</th><th>Keterangan</th><th>Sumber</th><th class="num">Jumlah</th></tr></thead>
+    <tbody>{% for entry in page %}
+      <tr class="{% if entry.superseded %}void{% endif %}">
+        <td>{{ entry.date|date:"d M Y" }}</td>
+        <td><a class="rowlink" href="{% url 'merchant-journal-detail' entry.id %}">JU-{{ entry.id }}</a></td>
+        <td>{{ entry.memo|truncatechars:90 }}{% if entry.reverses_id %} <span class="pill pill-void">pembalikan</span>{% endif %}</td>
+        <td><span class="muted">{{ entry.source_label }}</span></td>
+        <td class="num">{{ entry.amount|rp }}</td>
+      </tr>{% endfor %}</tbody>
+  </table></div>
+  <footer><span>{{ page.paginator.count }} jurnal</span>
+    <span class="pager">{% if page.has_previous %}<a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page.previous_page_number }}">‹ Sebelumnya</a>{% endif %}<span>Hal. {{ page.number }}/{{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page.next_page_number }}">Berikutnya ›</a>{% endif %}</span></footer>
+  {% else %}
+  <div class="empty-box"><strong>Tidak ada jurnal</strong>Ubah filter, atau catat jurnal umum untuk saldo awal dan koreksi.</div>
+  {% endif %}
+</section>
+{% endblock %}

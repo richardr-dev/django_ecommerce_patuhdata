@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ note.number }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-credit-notes' %}">Nota kredit</a> › <span>{{ note.number }}</span></nav>
+<div class="dp-head">
+  <div><h1 class="dp-title">{{ note.number }} <span class="pill {% if note.status == 'void' %}pill-void{% else %}pill-issued{% endif %}">{{ note.get_status_display }}</span></h1>
+    <p class="dp-sub">Untuk invoice <b><a href="{% url 'merchant-invoice-detail' note.invoice_id %}" style="color:var(--pd-primary)">{{ note.invoice.number }}</a></b> · {{ note.buyer_name }} · <b>{{ note.total|rp }}</b></p></div>
+  <div class="dp-actions">
+    <button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button>
+    {% if can_edit and note.status != 'void' %}<form method="post" data-confirm="Batalkan nota kredit ini? Jurnalnya dibalik dan barang yang kembali dikeluarkan lagi dari stok.">{% csrf_token %}<input type="hidden" name="action" value="void"><button class="btn btn-danger">Batalkan</button></form>{% endif %}
+  </div>
+</div>
+<div class="dp-grid">
+  <article class="dp-paper">
+    <div class="dp-paper-head">
+      <div class="dp-seller"><span class="mark">{{ note.store.name|slice:':1' }}</span><div><strong>{{ note.invoice.seller_name }}</strong>{% if note.invoice.seller_address %}<p>{{ note.invoice.seller_address }}</p>{% endif %}{% if note.invoice.seller_npwp %}<p>NPWP {{ note.invoice.seller_npwp }}</p>{% endif %}</div></div>
+      <div class="dp-doc-type"><span>{% if note.tax %}NOTA RETUR / KREDIT{% else %}NOTA KREDIT{% endif %}</span><small>{{ note.number }}</small></div></div>
+    <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ note.issued_on|date:"d M Y" }}</dd></div><div><dt>Invoice asal</dt><dd>{{ note.invoice.number }}</dd></div><div><dt>Alasan</dt><dd>{{ note.get_reason_display }}</dd></div><div><dt>Diterbitkan oleh</dt><dd>{{ note.created_by.username|default:"—" }}</dd></div></dl>
+    <div class="dp-parties"><div><h4>Pelanggan</h4><strong>{{ note.buyer_name }}</strong>{% if note.buyer_npwp %}<p>NPWP {{ note.buyer_npwp }}</p>{% endif %}</div>
+      <div><h4>Penyelesaian</h4><p style="color:var(--pd-text)">{% if note.applied %}{{ note.applied|rp }} mengurangi sisa tagihan invoice.{% endif %}{% if note.paid_out %} {{ note.paid_out|rp }} {% if note.excess_action == 'credit' %}disimpan sebagai kredit pelanggan.{% else %}dikembalikan{% if note.bank_account %} dari {{ note.bank_account.name }}{% endif %}.{% endif %}{% endif %}</p></div></div>
+    <div class="scroll-x"><table class="dp-items"><thead><tr><th>Barang / jasa</th><th class="num">Qty</th><th class="num">Harga satuan</th><th class="num">Jumlah</th></tr></thead>
+      <tbody>{% for i in items %}<tr><td><strong>{{ i.description }}</strong>{% if i.restock %}<small>Barang kembali ke stok</small>{% endif %}</td><td class="num">{{ i.quantity|floatformat:"-2" }}</td><td class="num">{{ i.unit_price|rp }}</td><td class="num"><strong>{{ i.line_total|rp }}</strong></td></tr>{% endfor %}</tbody></table></div>
+    <div class="dp-foot"><div class="dp-notes">{% if note.notes %}<h4>Catatan</h4><p>{{ note.notes }}</p>{% endif %}</div>
+      <div class="dp-totals"><div><span>Subtotal</span><span>{{ note.subtotal|rp }}</span></div>{% if note.tax %}<div><span>PPN {{ note.tax_rate|floatformat:"-2" }}%</span><span>{{ note.tax|rp }}</span></div>{% endif %}<div class="grand"><span>Total kredit</span><span>{{ note.total|rp }}</span></div></div></div>
+    {% if note.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
+  </article>
+  <aside class="dp-stack">{% include "merchant/_journal_card.html" %}</aside>
+</div>
+{% endblock %}

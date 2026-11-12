@@ -154,6 +154,10 @@ def transition(settlement: Settlement, new_status: str, actor=None,
 
     settlement.save(update_fields=update_fields)
 
+    if new_status == Settlement.STATUS_INVOICED:
+        from .consignment import record_settlement_sales
+        record_settlement_sales(settlement, actor=actor)
+
     if actor:
         store = settlement.store
         AuditLog.objects.create(
@@ -188,13 +192,13 @@ def _next_invoice_number(store) -> str:
 @transaction.atomic
 def record_payment(settlement: Settlement, amount: Decimal, payment_date: date_type,
                    method: str = "bank_transfer", reference: str = "",
-                   notes: str = "", recorded_by=None) -> SettlementPayment:
+                   notes: str = "", recorded_by=None, bank_account=None) -> SettlementPayment:
     """Record a payment from the partner. Updates settlement.amount_paid and status."""
     if settlement.status not in (Settlement.STATUS_INVOICED, Settlement.STATUS_PARTIAL,
                                   Settlement.STATUS_PAID):
         raise SettlementError("Payment hanya bisa dicatat setelah settlement ditagih (invoiced).")
 
-    if amount <= Decimal("0"):
+    if amount <= Decimal(0):
         raise SettlementError("Jumlah payment harus lebih dari 0.")
 
     new_total_paid = settlement.amount_paid + amount
@@ -207,6 +211,7 @@ def record_payment(settlement: Settlement, amount: Decimal, payment_date: date_t
     payment = SettlementPayment.objects.create(
         settlement=settlement, amount=amount, payment_date=payment_date,
         method=method, reference=reference, notes=notes, recorded_by=recorded_by,
+        bank_account=bank_account,
     )
 
     settlement.amount_paid = new_total_paid
@@ -214,5 +219,7 @@ def record_payment(settlement: Settlement, amount: Decimal, payment_date: date_t
                   else Settlement.STATUS_PARTIAL)
     settlement.status = new_status
     settlement.save(update_fields=["amount_paid", "status", "updated_at"])
+    from .consignment import post_settlement_payment
+    post_settlement_payment(payment, actor=recorded_by)
 
     return payment

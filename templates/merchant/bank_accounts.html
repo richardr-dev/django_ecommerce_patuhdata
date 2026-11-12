@@ -1,0 +1,99 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Kas & Bank{% endblock %}
+{% block content %}
+
+<div class="pg-head">
+  <div>
+    <span class="pg-kicker">Akuntansi</span>
+    <h1>Kas & Bank</h1>
+    <p>Saldo setiap rekening menurut pembukuan. Impor mutasi rekening dari internet banking untuk mencocokkannya dengan catatan bank.</p>
+  </div>
+  {% if can_edit %}
+  <div class="dp-actions">
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind=transfer">{% icon "swap" %} Transfer</a>
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind=receive">{% icon "arrow-in" %} Terima uang</a>
+    <a class="btn-primary" href="{% url 'merchant-cash-new' %}?kind=spend">{% icon "arrow-out" %} Kirim uang</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Total kas & bank</small><strong>Rp{{ total|floatformat:"0g" }}</strong><span>{{ accounts|length }} rekening aktif</span></div>
+</div>
+
+<div class="acct-grid">
+  {% for account in accounts %}
+  <a class="acct" href="{% url 'merchant-bank-account' account.id %}">
+    <div class="acct-top">
+      <span class="acct-ico">{% if account.kind == 'cash' %}{% icon "cash" %}{% elif account.kind == 'ewallet' %}{% icon "wallet" %}{% else %}{% icon "bank" %}{% endif %}</span>
+      <div>
+        <strong>{{ account.name }}</strong>
+        <small>{% if account.bank_name %}{{ account.bank_name }}{% if account.account_number %} · {{ account.account_number }}{% endif %} · {% endif %}Akun {{ account.account.code }}</small>
+      </div>
+    </div>
+    <div class="acct-bal"><span>Saldo pembukuan</span><b>Rp{{ account.book_balance|floatformat:"0g" }}</b></div>
+    {% if account.summary.statement_balance is not None %}
+    <div class="acct-bal"><span>Saldo bank {{ account.summary.statement_date|date:"d M" }}</span><span>Rp{{ account.summary.statement_balance|floatformat:"0g" }}</span></div>
+    {% endif %}
+    <div class="acct-foot">
+      {% if account.summary.unmatched_count %}
+      <span class="warn">{{ account.summary.unmatched_count }} mutasi perlu dicocokkan</span>
+      {% elif account.summary.matched_count %}
+      <span class="ok">✓ Semua mutasi cocok</span>
+      {% else %}
+      <span>Belum ada mutasi diimpor</span>
+      {% endif %}
+      <span>Rekonsiliasi →</span>
+    </div>
+  </a>
+  {% endfor %}
+  {% if can_edit %}
+  <button type="button" class="acct add" data-open="add-account">{% icon "plus" %} Tambah rekening</button>
+  {% endif %}
+</div>
+
+<section class="panel">
+  <header><div><h2>Transaksi kas & bank terakhir</h2><p>Uang masuk dan keluar yang tidak berasal dari invoice atau tagihan supplier.</p></div></header>
+  {% if recent %}
+  <div class="scroll-x">
+  <table class="tbl">
+    <thead><tr><th>Tanggal</th><th>Jenis</th><th>Rekening</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th></tr></thead>
+    <tbody>
+    {% for txn in recent %}
+      <tr class="{% if txn.voided %}void{% endif %}">
+        <td>{{ txn.date|date:"d M Y" }}</td>
+        <td><a class="rowlink" href="{% url 'merchant-cash-detail' txn.id %}">{{ txn.get_kind_display }}</a></td>
+        <td>{{ txn.bank_account.name }}{% if txn.to_bank_account %} → {{ txn.to_bank_account.name }}{% endif %}</td>
+        <td>{{ txn.contact|default:"" }}{% if txn.contact and txn.description %} · {% endif %}{{ txn.description|truncatechars:60 }}</td>
+        <td class="num">{% if txn.kind == 'receive' %}Rp{{ txn.total|floatformat:"0g" }}{% endif %}</td>
+        <td class="num">{% if txn.kind == 'spend' %}Rp{{ txn.total|floatformat:"0g" }}{% elif txn.kind == 'transfer' %}<span class="muted">Rp{{ txn.total|floatformat:"0g" }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-box"><strong>Belum ada transaksi kas</strong>Catat setoran modal, bunga bank, biaya admin, atau pembelian tunai di sini.</div>
+  {% endif %}
+</section>
+
+{% if can_edit %}
+<dialog id="add-account" class="pd-dialog" aria-labelledby="add-title">
+  <form method="post">
+    {% csrf_token %}
+    <header><h2 id="add-title">Tambah rekening</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>Nama rekening</span><input name="name" maxlength="120" required placeholder="mis. BCA Operasional"></label>
+      <label class="field"><span>Jenis</span><select name="kind">{% for code, label in kinds %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+      <div class="field-row">
+        <label class="field"><span>Bank <em>(opsional)</em></span><input name="bank_name" maxlength="60" placeholder="BCA, Mandiri, BRI…"></label>
+        <label class="field"><span>No. rekening <em>(opsional)</em></span><input name="account_number" maxlength="40" inputmode="numeric"></label>
+      </div>
+      <p class="dp-help">Rekening baru mendapat akun sendiri di bagan akun (1101, 1102, …). Saldo awalnya dicatat lewat Terima uang dari Modal pemilik, atau Jurnal umum.</p>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan rekening</button></footer>
+  </form>
+</dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

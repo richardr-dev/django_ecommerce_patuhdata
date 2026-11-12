@@ -994,6 +994,7 @@ def _merchant_context(request, store, **context):
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
     pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "merchant_is_owner": store.owner_id == request.user.id,
         "merchant_store_url": store_url(store), "merchant_preview_url": preview_url(store),
         "pending_customers_count": pending_count,
         **context}
@@ -1087,8 +1088,9 @@ def merchant_dashboard(request):
     live_state = store_state(store)
     loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
+    from apps.accounting.todo import todo_items
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
-        live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
+        finance_todo=todo_items(store, today), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
         low_stock_count=low_stock_count, recent_orders=recent,
@@ -1279,7 +1281,8 @@ def merchant_returns(request):
     return render(request, "merchant/returns.html", _merchant_context(request, store,
         returns=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         query=query, status_filter=status_filter, type_filter=type_filter,
-        statuses=ReturnRequest.STATUS, types=ReturnRequest.TYPES, counts=counts))
+        statuses=[(key, label, counts[key]) for key, label in ReturnRequest.STATUS],
+        types=ReturnRequest.TYPES, counts=counts))
 
 
 @login_required(login_url="/merchant/login/")
@@ -2123,11 +2126,15 @@ def merchant_customer_detail(request, customer_id):
     from django.utils import timezone as tz
     days_since = (tz.localdate() - last_order.created_at.date()).days if last_order else None
 
+    from apps.tax.receivables import statement
+    open_lines, receivable = statement(store, customer.pk, tz.localdate())
+    overdue_receivable = sum((line["due"] for line in open_lines if line["late_days"]), 0)
     return render(request, "merchant/customer_detail.html", _merchant_context(request, store,
         customer=customer, orders=orders, lifetime_spend=lifetime_spend,
         order_count=count, average_order=average_order,
         channel_breakdown=channel_breakdown, top_products=top_products,
-        days_since=days_since))
+        days_since=days_since, receivable=receivable, overdue_receivable=overdue_receivable,
+        open_invoice_count=len(open_lines)))
 
 
 @login_required(login_url="/merchant/login/")

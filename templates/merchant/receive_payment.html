@@ -1,0 +1,44 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Terima Pembayaran{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-receivables' %}">Piutang pelanggan</a> › <span>Terima pembayaran</span></nav>
+<div class="pg-head"><div><h1>Terima pembayaran</h1><p>Satu transfer untuk beberapa invoice sekaligus. Kelebihannya disimpan sebagai kredit pelanggan untuk invoice berikutnya.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-receipts' %}">Riwayat penerimaan</a></div></div>
+<form class="toolbar" method="get"><label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Pelanggan</span>
+  <select name="customer" onchange="this.form.submit()"><option value="">— pilih pelanggan —</option>{% for c in customers %}<option value="{{ c.id }}" {% if customer and customer.id == c.id %}selected{% endif %}>{{ c.name }}{% if c.company_name and c.company_name != c.name %} · {{ c.company_name }}{% endif %}</option>{% endfor %}</select></label>
+  <span style="color:var(--pd-faint)">atau</span><input type="search" name="buyer" value="{% if not customer %}{{ buyer }}{% endif %}" placeholder="Nama pembeli (tanpa data CRM)"><button class="btn">Tampilkan</button></form>
+{% if customer or buyer %}
+{% if credit %}<div class="notice info">{% icon "wallet" %}<span>{{ buyer }} punya kredit <b>{{ credit|rp }}</b>. Pakai untuk invoice di <a href="{% url 'merchant-customer-credit' %}" style="text-decoration:underline">Kredit pelanggan</a>.</span></div>{% endif %}
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="customer" value="{{ customer.id|default:'' }}"><input type="hidden" name="buyer" value="{% if not customer %}{{ buyer }}{% endif %}">
+  <div class="form-grid">
+    <label class="field"><span>Jumlah diterima</span><input name="amount" id="amount" inputmode="decimal" data-rupiah required placeholder="0" value="{{ post.amount }}"></label>
+    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ post.date|default:today }}" required></label>
+    <label class="field"><span>Metode</span><select name="method">{% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Masuk ke rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label class="field wide"><span>No. referensi <em>(opsional)</em></span><input name="reference" maxlength="120" value="{{ post.reference }}" placeholder="No. transfer / bukti"></label>
+    <label class="field wide"><span>Catatan <em>(opsional)</em></span><input name="note" maxlength="200" value="{{ post.note }}"></label>
+  </div>
+  <div class="scroll-x"><table class="editor">
+    <thead><tr><th>Invoice</th><th>Jatuh tempo</th><th class="num" style="width:130px">Sisa tagihan</th><th class="num" style="width:160px">Dibayar sekarang</th></tr></thead>
+    <tbody>{% for inv in invoices %}<tr><td><a href="{% url 'merchant-invoice-detail' inv.id %}" style="color:var(--pd-ink);font-weight:600">{{ inv.number }}</a><br><small style="color:var(--pd-faint)">{{ inv.issued_on|date:"d M Y" }}</small></td>
+      <td>{{ inv.due_date|date:"d M Y"|default:"—" }}</td><td class="num" style="padding-right:14px">{{ inv.amount_due|rp }}</td>
+      <td class="num"><input name="alloc_{{ inv.id }}" inputmode="decimal" data-rupiah placeholder="0" data-alloc data-due="{{ inv.amount_due|floatformat:'0' }}"></td></tr>
+    {% empty %}<tr><td colspan="4"><div class="empty-box">Tidak ada invoice terbuka untuk pelanggan ini. Jumlah yang diterima akan disimpan sebagai kredit.</div></td></tr>{% endfor %}</tbody></table></div>
+  <div class="editor-foot"><div>{% if invoices %}<button type="button" class="add-line" id="auto">Alokasikan otomatis (terlama dulu)</button>{% endif %}
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="keep_rest" value="1" checked style="width:auto;height:auto"> Simpan sisa yang tidak dialokasikan sebagai kredit pelanggan</label></div>
+    <div class="sum"><div><span>Diterima</span><span id="recv">Rp0</span></div><div><span>Dialokasikan ke invoice</span><span id="alloc">Rp0</span></div><div class="grand"><span>Menjadi kredit</span><span id="rest">Rp0</span></div></div></div>
+  <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-receivables' %}">Batal</a><button class="btn-primary">{% icon "check" %} Simpan penerimaan</button></div>
+</form>
+<script>
+(function(){
+  function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
+  function fmt(n){return (n<0?"−":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");}
+  var amount=document.getElementById("amount"),fields=document.querySelectorAll("[data-alloc]");
+  function calc(){var a=num(amount.value),s=0;fields.forEach(function(f){s+=num(f.value);});
+    document.getElementById("recv").textContent=fmt(a);document.getElementById("alloc").textContent=fmt(s);var r=document.getElementById("rest");r.textContent=fmt(a-s);r.style.color=a-s<0?"#b42318":"";}
+  document.getElementById("auto")&&document.getElementById("auto").addEventListener("click",function(){var left=num(amount.value);fields.forEach(function(f){var d=num(f.dataset.due),p=Math.min(left,d);f.value=p>0?p:"";left-=Math.max(p,0);});calc();});
+  document.querySelector("form.panel").addEventListener("input",calc);calc();
+})();
+</script>
+{% else %}<div class="panel"><div class="empty-box"><strong>Pilih pelanggan</strong>Pilih pelanggan di atas untuk melihat invoice yang belum dibayar.</div></div>{% endif %}
+{% endblock %}

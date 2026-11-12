@@ -1,0 +1,46 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Nota Kredit · {{ invoice.number }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a> › <a href="{% url 'merchant-invoice-detail' invoice.id %}">{{ invoice.number }}</a> › <span>Nota kredit</span></nav>
+<div class="pg-head"><div><h1>Nota kredit untuk {{ invoice.number }}</h1>
+  <p>{{ invoice.buyer_name }} · total invoice {{ invoice.total|rp }} · sisa tagihan {{ due|rp }}. Isi jumlah yang dikreditkan pada baris yang berubah.</p></div></div>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="invoice" value="{{ invoice.id }}">
+  <div class="form-grid">
+    <label class="field"><span>Tanggal</span><input type="date" name="issued_on" value="{{ post.issued_on|default:today }}" required></label>
+    <label class="field"><span>Alasan</span><select name="reason">{% for code, label in reasons %}<option value="{{ code }}" {% if post.reason == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="field wide"><span>Catatan <em>(opsional)</em></span><input name="notes" maxlength="500" value="{{ post.notes }}"></label>
+  </div>
+  <div class="scroll-x"><table class="editor">
+    <thead><tr><th>Barang / jasa</th><th class="num" style="width:90px">Maks.</th><th class="num" style="width:100px">Qty kredit</th><th class="num" style="width:150px">Harga satuan</th><th style="width:130px">Kembali ke stok</th></tr></thead>
+    <tbody>{% for row in rows %}<tr>
+      <td><strong>{{ row.item.description }}</strong>{% if row.item.sku %}<br><small style="color:var(--pd-faint)">{{ row.item.sku }}</small>{% endif %}</td>
+      <td class="num" style="padding-right:14px">{{ row.left|floatformat:"-2" }}</td>
+      <td class="num"><input name="qty_{{ row.item.id }}" inputmode="decimal" data-rupiah placeholder="0" data-qty></td>
+      <td class="num"><input name="price_{{ row.item.id }}" inputmode="decimal" data-rupiah value="{{ row.item.unit_price|floatformat:'0' }}" data-price style="text-align:right"></td>
+      <td>{% if row.item.product_id %}<label style="display:flex;gap:7px;align-items:center;font-size:13px"><input type="checkbox" name="restock_{{ row.item.id }}" value="1" style="width:auto;height:auto"> Ya, barang kembali</label>{% else %}<span class="muted" style="color:var(--pd-faint)">—</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5"><div class="empty-box">Semua barang di invoice ini sudah dikreditkan.</div></td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr">
+    <label class="field"><span>Koreksi lain (mis. potongan harga) <em>(opsional)</em></span><input name="extra_description" maxlength="200" placeholder="Keterangan" value="{{ post.extra_description }}"></label>
+    <label class="field"><span>Jumlah</span><input name="extra_amount" inputmode="decimal" data-rupiah placeholder="0" value="{{ post.extra_amount }}" data-extra></label>
+  </div>
+  <div class="editor-foot"><div style="max-width:560px;flex:1">
+      <p class="dp-help" style="margin:0 0 8px"><b>Jika pelanggan sudah membayar</b> lebih dari sisa tagihan setelah nota kredit, kelebihannya:</p>
+      <div class="field-row" style="grid-template-columns:1fr 1fr"><label class="field"><span>Perlakuan</span><select name="excess_action" id="excess"><option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang</option></select></label>
+        <label class="field" id="bank-wrap" hidden><span>Dari rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label></div></div>
+    <div class="sum"><div><span>Subtotal kredit</span><span id="sub">Rp0</span></div>{% if taxed %}<div><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span id="vat">Rp0</span></div>{% endif %}<div class="grand"><span>Total nota kredit</span><span id="grand">Rp0</span></div></div></div>
+  <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-invoice-detail' invoice.id %}">Batal</a><button class="btn-primary">{% icon "check" %} Terbitkan nota kredit</button></div>
+</form>
+<script>
+(function(){
+  var rate={{ invoice.tax_rate|default:0|stringformat:"s" }}||0;
+  function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
+  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function calc(){var sub=0;document.querySelectorAll("tbody tr").forEach(function(tr){var q=tr.querySelector("[data-qty]"),p=tr.querySelector("[data-price]");if(q&&p)sub+=num(q.value)*num(p.value);});
+    var ex=document.querySelector("[data-extra]");sub+=num(ex&&ex.value);var vat=sub*rate/100;
+    document.getElementById("sub").textContent=fmt(sub);var v=document.getElementById("vat");if(v)v.textContent=fmt(vat);document.getElementById("grand").textContent=fmt(sub+vat);}
+  document.querySelector("form.panel").addEventListener("input",calc);calc();
+  var ex=document.getElementById("excess"),bw=document.getElementById("bank-wrap");ex.addEventListener("change",function(){bw.hidden=ex.value!=="refund";});
+})();
+</script>
+{% endblock %}

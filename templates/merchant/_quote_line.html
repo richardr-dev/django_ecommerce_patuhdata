@@ -1,0 +1,5 @@
+<td><select name="product[]" aria-label="Produk"><option value="">— pilih produk —</option>{% for p in products %}<option value="{{ p.id }}" data-price="{{ p.price|floatformat:'0' }}" {% if p.id == selected %}selected{% endif %}>{{ p.sku }} · {{ p.name }}</option>{% endfor %}</select></td>
+<td class="num"><input name="qty[]" inputmode="numeric" placeholder="1" value="{{ qty|default:'' }}" data-qty></td>
+<td class="num"><input name="unit_price[]" inputmode="decimal" data-rupiah placeholder="0" value="{% if price %}{{ price|floatformat:'0' }}{% endif %}" data-price></td>
+<td class="num" data-line style="padding-right:14px;font-weight:600"></td>
+<td class="x"><button type="button" data-remove aria-label="Hapus baris">×</button></td>

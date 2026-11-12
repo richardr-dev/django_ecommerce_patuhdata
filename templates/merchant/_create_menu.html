@@ -1,0 +1,9 @@
+{% load icons %}
+<details class="create-menu">
+  <summary class="btn-primary">{% icon "plus" %}<span>Buat baru</span></summary>
+  <div class="menu-panel" role="menu">
+    {% for item in items %}
+    <a href="{{ item.href }}" role="menuitem">{% icon item.icon %}<span>{{ item.label }}</span></a>
+    {% endfor %}
+  </div>
+</details>

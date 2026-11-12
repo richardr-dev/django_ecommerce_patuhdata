@@ -3,13 +3,19 @@ Parse Shopee Seller Center XLSX exports into MarketplaceOrder objects.
 
 Shopee's native export masks phone numbers, partial names, and partial addresses.
 We use Username (Pembeli) as the buyer identifier since it is always unmasked.
-Cancelled orders (Status Pesanan = Batal) are silently skipped.
+Unpaid orders are skipped; cancelled and returned ones are imported so their state is tracked.
 """
 from collections import OrderedDict
 
 import openpyxl
 
-from apps.channels.adapters import MarketplaceOrder, OrderLine
+from apps.channels.adapters import (
+    STATE_UNPAID,
+    MarketplaceOrder,
+    OrderLine,
+    normalize_state,
+    parse_marketplace_time,
+)
 from apps.channels.services import ChannelImportError, parse_amount
 
 # Map internal keys → Shopee column header text.
@@ -34,10 +40,15 @@ _COLS = {
     "address":         "Alamat Pengiriman",
     "city":            "Kota/Kabupaten",
     "province":        "Provinsi",
+    "created":         "Waktu Pesanan Dibuat",
+    "paid":            "Waktu Pembayaran Dilakukan",
 }
 
 # These statuses are never imported — Shopee shows them in all-order exports.
-_SKIP_STATUSES = {"Batal", "Dibatalkan"}
+# Orders nobody paid for are not sales, so they are not imported. Cancelled and returned
+# orders are imported: they show the cancellation rate and take back a sale already booked.
+def _is_unpaid(status):
+    return normalize_state(status) == STATE_UNPAID
 
 _REQUIRED_KEYS = {"order_id", "product_name", "unit_price", "quantity"}
 
@@ -136,7 +147,7 @@ def parse_shopee_xlsx(upload):
             continue
 
         status = _get(row, index, "status")
-        if status in _SKIP_STATUSES:
+        if _is_unpaid(status):
             # Count unique cancelled order IDs, not rows, so multi-line orders aren't inflated.
             skipped_ids.add(order_id)
             continue
@@ -174,6 +185,9 @@ def parse_shopee_xlsx(upload):
             discount=parse_amount(_get(row, index, "seller_discount")),
             courier=_extract_courier(_get(row, index, "courier")),
             tracking_number=_get(row, index, "tracking"),
+            status_text=head["status"],
+            placed_at=parse_marketplace_time(row[index["created"]]) if "created" in index else None,
+            paid_at=parse_marketplace_time(row[index["paid"]]) if "paid" in index else None,
             raw={
                 "shopee_status": head["status"],
                 "shopee_username": _get(row, index, "username"),

@@ -1,0 +1,64 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Rekap Invoice per Channel{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Penjualan</span><h1>Rekap invoice per channel</h1>
+    <p>Berapa yang ditagihkan lewat Shopee, Tokopedia, TikTok Shop, Lazada, toko online, mitra, dan penjualan manual, berapa yang sudah terbayar, dan berapa yang masih tertunggak. Klik channel untuk melihat invoice-nya.</p></div>
+  <div class="dp-actions">
+    <a class="btn" href="{% url 'merchant-sales-overview' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{% icon "bar-chart" %} Margin per channel</a>
+    <a class="btn" href="{% url 'merchant-sales-export' %}?period={{ preset }}&start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{% icon "file" %} Data lengkap</a>
+    <a class="btn" href="?period={{ preset }}&start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a>
+  </div>
+</div>
+{% include "merchant/_period_bar.html" %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Penjualan bersih (diinvoice)</small><strong>{{ recap.totals.net|rp }}</strong><span>{{ recap.totals.count }} invoice{% if recap.totals.credited %} · nota kredit {{ recap.totals.credited|rp }}{% endif %}</span></div>
+  <div class="tile"><small>Sudah terselesaikan</small><strong>{{ recap.totals.paid|rp }}</strong><span>Dibayar atau dikreditkan</span></div>
+  <div class="tile"><small>Belum dibayar</small><strong>{{ recap.totals.outstanding|rp }}</strong><span>Dari invoice periode ini</span></div>
+  <div class="tile {% if recap.totals.overdue %}warn{% endif %}"><small>Lewat jatuh tempo</small><strong>{{ recap.totals.overdue|rp }}</strong><span>{{ recap.totals.overdue_count }} invoice</span></div>
+</div>
+
+<section class="panel">
+  <header><div><h2>Per channel · {{ label }}</h2><p>Angka dari invoice yang terbit pada periode ini, tanpa invoice yang dibatalkan.</p></div></header>
+  {% if recap.channels %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Channel</th><th class="num">Invoice</th><th class="num">Ditagihkan</th><th class="num">PPN</th><th class="num">Nota kredit</th><th class="num">Bersih</th><th class="num">Porsi</th><th class="num">Belum dibayar</th><th class="num">Lewat tempo</th>{% if recap.has_marketplace %}<th class="num">Biaya marketplace</th><th class="num">Dana diterima</th><th class="num">Belum cair</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in recap.channels %}
+      <tr>
+        <td><a class="rowlink" href="{% url 'merchant-sales-invoices' %}?channel={{ r.channel }}&date_from={{ start|date:'Y-m-d' }}&date_to={{ end|date:'Y-m-d' }}">{{ r.label }}</a>{% if r.void_count %}<small>{{ r.void_count }} dibatalkan</small>{% endif %}</td>
+        <td class="num">{{ r.count }}</td>
+        <td class="num">{{ r.invoiced|rp }}</td>
+        <td class="num">{% if r.tax %}{{ r.tax|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num">{% if r.credited %}<span class="neg">−{{ r.credited|rp }}</span><small>{{ r.credit_count }} nota</small>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num"><strong>{{ r.net|rp }}</strong></td>
+        <td class="num"><div class="progress" style="width:70px;margin:0 0 4px auto"><span style="width:{{ r.share }}%"></span></div>{{ r.share }}%</td>
+        <td class="num">{% if r.outstanding %}<a class="rowlink" href="{% url 'merchant-sales-invoices' %}?channel={{ r.channel }}&inv=awaiting&date_from={{ start|date:'Y-m-d' }}&date_to={{ end|date:'Y-m-d' }}">{{ r.outstanding|rp }}</a>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num {% if r.overdue %}neg{% endif %}">{% if r.overdue %}<strong>{{ r.overdue|rp }}</strong><small>{{ r.overdue_count }} invoice</small>{% else %}<span class="muted">–</span>{% endif %}</td>
+        {% if recap.has_marketplace %}
+        <td class="num">{% if r.fees %}{{ r.fees|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num">{% if r.released %}{{ r.released|rp }}<small>{{ r.income_count }} pesanan</small>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num {% if r.awaiting_count %}neg{% endif %}">{% if r.awaiting_count %}<strong>{{ r.awaiting_value|rp }}</strong><small>{{ r.awaiting_count }} pesanan</small>{% else %}<span class="muted">–</span>{% endif %}</td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td><td class="num">{{ recap.totals.count }}</td><td class="num">{{ recap.totals.invoiced|rp }}</td><td class="num">{{ recap.totals.tax|rp }}</td><td class="num">{% if recap.totals.credited %}−{{ recap.totals.credited|rp }}{% else %}–{% endif %}</td><td class="num">{{ recap.totals.net|rp }}</td><td class="num">100%</td><td class="num">{{ recap.totals.outstanding|rp }}</td><td class="num">{{ recap.totals.overdue|rp }}</td>{% if recap.has_marketplace %}<td class="num">{{ recap.totals.fees|rp }}</td><td class="num">{{ recap.totals.released|rp }}</td><td class="num">{{ recap.totals.awaiting_value|rp }}</td>{% endif %}</tr></tfoot>
+  </table></div>
+  {% else %}
+  <div class="empty-box"><strong>Belum ada invoice pada periode ini</strong>Impor pesanan marketplace atau buat invoice, lalu rekap per channel muncul di sini.<br><a class="btn-primary" href="{% url 'merchant-import' %}">{% icon "upload" %} Impor pesanan</a></div>
+  {% endif %}
+</section>
+
+{% if recap.month_rows|length > 1 %}
+<section class="panel">
+  <header><div><h2>Per bulan</h2><p>Penjualan bersih (ditagihkan dikurangi nota kredit) tiap bulan, per channel.</p></div></header>
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Bulan</th>{% for c in recap.month_channels %}<th class="num">{{ c.label }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+    <tbody>{% for m in recap.month_rows %}<tr><td>{{ m.month|date:"F Y" }}</td>{% for cell in m.cells %}<td class="num">{% if cell %}{{ cell|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}<td class="num"><strong>{{ m.total|rp }}</strong></td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>Total</td>{% for t in recap.month_totals %}<td class="num">{{ t|rp }}</td>{% endfor %}<td class="num">{{ recap.totals.net|rp }}</td></tr></tfoot>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

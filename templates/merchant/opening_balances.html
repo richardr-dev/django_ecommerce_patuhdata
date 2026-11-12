@@ -1,0 +1,59 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Saldo Awal{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Saldo awal pembukuan</h1>
+    <p>Mulai pembukuan dari kondisi usaha hari ini: uang di rekening, piutang pelanggan, stok, utang supplier, dan pinjaman. Modal pemilik dihitung otomatis sebagai selisihnya, sehingga neraca langsung seimbang.</p></div>
+</div>
+{% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup: pilih tanggal setelahnya.</span></div>{% endif %}
+
+{% if standing %}
+<section class="panel">
+  <header><div><h2>Saldo awal sudah dicatat</h2><p>Per {{ standing.date|date:"d M Y" }} · <a href="{% url 'merchant-journal-detail' standing.id %}" style="color:var(--pd-primary)">lihat jurnal JU-{{ standing.id }}</a></p></div>
+    {% if can_edit %}<form method="post" data-confirm="Batalkan saldo awal? Jurnalnya dibalik dan Anda bisa mencatatnya lagi dengan angka yang benar." data-confirm-ok="Batalkan saldo awal">{% csrf_token %}<input type="hidden" name="action" value="undo"><button class="btn btn-danger">Batalkan & ulangi</button></form>{% endif %}</header>
+  <table class="tbl"><thead><tr><th>Akun</th><th class="num">Debit</th><th class="num">Kredit</th></tr></thead>
+    <tbody>{% for name, debit, credit in lines %}<tr><td>{{ name }}</td><td class="num">{% if debit %}{{ debit|rp }}{% endif %}</td><td class="num">{% if credit %}{{ credit|rp }}{% endif %}</td></tr>{% endfor %}</tbody></table>
+  <footer><span>Piutang dan utang dicatat sebagai total. Pelunasannya lewat Terima pembayaran / Terima uang (akun Piutang usaha) dan Kirim uang (akun Utang usaha).</span></footer>
+</section>
+{% elif can_edit %}
+<form method="post" class="panel" id="opening-form">{% csrf_token %}
+  <div class="form-grid" style="grid-template-columns:1fr 3fr">
+    <label class="field"><span>Tanggal mulai pembukuan</span><input type="date" name="date" value="{{ today }}" required></label>
+    <p class="dp-help" style="align-self:end;margin:0 0 10px">Saldo di bawah adalah posisi pada akhir tanggal ini. Transaksi sebelum tanggal ini tidak perlu dimasukkan satu per satu.</p>
+  </div>
+
+  <div class="scroll-x"><table class="editor">
+    <thead><tr><th>Yang Anda miliki</th><th class="num" style="width:220px">Saldo</th></tr></thead>
+    <tbody>
+      {% for bank in banks %}<tr><td><strong>{{ bank.name }}</strong><br><small style="color:var(--pd-faint)">{% if bank.bank_name %}{{ bank.bank_name }} · {% endif %}akun {{ bank.account.code }}</small></td>
+        <td class="num"><input name="bank_{{ bank.pk }}" inputmode="decimal" data-rupiah placeholder="0" data-asset></td></tr>{% endfor %}
+      <tr><td><strong>Piutang pelanggan</strong><br><small style="color:var(--pd-faint)">Total yang belum dibayar pelanggan, di semua invoice lama</small></td><td class="num"><input name="receivable" inputmode="decimal" data-rupiah placeholder="0" data-asset></td></tr>
+      <tr><td><strong>Persediaan barang</strong><br><small style="color:var(--pd-faint)">Stok saat ini dinilai dengan harga pokok: {{ valuation.shelf_value|rp }} di gudang{% if valuation.mitra_value %}, {{ valuation.mitra_value|rp }} di mitra{% endif %}{% if valuation.missing_cost %} · {{ valuation.missing_cost }} barang belum punya harga pokok{% endif %}</small></td>
+        <td class="num" style="padding-right:14px"><label style="display:inline-flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" name="include_stock" value="1" checked style="width:auto;height:auto" data-stock="{{ valuation.shelf_value|add:valuation.mitra_value|floatformat:'0' }}"> Catat nilai stok</label></td></tr>
+    </tbody>
+    <thead><tr><th>Yang Anda tanggung</th><th class="num">Saldo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Utang supplier</strong><br><small style="color:var(--pd-faint)">Total tagihan supplier yang belum dibayar</small></td><td class="num"><input name="payable" inputmode="decimal" data-rupiah placeholder="0" data-debt></td></tr>
+      <tr><td><strong>Pinjaman bank & utang lain</strong></td><td class="num"><input name="loans" inputmode="decimal" data-rupiah placeholder="0" data-debt></td></tr>
+    </tbody>
+  </table></div>
+  <div class="editor-foot"><p class="dp-help" style="max-width:520px;margin:0">Aset tetap (motor, laptop, mesin) dicatat terpisah di <a href="{% url 'merchant-assets' %}" style="color:var(--pd-primary)">Aset tetap</a> dengan sumber dana Modal pemilik, agar disusutkan.</p>
+    <div class="sum"><div><span>Total yang dimiliki</span><span id="t-assets">Rp0</span></div><div><span>Total yang ditanggung</span><span id="t-debts">Rp0</span></div><div class="grand"><span>Modal pemilik (otomatis)</span><span id="t-equity">Rp0</span></div></div></div>
+  <div class="form-actions-bar"><button class="btn-primary">{% icon "check" %} Catat saldo awal</button></div>
+</form>
+<script>
+(function(){
+  function num(t){return parseFloat(String(t||"").replace(/\./g,"").replace(",","."))||0;}
+  function fmt(n){return (n<0?"−":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");}
+  var form=document.getElementById("opening-form");
+  function calc(){var a=0,d=0;form.querySelectorAll("[data-asset]").forEach(function(i){a+=num(i.value);});
+    var st=form.querySelector("[data-stock]");if(st&&st.checked)a+=num(st.dataset.stock);
+    form.querySelectorAll("[data-debt]").forEach(function(i){d+=num(i.value);});
+    document.getElementById("t-assets").textContent=fmt(a);document.getElementById("t-debts").textContent=fmt(d);document.getElementById("t-equity").textContent=fmt(a-d);}
+  form.addEventListener("input",calc);form.addEventListener("change",calc);calc();
+})();
+</script>
+{% else %}
+<div class="panel"><div class="empty-box"><strong>Belum ada saldo awal</strong>Hanya admin atau finance yang bisa mencatatnya.</div></div>
+{% endif %}
+{% endblock %}

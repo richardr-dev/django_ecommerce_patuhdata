@@ -1,0 +1,49 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}JU-{{ entry.id }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-journal-list' %}">Jurnal</a> › <span>JU-{{ entry.id }}</span></nav>
+<div class="dp-head">
+  <div>
+    <h1 class="dp-title">JU-{{ entry.id }} {% if entry.reverses_id %}<span class="pill pill-void">Pembalikan</span>{% elif entry.superseded %}<span class="pill pill-void">Dibatalkan</span>{% else %}<span class="pill pill-paid">Aktif</span>{% endif %}</h1>
+    <p class="dp-sub">{{ entry.memo }}</p>
+  </div>
+  <div class="dp-actions">
+    {% if source_url %}<a class="btn" href="{{ source_url }}">{% icon "file" %} Buka {{ source_label|lower }}</a>{% endif %}
+    {% if can_reverse %}<button type="button" class="btn btn-danger" data-open="rev-dialog">{% icon "undo" %} Balik jurnal</button>{% endif %}
+  </div>
+</div>
+<div class="dp-grid">
+  <article class="dp-paper">
+    <div class="dp-paper-head"><div class="dp-seller"><span class="mark">{{ merchant_store.name|slice:':1' }}</span><div><strong>{{ merchant_store.name }}</strong><p>Bukti jurnal</p></div></div>
+      <div class="dp-doc-type"><span>JURNAL</span><small>JU-{{ entry.id }}</small></div></div>
+    <dl class="dp-meta">
+      <div><dt>Tanggal</dt><dd>{{ entry.date|date:"d M Y" }}</dd></div>
+      <div><dt>Sumber</dt><dd>{{ source_label }}</dd></div>
+      <div><dt>Dicatat oleh</dt><dd>{{ entry.created_by.username|default:"Sistem" }}</dd></div>
+      <div><dt>Waktu dicatat</dt><dd>{{ entry.created_at|date:"d M Y H:i" }}</dd></div>
+    </dl>
+    <div style="height:18px"></div>
+    <div class="scroll-x"><table class="dp-items">
+      <thead><tr><th>Akun</th><th class="num">Debit</th><th class="num">Kredit</th></tr></thead>
+      <tbody>{% for line in rows %}
+        <tr><td style="{% if line.credit %}padding-left:52px{% endif %}"><strong><a href="{% url 'merchant-account-ledger' line.account.code %}" style="color:inherit">{{ line.account.name }}</a></strong><small>{{ line.account.code }}</small></td>
+          <td class="num">{% if line.debit %}{{ line.debit|rp }}{% endif %}</td><td class="num">{% if line.credit %}{{ line.credit|rp }}{% endif %}</td></tr>{% endfor %}</tbody>
+      <tfoot><tr><td style="padding:12px 14px 12px 32px;font-weight:700">Total</td><td class="num" style="padding:12px 14px;font-weight:700">{{ total|rp }}</td><td class="num" style="padding:12px 32px 12px 14px;font-weight:700">{{ total|rp }}</td></tr></tfoot>
+    </table></div>
+    <div style="height:24px"></div>
+  </article>
+  <aside class="dp-stack">
+    {% if entry.reverses %}<section class="dp-card"><header><h2>Membalik</h2></header><div class="dp-card-body"><a href="{% url 'merchant-journal-detail' entry.reverses_id %}">JU-{{ entry.reverses_id }}</a><p class="dp-help">{{ entry.reverses.memo }}</p></div></section>{% endif %}
+    {% if reversal %}<section class="dp-card"><header><h2>Dibalik oleh</h2></header><div class="dp-card-body"><a href="{% url 'merchant-journal-detail' reversal.id %}">JU-{{ reversal.id }}</a><p class="dp-help">{{ reversal.date|date:"d M Y" }}</p></div></section>{% endif %}
+    <section class="dp-card"><header><h2>Catatan</h2></header><div class="dp-card-body"><p class="dp-help" style="margin:0">Jurnal tidak diubah atau dihapus. Koreksi dilakukan dengan jurnal pembalik, sehingga jejak audit tetap lengkap.{% if not can_reverse and entry.source_type != 'journal' %} Jurnal otomatis dibalik dengan membatalkan dokumen sumbernya.{% endif %}</p></div></section>
+  </aside>
+</div>
+{% if can_reverse %}
+<dialog id="rev-dialog" class="pd-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="reverse">
+  <header><h2>Balik jurnal</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Tanggal pembalikan</span><input type="date" name="date" value="{{ today }}" required></label>
+  <p class="dp-help">Jurnal pembalik dengan debit dan kredit bertukar akan dicatat.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Balik jurnal</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

@@ -120,15 +120,15 @@ class TestParseShopeeXlsx:
         assert o.lines[0].quantity == 1
         assert o.shipping_cost == Decimal("10000")
 
-    def test_skips_cancelled_orders(self):
+    def test_keeps_cancelled_orders_with_their_state(self):
         xlsx = _make_xlsx([
             _row("SHP001", "Batal", "Tumbler", sku_ref="TBL-001"),
             _row("SHP002", "Selesai", "Tumbler", sku_ref="TBL-001"),
         ])
         orders, skipped = parse_shopee_xlsx(xlsx)
-        assert len(orders) == 1
-        assert skipped == 1
-        assert orders[0].external_id == "SHP002"
+        assert skipped == 0
+        assert [(o.external_id, o.state) for o in orders] == [
+            ("SHP001", "cancelled"), ("SHP002", "completed")]
 
     def test_groups_multi_product_order(self):
         xlsx = _make_xlsx([
@@ -221,14 +221,15 @@ class TestParseShopeeXlsx:
         with pytest.raises(ChannelImportError, match="tidak dapat dibaca"):
             parse_shopee_xlsx(buf)
 
-    def test_multiple_cancelled_same_order_id_counts_once(self):
-        """Multi-row cancelled order should count as 1 skipped, not N."""
+    def test_multiple_cancelled_same_order_id_is_one_order(self):
+        """A multi-row cancelled order is one order with every line, not N orders."""
         xlsx = _make_xlsx([
             _row("SHP001", "Batal", "Produk A", sku_ref="A"),
             _row("SHP001", "Batal", "Produk B", sku_ref="B"),
         ])
-        _, skipped = parse_shopee_xlsx(xlsx)
-        assert skipped == 1
+        orders, skipped = parse_shopee_xlsx(xlsx)
+        assert skipped == 0
+        assert len(orders) == 1 and len(orders[0].lines) == 2
 
     def test_real_shopee_export_file(self):
         """Smoke test against the actual Shopee export sample in docs/."""
@@ -238,9 +239,9 @@ class TestParseShopeeXlsx:
             pytest.skip("Sample file not present")
         with open(sample, "rb") as f:
             orders, skipped = parse_shopee_xlsx(f)
-        # 5 rows total: 2 Batal + 3 Selesai
-        assert skipped == 2
-        assert len(orders) == 3
+        # 5 rows total: 2 Batal + 3 Selesai, all kept
+        assert skipped == 0
+        assert len(orders) == 5
         for o in orders:
             assert o.external_id
             assert len(o.lines) >= 1

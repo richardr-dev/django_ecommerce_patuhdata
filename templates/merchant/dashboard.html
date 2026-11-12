@@ -1,26 +1,115 @@
-{% extends "merchant/base.html" %}{% load icons %}{% load static %}{% block title %}Beranda{% endblock %}{% block head_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">{% endblock %}{% block content %}
-<div class="bo-heading"><div><span class="eyebrow">BERANDA</span><h1>Halo, {{ merchant_store.name }}</h1><p>Ringkasan toko Anda hari ini.</p></div>{% if merchant_role == "admin" or merchant_role == "manager" or merchant_role == "ops" %}<a class="bo-button" href="{% url 'merchant-entity-new' 'products' %}">+ Produk baru</a>{% endif %}</div>
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Beranda{% endblock %}{% block content %}
+{% url 'merchant-orders' as todo_orders %}{% url 'merchant-stock' as todo_stock %}{% url 'merchant-engagement' as todo_engagement %}{% url 'merchant-integrations' as todo_integrations %}{% with todo_orders_pending=todo_orders|add:'?status=pending' %}
+{% with sub=subscription_status %}{% if sub %}
+{% if sub.lapsed %}{% include "merchant/_plan_banner.html" with tone="bad" %}
+{% elif sub.renewal %}{% include "merchant/_plan_banner.html" with tone="renewal" %}
+{% elif sub.trial %}{% include "merchant/_plan_banner.html" with tone="trial" %}
+{% elif sub.ending_soon %}{% include "merchant/_plan_banner.html" with tone="ending" %}{% endif %}
+{% endif %}{% endwith %}
 
-{% with sub=subscription_status %}{% if sub %}{% if sub.lapsed %}<div class="plan-banner lapsed"><span>⏰ <b>{% if sub.trial %}Masa coba gratis{% else %}Paket {{ sub.plan.name }}{% endif %} sudah berakhir.</b> Toko dan produk tetap tampil, tetapi Anda belum bisa menambah produk.</span>{% if merchant_role == "admin" or merchant_role == "finance" %}<a class="bo-button" href="{% url 'merchant-billing' %}">Pilih paket</a>{% endif %}</div>{% elif sub.renewal %}<div class="plan-banner{% if sub.grace %} lapsed{% endif %}"><span>{% icon "receipt" %} <b>Tagihan {{ sub.renewal.plan.name }} Rp{{ sub.renewal.amount|floatformat:"0g" }}</b> {% if sub.grace %}sudah lewat jatuh tempo; fitur tetap aktif beberapa hari lagi.{% else %}jatuh tempo {{ sub.renewal.due_at|date:"d M Y" }}.{% endif %}</span>{% if merchant_role == "admin" or merchant_role == "finance" %}<a class="bo-button" href="{% url 'merchant-billing' %}">Bayar</a>{% endif %}</div>{% elif sub.trial %}<div class="plan-banner"><span>{% icon "gift" %} <b>Masa coba gratis: {{ sub.days_left }} hari lagi</b> (sampai {{ sub.ends_at|date:"d M Y" }}). Semua fitur {{ sub.plan.name }} aktif.</span>{% if merchant_role == "admin" or merchant_role == "finance" %}<a class="bo-link" href="{% url 'merchant-billing' %}">Lihat paket →</a>{% endif %}</div>{% elif sub.ending_soon %}<div class="plan-banner"><span>Paket {{ sub.plan.name }} berakhir {{ sub.ends_at|date:"d M Y" }}.</span>{% if merchant_role == "admin" or merchant_role == "finance" %}<a class="bo-link" href="{% url 'merchant-billing' %}">Perpanjang →</a>{% endif %}</div>{% endif %}{% endif %}{% endwith %}
-<section class="bo-card store-link-card"><div><small>Alamat toko Anda</small><a href="{{ merchant_store_url }}" target="_blank" rel="noopener" data-store-url>{{ merchant_store_url }}</a></div><div class="store-link-actions"><button type="button" class="bo-link" data-copy-url>Salin tautan</button><a class="bo-button wa" href="https://wa.me/?text={{ merchant_store.name|urlencode }}%20{{ merchant_store_url|urlencode }}" target="_blank" rel="noopener">Bagikan ke WhatsApp</a></div></section>
+<section class="bb-hero mb-5">
+  <p class="text-xs font-bold uppercase tracking-widest text-blue-100">Beranda</p>
+  <div class="mt-1 flex flex-wrap items-end justify-between gap-4">
+    <div><h1>Halo, {{ merchant_store.name }}</h1><p>Ringkasan toko Anda hari ini.</p></div>
+    <div class="flex flex-wrap gap-2">
+      {% if merchant_role == "admin" or merchant_role == "manager" or merchant_role == "ops" %}<a class="btn-primary" href="{% url 'merchant-invoice-new' %}">+ Buat invoice</a><a class="btn" href="{% url 'merchant-entity-new' 'products' %}">+ Produk baru</a>{% endif %}
+    </div>
+  </div>
+</section>
 
-{% if live_state == "closed" %}<section class="bo-card store-live closed"><b>{% icon "lock" %} Toko ditutup untuk pembeli.</b> Masa langganan berakhir, jadi pembeli melihat toko "tutup sementara" dan tidak bisa memesan. <a class="bo-button" href="{% url 'merchant-billing' %}">Perpanjang langganan</a></section>{% elif live_state == "setup" %}<section class="bo-card store-live setup"><b>{% icon "eye" %} Toko belum tampil untuk pembeli.</b> Selesaikan langkah bertanda <em>Wajib</em> di bawah; sementara itu hanya Anda yang bisa melihatnya lewat <a href="{{ merchant_preview_url }}" target="_blank" rel="noopener">Lihat toko</a>.</section>{% else %}<section class="bo-card store-live open"><b>{% icon "check-circle" %} Toko sudah tampil untuk pembeli.</b></section>{% endif %}{% if setup_done < setup|length %}<section class="bo-card setup-checklist"><div class="card-heading"><div><h2>Siapkan toko Anda</h2><p>{{ setup_done }} dari {{ setup|length }} langkah selesai. Selesaikan semuanya agar toko siap menerima pesanan.</p></div></div><div class="setup-bar"><i style="width:{% widthratio setup_done setup|length 100 %}%"></i></div><ol>{% for step in setup %}<li class="{% if step.done %}done{% endif %}"><span class="step-mark">{% if step.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span><div><strong>{{ step.title }}{% if step.required and not step.done %} <em class="required-tag">Wajib</em>{% endif %}</strong><small>{{ step.hint }}</small></div>{% if not step.done %}<a class="bo-button" href="{{ step.url }}"{% if forloop.last %} target="_blank" rel="noopener"{% endif %}>{{ step.action }}</a>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+<section class="bb-card mb-5 flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+  <div class="flex items-center gap-3 min-w-0"><span class="bb-bubble [&>svg]:h-4 [&>svg]:w-4">{% icon "store" %}</span>
+    <div class="min-w-0"><small class="block text-xs font-semibold text-slate-500">Alamat toko Anda</small><a class="block truncate text-sm font-bold text-blue-700 hover:underline" href="{{ merchant_store_url }}" target="_blank" rel="noopener" data-store-url>{{ merchant_store_url }}</a></div></div>
+  <div class="flex gap-2"><button type="button" class="btn" data-copy-url>Salin tautan</button><a class="btn" href="https://wa.me/?text={{ merchant_store.name|urlencode }}%20{{ merchant_store_url|urlencode }}" target="_blank" rel="noopener">Bagikan ke WhatsApp</a></div>
+</section>
 
-<section class="kpi-grid simple-kpis"><article><small>Penjualan hari ini</small><strong>Rp{{ today_net|floatformat:"0g" }}</strong><span>{% if today_refunds %}Setelah refund Rp{{ today_refunds|floatformat:"0g" }}{% else %}Pesanan yang sudah dibayar{% endif %}</span></article><article><small>Pesanan hari ini</small><strong>{{ today_orders }}</strong><span>Rata-rata Rp{{ today_aov|floatformat:"0g" }}</span></article><article><small>Pelanggan baru hari ini</small><strong>{{ today_new_customers }}</strong><span>{{ today_repeat_customers }} pelanggan kembali</span></article><article><small>Penjualan 30 hari</small><strong>Rp{{ month_revenue|floatformat:"0g" }}</strong><span>Total sejak awal Rp{{ revenue|floatformat:"0g" }}</span></article></section>
+{% if live_state == "closed" %}
+<div class="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-900 ring-1 ring-rose-100"><span class="bb-bubble bad [&>svg]:h-4 [&>svg]:w-4">{% icon "lock" %}</span><span class="flex-1"><b>Toko ditutup untuk pembeli.</b> Masa langganan berakhir, jadi pembeli melihat toko "tutup sementara" dan tidak bisa memesan.</span><a class="btn" href="{% url 'merchant-billing' %}">Perpanjang langganan</a></div>
+{% elif live_state == "setup" %}
+<div class="mb-5 flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-100"><span class="bb-bubble warn [&>svg]:h-4 [&>svg]:w-4">{% icon "eye" %}</span><span><b>Toko belum tampil untuk pembeli.</b> Selesaikan langkah bertanda <em>Wajib</em> di bawah; sementara itu hanya Anda yang bisa melihatnya lewat <a class="font-semibold underline" href="{{ merchant_preview_url }}" target="_blank" rel="noopener">Lihat toko</a>.</span></div>
+{% else %}
+<div class="mb-5 flex items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 ring-1 ring-emerald-100"><span class="bb-bubble ok [&>svg]:h-4 [&>svg]:w-4">{% icon "check-circle" %}</span><b>Toko sudah tampil untuk pembeli.</b></div>
+{% endif %}
 
-<section class="bo-card todo-card"><div class="card-heading"><div><h2>Perlu tindakan</h2><p>Hal yang menunggu Anda sekarang.</p></div></div><div class="todo-list">
-{% if transfers_to_confirm %}<a href="{% url 'merchant-orders' %}?status=pending"><span>{% icon "cash" %}</span><b>{{ transfers_to_confirm }}</b> transfer bank menunggu dicek<em>Konfirmasi →</em></a>{% endif %}
-{% if to_ship %}<a href="{% url 'merchant-orders' %}"><span>{% icon "box" %}</span><b>{{ to_ship }}</b> pesanan perlu diproses & dikirim<em>Proses →</em></a>{% endif %}
-{% if low_stock_count %}<a href="{% url 'merchant-stock' %}"><span>{% icon "trend-down" %}</span><b>{{ low_stock_count }}</b> produk stoknya tinggal sedikit<em>Tambah stok →</em></a>{% endif %}
-{% if engagement.abandoned_count %}<a href="{% url 'merchant-engagement' %}"><span>{% icon "cart" %}</span><b>{{ engagement.abandoned_count }}</b> keranjang tertinggal · Rp{{ engagement.abandoned_value|floatformat:"0g" }}<em>Lihat →</em></a>{% endif %}
-{% if problem_count %}<a class="danger" href="{% url 'merchant-integrations' %}"><span>{% icon "alert" %}</span><b>{{ problem_count }}</b> kendala pembayaran, pengiriman, atau integrasi<em>Periksa →</em></a>{% endif %}
-{% if not transfers_to_confirm and not to_ship and not low_stock_count and not engagement.abandoned_count and not problem_count %}<p class="all-clear">Semua beres Tidak ada yang menunggu.</p>{% endif %}
-</div></section>
+{% if setup_done < setup|length %}
+<section class="panel">
+  <header><div><h2>Siapkan toko Anda</h2><p>{{ setup_done }} dari {{ setup|length }} langkah selesai. Selesaikan semuanya agar toko siap menerima pesanan.</p></div>
+    <span class="bb-pill">{% widthratio setup_done setup|length 100 %}%</span></header>
+  <div class="mx-5 mt-4 h-2 overflow-hidden rounded-full bg-blue-50"><i class="block h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400" style="width:{% widthratio setup_done setup|length 100 %}%"></i></div>
+  <ol class="grid gap-1 p-3">
+    {% for step in setup %}
+    <li class="flex items-center gap-3 rounded-2xl px-3 py-2.5 hover:bg-blue-50/60">
+      <span class="bb-bubble {% if step.done %}ok{% else %}step{% endif %} !h-8 !w-8">{% if step.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+      <div class="min-w-0 flex-1"><strong class="block text-sm {% if step.done %}text-slate-400 line-through{% else %}text-slate-900{% endif %}">{{ step.title }}{% if step.required and not step.done %} <em class="ml-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold not-italic text-rose-700">Wajib</em>{% endif %}</strong><small class="text-xs text-slate-500">{{ step.hint }}</small></div>
+      {% if not step.done %}<a class="btn" href="{{ step.url }}"{% if forloop.last %} target="_blank" rel="noopener"{% endif %}>{{ step.action }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
 
-<div class="dashboard-grid"><section class="bo-card sales-card"><div class="card-heading"><div><h2>Penjualan 30 hari</h2><p>Omzet harian dari pesanan yang dibayar</p></div><strong>Rp{{ month_revenue|floatformat:"0g" }}</strong></div><div class="bar-chart">{% for row in daily_sales %}<div class="bar-column" title="{{ row.day }} · Rp{{ row.revenue|floatformat:'0g' }}"><div class="bar" style="height:{{ row.percent }}%"></div><small>{{ row.day|date:'d' }}</small></div>{% empty %}<div class="empty-state">Belum ada penjualan. Bagikan tautan toko untuk mendapat pesanan pertama.</div>{% endfor %}</div></section><section class="bo-card"><div class="card-heading"><div><h2>Produk terlaris</h2><p>Berdasarkan omzet</p></div></div><div class="rank-list">{% for product in top_products %}<div><span><b>{{ forloop.counter }}</b>{{ product.name }}</span><span>{{ product.units }} unit<strong>Rp{{ product.revenue|floatformat:"0g" }}</strong></span></div>{% empty %}<div class="empty-state">Belum ada data.</div>{% endfor %}</div></section></div>
+<div class="tiles">
+  <div class="tile accent"><small>Penjualan hari ini</small><strong>Rp{{ today_net|floatformat:"0g" }}</strong><span>{% if today_refunds %}Setelah refund Rp{{ today_refunds|floatformat:"0g" }}{% else %}Pesanan yang sudah dibayar{% endif %}</span></div>
+  <div class="tile"><small>Pesanan hari ini</small><strong>{{ today_orders }}</strong><span>Rata-rata Rp{{ today_aov|floatformat:"0g" }}</span></div>
+  <div class="tile"><small>Pelanggan baru hari ini</small><strong>{{ today_new_customers }}</strong><span>{{ today_repeat_customers }} pelanggan kembali</span></div>
+  <div class="tile"><small>Penjualan 30 hari</small><strong>Rp{{ month_revenue|floatformat:"0g" }}</strong><span>Total sejak awal Rp{{ revenue|floatformat:"0g" }}</span></div>
+</div>
 
-<div class="dashboard-grid"><section class="bo-card"><div class="card-heading"><div><h2>Pesanan terbaru</h2></div><a href="{% url 'merchant-orders' %}">Lihat semua</a></div><div class="compact-table">{% for order in recent_orders %}<div><span><b>#{{ order.id|stringformat:'s'|slice:':8' }}</b><small>{{ order.customer_name }}</small></span><span class="badge {{ order.status }}">{{ order.get_status_display }}</span><strong>Rp{{ order.total|floatformat:"0g" }}</strong></div>{% empty %}<div class="empty-state">Belum ada pesanan.</div>{% endfor %}</div></section><section class="bo-card"><div class="card-heading"><div><h2>Perlu restock</h2><p>Stok tersedia ≤ 5</p></div><a href="{% url 'merchant-stock' %}">Kelola stok</a></div><div class="stock-list">{% for product in low_stock %}<div><span>{{ product.name }}<small>{{ product.sku }}</small></span><strong>{{ product.stock_available }} unit</strong></div>{% empty %}<div class="empty-state">Semua stok aman.</div>{% endfor %}</div></section></div>
+<section class="panel">
+  <header><div><h2>Perlu tindakan</h2><p>Hal yang menunggu Anda sekarang.</p></div></header>
+  <div class="grid gap-1 p-3 md:grid-cols-2">
+    {% if transfers_to_confirm %}{% include "merchant/_todo_row.html" with href=todo_orders_pending icon="cash" count=transfers_to_confirm text="transfer bank menunggu dicek" action="Konfirmasi →" %}{% endif %}
+    {% if to_ship %}{% include "merchant/_todo_row.html" with href=todo_orders icon="box" count=to_ship text="pesanan perlu diproses & dikirim" action="Proses →" %}{% endif %}
+    {% if low_stock_count %}{% include "merchant/_todo_row.html" with href=todo_stock icon="trend-down" count=low_stock_count text="produk stoknya tinggal sedikit" action="Tambah stok →" %}{% endif %}
+    {% if engagement.abandoned_count %}{% include "merchant/_todo_row.html" with href=todo_engagement icon="cart" count=engagement.abandoned_count text="keranjang tertinggal" extra=engagement.abandoned_value action="Lihat →" %}{% endif %}
+    {% if problem_count %}{% include "merchant/_todo_row.html" with href=todo_integrations icon="alert" count=problem_count text="kendala pembayaran, pengiriman, atau integrasi" action="Periksa →" tone="bad" %}{% endif %}
+    {% for item in finance_todo %}{% include "merchant/_todo_row.html" with href=item.url icon=item.icon count=item.count text=item.label action=item.action tone=item.tone %}{% endfor %}
+  </div>
+  {% if not transfers_to_confirm and not to_ship and not low_stock_count and not engagement.abandoned_count and not problem_count and not finance_todo %}
+  <p class="px-5 py-8 text-center text-sm font-semibold text-emerald-700">Semua beres Tidak ada yang menunggu.</p>
+  {% endif %}
+</section>
 
-<details class="bo-card system-details"><summary><b>Kesehatan sistem</b> <span class="muted">· {% if problem_count or queue_backlogged %}ada kendala{% else %}semua normal{% endif %}</span></summary><div class="health-list">{% for service in operational_health %}<div><span class="health-dot {{ service.state }}"></span><span>{{ service.name }}</span><b class="{{ service.state }}">{{ service.label }}</b></div>{% endfor %}</div><p class="muted">{{ queue_pending }} antrean · {{ notification_failures }} notifikasi gagal · {{ payment_errors }} pembayaran gagal · {{ reconciliation_mismatches }} selisih pembayaran</p></details>
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+  <section class="panel !mb-0">
+    <header><div><h2>Penjualan 30 hari</h2><p>Omzet harian dari pesanan yang dibayar</p></div><strong class="text-lg font-extrabold text-blue-700">Rp{{ month_revenue|floatformat:"0g" }}</strong></header>
+    {% if daily_sales %}
+    <div class="flex h-48 items-end gap-1 px-5 pb-4 pt-6">
+      {% for row in daily_sales %}<div class="group flex h-full min-w-0 flex-1 flex-col justify-end text-center" title="{{ row.day }} · Rp{{ row.revenue|floatformat:'0g' }}"><div class="w-full rounded-t-full bg-gradient-to-t from-blue-600 to-sky-400 opacity-80 transition group-hover:opacity-100" style="height:{{ row.percent }}%;min-height:3px"></div><small class="mt-1 text-[10px] text-slate-400">{{ row.day|date:'d' }}</small></div>{% endfor %}
+    </div>
+    {% else %}<p class="px-5 py-10 text-center text-sm text-slate-400">Belum ada penjualan. Bagikan tautan toko untuk mendapat pesanan pertama.</p>{% endif %}
+  </section>
+  <section class="panel !mb-0">
+    <header><div><h2>Produk terlaris</h2><p>Berdasarkan omzet</p></div></header>
+    <div class="grid gap-1 p-3">
+      {% for product in top_products %}<div class="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60"><span class="bb-bubble step !h-7 !w-7 !text-xs">{{ forloop.counter }}</span><span class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{{ product.name }}</span><span class="text-right text-xs text-slate-500">{{ product.units }} unit<b class="block text-sm text-slate-900">Rp{{ product.revenue|floatformat:"0g" }}</b></span></div>
+      {% empty %}<p class="px-3 py-8 text-center text-sm text-slate-400">Belum ada data.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="mt-5 grid gap-5 lg:grid-cols-2">
+  <section class="panel !mb-0">
+    <header><h2>Pesanan terbaru</h2><a class="text-sm font-semibold text-blue-700 hover:underline" href="{% url 'merchant-orders' %}">Lihat semua</a></header>
+    <div class="grid gap-1 p-3">
+      {% for order in recent_orders %}<div class="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60"><span class="bb-avatar !h-8 !w-8 !text-xs">{{ order.customer_name|slice:":1"|upper }}</span><span class="min-w-0 flex-1"><b class="block text-sm text-slate-900">#{{ order.id|stringformat:'s'|slice:':8' }}</b><small class="text-xs text-slate-500">{{ order.customer_name }}</small></span><span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span><strong class="w-28 text-right text-sm text-slate-900">Rp{{ order.total|floatformat:"0g" }}</strong></div>
+      {% empty %}<p class="px-3 py-8 text-center text-sm text-slate-400">Belum ada pesanan.</p>{% endfor %}
+    </div>
+  </section>
+  <section class="panel !mb-0">
+    <header><div><h2>Perlu restock</h2><p>Stok tersedia ≤ 5</p></div><a class="text-sm font-semibold text-blue-700 hover:underline" href="{% url 'merchant-stock' %}">Kelola stok</a></header>
+    <div class="grid gap-1 p-3">
+      {% for product in low_stock %}<div class="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60"><span class="bb-bubble warn !h-8 !w-8 [&>svg]:h-4 [&>svg]:w-4">{% icon "box" %}</span><span class="min-w-0 flex-1 text-sm font-semibold text-slate-800">{{ product.name }}<small class="block text-xs font-normal text-slate-400">{{ product.sku }}</small></span><strong class="text-sm text-amber-700">{{ product.stock_available }} unit</strong></div>
+      {% empty %}<p class="px-3 py-8 text-center text-sm text-slate-400">Semua stok aman.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<details class="panel mt-5">
+  <summary class="flex cursor-pointer items-center gap-3 px-5 py-4 text-sm"><span class="bb-bubble {% if problem_count or queue_backlogged %}warn{% else %}ok{% endif %} !h-8 !w-8">●</span><b class="text-slate-900">Kesehatan sistem</b> <span class="text-slate-500">· {% if problem_count or queue_backlogged %}ada kendala{% else %}semua normal{% endif %}</span></summary>
+  <div class="grid gap-1 px-5 pb-2 sm:grid-cols-2">{% for service in operational_health %}<div class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm"><span class="h-2.5 w-2.5 rounded-full {% if service.state == 'issue' %}bg-rose-500{% else %}bg-emerald-500{% endif %}"></span><span class="flex-1 text-slate-700">{{ service.name }}</span><b class="text-xs text-slate-500">{{ service.label }}</b></div>{% endfor %}</div>
+  <p class="px-5 pb-4 text-xs text-slate-500">{{ queue_pending }} antrean · {{ notification_failures }} notifikasi gagal · {{ payment_errors }} pembayaran gagal · {{ reconciliation_mismatches }} selisih pembayaran</p>
+</details>
+{% endwith %}
 <script>document.querySelector('[data-copy-url]')?.addEventListener('click',async event=>{await navigator.clipboard.writeText(document.querySelector('[data-store-url]').href);event.currentTarget.textContent='Tersalin ✓'});</script>
 {% endblock %}

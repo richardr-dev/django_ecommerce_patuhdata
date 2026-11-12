@@ -1,0 +1,61 @@
+{% extends "merchant/base.html" %}
+{% block title %}Penghasilan Marketplace{% endblock %}
+{% block content %}
+
+<div class="bb-hero mb-5">
+  <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MARKETPLACE</p>
+  <h1 class="text-2xl font-bold text-gray-900 mb-1">Penghasilan Marketplace</h1>
+  <p class="text-sm text-gray-500">Unggah laporan penghasilan dari Shopee, TikTok Shop, atau Lazada. Setiap pesanan mendapat biaya sebenarnya (komisi, layanan, ongkir, voucher, afiliasi) dan dana yang cair, sehingga laba bersih per pesanan dan per toko akurat. Pencairan juga masuk ke pembukuan: piutang marketplace menjadi kas, dikurangi biaya.</p>
+</div>
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+    {% csrf_token %}
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">{{ form.channel.label }}</span>{{ form.channel }}</label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">{{ form.file.label }}</span>{{ form.file }}</label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">{{ form.release_date.label }}</span>{{ form.release_date }}</label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">{{ form.bank_account.label }}</span>{{ form.bank_account }}</label>
+    <button class="px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Impor</button>
+  </form>
+  {% for field in form %}{% for error in field.errors %}<p class="text-sm text-red-600 mt-2">{{ error }}</p>{% endfor %}{% endfor %}
+  <p class="text-xs text-gray-400 mt-3">Pesanan harus sudah diimpor lebih dulu. Laporan yang sama aman diunggah ulang: pesanan yang sudah dicairkan dilewati.</p>
+</div>
+
+{% if summary %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+  <h2 class="text-base font-semibold text-gray-800 mb-4">Hasil impor</h2>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+    <div class="bg-green-50 rounded-xl p-4"><p class="text-xs text-green-700 mb-1">Pesanan dicairkan</p><p class="text-2xl font-bold text-green-800">{{ summary.orders }}</p></div>
+    <div class="bg-gray-50 rounded-xl p-4"><p class="text-xs text-gray-500 mb-1">Dana masuk</p><p class="text-2xl font-bold text-gray-800">Rp{{ summary.net|floatformat:"0g" }}</p></div>
+    <div class="bg-amber-50 rounded-xl p-4"><p class="text-xs text-amber-700 mb-1">Biaya marketplace</p><p class="text-2xl font-bold text-amber-800">Rp{{ summary.fees|floatformat:"0g" }}</p></div>
+    <div class="bg-gray-50 rounded-xl p-4"><p class="text-xs text-gray-500 mb-1">Sudah dicairkan sebelumnya</p><p class="text-2xl font-bold text-gray-800">{{ summary.already }}</p></div>
+  </div>
+  {% for message in summary.errors %}<p class="text-sm text-red-600">{{ message }}</p>{% endfor %}
+  {% for message in summary.warnings %}<p class="text-sm text-amber-700">{{ message }}</p>{% endfor %}
+</div>
+{% endif %}
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <h2 class="text-sm font-semibold text-gray-800 px-4 py-3">Terakhir diimpor</h2>
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+      <th class="text-left px-4 py-2">Pesanan</th><th class="text-left px-4 py-2">Toko</th>
+      <th class="text-right px-4 py-2">Total pesanan</th><th class="text-right px-4 py-2">Biaya</th>
+      <th class="text-right px-4 py-2">Dana cair</th><th class="text-left px-4 py-2">Tanggal</th></tr></thead>
+    <tbody>
+    {% for row in recent %}
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-2">{{ row.channel_order.external_order_id }}</td>
+        <td class="px-4 py-2">{{ row.channel_order.channel }}</td>
+        <td class="px-4 py-2 text-right">Rp{{ row.channel_order.order.total|floatformat:"0g" }}</td>
+        <td class="px-4 py-2 text-right text-amber-700">Rp{{ row.total_fees|floatformat:"0g" }}</td>
+        <td class="px-4 py-2 text-right">Rp{{ row.net_released|floatformat:"0g" }}</td>
+        <td class="px-4 py-2 text-gray-500">{{ row.released_on|date:"d/m/Y" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Belum ada laporan penghasilan yang diimpor.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

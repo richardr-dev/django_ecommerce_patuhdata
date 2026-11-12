@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import re
 from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
@@ -13,14 +14,28 @@ from apps.catalog.models import InventoryLevel, Product, ProductVariant
 from apps.channels.adapters import OrderLine
 from apps.integrations.http import ProviderError
 from apps.integrations.reconciliation import confirm_payment
-from apps.orders.inventory import reserve_from_levels, reserve_variant
-from apps.orders.models import Order, OrderItem, OrderStatusEvent
+from apps.orders.inventory import commit_order_inventory, reserve_from_levels, reserve_variant
+from apps.orders.models import Order, OrderItem, OrderStatusEvent, PaymentTransaction
+from apps.tax.services import issue_invoice_for_order
 
-from .adapters import PLATFORMS, ChannelNotReady, MarketplaceOrder, OrderLine, adapter_for
+from .adapters import (
+    PLATFORMS,
+    STATE_COMPLETED,
+    STATE_SHIPPED,
+    ChannelNotReady,
+    MarketplaceOrder,
+    OrderLine,
+    adapter_for,
+)
+from .lifecycle import ORDER_STATUS, REVERSING, _note, sync_order_state
+from .mapping import MappingError, expand_bundle, find_mapping, note_unmapped
 from .models import ChannelBuyer, ChannelListing, ChannelOrder, ImportBatch, SalesChannel
 
 CSV_COLUMNS = ["order_id", "buyer_name", "phone", "address", "sku", "quantity", "unit_price",
     "shipping_cost", "discount", "courier", "tracking_number"]
+
+
+logger = logging.getLogger(__name__)
 
 
 class ChannelImportError(ValueError):
@@ -40,7 +55,13 @@ def _resolve_sku(store, sku):
     return product, None
 
 
-def import_order(channel, data: MarketplaceOrder, soft: bool = False):
+def import_order(channel, data: MarketplaceOrder, soft: bool = False, batch=None):
+    """Import one marketplace order. Returns (order, created); see ``import_order_outcome``."""
+    order, outcome = import_order_outcome(channel, data, soft=soft, batch=batch)
+    return order, outcome == "created"
+
+
+def import_order_outcome(channel, data: MarketplaceOrder, soft: bool = False, batch=None):
     """Create the paid Lakuin order for a marketplace order. Returns (order, created).
 
     soft=True: historical import mode — auto-creates placeholder products for unrecognised
@@ -50,16 +71,18 @@ def import_order(channel, data: MarketplaceOrder, soft: bool = False):
     existing = ChannelOrder.objects.filter(channel=channel,
         external_order_id=data.external_id).select_related("order").first()
     if existing:
-        return existing.order, False
+        changed = sync_order_state(channel, existing.order, data)
+        redated = apply_marketplace_dates(existing.order, data)
+        return existing.order, "updated" if changed or redated else "duplicate"
     if not data.lines:
         raise ChannelImportError("Pesanan tanpa produk.")
     store = channel.store
     label = PLATFORMS[channel.platform].label
 
-    if soft:
-        resolved = [(line, *_resolve_sku_soft(store, line)) for line in data.lines]
-    else:
-        resolved = [(line, *_resolve_sku(store, line.sku)) for line in data.lines]
+    if data.state in REVERSING:
+        # Never seen, already cancelled or returned: keep it as a record, never as a sale.
+        return _record_dead_order(channel, data, batch), "created"
+    resolved = resolve_lines(channel, data.lines, soft=soft)
 
     try:
         with transaction.atomic():
@@ -85,8 +108,8 @@ def import_order(channel, data: MarketplaceOrder, soft: bool = False):
             for line, product, variant in resolved:
                 item = OrderItem.objects.create(order=order, product=product, variant=variant,
                     name=(line.name or product.name)[:160], sku=line.sku,
-                    variant_name=variant.name if variant else "", unit_price=line.unit_price,
-                    quantity=line.quantity, line_total=line.unit_price * line.quantity)
+                    variant_name=variant.name if variant else "", unit_price=line.unit_price, bundle_sku=line.bundle,
+                    quantity=line.quantity, line_total=_line_total(line))
                 if not soft:
                     _reserve(item, product, variant, line.quantity)
             confirm_payment(order, provider=channel.platform, external_id=data.external_id,
@@ -94,15 +117,121 @@ def import_order(channel, data: MarketplaceOrder, soft: bool = False):
                 note=f"Dibayar melalui {label}")
             ChannelOrder.objects.create(channel=channel, order=order,
                 external_order_id=data.external_id,
-                batch=_current_batch.get(channel.id))
+                batch=batch)
             _upsert_buyer(channel, data, order)
+            apply_marketplace_dates(order, data)
     except IntegrityError:  # imported concurrently
         existing = ChannelOrder.objects.filter(channel=channel,
             external_order_id=data.external_id).select_related("order").first()
         if existing:
-            return existing.order, False
+            return existing.order, "duplicate"
         raise
-    return order, True
+    # Invoice the sale (dated by the order) and take its stock. A failure here never loses the
+    # import: the order stays, the error is logged, and the books' worker issues the missing
+    # invoice later (see ``tax.posting.issue_missing_invoices``).
+    try:
+        issue_invoice_for_order(order, notes=event_note,
+            issued_on=timezone.localdate(data.placed_at) if data.placed_at else None)
+    except Exception:  # noqa: BLE001 - see above
+        logger.exception("invoice for marketplace order %s could not be issued", order.pk)
+    if not soft:
+        try:
+            commit_order_inventory(order)
+        except Exception:
+            pass  # low stock is non-fatal; stock was already reserved
+    if data.state in {STATE_SHIPPED, STATE_COMPLETED}:
+        sync_order_state(channel, order, data)
+    return order, "created"
+
+
+def apply_marketplace_dates(order, data):
+    """Date the order, its payment and its invoice by the marketplace's own order time, not by
+    the day the file was imported: the sale belongs to the month the buyer ordered it (PPN,
+    PPh Final and the profit and loss all follow). Returns True when anything moved."""
+    from apps.accounting.ledger import redate_payment
+    from apps.tax.models import Invoice
+    if not data.placed_at:
+        return False
+    placed, paid = data.placed_at, data.paid_at or data.placed_at
+    day, moved = timezone.localdate(placed), False
+    if timezone.localdate(order.created_at) != day:
+        Order.objects.filter(pk=order.pk).update(created_at=placed)
+        order.created_at, moved = placed, True
+    for payment in order.payment_transactions.filter(kind="payment"):
+        if timezone.localdate(payment.updated_at) != timezone.localdate(paid):
+            PaymentTransaction.objects.filter(pk=payment.pk).update(created_at=paid, updated_at=paid)
+            payment.updated_at = paid
+            redate_payment(payment, timezone.localdate(paid))
+            moved = True
+    invoice = Invoice.objects.filter(order=order).first()
+    if invoice and invoice.issued_on != day:
+        Invoice.objects.filter(pk=invoice.pk).update(issued_on=day)
+        moved = True
+    if moved:
+        OrderStatusEvent.objects.create(order=order, status=order.status,
+            note=f"Tanggal disesuaikan dengan waktu pesanan di marketplace ({day:%d/%m/%Y})")
+    return moved
+
+
+def _record_dead_order(channel, data, batch):
+    """An order that reached us already cancelled or returned: kept so cancellations can be
+    counted per channel, with no stock, payment, invoice or ledger entry."""
+    store, label = channel.store, PLATFORMS[channel.platform].label
+    resolved = resolve_lines(channel, data.lines, soft=True)
+    with transaction.atomic():
+        order = Order.objects.create(store=store, channel=channel.platform,
+            external_order_id=data.external_id[:100], status=ORDER_STATUS[data.state],
+            marketplace_status=data.status_text[:60],
+            customer_name=(data.buyer_name or f"Pembeli {label}")[:120],
+            phone=data.phone[:30] or "-", shipping_address=data.address or "-",
+            subtotal=data.subtotal, discount=min(data.discount, data.subtotal),
+            shipping_cost=data.shipping_cost, total=data.total, payment_provider=channel.platform,
+            payment_method="marketplace", paid_to_store_account=True,
+            idempotency_key=f"ch{channel.id}-{data.external_id}"[:64])
+        OrderStatusEvent.objects.create(order=order, status=order.status,
+            note=_note(channel, data.state, data.status_text) + " · diimpor tanpa penjualan")
+        for line, product, variant in resolved:
+            OrderItem.objects.create(order=order, product=product, variant=variant,
+                name=(line.name or product.name)[:160], sku=line.sku,
+                variant_name=variant.name if variant else "", unit_price=line.unit_price, bundle_sku=line.bundle,
+                quantity=line.quantity, line_total=_line_total(line))
+        ChannelOrder.objects.create(channel=channel, order=order,
+            external_order_id=data.external_id, batch=batch)
+        if data.placed_at:
+            Order.objects.filter(pk=order.pk).update(created_at=data.placed_at)
+            order.created_at = data.placed_at
+    return order
+
+
+def _line_total(line):
+    return line.line_total if line.line_total is not None else line.unit_price * line.quantity
+
+
+def resolve_line(channel, line, *, soft=False):
+    """Match one marketplace line to the catalog: the channel's SKU map, a bundle, then the
+    master SKU. A SKU that matches nothing is queued for review, then refused (strict) or given
+    a placeholder product (historical mode). Returns ``[(OrderLine, product, variant)]``."""
+    product, variant, bundle = find_mapping(channel, line.sku)
+    if bundle:
+        try:
+            return expand_bundle(bundle, line)
+        except MappingError as error:
+            raise ChannelImportError(str(error)) from error
+    if product:
+        return [(line, product, variant)]
+    try:
+        found = _resolve_sku(channel.store, line.sku)
+    except ChannelImportError:
+        if not soft:
+            note_unmapped(channel, line)
+            raise
+        found = _resolve_sku_soft(channel.store, line)
+        note_unmapped(channel, line, placeholder=found[0])
+    return [(line, *found)]
+
+
+def resolve_lines(channel, lines, *, soft=False):
+    return [row for line in lines for row in resolve_line(channel, line, soft=soft)]
 
 
 def _resolve_sku_soft(store, line: "OrderLine"):
@@ -157,7 +286,8 @@ def _resolve_sku_soft(store, line: "OrderLine"):
 def _upsert_buyer(channel: "SalesChannel", data: MarketplaceOrder, order):
     """Create or update the ChannelBuyer record for this marketplace order."""
     raw = data.raw or {}
-    external_id = (raw.get("shopee_username") or raw.get("tokopedia_username")
+    external_id = (raw.get("buyer_username") or raw.get("shopee_username")
+                   or raw.get("tokopedia_username")
                    or data.phone or data.external_id)
     if not external_id or external_id == "-":
         return
@@ -192,7 +322,7 @@ def _upsert_buyer(channel: "SalesChannel", data: MarketplaceOrder, order):
         buyer.order_count += 1
         update_fields.append("order_count")
         from decimal import Decimal
-        buyer.total_spent = (buyer.total_spent or Decimal("0")) + order.total
+        buyer.total_spent = (buyer.total_spent or Decimal(0)) + order.total
         update_fields.append("total_spent")
         if update_fields:
             buyer.save(update_fields=update_fields + ["last_seen"])
@@ -295,10 +425,6 @@ def parse_orders_csv(upload):
         for order_id, head in grouped.items()]
 
 
-# Thread-local batch context so import_order can find the current batch without arg drilling.
-_current_batch: dict = {}
-
-
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
                   category: str = "regular"):
@@ -309,34 +435,40 @@ def import_orders(channel, orders, soft: bool = False,
         file_name=file_name[:255], is_soft=soft,
         category=category if category in {c for c, _ in ImportBatch.CAT_CHOICES} else "regular",
     )
-    _current_batch[channel.id] = batch
 
-    summary = {"created": 0, "duplicates": 0, "errors": [], "soft": soft,
+    summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],
+               "soft": soft,
                "batch_id": str(batch.id)}
-    total_amount = Decimal("0")
+    total_amount = Decimal(0)
 
-    try:
-        for data in orders:
-            try:
-                order, created = import_order(channel, data, soft=soft)
-            except ChannelImportError as error:
-                summary["errors"].append(f"{data.external_id}: {error}")
-                continue
-            if created:
-                summary["created"] += 1
-                total_amount += order.total
-            else:
-                summary["duplicates"] += 1
-    finally:
-        _current_batch.pop(channel.id, None)
+    for data in orders:
+        try:
+            order, outcome = import_order_outcome(channel, data, soft=soft, batch=batch)
+        except ChannelImportError as error:
+            summary["errors"].append(f"{data.external_id}: {error}")
+            continue
+        if outcome == "created" and data.state in REVERSING:
+            summary["cancelled"] += 1  # recorded, but not a sale
+        elif outcome == "created":
+            summary["created"] += 1
+            total_amount += order.total
+        elif outcome == "updated":
+            summary["updated"] += 1
+        else:
+            summary["duplicates"] += 1
+        if data.state in REVERSING and outcome == "updated":
+            summary["cancelled"] += 1
 
     # Update batch totals now that we know them
     batch.order_count = summary["created"]
     batch.duplicate_count = summary["duplicates"]
+    batch.updated_count = summary["updated"]
+    batch.cancelled_count = summary["cancelled"]
     batch.skipped_count = skipped
     batch.error_count = len(summary["errors"])
     batch.total_amount = total_amount
-    batch.save(update_fields=["order_count", "duplicate_count", "skipped_count",
+    batch.save(update_fields=["order_count", "duplicate_count", "updated_count", "cancelled_count",
+                               "skipped_count",
                                "error_count", "total_amount"])
 
     return summary

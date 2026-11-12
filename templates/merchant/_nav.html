@@ -1,0 +1,17 @@
+{% load icons %}
+<a href="{{ home_href }}" class="nav-home{% if home_active %} is-active{% endif %}">{% icon "home" %}<span>Beranda</span></a>
+{% for section in sections %}
+  {% if section.title %}<p class="nav-section">{{ section.title }}</p>{% else %}<div class="nav-divider"></div>{% endif %}
+  {% for group in section.groups %}
+  <details class="nav-group"{% if group.open %} open{% endif %}>
+    <summary>{% icon group.icon %}{{ group.label }}</summary>
+    <div class="nav-links">
+      {% for item in group.links %}
+      <a href="{{ item.href }}" class="nav-link{% if item.active %} is-active{% endif %}" data-group="{{ group.label }}"{% if item.active %} aria-current="page"{% endif %}>
+        <span>{{ item.label }}</span>{% if item.badge %}<b class="nav-badge">{{ item.badge }}</b>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+{% endfor %}

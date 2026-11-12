@@ -1,108 +1,76 @@
-{% extends "merchant/base.html" %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Akuntansi{% endblock %}
 {% block content %}
-
-<div class="mb-6">
-  <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI</p>
-  <h1 class="text-2xl font-bold text-gray-900">Kelola Keuangan</h1>
-  <p class="text-sm text-gray-500 mt-1">Kelola keuangan dan pembukuan toko</p>
-</div>
-
-{# KPI strip #}
-<div class="grid grid-cols-3 gap-4 mb-6">
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Total Akun</p>
-    <p class="text-2xl font-bold text-gray-900">{{ total_accounts }}</p>
-    <p class="text-xs text-gray-400 mt-1">dalam buku besar</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Biaya (30 hari)</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ recent_expenses|floatformat:"0g" }}</p>
-    <p class="text-xs text-gray-400 mt-1">biaya operasional</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Posting Jurnal (30 hari)</p>
-    <p class="text-2xl font-bold text-gray-900">{{ recent_journal_count }}</p>
-    <p class="text-xs text-gray-400 mt-1">entri jurnal</p>
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Ringkasan keuangan</h1>
+    <p>Posisi kas, piutang, utang, dan laba bulan ini dari buku besar. Semua angka bisa diklik sampai ke transaksinya.</p></div>
+  <div class="dp-actions">
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind=receive">{% icon "arrow-in" %} Terima uang</a>
+    <a class="btn" href="{% url 'merchant-bill-new' %}">{% icon "truck" %} Buat tagihan</a>
+    <a class="btn-primary" href="{% url 'merchant-invoice-new' %}">{% icon "plus" %} Buat invoice</a>
   </div>
 </div>
 
-{# Module cards grid #}
-<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-
-  <a href="{% url 'merchant-chart-of-accounts' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="flex items-start justify-between mb-3">
-      <span class="text-2xl">📊</span>
-      {% if total_accounts %}
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{{ total_accounts }} akun</span>
-      {% endif %}
-    </div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Chart of Accounts</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Daftar akun buku besar per kategori</p>
-    {% if account_counts %}
-    <div class="mt-3 flex flex-wrap gap-1">
-      {% if account_counts.asset %}<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{ account_counts.asset }} aset</span>{% endif %}
-      {% if account_counts.liability %}<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{ account_counts.liability }} liabilitas</span>{% endif %}
-      {% if account_counts.revenue %}<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{ account_counts.revenue }} pendapatan</span>{% endif %}
-      {% if account_counts.expense %}<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{ account_counts.expense }} beban</span>{% endif %}
-    </div>
-    {% endif %}
-  </a>
-
-  <a href="{% url 'merchant-finance' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">📒</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Jurnal & Buku Besar</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Semua posting jurnal debit-kredit</p>
-  </a>
-
-  <a href="{% url 'merchant-finance' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">📈</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Laba Rugi</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Laporan pendapatan dan beban</p>
-  </a>
-
-  <a href="{% url 'merchant-expenses' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">💳</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Biaya Operasional</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Gaji, sewa, iklan, dan biaya lain</p>
-  </a>
-
-  <a href="{% url 'merchant-payouts' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">💰</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Pencairan Dana</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Settlement payment gateway &amp; marketplace</p>
-  </a>
-
-  <a href="{% url 'merchant-tax' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">📄</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Pajak &amp; Invoice</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Invoice ke pelanggan dan laporan PPN</p>
-  </a>
-
-  <a href="{% url 'merchant-suppliers' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">🏭</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Supplier</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Daftar vendor dan pemasok</p>
-  </a>
-
-  <a href="{% url 'merchant-bills' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">🧾</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Tagihan Supplier (AP)</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Faktur dari supplier, bayar hutang</p>
-  </a>
-
-  <a href="{% url 'merchant-balance-sheet' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">⚖️</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Neraca</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Balance sheet — aset, liabilitas, ekuitas</p>
-  </a>
-
-  <a href="{% url 'merchant-trial-balance' %}" class="group bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-gray-300 transition-all" style="text-decoration:none">
-    <div class="mb-3"><span class="text-2xl">📋</span></div>
-    <h3 class="text-sm font-semibold text-gray-900 group-hover:text-gray-600 transition-colors mb-1">Neraca Saldo</h3>
-    <p class="text-xs text-gray-500 leading-relaxed">Trial balance — semua akun debit/kredit</p>
-  </a>
-
+<div class="tiles">
+  <a class="tile accent" href="{% url 'merchant-bank-accounts' %}"><small>Kas & bank</small><strong>{{ cash_total|rp }}</strong><span>{% if unmatched %}{{ unmatched }} mutasi perlu dicocokkan{% else %}Semua rekening{% endif %}</span></a>
+  <a class="tile" href="{% url 'merchant-receivables' %}"><small>Piutang pelanggan</small><strong>{{ ar.total|rp }}</strong><span>{% if ar.total != ar.current %}Ada yang lewat jatuh tempo{% else %}Belum ada yang terlambat{% endif %}</span></a>
+  <a class="tile" href="{% url 'merchant-payables' %}"><small>Utang supplier</small><strong>{{ ap.total|rp }}</strong><span>{% if bills_soon %}{{ bills_soon|length }} tagihan segera jatuh tempo{% else %}Tidak ada yang mendesak{% endif %}</span></a>
+  <a class="tile" href="{% url 'merchant-profit-loss' %}"><small>Laba bulan ini</small><strong>{{ pl.totals.net.amount|rp }}</strong><span>{% if pl.totals.net.change is not None %}<b class="{% if pl.totals.net.change >= 0 %}up{% else %}down{% endif %}">{% if pl.totals.net.change >= 0 %}▲{% else %}▼{% endif %} {{ pl.totals.net.change|abs }}%</b> dari bulan lalu{% else %}Pendapatan {{ pl.totals.revenue.amount|rp }}{% endif %}</span></a>
 </div>
 
+<div class="dp-grid">
+  <div class="dp-stack">
+    <section class="panel" style="margin:0">
+      <header><div><h2>Pendapatan dan beban</h2><p>6 bulan terakhir</p></div><div class="legend"><span><i style="background:var(--pd-primary)"></i>Pendapatan</span><span><i style="background:#b8c7de"></i>Beban</span></div></header>
+      <div class="scroll-x"><table class="tbl"><thead><tr><th>Bulan</th><th class="num">Pendapatan</th><th class="num">Beban</th><th class="num">Laba</th></tr></thead>
+        <tbody>{% for m in trend %}<tr><td>{{ m.month|date:"F Y" }}</td><td class="num">{{ m.revenue|rp }}</td><td class="num">{{ m.expense|rp }}</td><td class="num {% if m.profit < 0 %}neg{% else %}pos{% endif %}"><strong>{{ m.profit|rp }}</strong></td></tr>{% endfor %}</tbody></table></div>
+    </section>
+
+    <section class="panel" style="margin:0">
+      <header><h2>Menu akuntansi</h2></header>
+      <div class="dp-links">
+        <a href="{% url 'merchant-books-checks' %}"><span>Pemeriksaan pembukuan <small>· apakah semuanya cocok: buku, invoice, stok, bank</small></span><span>→</span></a>
+        <a href="{% url 'merchant-journal-list' %}"><span>Jurnal <small>· semua pencatatan buku besar</small></span><span>→</span></a>
+        <a href="{% url 'merchant-opening-balances' %}"><span>Saldo awal <small>· mulai pembukuan dari kas, piutang, stok, dan utang yang ada</small></span><span>→</span></a>
+        <a href="{% url 'merchant-chart-of-accounts' %}"><span>Bagan akun <small>· {{ total_accounts }} akun</small></span><span>→</span></a>
+        <a href="{% url 'merchant-assets' %}"><span>Aset tetap <small>· penyusutan bulanan</small></span><span>→</span></a>
+        <a href="{% url 'merchant-balance-sheet' %}"><span>Neraca <small>· aset, liabilitas, ekuitas</small></span><span>→</span></a>
+        <a href="{% url 'merchant-cash-flow' %}"><span>Arus kas <small>· masuk dan keluar</small></span><span>→</span></a>
+        <a href="{% url 'merchant-trial-balance' %}"><span>Neraca saldo <small>· debit dan kredit semua akun</small></span><span>→</span></a>
+        <a href="{% url 'merchant-tax' %}"><span>Pajak <small>· PPN dan PPh</small></span><span>→</span></a>
+      </div>
+    </section>
+  </div>
+
+  <aside class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Segera dibayar</h2><small>{{ bills_soon|length }} tagihan</small></header>
+      {% if bills_soon %}<div class="dp-links">{% for bill in bills_soon %}
+        <a href="{% url 'merchant-bill-detail' bill.id %}"><span>{{ bill.supplier.name }}<small style="display:block">{{ bill.due_date|date:"d M Y" }}</small></span><strong style="color:var(--pd-ink)">{{ bill.amount_due|rp }}</strong></a>{% endfor %}</div>
+      {% else %}<p class="dp-empty">Tidak ada tagihan yang jatuh tempo dalam 7 hari.</p>{% endif %}
+    </section>
+
+    <section class="dp-card">
+      <header><h2>Tutup buku</h2>{% if locked_through %}<span class="pill pill-paid">Ditutup</span>{% endif %}</header>
+      <div class="dp-card-body">
+        <p class="dp-help" style="margin:0 0 12px">{% if locked_through %}Pembukuan sampai <b>{{ locked_through|date:"d/m/Y" }}</b> sudah ditutup dan tidak bisa diubah.{% else %}Belum ada periode yang ditutup. Tutup periode yang sudah dilaporkan pajaknya agar angkanya tidak berubah.{% endif %}</p>
+        {% if can_lock %}
+        <form method="post" action="{% url 'merchant-ledger-lock' %}" style="display:grid;gap:8px">
+          {% csrf_token %}
+          <input type="date" name="locked_through" value="{{ locked_through|date:'Y-m-d' }}" aria-label="Tutup buku sampai tanggal" class="field" style="height:38px;padding:0 12px;border:1px solid var(--pd-line-strong);border-radius:8px;font:inherit;font-size:13.5px">
+          <button class="btn-primary btn-block" style="justify-content:center">Tutup sampai tanggal ini</button>
+        </form>
+        {% if locked_through %}<form method="post" action="{% url 'merchant-ledger-lock' %}" style="margin-top:8px">{% csrf_token %}<button class="btn btn-block" style="justify-content:center">Buka kembali</button></form>{% endif %}
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="dp-card">
+      <header><h2>Aktivitas 30 hari</h2></header>
+      <div class="dp-card-body"><div class="kv">
+        <div><span>Jurnal tercatat</span><span>{{ recent_journal_count }}</span></div>
+        <div><span>Biaya operasional</span><span>{{ recent_expenses|rp }}</span></div></div></div>
+    </section>
+  </aside>
+</div>
 {% endblock %}

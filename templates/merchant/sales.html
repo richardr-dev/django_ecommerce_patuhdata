@@ -2,7 +2,7 @@
 {% block title %}Penjualan{% endblock %}
 {% block content %}
 
-<div class="flex items-start justify-between mb-6">
+<div class="bb-hero mb-5 flex flex-wrap items-end justify-between gap-4">
   <div>
     <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">SALES</p>
     <h1 class="text-2xl font-bold text-gray-900 mb-1">Penjualan</h1>
@@ -48,7 +48,7 @@
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Pesanan</p>
@@ -56,7 +56,7 @@
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Rata-rata / Pesanan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Pelanggan Unik</p>
@@ -64,7 +64,7 @@
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Diskon</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:"0g" }}</p>
   </div>
 </div>
 
@@ -79,7 +79,7 @@
       {% for row in daily %}
       <div class="flex-1 bg-indigo-500 rounded-t hover:bg-indigo-700 transition-colors cursor-default"
            style="height:{{ row.pct }}%;min-height:2px"
-           title="{{ row.day|date:'d M' }}: Rp{{ row.revenue|floatformat:0 }} · {{ row.orders }} pesanan"></div>
+           title="{{ row.day|date:'d M' }}: Rp{{ row.revenue|floatformat:"0g" }} · {{ row.orders }} pesanan"></div>
       {% endfor %}
     </div>
     <div class="flex gap-px overflow-hidden">
@@ -105,7 +105,7 @@
           <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
             <div class="h-full bg-indigo-500 rounded-full" style="width:{{ row.pct }}%"></div>
           </div>
-          <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:0 }}</span>
+          <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
         </div>
       </div>
       {% endfor %}
@@ -128,7 +128,7 @@
       <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
         <div class="h-full bg-indigo-400 rounded-full" style="width:{{ row.pct }}%"></div>
       </div>
-      <span class="text-xs text-gray-700 w-24 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:0 }}</span>
+      <span class="text-xs text-gray-700 w-24 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
       <span class="text-xs text-gray-400 w-8 text-right flex-shrink-0">{{ row.orders }}</span>
     </div>
     {% endfor %}
@@ -159,7 +159,7 @@
         <tr class="hover:bg-gray-50">
           <td class="px-5 py-3 text-gray-800">{{ p.name }}</td>
           <td class="px-5 py-3 text-right text-gray-600">{{ p.units }}</td>
-          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ p.revenue|floatformat:0 }}</td>
+          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ p.revenue|floatformat:"0g" }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="3" class="px-5 py-8 text-center text-sm text-gray-400">Belum ada data produk.</td></tr>
@@ -189,7 +189,7 @@
           <td class="px-5 py-3 font-medium text-gray-800">{{ b.channel.get_platform_display }}</td>
           <td class="px-5 py-3 text-xs text-gray-500 truncate max-w-xs">{{ b.file_name|default:"—" }}</td>
           <td class="px-5 py-3 text-right text-gray-600">{{ b.order_count }}</td>
-          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_amount|floatformat:0 }}</td>
+          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_amount|floatformat:"0g" }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="4" class="px-5 py-8 text-center text-sm text-gray-400">Belum ada impor. <a class="text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-import' %}">Impor sekarang →</a></td></tr>
@@ -229,7 +229,7 @@
         </td>
         <td class="px-5 py-3 text-gray-600">{{ o.get_channel_display }}</td>
         <td class="px-5 py-3 text-xs text-gray-500">{{ o.created_at|date:"d M Y H:i" }}</td>
-        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ o.total|floatformat:0 }}</td>
+        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ o.total|floatformat:"0g" }}</td>
         <td class="px-5 py-3"><span class="badge {{ o.status }}">{{ o.get_status_display }}</span></td>
       </tr>
       {% empty %}

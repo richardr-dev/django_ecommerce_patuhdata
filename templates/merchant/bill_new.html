@@ -2,7 +2,7 @@
 {% block title %}Tagihan Baru{% endblock %}
 {% block content %}
 
-<div class="flex items-start justify-between mb-6">
+<div class="bb-hero mb-5 flex flex-wrap items-end justify-between gap-4">
   <div>
     <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — AP</p>
     <h1 class="text-2xl font-bold text-gray-900">Tagihan Supplier Baru</h1>
@@ -46,6 +46,14 @@
     </div>
 
     <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Kategori</label>
+      <select name="category"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+        {% for code, label in bill_categories %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
       <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Tagihan</label>
       <input type="date" name="bill_date" value="{{ today }}"
              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
@@ -73,6 +81,7 @@
     <table class="w-full text-sm" id="items-table">
       <thead class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
         <tr>
+          <th class="pb-2 text-left font-medium w-32">SKU (stok)</th>
           <th class="pb-2 text-left font-medium">Deskripsi</th>
           <th class="pb-2 px-2 text-right font-medium w-20">Qty</th>
           <th class="pb-2 px-2 text-right font-medium w-32">Harga Satuan</th>
@@ -82,6 +91,10 @@
       </thead>
       <tbody id="items-body">
         <tr class="item-row border-b border-gray-50">
+          <td class="py-2 pr-2">
+            <input type="text" name="sku[]" maxlength="60" placeholder="Opsional"
+                   class="sku-input w-full px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
+          </td>
           <td class="py-2 pr-2">
             <input type="text" name="description[]" placeholder="Nama barang / jasa"
                    class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
@@ -170,6 +183,7 @@ function recalcTotals() {
 
 function addRow() {
   const tmpl = document.querySelector('.item-row').cloneNode(true);
+  tmpl.querySelector('.sku-input').value = '';
   tmpl.querySelector('.qty-input').value = '1';
   tmpl.querySelector('.price-input').value = '';
   tmpl.querySelector('.line-total-display').textContent = 'Rp0';

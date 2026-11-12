@@ -6,7 +6,7 @@ from apps.shops import segment_views
 from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
-from . import delivery_views, gift_card_views, manual_views, setup_views, views
+from . import delivery_views, gift_card_views, manual_views, search, setup_views, views
 from .forms import CustomerLoginForm, MerchantLoginForm
 
 # Per IP and per submitted username/email; see config/ratelimit.py.
@@ -107,6 +107,7 @@ urlpatterns = [
         name="merchant-customer-tags"),
     path("merchant/broadcasts/", segment_views.merchant_broadcasts, name="merchant-broadcasts"),
     path("unsubscribe/<str:token>/", segment_views.customer_unsubscribe, name="customer-unsubscribe"),
+    path("merchant/search/", search.merchant_search, name="merchant-search"),
     path("merchant/customers/<uuid:customer_id>/", views.merchant_customer_detail, name="merchant-customer-detail"),
     path("merchant/integrations/", views.merchant_integrations, name="merchant-integrations"),
     path("merchant/finance/", views.merchant_finance, name="merchant-finance"),

@@ -35,6 +35,13 @@ class Payout(models.Model):
     gross = models.DecimalField(max_digits=14, decimal_places=2)
     fees = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     net = models.DecimalField(max_digits=14, decimal_places=2)
+    # The fees by ledger account ({"6110": "1500.00", …}) when the marketplace's income report
+    # itemised them; empty for a plain payout file, whose fees all go to the general account.
+    fee_breakdown = models.JSONField(default=dict, blank=True)
+    # The money account the payout landed in (the main cash account when empty), so it can be
+    # matched to that account's bank statement.
+    bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -90,6 +97,9 @@ class Expense(models.Model):
     input_vat = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # PPN masukan
     receipt = models.FileField(upload_to=ExpenseReceiptPath(), storage=private_storage_callable,
         blank=True)
+    # The money account it was paid from (the main cash account when empty).
+    bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -107,11 +117,23 @@ class Expense(models.Model):
 
 
 class JournalEntry(models.Model):
-    """A balanced double-entry posting. Each payment, refund or payout posts at most once, so
-    the worker can scan for unposted ones on every cycle without double counting."""
+    """A balanced double-entry posting.
+
+    Every entry names the business document that caused it as ``source_type`` + ``source_id``
+    (e.g. ``invoice`` + the invoice id). A document has at most one live entry, so posting is
+    idempotent and any module (invoicing, purchasing, POS...) can post without the ledger
+    importing its models. Entries are never edited: a correction supersedes the entry with a
+    reversing one. The payment/refund/payout/expense links predate ``source`` and are kept for
+    the pages that follow them."""
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="journal_entries")
     date = models.DateField()
     memo = models.CharField(max_length=300)
+    source_type = models.CharField(max_length=40, blank=True)
+    source_id = models.CharField(max_length=64, blank=True)
+    # True once a reversing entry cancels this one; the document may then be posted again.
+    superseded = models.BooleanField(default=False)
+    reverses = models.OneToOneField("self", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="reversal")
     payment = models.OneToOneField(PaymentTransaction, on_delete=models.PROTECT, null=True,
         blank=True, related_name="journal_entry")
     refund = models.OneToOneField(Refund, on_delete=models.PROTECT, null=True, blank=True,
@@ -120,11 +142,27 @@ class JournalEntry(models.Model):
         related_name="journal_entry")
     expense = models.OneToOneField(Expense, on_delete=models.PROTECT, null=True, blank=True,
         related_name="journal_entry")
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-date", "-id"]
         verbose_name_plural = "journal entries"
+        constraints = [models.UniqueConstraint(fields=["store", "source_type", "source_id"],
+            condition=models.Q(superseded=False) & ~models.Q(source_type=""),
+            name="unique_live_entry_per_source")]
+        indexes = [models.Index(fields=["store", "date"], name="journal_store_date")]
+
+
+class LedgerLock(models.Model):
+    """Tutup buku: no entry may be posted, reversed or removed on or before this date, so a
+    period already reported to the tax office cannot change afterwards."""
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="ledger_lock")
+    locked_through = models.DateField()
+    locked_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class JournalLine(models.Model):
@@ -163,6 +201,10 @@ class Supplier(models.Model):
         return self.name
 
 
+# What a supplier bill buys: stock for resale, or one of the operating expense accounts.
+BILL_CATEGORIES = [("1400", "Pembelian barang dagang (persediaan)")] + EXPENSE_CATEGORIES
+
+
 class Bill(models.Model):
     """A supplier invoice (AP invoice). Tracks money owed TO suppliers."""
     STATUS_DRAFT   = "draft"
@@ -185,6 +227,7 @@ class Bill(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="bills")
     number = models.CharField(max_length=40, blank=True, help_text="Nomor faktur dari supplier")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    category = models.CharField(max_length=10, choices=BILL_CATEGORIES, default="1400")
     bill_date = models.DateField()
     due_date = models.DateField(null=True, blank=True)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -203,7 +246,7 @@ class Bill(models.Model):
     @property
     def amount_paid(self):
         from decimal import Decimal
-        return sum((p.amount for p in self.payments.all()), Decimal("0"))
+        return sum((p.amount for p in self.payments.all()), Decimal(0))
 
     @property
     def amount_due(self):
@@ -217,6 +260,12 @@ class BillItem(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+    # Goods bought: the product (and variant) this line puts on the shelf once received.
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
+    received_quantity = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["id"]
@@ -238,9 +287,159 @@ class BillPayment(models.Model):
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default="transfer")
     reference = models.CharField(max_length=120, blank=True)
     note = models.CharField(max_length=200, blank=True)
+    bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
     recorded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["paid_on", "id"]
         constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="bill_payment_positive")]
+
+
+# ---------------------------------------------------------------------------
+# Kas & bank: accounts, money in/out, bank statements and reconciliation
+# ---------------------------------------------------------------------------
+
+class BankAccount(models.Model):
+    """A place money sits: a bank account, petty cash, or an e-wallet. Each has its own ledger
+    account (1100 for the first, then 1101, 1102...), so balances and reconciliation are per
+    account while reports still add them up as cash."""
+    KINDS = [("bank", "Rekening bank"), ("cash", "Kas tunai"), ("ewallet", "E-wallet")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="bank_accounts")
+    account = models.OneToOneField(Account, on_delete=models.PROTECT, related_name="bank_account")
+    name = models.CharField(max_length=120)
+    kind = models.CharField(max_length=10, choices=KINDS, default="bank")
+    bank_name = models.CharField(max_length=60, blank=True)
+    account_number = models.CharField(max_length=40, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["account__code"]
+
+    def __str__(self):
+        return self.name
+
+
+class CashTransaction(models.Model):
+    """Terima uang, kirim uang, or a transfer between the store's own accounts: money that moves
+    without an invoice or bill (owner capital, bank interest, admin fees, a cash purchase)."""
+    RECEIVE, SPEND, TRANSFER = "receive", "spend", "transfer"
+    KINDS = [(RECEIVE, "Terima uang"), (SPEND, "Kirim uang"), (TRANSFER, "Transfer antar rekening")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="cash_transactions")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT, related_name="+")
+    to_bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
+    date = models.DateField()
+    contact = models.CharField(max_length=160, blank=True)
+    reference = models.CharField(max_length=120, blank=True)
+    description = models.CharField(max_length=300, blank=True)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # PPN on the lines
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    voided = models.BooleanField(default=False)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+        constraints = [models.CheckConstraint(condition=models.Q(total__gt=0),
+            name="cash_transaction_positive")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.total}"
+
+
+class CashTransactionLine(models.Model):
+    transaction = models.ForeignKey(CashTransaction, on_delete=models.CASCADE, related_name="lines")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="+")
+    description = models.CharField(max_length=200, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class BankStatementLine(models.Model):
+    """One line of a bank statement (mutasi rekening) imported from the bank's CSV. Matching it
+    to the ledger line it stands for is what reconciles the account."""
+    UNMATCHED, MATCHED, IGNORED = "unmatched", "matched", "ignored"
+    STATUSES = [(UNMATCHED, "Belum dicocokkan"), (MATCHED, "Cocok"), (IGNORED, "Diabaikan")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="+")
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE,
+        related_name="statement_lines")
+    date = models.DateField()
+    description = models.CharField(max_length=300)
+    reference = models.CharField(max_length=120, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)  # + money in, − money out
+    balance = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
+    import_key = models.CharField(max_length=64)  # the same mutation is imported only once
+    status = models.CharField(max_length=10, choices=STATUSES, default=UNMATCHED)
+    matched_line = models.OneToOneField(JournalLine, on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="statement_line")
+    matched_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    matched_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "id"]
+        constraints = [models.UniqueConstraint(fields=["bank_account", "import_key"],
+            name="unique_statement_line")]
+
+
+# ---------------------------------------------------------------------------
+# Aset tetap: fixed assets and their monthly straight-line depreciation
+# ---------------------------------------------------------------------------
+
+# Kelompok harta berwujud bukan bangunan (PMK 72/2023), with their useful life in years.
+ASSET_GROUPS = [
+    ("1", "Kelompok 1 · 4 tahun (laptop, HP, perabot ringan)", 4),
+    ("2", "Kelompok 2 · 8 tahun (kendaraan, mesin ringan, AC)", 8),
+    ("3", "Kelompok 3 · 16 tahun (mesin produksi berat)", 16),
+    ("4", "Kelompok 4 · 20 tahun (alat berat)", 20),
+    ("b", "Bangunan permanen · 20 tahun", 20),
+    ("x", "Lainnya (masa manfaat sendiri)", 0),
+]
+
+
+class FixedAsset(models.Model):
+    ACTIVE, DISPOSED = "active", "disposed"
+    STATUSES = [(ACTIVE, "Aktif"), (DISPOSED, "Dilepas")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="fixed_assets")
+    name = models.CharField(max_length=160)
+    number = models.CharField(max_length=40, blank=True)
+    group = models.CharField(max_length=2, choices=[(c, label) for c, label, _ in ASSET_GROUPS],
+        default="1")
+    acquired_on = models.DateField()
+    cost = models.DecimalField(max_digits=14, decimal_places=2)
+    residual_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    useful_life_months = models.PositiveIntegerField()
+    # Where the purchase was paid from (a cash/bank account, utang usaha, or modal pemilik).
+    paid_from = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, choices=STATUSES, default=ACTIVE)
+    disposed_on = models.DateField(null=True, blank=True)
+    disposal_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    disposal_to = models.ForeignKey(Account, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-acquired_on", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(cost__gt=0), name="asset_cost_positive"),
+            models.CheckConstraint(condition=models.Q(residual_value__gte=0)
+                & models.Q(residual_value__lt=models.F("cost")), name="asset_residual_below_cost"),
+            models.CheckConstraint(condition=models.Q(useful_life_months__gt=0),
+                name="asset_life_positive"),
+        ]
+
+    def __str__(self):
+        return self.name

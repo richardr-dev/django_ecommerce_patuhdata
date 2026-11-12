@@ -1,0 +1,43 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Laba Rugi{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Laporan keuangan</span><h1>Laba Rugi</h1><p>Pendapatan dikurangi harga pokok dan beban, langsung dari buku besar. Klik nama akun untuk melihat transaksinya.</p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a></div>
+</div>
+{% include "merchant/_period_bar.html" %}
+<div class="tiles">
+  <div class="tile"><small>Pendapatan</small><strong>{{ report.totals.revenue.amount|rp }}</strong></div>
+  <div class="tile"><small>Laba kotor</small><strong>{{ report.totals.gross.amount|rp }}</strong><span>{% if report.margins.gross is not None %}Margin {{ report.margins.gross }}%{% endif %}</span></div>
+  <div class="tile accent"><small>Laba bersih</small><strong>{{ report.totals.net.amount|rp }}</strong><span>{% if report.totals.net.change is not None %}<b class="{% if report.totals.net.change >= 0 %}up{% else %}down{% endif %}">{% if report.totals.net.change >= 0 %}▲{% else %}▼{% endif %} {{ report.totals.net.change|abs }}%</b> dari periode sebelumnya{% elif report.margins.net is not None %}Margin {{ report.margins.net }}%{% endif %}</span></div>
+</div>
+<section class="panel">
+  <div class="stmt-title"><strong>{{ merchant_store.name }}</strong><span>Laporan Laba Rugi · {{ label }}</span></div>
+  <div class="scroll-x"><table class="stmt">
+    <thead><tr><th></th><th>{{ start|date:"d/m/y" }} – {{ end|date:"d/m/y" }}</th><th>{{ report.previous_start|date:"d/m/y" }} – {{ report.previous_end|date:"d/m/y" }}</th></tr></thead>
+    <tbody>
+    <tr class="section"><td colspan="3">Pendapatan</td></tr>
+    {% for r in report.sections.revenue %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{{ r.name }}</a></td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="total"><td>Total pendapatan</td><td class="num">{{ report.totals.revenue.amount|rp }}</td><td class="num">{{ report.totals.revenue.previous|rp }}</td></tr>
+    <tr class="section"><td colspan="3">Harga pokok penjualan</td></tr>
+    {% for r in report.sections.cogs %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{{ r.name }}</a></td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="key"><td>Laba kotor</td><td class="num">{{ report.totals.gross.amount|rp }}</td><td class="num">{{ report.totals.gross.previous|rp }}</td></tr>
+    <tr class="section"><td colspan="3">Beban operasional</td></tr>
+    {% for r in report.sections.operating %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{{ r.name }}</a></td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% empty %}<tr class="line"><td class="muted" colspan="3">Belum ada beban tercatat.</td></tr>{% endfor %}
+    <tr class="total"><td>Total beban operasional</td><td class="num">{{ report.totals.operating.amount|rp }}</td><td class="num">{{ report.totals.operating.previous|rp }}</td></tr>
+    <tr class="key"><td>Laba operasional</td><td class="num">{{ report.totals.operating_profit.amount|rp }}</td><td class="num">{{ report.totals.operating_profit.previous|rp }}</td></tr>
+    {% if report.sections.other_income or report.sections.other_expense %}
+    <tr class="section"><td colspan="3">Pendapatan & beban lain</td></tr>
+    {% for r in report.sections.other_income %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}">{{ r.name }}</a></td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+    {% for r in report.sections.other_expense %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}">{{ r.name }}</a></td><td class="num">−{{ r.amount|rp }}</td><td class="num">−{{ r.previous|rp }}</td></tr>{% endfor %}
+    {% endif %}
+    <tr class="bottom {% if report.totals.net.amount < 0 %}loss{% endif %}"><td>Laba bersih</td><td class="num">{{ report.totals.net.amount|rp }}</td><td class="num">{{ report.totals.net.previous|rp }}</td></tr>
+    </tbody>
+  </table></div>
+</section>
+<section class="panel no-print">
+  <header><div><h2>6 bulan terakhir</h2></div><div class="legend"><span><i style="background:var(--pd-primary)"></i>Pendapatan</span><span><i style="background:#b8c7de"></i>Beban</span></div></header>
+  <div class="bars">{% for m in trend %}<div class="col"><div class="pair"><span class="b rev" style="height:{{ m.revenue_pct }}%" title="Pendapatan {{ m.revenue|rp }}"></span><span class="b exp" style="height:{{ m.expense_pct }}%" title="Beban {{ m.expense|rp }}"></span></div></div>{% endfor %}</div>
+  <div class="bars-x">{% for m in trend %}<div>{{ m.month|date:"M y" }}<b class="{% if m.profit < 0 %}neg{% endif %}">{{ m.profit|rp }}</b></div>{% endfor %}</div>
+</section>
+{% endblock %}

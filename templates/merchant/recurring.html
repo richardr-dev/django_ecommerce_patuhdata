@@ -1,0 +1,11 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Invoice Berulang{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Invoice berulang</h1><p>Sewa, langganan, atau pasokan rutin: invoice diterbitkan otomatis pada tanggal jadwal oleh worker harian (<code>manage.py run_recurring</code>). Anda juga bisa menerbitkannya sekarang.</p></div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-recurring-new' %}">{% icon "plus" %} Jadwal baru</a></div>{% endif %}</div>
+<section class="panel">{% if rows %}<div class="scroll-x"><table class="tbl"><thead><tr><th>Jadwal</th><th>Pelanggan</th><th>Interval</th><th>Berikutnya</th><th class="num">Per invoice</th><th class="num">Terbit</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr class="{% if not r.is_active %}void{% endif %}"><td><a class="rowlink" href="{% url 'merchant-recurring-edit' r.id %}">{{ r.name }}</a>{% if r.last_error %}<small style="color:#b42318">⚠ {{ r.last_error }}</small>{% endif %}</td><td>{{ r.buyer_name }}</td><td>{{ r.get_interval_display }}</td>
+<td>{% if r.is_active %}{{ r.next_run|date:"d M Y" }}{% if r.due %} <span class="pill pill-partial">Jatuh tempo</span>{% endif %}{% else %}<span class="pill pill-void">Berhenti</span>{% endif %}</td><td class="num">{{ r.per_run|rp }}</td><td class="num">{{ r.runs }}×</td>
+<td class="num">{% if can_edit %}<form method="post" style="display:inline-flex;gap:10px">{% csrf_token %}<input type="hidden" name="id" value="{{ r.id }}">{% if r.due %}<button name="action" value="run" class="link-btn" style="color:var(--pd-primary);font-weight:600">Terbitkan</button>{% endif %}<button name="action" value="toggle" class="link-btn">{% if r.is_active %}Jeda{% else %}Aktifkan{% endif %}</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="empty-box"><strong>Belum ada invoice berulang</strong>Buat jadwal untuk tagihan yang sama setiap minggu, bulan, atau tahun.</div>{% endif %}</section>
+{% endblock %}

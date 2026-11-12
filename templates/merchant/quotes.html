@@ -1,0 +1,14 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penawaran{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Penawaran</h1><p>Harga yang ditawarkan sebelum penjualan. Penawaran tidak masuk pembukuan sampai dijadikan invoice.</p></div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-quote-new' %}">{% icon "plus" %} Buat penawaran</a></div>{% endif %}</div>
+<div class="tiles"><div class="tile accent"><small>Penawaran berjalan</small><strong>{{ open_total|rp }}</strong><span>Draft, terkirim, dan disetujui</span></div></div>
+<nav class="seg" style="margin-bottom:16px"><a href="?" class="{% if not status %}on{% endif %}">Semua</a>{% for code, label in statuses %}<a href="?status={{ code }}" class="{% if status == code %}on{% endif %}">{{ label }}</a>{% endfor %}</nav>
+<section class="panel">{% if page.object_list %}<div class="scroll-x"><table class="tbl"><thead><tr><th>Penawaran</th><th>Tanggal</th><th>Pelanggan</th><th>Berlaku s/d</th><th class="num">Total</th><th>Status</th></tr></thead>
+<tbody>{% for q in page %}<tr><td><a class="rowlink" href="{% url 'merchant-quote-detail' q.id %}">{{ q.number }}</a></td><td>{{ q.issued_on|date:"d M Y" }}</td><td>{{ q.buyer_name }}</td>
+<td>{{ q.valid_until|date:"d M Y"|default:"—" }}{% if q.expired %} <span class="pill pill-overdue">Kedaluwarsa</span>{% endif %}</td><td class="num"><strong>{{ q.total|rp }}</strong></td>
+<td><span class="pill {% if q.status == 'accepted' or q.status == 'invoiced' %}pill-paid{% elif q.status == 'declined' %}pill-overdue{% elif q.status == 'sent' %}pill-issued{% else %}pill-draft{% endif %}">{{ q.get_status_display }}</span></td></tr>{% endfor %}</tbody></table></div>
+<footer><span>{{ page.paginator.count }} penawaran</span><span class="pager">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">‹</a>{% endif %}<span>{{ page.number }}/{{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?page={{ page.next_page_number }}">›</a>{% endif %}</span></footer>
+{% else %}<div class="empty-box"><strong>Belum ada penawaran</strong>Buat penawaran untuk calon pelanggan, lalu jadikan invoice dengan satu klik saat disetujui.</div>{% endif %}</section>
+{% endblock %}

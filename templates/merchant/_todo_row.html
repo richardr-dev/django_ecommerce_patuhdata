@@ -1,0 +1,5 @@
+{% load icons %}<a href="{{ href }}" class="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition hover:bg-blue-50/70 {% if tone == 'bad' or tone == 'danger' %}bg-rose-50/60{% elif tone == 'warn' %}bg-amber-50/60{% endif %}">
+  <span class="bb-bubble {% if tone == 'bad' or tone == 'danger' %}bad{% elif tone == 'warn' %}warn{% endif %} !h-9 !w-9 [&>svg]:h-4 [&>svg]:w-4">{% icon icon %}</span>
+  <span class="min-w-0 flex-1 text-slate-700"><b class="text-slate-900">{{ count }}</b> {{ text }}{% if extra %} · Rp{{ extra|floatformat:"0g" }}{% endif %}</span>
+  <em class="text-xs font-bold not-italic text-blue-700">{{ action }}</em>
+</a>

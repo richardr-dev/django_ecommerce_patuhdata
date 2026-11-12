@@ -1,138 +1,26 @@
-{% extends "merchant/base.html" %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Neraca{% endblock %}
 {% block content %}
-
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">AKUNTANSI — LAPORAN</p>
-    <h1 class="text-2xl font-bold text-gray-900">Neraca (Balance Sheet)</h1>
-    <p class="text-sm text-gray-500 mt-1">Per {{ as_of|date:"d M Y" }}</p>
-  </div>
-  <div class="flex items-center gap-3">
-    <form method="get" class="flex items-center gap-2">
-      <label class="text-xs text-gray-500">Per tanggal</label>
-      <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"
-             class="px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900">
-      <button type="submit" class="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-xs font-semibold hover:bg-black">Tampilkan</button>
-    </form>
-    <a href="{% url 'merchant-accounting' %}" class="text-sm text-gray-400 hover:text-gray-600">← Akuntansi</a>
-  </div>
+<div class="pg-head">
+  <div><span class="pg-kicker">Laporan keuangan</span><h1>Neraca</h1>
+    <p>Posisi keuangan per tanggal tertentu: apa yang dimiliki, apa yang terutang, dan modal pemilik. Klik nama akun untuk melihat transaksinya.</p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button>
+    <a class="btn" href="?as_of={{ as_of|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a></div>
 </div>
-
-{# Balance check banner #}
-{% if balanced %}
-<div class="mb-5 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2">
-  <span class="font-bold">✓</span> Neraca seimbang: Aset = Liabilitas + Ekuitas
-</div>
+<form class="toolbar" method="get">
+  <label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label>
+  <button class="btn">Terapkan</button>
+</form>
+{% if sheet.balanced %}
+<div class="notice ok">{% icon "check-circle" %}<span>Neraca seimbang: total aset sama dengan liabilitas ditambah ekuitas.</span></div>
 {% else %}
-<div class="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
-  <span class="font-bold">!</span> Neraca tidak seimbang — periksa posting jurnal.
-  Aset: Rp{{ total_assets|floatformat:"0g" }} vs L+E: Rp{{ total_l_e|floatformat:"0g" }}
-</div>
+<div class="notice">{% icon "alert" %}<span>Neraca tidak seimbang, selisih {{ sheet.difference|rp }}. Periksa Neraca saldo dan jurnal manual.</span></div>
 {% endif %}
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-  {# Left: Assets #}
-  <div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 bg-gray-900 text-white">
-        <h2 class="text-sm font-semibold uppercase tracking-wide">Aset</h2>
-      </div>
-      <table class="w-full text-sm">
-        <tbody class="divide-y divide-gray-50">
-          {% for a in assets %}
-          <tr class="hover:bg-gray-50">
-            <td class="px-5 py-2.5">
-              <span class="font-mono text-xs text-gray-400 mr-2">{{ a.code }}</span>
-              <span class="text-gray-700">{{ a.name }}</span>
-            </td>
-            <td class="px-5 py-2.5 text-right font-semibold text-gray-800">Rp{{ a.balance|floatformat:"0g" }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="2" class="px-5 py-4 text-center text-gray-400 text-xs">Tidak ada akun aset dengan saldo.</td></tr>
-          {% endfor %}
-        </tbody>
-        <tfoot class="border-t-2 border-gray-900 bg-gray-50">
-          <tr>
-            <td class="px-5 py-3 font-bold text-gray-900 uppercase text-xs tracking-wide">Total Aset</td>
-            <td class="px-5 py-3 text-right font-bold text-gray-900 text-base">Rp{{ total_assets|floatformat:"0g" }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  </div>
-
-  {# Right: Liabilities + Equity #}
-  <div class="space-y-4">
-
-    {# Liabilities #}
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 bg-gray-700 text-white">
-        <h2 class="text-sm font-semibold uppercase tracking-wide">Liabilitas</h2>
-      </div>
-      <table class="w-full text-sm">
-        <tbody class="divide-y divide-gray-50">
-          {% for a in liabilities %}
-          <tr class="hover:bg-gray-50">
-            <td class="px-5 py-2.5">
-              <span class="font-mono text-xs text-gray-400 mr-2">{{ a.code }}</span>
-              <span class="text-gray-700">{{ a.name }}</span>
-            </td>
-            <td class="px-5 py-2.5 text-right font-semibold text-gray-800">Rp{{ a.balance|floatformat:"0g" }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="2" class="px-5 py-4 text-center text-gray-400 text-xs">Tidak ada liabilitas dengan saldo.</td></tr>
-          {% endfor %}
-        </tbody>
-        <tfoot class="border-t border-gray-200 bg-gray-50">
-          <tr>
-            <td class="px-5 py-2 font-semibold text-gray-700 text-xs">Total Liabilitas</td>
-            <td class="px-5 py-2 text-right font-semibold text-gray-700">Rp{{ total_liabilities|floatformat:"0g" }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-
-    {# Equity #}
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 bg-gray-500 text-white">
-        <h2 class="text-sm font-semibold uppercase tracking-wide">Ekuitas</h2>
-      </div>
-      <table class="w-full text-sm">
-        <tbody class="divide-y divide-gray-50">
-          {% for a in equity_accs %}
-          <tr class="hover:bg-gray-50">
-            <td class="px-5 py-2.5">
-              <span class="font-mono text-xs text-gray-400 mr-2">{{ a.code }}</span>
-              <span class="text-gray-700">{{ a.name }}</span>
-            </td>
-            <td class="px-5 py-2.5 text-right font-semibold text-gray-800">Rp{{ a.balance|floatformat:"0g" }}</td>
-          </tr>
-          {% endfor %}
-          <tr class="bg-gray-50">
-            <td class="px-5 py-2.5 text-gray-600 italic">Laba ditahan (Retained Earnings)</td>
-            <td class="px-5 py-2.5 text-right font-semibold {% if retained_earnings >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
-              Rp{{ retained_earnings|floatformat:"0g" }}
-            </td>
-          </tr>
-        </tbody>
-        <tfoot class="border-t border-gray-200 bg-gray-50">
-          <tr>
-            <td class="px-5 py-2 font-semibold text-gray-700 text-xs">Total Ekuitas</td>
-            <td class="px-5 py-2 text-right font-semibold text-gray-700">Rp{{ total_equity|floatformat:"0g" }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-
-    {# Grand total L+E #}
-    <div class="bg-gray-900 rounded-2xl px-5 py-4 flex justify-between items-center">
-      <span class="text-white font-bold uppercase text-xs tracking-wide">Total Liabilitas + Ekuitas</span>
-      <span class="text-white font-bold text-lg">Rp{{ total_l_e|floatformat:"0g" }}</span>
-    </div>
-
-  </div>
+<div class="tiles">
+  <div class="tile"><small>Total aset</small><strong>{{ sheet.totals.assets.amount|rp }}</strong></div>
+  <div class="tile"><small>Total liabilitas</small><strong>{{ sheet.totals.liabilities.amount|rp }}</strong></div>
+  <div class="tile accent"><small>Total ekuitas</small><strong>{{ sheet.totals.equity.amount|rp }}</strong></div>
 </div>
-
+{% include "merchant/_sheet_part.html" with title="Aset" first="current_assets" first_label="Aset lancar" second="fixed_assets" second_label="Aset tetap (nilai buku)" grand_label="Total aset" grand=sheet.totals.assets %}
+{% include "merchant/_sheet_part.html" with title="Liabilitas dan ekuitas" first="current_liabilities" first_label="Liabilitas jangka pendek" second="long_liabilities" second_label="Liabilitas jangka panjang" third="equity" third_label="Ekuitas" grand_label="Total liabilitas dan ekuitas" grand=sheet.totals.liabilities_equity %}
 {% endblock %}

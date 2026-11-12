@@ -1,0 +1,31 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Arus Kas{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Laporan keuangan</span><h1>Arus Kas</h1><p>Uang yang benar-benar masuk dan keluar dari semua rekening kas & bank, dikelompokkan menurut tujuannya. Transfer antar rekening sendiri tidak dihitung.</p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button></div>
+</div>
+{% include "merchant/_period_bar.html" %}
+<div class="tiles">
+  <div class="tile"><small>Kas awal</small><strong>{{ flow.opening|rp }}</strong></div>
+  <div class="tile"><small>Perubahan kas</small><strong class="{% if flow.net >= 0 %}up{% else %}down{% endif %}">{{ flow.net|signed_rp }}</strong></div>
+  <div class="tile accent"><small>Kas akhir</small><strong>{{ flow.closing|rp }}</strong></div>
+</div>
+{% if flow.difference %}<div class="notice">{% icon "alert" %}<span>Selisih {{ flow.difference|rp }} antara kas akhir dan rincian di bawah. Biasanya ada jurnal kas tanpa lawan akun; periksa di Jurnal.</span></div>{% endif %}
+<section class="panel">
+  <div class="stmt-title"><strong>{{ merchant_store.name }}</strong><span>Laporan Arus Kas · {{ label }}</span></div>
+  <div class="scroll-x"><table class="stmt">
+    <thead><tr><th></th><th>Jumlah</th></tr></thead>
+    <tbody>
+    <tr class="key"><td>Kas di awal periode</td><td class="num">{{ flow.opening|rp }}</td></tr>
+    {% for s in flow.sections %}
+    <tr class="section"><td colspan="2">{{ s.label }}</td></tr>
+    {% for r in s.rows %}<tr class="line"><td><a href="{% url 'merchant-account-ledger' r.code %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">{{ r.name }}</a></td><td class="num {% if r.amount < 0 %}down{% endif %}">{{ r.amount|signed_rp }}</td></tr>
+    {% empty %}<tr class="line"><td class="muted" colspan="2">Tidak ada.</td></tr>{% endfor %}
+    <tr class="total"><td>Arus kas bersih {{ s.label|lower }}</td><td class="num">{{ s.net|signed_rp }}</td></tr>
+    {% endfor %}
+    <tr class="bottom"><td>Kas di akhir periode</td><td class="num">{{ flow.closing|rp }}</td></tr>
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

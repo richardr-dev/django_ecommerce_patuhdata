@@ -1,0 +1,182 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ bank.name }} · Rekonsiliasi{% endblock %}
+{% block content %}
+
+<nav class="dp-crumb" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-bank-accounts' %}">Kas & Bank</a> › <span>{{ bank.name }}</span>
+</nav>
+
+<div class="dp-head">
+  <div>
+    <h1 class="dp-title">{{ bank.name }}{% if not bank.is_active %} <span class="pill pill-void">Nonaktif</span>{% endif %}</h1>
+    <p class="dp-sub">{% if bank.bank_name %}{{ bank.bank_name }}{% if bank.account_number %} · {{ bank.account_number }}{% endif %} · {% endif %}Akun <b>{{ bank.account.code }} {{ bank.account.name }}</b></p>
+  </div>
+  <div class="dp-actions">
+    {% if can_edit %}
+    <button type="button" class="btn-primary" data-open="import-dialog">{% icon "upload" %} Impor mutasi</button>
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind=spend&bank={{ bank.id }}">{% icon "arrow-out" %} Kirim uang</a>
+    <a class="btn" href="{% url 'merchant-cash-new' %}?kind=receive&bank={{ bank.id }}">{% icon "arrow-in" %} Terima uang</a>
+    {% endif %}
+    <details class="dp-more">
+      <summary class="btn" aria-label="Tindakan lain">Lainnya ▾</summary>
+      <div class="menu-panel">
+        <a href="{% url 'merchant-account-ledger' bank.account.code %}">{% icon "book" %}<span>Buku besar akun</span></a>
+        <a href="{% url 'merchant-cash-new' %}?kind=transfer&bank={{ bank.id }}">{% icon "swap" %}<span>Transfer antar rekening</span></a>
+        {% if can_edit %}<button type="button" data-open="edit-dialog">{% icon "sliders" %}<span>Ubah rekening</span></button>{% endif %}
+      </div>
+    </details>
+  </div>
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Saldo pembukuan</small><strong>Rp{{ summary.book_balance|floatformat:"0g" }}</strong><span>Semua jurnal di akun {{ bank.account.code }}</span></div>
+  <div class="tile"><small>Saldo menurut bank</small><strong>{% if summary.statement_balance is not None %}Rp{{ summary.statement_balance|floatformat:"0g" }}{% else %}—{% endif %}</strong><span>{% if summary.statement_date %}Per {{ summary.statement_date|date:"d M Y" }}, dari mutasi terakhir{% else %}Impor mutasi untuk melihatnya{% endif %}</span></div>
+  <div class="tile {% if summary.unmatched_count %}warn{% endif %}"><small>Mutasi belum cocok</small><strong>{{ summary.unmatched_count }}</strong><span>{% if summary.unmatched_count %}Total {{ summary.unmatched_total|signed_rp }}{% else %}{{ summary.matched_count }} mutasi sudah cocok{% endif %}</span></div>
+  <div class="tile"><small>Jurnal belum ada di mutasi</small><strong>{{ summary.open_ledger_count }}</strong><span>Dicatat di buku, belum muncul di bank</span></div>
+</div>
+
+<nav class="tabs">
+  <a href="?tab=match" class="{% if tab == 'match' %}on{% endif %}">Cocokkan <span class="count">{{ summary.unmatched_count }}</span></a>
+  <a href="?tab=all" class="{% if tab == 'all' %}on{% endif %}">Semua mutasi bank</a>
+  <a href="?tab=book" class="{% if tab == 'book' %}on{% endif %}">Belum ada di bank <span class="count">{{ summary.open_ledger_count }}</span></a>
+</nav>
+
+{% if tab == 'match' %}
+<section class="panel">
+  <div class="rec" style="background:#f7f9fd;font-size:11.5px;font-weight:600;color:var(--pd-muted)">
+    <div class="rec-side" style="padding-top:10px;padding-bottom:10px">MUTASI BANK</div><div class="rec-mid"></div>
+    <div class="rec-side" style="padding-top:10px;padding-bottom:10px">PEMBUKUAN</div>
+  </div>
+  {% for line in lines %}
+  <div class="rec">
+    <div class="rec-side">
+      <span class="amt {% if line.amount > 0 %}in{% else %}out{% endif %}">{{ line.amount|signed_rp }}</span>
+      <strong>{{ line.description }}</strong>
+      <small>{{ line.date|date:"d M Y" }}{% if line.reference %} · Ref {{ line.reference }}{% endif %}</small>
+      {% if can_edit %}
+      <div class="rec-tools">
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="ignore"><input type="hidden" name="line" value="{{ line.id }}">
+          <button class="link-btn" title="Mis. mutasi ganda atau yang sudah dicatat dengan cara lain">Abaikan</button></form>
+      </div>
+      {% endif %}
+    </div>
+    <div class="rec-mid">{% if line.suggestions %}<span>⇄</span>{% else %}<span>?</span>{% endif %}</div>
+    <div class="rec-side">
+      {% for match in line.suggestions %}
+      <form method="post" class="rec-option">{% csrf_token %}
+        <input type="hidden" name="action" value="match"><input type="hidden" name="line" value="{{ line.id }}"><input type="hidden" name="journal_line" value="{{ match.id }}">
+        <div style="min-width:0"><strong>{{ match.entry.memo|truncatechars:70 }}</strong><small>{{ match.entry.date|date:"d M Y" }} · JU-{{ match.entry_id }}</small></div>
+        {% if can_edit %}<button class="btn" style="height:32px;flex:none">{% icon "check" %} Cocokkan</button>{% endif %}
+      </form>
+      {% endfor %}
+      {% if can_edit %}
+      <details class="rec-create" {% if not line.suggestions %}open{% endif %}>
+        <summary>{% icon "plus" %} {% if line.suggestions %}Bukan ini — catat transaksi baru{% else %}Belum ada di pembukuan — catat sekarang{% endif %}</summary>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="create"><input type="hidden" name="line" value="{{ line.id }}">
+          <select name="account" required aria-label="Akun">
+            <option value="">— {% if line.amount > 0 %}Uang masuk dari{% else %}Uang keluar untuk{% endif %} akun —</option>
+            {% for label, group in accounts %}<optgroup label="{{ label }}">{% for account in group %}<option value="{{ account.code }}">{{ account.code }} · {{ account.name }}</option>{% endfor %}</optgroup>{% endfor %}
+          </select>
+          <input name="description" value="{{ line.description }}" maxlength="200" aria-label="Keterangan">
+          <button class="btn-primary" style="justify-self:start">Catat & cocokkan</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="empty-box">
+    {% if summary.matched_count %}
+    <strong>✓ Semua mutasi sudah cocok</strong>Pembukuan rekening ini sesuai dengan catatan bank.
+    {% else %}
+    <strong>Belum ada mutasi bank</strong>Unduh mutasi rekening (CSV) dari KlikBCA, Livin' by Mandiri, BRImo, BNI, atau bank lain, lalu impor di sini.
+    {% if can_edit %}<br><button type="button" class="btn-primary" data-open="import-dialog">{% icon "upload" %} Impor mutasi</button>{% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+{% elif tab == 'all' %}
+<section class="panel">
+  {% if lines %}
+  <div class="scroll-x">
+  <table class="tbl">
+    <thead><tr><th>Tanggal</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Saldo</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for line in lines %}
+      <tr>
+        <td>{{ line.date|date:"d M Y" }}</td>
+        <td>{{ line.description|truncatechars:70 }}{% if line.matched_line %}<small>↳ <a href="{% url 'merchant-journal-detail' line.matched_line.entry_id %}">JU-{{ line.matched_line.entry_id }}</a> · {{ line.matched_line.entry.memo|truncatechars:50 }}</small>{% endif %}</td>
+        <td class="num pos">{% if line.amount > 0 %}Rp{{ line.amount|floatformat:"0g" }}{% endif %}</td>
+        <td class="num">{% if line.amount < 0 %}{{ line.amount|abs|rp }}{% endif %}</td>
+        <td class="num muted">{% if line.balance is not None %}Rp{{ line.balance|floatformat:"0g" }}{% endif %}</td>
+        <td><span class="pill {% if line.status == 'matched' %}pill-paid{% elif line.status == 'ignored' %}pill-void{% else %}pill-partial{% endif %}">{{ line.get_status_display }}</span></td>
+        <td class="num">{% if can_edit and line.status != 'unmatched' %}<form method="post">{% csrf_token %}<input type="hidden" name="tab" value="all"><input type="hidden" name="action" value="{% if line.status == 'matched' %}unmatch{% else %}restore{% endif %}"><input type="hidden" name="line" value="{{ line.id }}"><button class="link-btn">{% if line.status == 'matched' %}Batalkan cocok{% else %}Kembalikan{% endif %}</button></form>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-box"><strong>Belum ada mutasi bank</strong>Impor file CSV mutasi rekening untuk memulai rekonsiliasi.</div>
+  {% endif %}
+</section>
+
+{% else %}
+<section class="panel">
+  <header><div><h2>Dicatat di pembukuan, belum ada di mutasi bank</h2><p>Biasanya transfer yang belum masuk (dalam perjalanan) atau transaksi yang tanggal/jumlahnya salah dicatat.</p></div></header>
+  {% if open_lines %}
+  <div class="scroll-x">
+  <table class="tbl">
+    <thead><tr><th>Tanggal</th><th>Jurnal</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th></tr></thead>
+    <tbody>
+    {% for line in open_lines %}
+      <tr>
+        <td>{{ line.entry.date|date:"d M Y" }}</td>
+        <td><a class="rowlink" href="{% url 'merchant-journal-detail' line.entry_id %}">JU-{{ line.entry_id }}</a></td>
+        <td>{{ line.entry.memo|truncatechars:80 }}</td>
+        <td class="num pos">{% if line.debit %}Rp{{ line.debit|floatformat:"0g" }}{% endif %}</td>
+        <td class="num">{% if line.credit %}Rp{{ line.credit|floatformat:"0g" }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-box"><strong>Tidak ada</strong>Semua jurnal di rekening ini sudah ada di mutasi bank.</div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if can_edit %}
+<dialog id="import-dialog" class="pd-dialog" aria-labelledby="import-title">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}<input type="hidden" name="action" value="import"><input type="hidden" name="tab" value="match">
+    <header><h2 id="import-title">Impor mutasi rekening</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>File CSV mutasi</span><input type="file" name="file" accept=".csv,.txt,text/csv" required style="padding-top:7px"></label>
+      <p class="dp-help">Format yang dikenali: KlikBCA (CSV), Livin' by Mandiri, BRI, BNI, Jago, dan file apa pun yang memiliki kolom tanggal, keterangan, dan jumlah (atau debit/kredit). Mutasi yang sudah pernah diimpor dilewati, jadi aman mengimpor periode yang tumpang tindih.</p>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">{% icon "upload" %} Impor</button></footer>
+  </form>
+</dialog>
+
+<dialog id="edit-dialog" class="pd-dialog" aria-labelledby="edit-title">
+  <form method="post" action="{% url 'merchant-bank-account-update' bank.id %}">
+    {% csrf_token %}
+    <header><h2 id="edit-title">Ubah rekening</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>Nama rekening</span><input name="name" value="{{ bank.name }}" maxlength="120" required></label>
+      <div class="field-row">
+        <label class="field"><span>Bank</span><input name="bank_name" value="{{ bank.bank_name }}" maxlength="60"></label>
+        <label class="field"><span>No. rekening</span><input name="account_number" value="{{ bank.account_number }}" maxlength="40"></label>
+      </div>
+      <label class="field"><span>Status</span><select name="is_active"><option value="1">Aktif</option><option value="0" {% if not bank.is_active %}selected{% endif %}>Nonaktif (sembunyikan)</option></select></label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan</button></footer>
+  </form>
+</dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

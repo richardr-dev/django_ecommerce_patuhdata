@@ -8,6 +8,23 @@ register = template.Library()
 
 # 24×24 outlines, drawn with currentColor strokes.
 ICONS = {
+    "plus": "M12 5v14M5 12h14",
+    "check": "M5 12.5l4.5 4.5L19 7",
+    "upload": "M12 16V4M7 9l5-5 5 5M4 20h16",
+    "download": "M12 4v12M7 11l5 5 5-5M4 20h16",
+    "user": "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4.4 3.6-8 8-8s8 3.6 8 8",
+    "copy": "M9 9h11v11H9zM5 15H4V4h11v1",
+    "bar-chart": "M4 20V11M10 20V5M16 20v-7M22 20H2",
+    "book": "M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2zM4 20a2 2 0 0 0 2 1h13v-3",
+    "percent": "M19 5 5 19M7.5 9.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16.5 18.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+    "file": "M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6",
+    "layers": "M12 3 2 8l10 5 10-5zM2 13l10 5 10-5",
+    "handshake": "M3 11l4-4 5 2 5-2 4 4-7 7zM8 13l3 3M11 11l3 3",
+    "megaphone": "M3 10v4h4l8 5V5L7 10zM18 9a3 3 0 0 1 0 6",
+    "menu": "M4 6h16M4 12h16M4 18h16",
+    "chevron": "M9 6l6 6-6 6",
+    "logout": "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11",
+    "external": "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
     "home": "M3 11 12 4l9 7M5 10v10h14V10",
     "receipt": "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
     "clipboard": "M8 4H6v17h12V4h-2M9 3h6v3H9zM9 12h6M9 16h4",
@@ -43,6 +60,15 @@ ICONS = {
         "M17 19.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z",
     "plug": "M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-10 0zM12 16v5",
     "star": "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z",
+    "bank": "M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18",
+    "arrow-in": "M12 4v12M7 11l5 5 5-5M5 20h14",
+    "arrow-out": "M12 20V8M7 13l5-5 5 5M5 4h14",
+    "swap": "M4 8h14l-4-4M20 16H6l4 4",
+    "link-check": "M5 12.5l4.5 4.5L19 7M3 21h18",
+    "building": "M4 21V4h11v17M15 9h5v12M8 8h3M8 12h3M8 16h3M3 21h18",
+    "pie": "M12 3v9h9a9 9 0 1 1-9-9zM15 3.5A9 9 0 0 1 20.5 9H15z",
+    "list": "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
+    "undo": "M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
 }
 
 

@@ -1,0 +1,67 @@
+{% extends "merchant/base.html" %}
+{% block title %}Pemetaan SKU{% endblock %}
+{% block content %}
+
+<div class="bb-hero mb-5">
+  <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MARKETPLACE</p>
+  <h1 class="text-2xl font-bold text-gray-900 mb-1">Pemetaan SKU</h1>
+  <p class="text-sm text-gray-500">Samakan SKU di Shopee, TikTok Shop, Lazada, dan lainnya dengan SKU di katalog. SKU yang sudah dipetakan otomatis dikenali saat impor pesanan. Satu SKU marketplace juga bisa diarahkan ke paket.</p>
+</div>
+
+{% if queue %}
+<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+  <h2 class="text-sm font-semibold text-amber-900 mb-1">Perlu dipetakan ({{ queue|length }})</h2>
+  <p class="text-xs text-amber-800 mb-3">SKU ini muncul di pesanan tetapi tidak ada di katalog. Pesanan dengan SKU ini ditolak, atau memakai produk sementara jika diimpor sebagai riwayat.</p>
+  <div class="space-y-2">
+    {% for row in queue %}
+    <form method="post" class="bg-white rounded-xl border border-amber-100 p-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+      {% csrf_token %}<input type="hidden" name="unmapped" value="{{ row.id }}">
+      <div class="md:col-span-2 text-sm"><b>{{ row.sku|default:"(tanpa SKU)" }}</b>
+        <span class="block text-xs text-gray-500">{{ row.name }} · {{ row.channel }} · muncul {{ row.times_seen }}×</span></div>
+      <input name="target" required placeholder="SKU katalog atau SKU paket" class="text-sm border border-gray-200 rounded-lg px-3 py-2 md:col-span-2">
+      <button class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Petakan</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+  <h2 class="text-sm font-semibold text-gray-800 mb-3">Tambah pemetaan</h2>
+  {% if channels %}
+  <form method="post" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+    {% csrf_token %}
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Toko marketplace</span>
+      <select name="channel" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2">
+        {% for channel in channels %}<option value="{{ channel.id }}">{{ channel }}</option>{% endfor %}
+      </select></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU di marketplace</span>
+      <input name="external_sku" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU katalog atau paket</span>
+      <input name="target" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
+    <button class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Simpan</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-gray-500">Belum ada toko marketplace. Tambahkan dulu di menu Marketplace.</p>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+      <th class="text-left px-4 py-2">Toko</th><th class="text-left px-4 py-2">SKU marketplace</th>
+      <th class="text-left px-4 py-2">Dipetakan ke</th><th></th></tr></thead>
+    <tbody>
+    {% for row in mappings %}
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-2">{{ row.channel }}</td><td class="px-4 py-2 font-medium">{{ row.external_sku }}</td>
+        <td class="px-4 py-2">{{ row.target_label }}</td>
+        <td class="px-4 py-2 text-right"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ row.id }}"><button class="text-xs text-red-600">Hapus</button></form></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada pemetaan.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

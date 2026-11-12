@@ -2,49 +2,50 @@
 {% block title %}{{ customer.name }} — CRM{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
+<nav class="dp-crumb" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-customers' %}">Pelanggan</a> › <span>{{ customer.name }}</span>
+</nav>
+<div class="dp-head">
   <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">CRM — PELANGGAN</p>
-    <h1 class="text-2xl font-bold text-gray-900">{{ customer.name }}</h1>
-    <p class="text-sm text-gray-500 mt-1">
-      {% if customer.customer_code %}<span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-mono mr-2">{{ customer.customer_code }}</span>{% endif %}
-      {% if customer.phone %}{{ customer.phone }}{% endif %}
-      {% if customer.phone and customer.email %} · {% endif %}
-      {{ customer.email|default:'' }}
-      {% if not customer.phone and not customer.email %}<span class="text-gray-400">Tanpa kontak</span>{% endif %}
-      · <span class="{% if customer.status == 'active' %}text-green-600{% elif customer.status == 'pending' %}text-amber-600{% else %}text-red-500{% endif %} font-medium">{{ customer.get_status_display }}</span>
+    <h1 class="dp-title">{{ customer.name }}
+      <span class="pill {% if customer.status == 'active' %}pill-paid{% elif customer.status == 'pending' %}pill-pending{% else %}pill-cancelled{% endif %}">{{ customer.get_status_display }}</span>
+      {% if customer.customer_code %}<span class="pill pill-void">{{ customer.customer_code }}</span>{% endif %}
+    </h1>
+    <p class="dp-sub">
+      {% if customer.company_name and customer.company_name != customer.name %}<b>{{ customer.company_name }}</b> · {% endif %}
+      {{ customer.phone|default:"" }}{% if customer.phone and customer.email %} · {% endif %}{{ customer.email|default:"" }}
+      {% if not customer.phone and not customer.email %}Tanpa kontak{% endif %}
+      · {% if customer.accepts_marketing %}Setuju menerima promo{% else %}Belum setuju menerima promo{% endif %}
     </p>
   </div>
-  <div class="flex items-center gap-3">
-    <a class="text-sm text-gray-400 hover:text-gray-600" href="{% url 'merchant-customers' %}">← Semua pelanggan</a>
+  <div class="dp-actions">
     {% if customer.status == 'pending' %}
     <form method="post" action="{% url 'merchant-customers' %}">{% csrf_token %}
       <input type="hidden" name="customer_id" value="{{ customer.id }}">
-      <button type="submit" name="action" value="approve"
-              class="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors">
-        Setujui
-      </button>
+      <button type="submit" name="action" value="approve" class="btn">{% icon "check" %} Setujui pelanggan</button>
     </form>
     {% endif %}
+    {% if receivable %}<a class="btn" href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{% icon "file" %} Surat tagihan</a>{% endif %}
+    <a class="btn-primary" href="{% url 'merchant-invoice-new' %}?customer={{ customer.id }}">{% icon "plus" %} Buat invoice</a>
   </div>
 </div>
 
 {# KPI cards #}
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Lifetime Value</p>
+    <p class="text-xs text-gray-500 mb-1">Total belanja</p>
     <p class="text-xl font-bold text-gray-900">Rp{{ lifetime_spend|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Total Pesanan</p>
+    <p class="text-xs text-gray-500 mb-1">Pesanan dibayar</p>
     <p class="text-xl font-bold text-gray-900">{{ order_count }}</p>
   </div>
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Rata-rata / Order</p>
+    <p class="text-xs text-gray-500 mb-1">Rata-rata per pesanan</p>
     <p class="text-xl font-bold text-gray-900">Rp{{ average_order|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Terakhir Beli</p>
+    <p class="text-xs text-gray-500 mb-1">Terakhir belanja</p>
     <p class="text-sm font-bold text-gray-900">
       {% if days_since is not None %}
         {% if days_since == 0 %}Hari ini
@@ -54,10 +55,9 @@
     </p>
   </div>
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Marketing</p>
-    <p class="text-sm font-semibold {% if customer.accepts_marketing %}text-green-600{% else %}text-gray-400{% endif %}">
-      {% if customer.accepts_marketing %}Opted in{% else %}No consent{% endif %}
-    </p>
+    <p class="text-xs text-gray-500 mb-1">Piutang</p>
+    <p class="text-xl font-bold {% if overdue_receivable %}text-red-600{% else %}text-gray-900{% endif %}">Rp{{ receivable|floatformat:"0g" }}</p>
+    {% if open_invoice_count %}<a class="text-xs text-indigo-600" href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{{ open_invoice_count }} invoice terbuka{% if overdue_receivable %} · Rp{{ overdue_receivable|floatformat:"0g" }} terlambat{% endif %} →</a>{% else %}<p class="text-xs text-gray-400">Tidak ada tagihan terbuka</p>{% endif %}
   </div>
 </div>
 
@@ -177,15 +177,15 @@
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
   <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
     <h2 class="text-sm font-semibold text-gray-700">Riwayat Pembelian</h2>
-    <p class="text-xs text-gray-400">{{ order_count }} pesanan</p>
+    <p class="text-xs text-gray-400">{{ orders|length }} pesanan</p>
   </div>
   {% for order in orders %}
   <div class="border-b border-gray-50 last:border-0">
     <div class="flex items-center justify-between px-5 py-3 bg-gray-50">
       <div class="flex items-center gap-3">
         <a href="{% url 'merchant-order-detail' order.id %}"
-           class="text-sm font-mono font-semibold text-indigo-600 hover:underline">
-          {{ order.invoice_number|default:order.id|stringformat:"s"|slice:":8" }}
+           class="text-sm font-semibold text-indigo-600 hover:underline whitespace-nowrap">
+          {% if order.invoice_number %}{{ order.invoice_number }}{% else %}{{ order.id|stringformat:"s"|slice:":8" }}{% endif %}
         </a>
         <span class="text-xs text-gray-400">{{ order.created_at|date:"d M Y" }}</span>
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium

@@ -1,0 +1,37 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ quote.number }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-quotes' %}">Penawaran</a> › <span>{{ quote.number }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">{{ quote.number }} <span class="pill {% if quote.status == 'accepted' or quote.status == 'invoiced' %}pill-paid{% elif quote.status == 'declined' %}pill-overdue{% elif quote.status == 'sent' %}pill-issued{% else %}pill-draft{% endif %}">{{ quote.get_status_display }}</span>{% if expired %} <span class="pill pill-overdue">Kedaluwarsa</span>{% endif %}</h1>
+  <p class="dp-sub">Untuk <b>{{ quote.buyer_name }}</b> · berlaku sampai <b>{{ quote.valid_until|date:"d M Y" }}</b> · <b>{{ quote.total|rp }}</b></p></div>
+  <div class="dp-actions">
+    {% if can_edit and quote.status != 'invoiced' and quote.status != 'declined' %}<button type="button" class="btn-primary" data-open="inv-dialog">{% icon "file" %} Jadikan invoice</button>{% endif %}
+    {% if quote.invoice %}<a class="btn-primary" href="{% url 'merchant-invoice-detail' quote.invoice.id %}">{% icon "file" %} Buka invoice {{ quote.invoice.number }}</a>{% endif %}
+    <button class="btn" onclick="window.print()">{% icon "printer" %} Cetak / PDF</button>
+    {% if can_edit and quote.status != 'invoiced' %}
+    <details class="dp-more"><summary class="btn">Lainnya ▾</summary><div class="menu-panel">
+      <a href="{% url 'merchant-quote-edit' quote.id %}">{% icon "sliders" %}<span>Ubah penawaran</span></a><hr>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="sent"><button>{% icon "arrow-out" %}<span>Tandai terkirim</span></button></form>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="accepted"><button>{% icon "check" %}<span>Tandai disetujui</span></button></form>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="declined"><button class="danger">{% icon "alert" %}<span>Tandai ditolak</span></button></form>
+    </div></details>{% endif %}
+  </div></div>
+<article class="dp-paper" style="max-width:900px">
+  <div class="dp-paper-head"><div class="dp-seller"><span class="mark">{{ quote.store.name|slice:':1' }}</span><div><strong>{{ quote.store.name }}</strong></div></div><div class="dp-doc-type"><span>PENAWARAN</span><small>{{ quote.number }}</small></div></div>
+  <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ quote.issued_on|date:"d M Y" }}</dd></div><div><dt>Berlaku sampai</dt><dd>{{ quote.valid_until|date:"d M Y"|default:"—" }}</dd></div><div><dt>Telepon</dt><dd>{{ quote.phone|default:"—" }}</dd></div><div><dt>Dibuat oleh</dt><dd>{{ quote.created_by.username|default:"—" }}</dd></div></dl>
+  <div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Ditujukan kepada</h4><strong>{% if quote.company_name and quote.company_name != quote.buyer_name %}{{ quote.company_name }} ({{ quote.buyer_name }}){% elif quote.company_name %}{{ quote.company_name }}{% else %}{{ quote.buyer_name }}{% endif %}</strong>{% if quote.address %}<p>{{ quote.address }}</p>{% endif %}{% if quote.buyer_npwp %}<p>NPWP {{ quote.buyer_npwp }}</p>{% endif %}</div></div>
+  <div class="scroll-x"><table class="dp-items"><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Harga satuan</th><th class="num">Jumlah</th></tr></thead><tbody>
+    {% for i in items %}<tr><td><strong>{{ i.description }}</strong><small>{{ i.sku }}</small></td><td class="num">{{ i.quantity }}</td><td class="num">{{ i.unit_price|rp }}</td><td class="num"><strong>{{ i.line_total|rp }}</strong></td></tr>{% endfor %}</tbody></table></div>
+  <div class="dp-foot"><div class="dp-notes">{% if quote.notes %}<h4>Catatan</h4><p>{{ quote.notes }}</p>{% endif %}</div>
+    <div class="dp-totals"><div><span>Subtotal</span><span>{{ quote.subtotal|rp }}</span></div>{% if quote.discount %}<div><span>Diskon</span><span>−{{ quote.discount|rp }}</span></div>{% endif %}{% if quote.tax %}<div><span>PPN</span><span>{{ quote.tax|rp }}</span></div>{% endif %}{% if quote.shipping %}<div><span>Ongkos kirim</span><span>{{ quote.shipping|rp }}</span></div>{% endif %}<div class="grand"><span>Total</span><span>{{ quote.total|rp }}</span></div></div></div>
+</article>
+{% if can_edit and quote.status != 'invoiced' and quote.status != 'declined' %}
+<dialog id="inv-dialog" class="pd-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="convert">
+  <header><h2>Jadikan invoice</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Jatuh tempo (hari setelah hari ini)</span><input type="number" name="due_days" value="14" min="0"></label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" name="paid" value="1" style="width:auto;height:auto"> Sudah dibayar lunas saat ini</label>
+    <p class="dp-help">Stok berkurang dan penjualan dicatat di pembukuan mulai sekarang.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Buat invoice</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

@@ -2,320 +2,249 @@
 {% block title %}Invoice {{ invoice.number }}{% endblock %}
 {% block content %}
 
-{# ── Breadcrumb ──────────────────────────────────────────────────────────── #}
-<div class="mb-6">
-  <a href="{% url 'merchant-sales-invoices' %}" class="text-xs text-gray-500 hover:text-gray-700 mb-2 inline-block">← Semua Invoice</a>
-  <div class="flex items-start justify-between">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">PENJUALAN</p>
-      <h1 class="text-2xl font-bold text-gray-900">{{ invoice.number }}</h1>
-      <div class="flex flex-wrap items-center gap-3 mt-1">
-        <p class="text-sm text-gray-500">Diterbitkan {{ invoice.issued_on|date:"d F Y" }}</p>
-        {% if invoice.order.invoice_number %}
-        <span class="inline-flex items-center gap-1 text-xs text-gray-500">
-          <span class="text-gray-400">No. Order:</span>
-          <span class="font-mono font-semibold text-gray-700">{{ invoice.order.invoice_number }}</span>
-        </span>
-        {% endif %}
-        {% if invoice.order.external_order_id %}
-        <span class="inline-flex items-center gap-1 text-xs text-gray-500">
-          <span class="text-gray-400">Ref. Eksternal:</span>
-          <span class="font-mono text-gray-600">{{ invoice.order.external_order_id }}</span>
-        </span>
+<nav class="dp-crumb" aria-label="Breadcrumb">
+  <a href="{% url 'merchant-sales' %}">Penjualan</a> › <a href="{% url 'merchant-sales-invoices' %}">Invoice</a> › <span>{{ invoice.number }}</span>
+</nav>
+
+<div class="dp-head">
+  <div>
+    <h1 class="dp-title">{{ invoice.number }} <span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span></h1>
+    <p class="dp-sub">
+      Kepada <b>{{ invoice.buyer_name }}</b>
+      {% if invoice.status != 'void' %} · Sisa tagihan <b>Rp{{ amount_due|floatformat:"0g" }}</b>{% endif %}
+      {% if invoice.due_date %} · Jatuh tempo <b>{{ invoice.due_date|date:"d M Y" }}</b>{% endif %}
+    </p>
+  </div>
+  <div class="dp-actions">
+    {% if invoice.status != 'void' and amount_due > 0 %}
+    <button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Catat pembayaran</button>
+    {% endif %}
+    <a class="btn" href="{% url 'merchant-invoice-pdf' invoice.id %}">{% icon "download" %} PDF</a>
+    {% if invoice.status != 'void' %}<a class="btn" href="{% url 'merchant-invoice-edit' invoice.id %}">Edit</a>{% endif %}
+    <details class="dp-more">
+      <summary class="btn" aria-label="Tindakan lain">Lainnya ▾</summary>
+      <div class="menu-panel">
+        {% if invoice.status != 'void' and invoice.status != 'draft' %}<a href="{% url 'merchant-credit-note-new' %}?invoice={{ invoice.id }}">{% icon "undo" %}<span>Buat nota kredit</span></a>{% endif %}
+        <a href="{% url 'merchant-invoice-duplicate' invoice.id %}">{% icon "copy" %}<span>Duplikat</span></a>
+        <a href="{% url 'merchant-invoices-xlsx' %}?ids={{ invoice.id }}">{% icon "file" %}<span>Unduh Excel</span></a>
+        <button type="button" onclick="window.print()">{% icon "printer" %}<span>Cetak</span></button>
+        {% if invoice.status != 'void' %}
+        <hr>
+        <form method="post" action="{% url 'merchant-invoice-delete' invoice.id %}"
+              data-confirm="Batalkan invoice {{ invoice.number }}? Penjualan, pembayaran dan stoknya dibalik di pembukuan.">
+          {% csrf_token %}
+          <button type="submit" class="danger">{% icon "alert" %}<span>Batalkan invoice</span></button>
+        </form>
         {% endif %}
       </div>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap justify-end">
-      {# Status badge #}
-      <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold
-        {% if invoice.status == 'paid' %}bg-green-100 text-green-700
-        {% elif invoice.status == 'partial' %}bg-yellow-100 text-yellow-700
-        {% elif invoice.status == 'overdue' %}bg-red-100 text-red-600
-        {% elif invoice.status == 'void' %}bg-gray-200 text-gray-500
-        {% elif invoice.status == 'draft' %}bg-gray-100 text-gray-500
-        {% else %}bg-gray-100 text-gray-700{% endif %}">
-        {{ invoice.get_status_display }}
-      </span>
-      {# Actions #}
-      {% if invoice.status != 'void' and invoice.status != 'paid' %}
-      <button onclick="document.getElementById('pay-modal').classList.remove('hidden')"
-              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors">
-        {% icon "check" %} Catat Pembayaran
-      </button>
-      {% endif %}
-      <a href="{% url 'merchant-invoice-edit' invoice.id %}"
-         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
-        Edit
-      </a>
-      <a href="{% url 'merchant-invoice-duplicate' invoice.id %}"
-         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
-        Duplikat
-      </a>
-      <button onclick="window.print()"
-              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
-        {% icon "printer" %} Cetak
-      </button>
-      {% if invoice.status != 'void' %}
-      <form method="post" action="{% url 'merchant-invoice-delete' invoice.id %}" class="inline"
-            onsubmit="return confirm('Hapus/batalkan invoice {{ invoice.number }}?')">
-        {% csrf_token %}
-        <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
-          Hapus
-        </button>
-      </form>
-      {% endif %}
-    </div>
+    </details>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-5" id="invoice-printable">
-
-  {# ── Invoice document (left 2/3) ───────────────────────────────────────── #}
-  <div class="lg:col-span-2 space-y-5">
-
-    {# Header: seller & buyer #}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <div class="flex items-center justify-between mb-6">
+<div class="dp-grid">
+  {# ── The invoice as the customer sees it ─────────────────────────────── #}
+  <article class="dp-paper" id="invoice-printable">
+    <div class="dp-paper-head">
+      <div class="dp-seller">
+        {% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="">{% else %}<span class="mark">{{ invoice.seller_name|slice:':1' }}</span>{% endif %}
         <div>
-          <p class="text-2xl font-bold text-gray-900">INVOICE</p>
-          <p class="text-sm font-mono text-gray-500 mt-0.5">{{ invoice.number }}</p>
-        </div>
-        <div class="text-right text-sm text-gray-500">
-          <p>Tanggal: <span class="font-semibold text-gray-800">{{ invoice.issued_on|date:"d F Y" }}</span></p>
-          {% if invoice.due_date %}
-          <p class="mt-1">Jatuh tempo: <span class="font-semibold text-gray-800">{{ invoice.due_date|date:"d F Y" }}</span></p>
-          {% endif %}
+          <strong>{{ invoice.seller_name }}</strong>
+          {% if invoice.seller_address %}<p>{{ invoice.seller_address }}</p>{% endif %}
+          {% if invoice.seller_npwp %}<p>NPWP {{ invoice.seller_npwp }}{% if invoice.seller_is_pkp %} · PKP{% endif %}</p>{% endif %}
         </div>
       </div>
-
-      <div class="grid grid-cols-2 gap-6">
-        <div>
-          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Dari</p>
-          <p class="font-semibold text-gray-900">{{ invoice.seller_name }}</p>
-          {% if invoice.seller_npwp %}<p class="text-xs text-gray-500">NPWP: {{ invoice.seller_npwp }}</p>{% endif %}
-          {% if invoice.seller_address %}<p class="text-xs text-gray-500 mt-1 whitespace-pre-line">{{ invoice.seller_address }}</p>{% endif %}
-          {% if invoice.seller_is_pkp %}<p class="text-xs text-gray-500 mt-1 font-medium">PKP — Pengusaha Kena Pajak</p>{% endif %}
-        </div>
-        <div>
-          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Kepada</p>
-          <p class="font-semibold text-gray-900">{{ invoice.buyer_name }}</p>
-          {% if invoice.buyer_npwp %}<p class="text-xs text-gray-500">NPWP: {{ invoice.buyer_npwp }}</p>{% endif %}
-          {% if invoice.buyer_address %}<p class="text-xs text-gray-500 mt-1 whitespace-pre-line">{{ invoice.buyer_address }}</p>{% endif %}
-        </div>
-      </div>
-
-      <div class="mt-4 pt-4 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-500">
-        <span>Channel: <a href="{% url 'merchant-sales-invoices' %}?channel={{ invoice.order.channel }}" class="text-gray-600 hover:text-gray-800 font-medium">{{ invoice.order.get_channel_display }}</a></span>
-        {% if invoice.order.external_order_id %}
-        <span>No. Marketplace: <span class="font-mono text-gray-700">{{ invoice.order.external_order_id }}</span></span>
-        {% endif %}
+      <div class="dp-doc-type">
+        <span>{% if invoice.seller_is_pkp and invoice.tax %}INVOICE PAJAK{% else %}INVOICE{% endif %}</span>
+        <small>{{ invoice.number }}</small>
       </div>
     </div>
 
-    {# Line items #}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-gray-100 bg-gray-50">
-            <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Produk / Deskripsi</th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">SKU</th>
-            <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-16">Qty</th>
-            <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Harga</th>
-            <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for item in items %}
-          <tr>
-            <td class="px-5 py-3">
-              {% if item.product %}
-              <a href="{% url 'merchant-entity-edit' 'products' item.product.id %}"
-                 class="font-medium font-medium text-gray-800 hover:text-gray-900">{{ item.description }}</a>
-              {% else %}
-              <p class="font-medium text-gray-800">{{ item.description }}</p>
-              {% endif %}
-              {% if item.dimension %}<span class="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-mono">{{ item.dimension }}</span>{% endif %}
-              {% if item.discount %}<p class="text-xs text-green-600 mt-0.5">Diskon −Rp{{ item.discount|floatformat:"0g" }}</p>{% endif %}
-            </td>
-            <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ item.sku|default:"—" }}</td>
-            <td class="px-4 py-3 text-right text-gray-700">{{ item.quantity|floatformat:"-2" }}</td>
-            <td class="px-4 py-3 text-right text-gray-700">Rp{{ item.unit_price|floatformat:"0g" }}</td>
-            <td class="px-5 py-3 text-right font-medium text-gray-900">Rp{{ item.line_total|floatformat:"0g" }}</td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="5" class="px-5 py-6 text-center text-gray-400 text-sm">
-              Tidak ada item tercatat. <a href="{% url 'merchant-order-detail' invoice.order.id %}" class="text-gray-600 hover:text-gray-800">Lihat detail pesanan →</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot class="border-t border-gray-200">
-          <tr>
-            <td colspan="4" class="px-5 py-2.5 text-right text-xs text-gray-500">Subtotal</td>
-            <td class="px-5 py-2.5 text-right text-sm text-gray-700">Rp{{ invoice.subtotal|floatformat:"0g" }}</td>
-          </tr>
-          {% if invoice.discount %}
-          <tr>
-            <td colspan="4" class="px-5 py-2 text-right text-xs text-gray-500">Diskon</td>
-            <td class="px-5 py-2 text-right text-sm text-red-500">−Rp{{ invoice.discount|floatformat:"0g" }}</td>
-          </tr>
-          {% endif %}
-          {% if invoice.seller_is_pkp and invoice.tax %}
-          <tr>
-            <td colspan="4" class="px-5 py-2 text-right text-xs text-gray-500">PPN {{ invoice.tax_rate }}%</td>
-            <td class="px-5 py-2 text-right text-sm text-gray-700">Rp{{ invoice.tax|floatformat:"0g" }}</td>
-          </tr>
-          {% endif %}
-          {% if invoice.shipping %}
-          <tr>
-            <td colspan="4" class="px-5 py-2 text-right text-xs text-gray-500">Ongkos Kirim</td>
-            <td class="px-5 py-2 text-right text-sm text-gray-700">Rp{{ invoice.shipping|floatformat:"0g" }}</td>
-          </tr>
-          {% endif %}
-          <tr class="border-t border-gray-200">
-            <td colspan="4" class="px-5 py-3 text-right text-sm font-bold text-gray-900">Total</td>
-            <td class="px-5 py-3 text-right text-base font-bold text-gray-900">Rp{{ invoice.total|floatformat:"0g" }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+    <dl class="dp-meta">
+      <div><dt>Tanggal invoice</dt><dd>{{ invoice.issued_on|date:"d M Y" }}</dd></div>
+      <div><dt>Jatuh tempo</dt><dd>{{ invoice.due_date|date:"d M Y"|default:"Saat diterima" }}</dd></div>
+      <div><dt>Referensi</dt><dd>{{ order.external_order_id|default:"—" }}</dd></div>
+      <div><dt>Channel</dt><dd>{{ order.get_channel_display }}</dd></div>
+    </dl>
 
-    {% if invoice.notes %}
-    <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 text-sm text-amber-800">
-      <span class="font-semibold">Catatan:</span> {{ invoice.notes }}
-    </div>
-    {% endif %}
-
-  </div>
-
-  {# ── Right sidebar: payment & status ──────────────────────────────────── #}
-  <div class="space-y-5">
-
-    {# Payment summary card #}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Ringkasan Pembayaran</p>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between">
-          <span class="text-gray-500">Total Invoice</span>
-          <span class="font-semibold text-gray-800">Rp{{ invoice.total|floatformat:"0g" }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-500">Sudah Dibayar</span>
-          <span class="font-semibold text-green-600">Rp{{ amount_paid|floatformat:"0g" }}</span>
-        </div>
-        <div class="flex justify-between border-t border-gray-100 pt-2">
-          <span class="font-semibold text-gray-700">Sisa Tagihan</span>
-          <span class="font-bold {% if amount_due <= 0 %}text-green-600{% else %}text-red-600{% endif %}">
-            Rp{{ amount_due|floatformat:"0g" }}
-          </span>
-        </div>
+    <div class="dp-parties">
+      <div>
+        <h4>Ditagihkan kepada</h4>
+        <strong>{{ invoice.buyer_name }}</strong>
+        {% if invoice.buyer_address and invoice.buyer_address != '-' %}<p>{{ invoice.buyer_address }}</p>{% endif %}
+        {% if invoice.buyer_npwp %}<p>NPWP {{ invoice.buyer_npwp }}</p>{% endif %}
+        {% if order.customer %}<a href="{% url 'merchant-customer-detail' order.customer.id %}" class="no-print">Lihat profil pelanggan →</a>{% endif %}
       </div>
-
-      {% if invoice.status != 'void' and invoice.status != 'paid' %}
-      <button onclick="document.getElementById('pay-modal').classList.remove('hidden')"
-              class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors">
-        {% icon "check" %} Catat Pembayaran
-      </button>
+      {% if order.shipping_address and order.shipping_address != '-' and order.shipping_address != invoice.buyer_address %}
+      <div>
+        <h4>Dikirim ke</h4>
+        <p>{{ order.full_address|default:order.shipping_address }}</p>
+      </div>
       {% endif %}
     </div>
 
-    {# Payment history #}
-    {% if payments %}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Riwayat Pembayaran</p>
-      <div class="space-y-3">
+    <div style="overflow-x:auto">
+    <table class="dp-items">
+      <thead><tr>
+        <th>Barang / jasa</th><th class="num">Qty</th><th class="num">Harga satuan</th>
+        <th class="num">Jumlah</th>
+      </tr></thead>
+      <tbody>
+      {% for item in items %}
+        <tr>
+          <td><strong>{{ item.description }}</strong>{% if item.sku or item.dimension %}<small>{% if item.sku %}SKU {{ item.sku }}{% endif %}{% if item.sku and item.dimension %} · {% endif %}{{ item.dimension }}</small>{% endif %}{% if item.note %}<small>{{ item.note }}</small>{% endif %}</td>
+          <td class="num">{{ item.quantity|floatformat:"-2" }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
+          <td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td>
+          <td class="num"><strong>Rp{{ item.line_total|floatformat:"0g" }}</strong></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="dp-empty">Invoice ini belum punya baris barang.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="dp-foot">
+      <div class="dp-notes">
+        {% if invoice.notes %}<h4>Catatan</h4><p>{{ invoice.notes }}</p>{% endif %}
+      </div>
+      <div class="dp-totals">
+        <div><span>Subtotal</span><span>Rp{{ invoice.subtotal|floatformat:"0g" }}</span></div>
+        {% if invoice.discount %}<div><span>Diskon</span><span>−Rp{{ invoice.discount|floatformat:"0g" }}</span></div>{% endif %}
+        {% if invoice.tax %}
+        <div><span>DPP</span><span>Rp{{ invoice.tax_base|floatformat:"0g" }}</span></div>
+        <div><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span>Rp{{ invoice.tax|floatformat:"0g" }}</span></div>
+        {% endif %}
+        {% if invoice.shipping %}<div><span>Ongkos kirim</span><span>Rp{{ invoice.shipping|floatformat:"0g" }}</span></div>{% endif %}
+        {% if invoice.other_charges %}<div><span>Biaya lain</span><span>Rp{{ invoice.other_charges|floatformat:"0g" }}</span></div>{% endif %}
+        <div class="grand"><span>Total</span><span>Rp{{ invoice.total|floatformat:"0g" }}</span></div>
+        {% if credited %}<div><span>Nota kredit</span><span>−Rp{{ credited|floatformat:"0g" }}</span></div>{% endif %}
+        {% if amount_paid %}<div><span>Sudah dibayar</span><span>−Rp{{ amount_paid|floatformat:"0g" }}</span></div>{% endif %}
+        {% if invoice.status != 'void' %}
+        <div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa tagihan{% endif %}</span><span>Rp{{ amount_due|floatformat:"0g" }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+    {% if invoice.status == 'paid' %}<span class="dp-stamp paid">LUNAS</span>{% elif invoice.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
+  </article>
+
+  {# ── Side panel: money, history, books ──────────────────────────────── #}
+  <aside class="dp-stack">
+    <section class="dp-card">
+      <header><h2>Pembayaran</h2><small>{{ paid_pct }}% terselesaikan</small></header>
+      <div class="dp-card-body">
+        <p class="dp-help" style="margin:0 0 2px">{% if invoice.status == 'void' %}Invoice dibatalkan{% elif amount_due <= 0 %}Sudah lunas{% else %}Sisa tagihan{% endif %}</p>
+        <div class="dp-amount {% if amount_due <= 0 %}ok{% elif invoice.status == 'overdue' %}alert{% endif %}">Rp{{ amount_due|floatformat:"0g" }}</div>
+        <div class="progress{% if paid_pct >= 100 %} done{% endif %}"><span style="width:{{ paid_pct }}%"></span></div>
+        <div class="kv">
+          <div><span>Total invoice</span><span>Rp{{ invoice.total|floatformat:"0g" }}</span></div>
+          {% if credited %}<div><span>Nota kredit</span><span>−Rp{{ credited|floatformat:"0g" }}</span></div>{% endif %}
+          <div><span>Sudah dibayar</span><span>Rp{{ amount_paid|floatformat:"0g" }}</span></div>
+          {% if invoice.due_date %}<div><span>Jatuh tempo</span><span>{{ invoice.due_date|date:"d M Y" }}</span></div>{% endif %}
+        </div>
+        {% if invoice.status != 'void' and amount_due > 0 %}
+        <button type="button" class="btn-primary btn-block" style="margin-top:14px" data-open="pay-dialog">{% icon "cash" %} Catat pembayaran</button>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if marketplace %}
+    <section class="dp-card">
+      <header><h2>{{ marketplace.channel.get_platform_display }}</h2><small>{{ marketplace.channel.name }}</small></header>
+      <div class="dp-card-body">
+        <div class="kv">
+          <div><span>No. pesanan</span><span>{{ marketplace.external_id }}</span></div>
+          {% if marketplace.status_text %}<div><span>Status di marketplace</span><span>{{ marketplace.status_text }}</span></div>{% endif %}
+          <div><span>Dibayar pembeli</span><span>Rp{{ marketplace.paid_by_buyer|floatformat:"0g" }}</span></div>
+          {% for label, amount in marketplace.fees %}<div><span>{{ label }}</span><span>−Rp{{ amount|floatformat:"0g" }}</span></div>{% endfor %}
+          {% if marketplace.income %}
+          <div style="border-top:1px solid var(--pd-line);padding-top:8px"><span><b>Dana diterima</b></span><span><b>Rp{{ marketplace.income.net_released|floatformat:"0g" }}</b></span></div>
+          {% if marketplace.income.released_on %}<div><span>Dicairkan</span><span>{{ marketplace.income.released_on|date:"d M Y" }}</span></div>{% endif %}
+          {% if marketplace.payout %}<div><span>Pencairan</span><span><a href="{% url 'merchant-payout-detail' marketplace.payout.id %}" style="color:var(--pd-primary)">{{ marketplace.payout.reference|truncatechars:22 }}</a></span></div>{% endif %}
+          {% endif %}
+        </div>
+        {% if not marketplace.income %}<p class="dp-help">Biaya dan dana cair belum tercatat. Impor laporan penghasilan dari Seller Center untuk melihatnya di sini.</p>
+        <a class="btn btn-block" style="margin-top:10px" href="{% url 'merchant-income-import' %}">{% icon "upload" %} Impor penghasilan</a>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="dp-card">
+      <header><h2>Riwayat</h2><small>{{ payments|length }} pembayaran{% if credit_notes %} · {{ credit_notes|length }} nota kredit{% endif %}</small></header>
+      <ul class="timeline">
+        <li><strong>Invoice diterbitkan</strong><small>{{ invoice.issued_on|date:"d M Y" }} · Rp{{ invoice.total|floatformat:"0g" }}</small></li>
         {% for pmt in payments %}
-        <div class="flex items-start justify-between text-sm">
-          <div>
-            <p class="font-medium text-gray-800">Rp{{ pmt.amount|floatformat:"0g" }}</p>
-            <p class="text-xs text-gray-400">{{ pmt.paid_on|date:"d M Y" }} · {{ pmt.get_method_display }}</p>
-            {% if pmt.reference %}<p class="text-xs font-mono text-gray-400">{{ pmt.reference }}</p>{% endif %}
-            {% if pmt.note %}<p class="text-xs text-gray-500 italic">{{ pmt.note }}</p>{% endif %}
-          </div>
-          <span class="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Lunas</span>
-        </div>
+        <li class="ok"><strong><span>Pembayaran diterima</span><span>Rp{{ pmt.amount|floatformat:"0g" }}</span></strong>
+          <small>{{ pmt.paid_on|date:"d M Y" }} · {{ pmt.get_method_display }}{% if pmt.reference %} · {{ pmt.reference }}{% endif %}</small>
+          {% if pmt.note %}<small>{{ pmt.note }}</small>{% endif %}</li>
         {% endfor %}
-      </div>
-    </div>
-    {% endif %}
+        {% for note in credit_notes %}
+        <li class="{% if note.status == 'void' %}{% else %}ok{% endif %}"><strong><span><a href="{% url 'merchant-credit-note-detail' note.id %}" style="color:inherit">Nota kredit {{ note.number }}</a>{% if note.status == 'void' %} <span class="tag" style="background:#f2f4f7;color:#667085;padding:0 6px;border-radius:4px;font-size:10.5px">batal</span>{% endif %}</span><span>−Rp{{ note.total|floatformat:"0g" }}</span></strong>
+          <small>{{ note.issued_on|date:"d M Y" }} · {{ note.get_reason_display }}</small></li>
+        {% endfor %}
+        {% if invoice.status == 'void' %}<li><strong>Invoice dibatalkan</strong><small>Pembukuannya dibalik.</small></li>{% endif %}
+      </ul>
+    </section>
 
-    {# Order link #}
-    <div class="bg-gray-50 rounded-xl p-4 text-sm">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Pesanan Terkait</p>
-      <p class="font-mono text-xs text-gray-600 mb-2">{{ invoice.order.invoice_number|default:invoice.order.id }}</p>
-      <a href="{% url 'merchant-order-detail' invoice.order.id %}"
-         class="text-xs text-gray-600 hover:text-gray-800 font-medium">Lihat detail pesanan →</a>
-    </div>
+    <section class="dp-card">
+      <header><h2>Jurnal</h2><small>Buku besar</small></header>
+      {% for entry in journal %}
+      <table class="journal">
+        <colgroup><col><col class="c-debit"><col class="c-credit"></colgroup>
+        <caption>{{ entry.memo }}{% if entry.reverses_id %}<span class="tag">pembalikan</span>{% elif entry.superseded %}<span class="tag">dibatalkan</span>{% endif %}<small>{{ entry.date|date:"d M Y" }}</small></caption>
+        <tbody>
+        {% for line in entry.rows %}
+          <tr>
+            <td class="{% if line.credit %}credit-name{% endif %}"><small>{{ line.account.code }}</small>{{ line.account.name }}</td>
+            <td class="amt">{% if line.debit %}Rp{{ line.debit|floatformat:"0g" }}{% endif %}</td>
+            <td class="amt">{% if line.credit %}Rp{{ line.credit|floatformat:"0g" }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if forloop.last %}<p class="dp-help" style="padding:0 18px 14px">Debit di kolom kiri, kredit di kanan (menjorok).</p>{% endif %}
+      {% empty %}
+      <p class="dp-empty">Belum masuk buku besar.{% if order.payment_transactions.exists %} Penjualan ini dicatat saat pembayaran diproses.{% endif %}</p>
+      {% endfor %}
+    </section>
 
-  </div>
+    <section class="dp-card dp-links">
+      <a href="{% url 'merchant-order-detail' order.id %}"><span>Pesanan {{ order.invoice_number|default:"terkait" }}</span><small>{{ order.get_status_display }} →</small></a>
+      {% if order.customer %}<a href="{% url 'merchant-receivables' %}?customer={{ order.customer.id }}"><span>Tagihan {{ order.customer.name }}</span><small>Piutang →</small></a>{% endif %}
+      {% if invoice.status != 'void' and amount_due > 0 %}<a href="{% url 'merchant-receive-payment' %}?{% if order.customer %}customer={{ order.customer.id }}{% else %}buyer={{ invoice.buyer_name|urlencode }}{% endif %}"><span>Satu pembayaran untuk beberapa invoice</span><small>Terima pembayaran →</small></a>{% endif %}
+      {% if credit_available and amount_due > 0 %}<a href="{% url 'merchant-customer-credit' %}"><span>Kredit pelanggan tersedia</span><small>Rp{{ credit_available|floatformat:"0g" }} →</small></a>{% endif %}
+      <a href="{% url 'merchant-sales-invoices' %}?channel={{ order.channel }}"><span>Invoice {{ order.get_channel_display }} lainnya</span><small>→</small></a>
+    </section>
+  </aside>
 </div>
 
-{# ── Payment modal ───────────────────────────────────────────────────────── #}
-<div id="pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-    <div class="flex items-center justify-between mb-5">
-      <h2 class="text-base font-bold text-gray-900">Catat Pembayaran</h2>
-      <button onclick="document.getElementById('pay-modal').classList.add('hidden')"
-              class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+{# ── Record a payment ────────────────────────────────────────────────── #}
+<dialog id="pay-dialog" class="pd-dialog" aria-labelledby="pay-title">
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="action" value="pay">
+    <header><h2 id="pay-title">Catat pembayaran</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>Jumlah diterima</span>
+        <input type="number" name="amount" value="{{ amount_due|floatformat:0 }}" min="1" max="{{ amount_due|floatformat:0 }}" step="1" required></label>
+      <div class="field-row">
+        <label class="field"><span>Tanggal bayar</span><input type="date" name="paid_on" value="{{ today }}" required></label>
+        <label class="field"><span>Metode</span>
+          <select name="method">{% for code, label in payment_methods %}{% if code != 'credit' %}<option value="{{ code }}"{% if code == 'transfer' %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></label>
+      </div>
+      {% if banks %}<label class="field"><span>Masuk ke rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>{% endif %}
+      <label class="field"><span>No. referensi <em>(opsional)</em></span><input type="text" name="reference" maxlength="120" placeholder="No. transfer atau kode transaksi"></label>
+      <label class="field"><span>Catatan <em>(opsional)</em></span><input type="text" name="note" maxlength="200"></label>
+      <p class="dp-help">Pembayaran langsung masuk pembukuan: kas bertambah dan piutang pelanggan berkurang.</p>
     </div>
-    <form method="post">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="pay">
-      <div class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Jumlah (Rp)</label>
-          <input type="number" name="amount" value="{{ amount_due|floatformat:0 }}" min="1" required
-                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Tanggal Bayar</label>
-          <input type="date" name="paid_on" value="{{ today }}" required
-                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Metode Pembayaran</label>
-          <select name="method"
-                  class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500">
-            {% for code, label in payment_methods %}
-            <option value="{{ code }}"{% if code == 'transfer' %} selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">No. Referensi <span class="font-normal text-gray-400">(opsional)</span></label>
-          <input type="text" name="reference" placeholder="Nomor transaksi / kode transfer"
-                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Catatan <span class="font-normal text-gray-400">(opsional)</span></label>
-          <input type="text" name="note" placeholder="Catatan internal"
-                 class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500">
-        </div>
-      </div>
-      <div class="mt-5 flex gap-3">
-        <button type="submit"
-                class="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors">
-          Simpan Pembayaran
-        </button>
-        <button type="button" onclick="document.getElementById('pay-modal').classList.add('hidden')"
-                class="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200 transition-colors">
-          Batal
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan pembayaran</button></footer>
+  </form>
+</dialog>
 
-{# Print styles #}
-<style>
-@media print {
-  nav, .sidebar, button, a[href], #pay-modal { display: none !important; }
-  #invoice-printable { display: block !important; }
-  .lg\:col-span-2 { width: 100% !important; }
-  .lg\:grid-cols-3 > :last-child { display: none !important; }
-  body { font-size: 12px; }
-}
-</style>
-
+<script>
+document.querySelectorAll("[data-open]").forEach(function (el) {
+  el.addEventListener("click", function () { document.getElementById(el.dataset.open).showModal(); });
+});
+document.querySelectorAll("dialog [data-close]").forEach(function (el) {
+  el.addEventListener("click", function () { el.closest("dialog").close(); });
+});
+</script>
 {% endblock %}

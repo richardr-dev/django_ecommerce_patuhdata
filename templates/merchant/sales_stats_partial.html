@@ -1,7 +1,7 @@
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Pesanan</p>
@@ -9,7 +9,7 @@
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Rata-rata / Pesanan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:"0g" }}</p>
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Pelanggan Unik</p>
@@ -17,7 +17,7 @@
   </div>
   <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
     <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Diskon</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:0 }}</p>
+    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:"0g" }}</p>
   </div>
 </div>
 
@@ -35,7 +35,7 @@
         <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
           <div class="h-full bg-indigo-500 rounded-full" style="width:{{ row.pct }}%"></div>
         </div>
-        <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:0 }}</span>
+        <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
       </div>
     </div>
     {% endfor %}

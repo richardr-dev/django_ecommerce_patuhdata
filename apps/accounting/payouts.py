@@ -31,7 +31,7 @@ def _date(text):
     text = (text or "").strip()
     for layout in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
-            return datetime.strptime(text, layout).date()  # noqa: DTZ007 (date only)
+            return datetime.strptime(text, layout).date()
         except ValueError:
             continue
     raise PayoutImportError(f"Tanggal tidak valid: {text or '(kosong)'} (pakai YYYY-MM-DD).")
@@ -84,7 +84,8 @@ def _match(store, provider, line, claimed):
     return payment
 
 
-def import_payout(store, provider, reference, data, *, actor=None):
+def import_payout(store, provider, reference, data, *, actor=None, bank_account=None,
+        fee_breakdown=None):
     """Record one payout and post it to the ledger. All or nothing: any row that does not match
     a paid order rejects the whole payout. Returns (payout, created)."""
     existing = Payout.objects.filter(store=store, provider=provider, reference=reference).first()
@@ -101,7 +102,8 @@ def import_payout(store, provider, reference, data, *, actor=None):
         with transaction.atomic():
             payout = Payout.objects.create(store=store, provider=provider, reference=reference,
                 paid_on=data["paid_on"], gross=gross, fees=fees, net=gross - fees,
-                created_by=actor)
+                bank_account=bank_account, created_by=actor,
+                fee_breakdown={code: str(value) for code, value in (fee_breakdown or {}).items()})
             PayoutLine.objects.bulk_create(PayoutLine(payout=payout, payment=payment,
                 amount=line["amount"], fee=line["fee"]) for payment, line in matched)
             post_payout(payout)
@@ -111,12 +113,13 @@ def import_payout(store, provider, reference, data, *, actor=None):
     return payout, True
 
 
-def import_payouts(store, provider, grouped, *, actor=None):
+def import_payouts(store, provider, grouped, *, actor=None, bank_account=None):
     """Import each payout on its own, so one bad payout does not block the rest."""
     summary = {"created": 0, "duplicates": 0, "net": Decimal(0), "errors": []}
     for reference, data in grouped.items():
         try:
-            payout, created = import_payout(store, provider, reference, data, actor=actor)
+            payout, created = import_payout(store, provider, reference, data, actor=actor,
+                bank_account=bank_account)
         except PayoutImportError as error:
             summary["errors"].append(f"{reference}: {error}")
             continue

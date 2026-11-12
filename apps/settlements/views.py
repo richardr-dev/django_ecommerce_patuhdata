@@ -12,6 +12,12 @@ from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 
 from .models import ConsignmentPartner, PartnerProductPrice, Settlement, SettlementPayment
+
+
+def bank_accounts_for(store):
+    from apps.accounting.bank import bank_accounts
+    return bank_accounts(store)
+
 from .services import (
     SettlementError,
     add_sell_through_orders,
@@ -93,8 +99,8 @@ def settlement_list(request):
         store=store,
         status__in=[Settlement.STATUS_INVOICED, Settlement.STATUS_PARTIAL],
     )
-    open_total = open_qs.aggregate(s=models.Sum("total_due"))["s"] or Decimal("0")
-    open_paid = open_qs.aggregate(s=models.Sum("amount_paid"))["s"] or Decimal("0")
+    open_total = open_qs.aggregate(s=models.Sum("total_due"))["s"] or Decimal(0)
+    open_paid = open_qs.aggregate(s=models.Sum("amount_paid"))["s"] or Decimal(0)
 
     return render(request, "merchant/settlements.html", _merchant_context(
         request, store,
@@ -194,9 +200,12 @@ def settlement_detail(request, pk):
                 method = request.POST.get("method", "bank_transfer")
                 reference = request.POST.get("reference", "").strip()
                 pay_notes = request.POST.get("pay_notes", "").strip()
+                from apps.accounting.bank import bank_accounts
+                bank = next((b for b in bank_accounts(store)
+                    if str(b.pk) == request.POST.get("bank_account")), None)
                 record_payment(settlement, amount, payment_date, method=method,
                                reference=reference, notes=pay_notes,
-                               recorded_by=request.user)
+                               recorded_by=request.user, bank_account=bank)
                 messages.success(request, f"Pembayaran Rp{amount:,.0f} dicatat.")
             except (SettlementError, InvalidOperation) as exc:
                 messages.error(request, f"Gagal mencatat pembayaran: {exc}")
@@ -235,7 +244,7 @@ def settlement_detail(request, pk):
             (s, label) for s, label in Settlement.STATUS_CHOICES
             if settlement.can_transition_to(s)
         ],
-        payment_methods=SettlementPayment.METHODS,
+        payment_methods=SettlementPayment.METHODS, banks=bank_accounts_for(store),
         today=date.today(),
     ))
 
@@ -271,8 +280,8 @@ def settlement_partner_detail(request, pk):
     total_invoiced = settlements.filter(status__in=[
         Settlement.STATUS_INVOICED, Settlement.STATUS_PARTIAL,
         Settlement.STATUS_PAID, Settlement.STATUS_CLOSED,
-    ]).aggregate(s=models.Sum("total_due"))["s"] or Decimal("0")
-    total_paid = settlements.aggregate(s=models.Sum("amount_paid"))["s"] or Decimal("0")
+    ]).aggregate(s=models.Sum("total_due"))["s"] or Decimal(0)
+    total_paid = settlements.aggregate(s=models.Sum("amount_paid"))["s"] or Decimal(0)
 
     page, page_range, page_query = paginate(request, settlements, PAGE_SIZE)
 
@@ -379,6 +388,7 @@ def mitra_invoice_list(request, partner_id):
 def mitra_invoice_new(request, partner_id):
     """Create a sell-through invoice for a Mitra partner."""
     from decimal import Decimal, InvalidOperation
+
     from apps.catalog.models import Product
     from apps.orders.models import OrderItem
 
@@ -400,7 +410,7 @@ def mitra_invoice_new(request, partner_id):
             prices = request.POST.getlist("unit_price[]")
 
             lines = []
-            subtotal = Decimal("0")
+            subtotal = Decimal(0)
             for sku, qty_str, price_str in zip(skus, qtys, prices):
                 sku = sku.strip()
                 if not sku:
@@ -431,12 +441,12 @@ def mitra_invoice_new(request, partner_id):
                 return render(request, "merchant/mitra_invoice_new.html",
                     _merchant_context(request, store, partner=partner, products=products))
 
-            discount = Decimal("0")
+            discount = Decimal(0)
             try:
                 discount = Decimal(request.POST.get("discount", "0").replace(",", ""))
             except InvalidOperation:
                 pass
-            subtotal_net = max(subtotal - discount, Decimal("0"))
+            subtotal_net = max(subtotal - discount, Decimal(0))
 
             from django.db import transaction as db_transaction
             with db_transaction.atomic():
@@ -451,7 +461,7 @@ def mitra_invoice_new(request, partner_id):
                     shipping_address="-",
                     subtotal=subtotal,
                     discount=discount,
-                    shipping_cost=Decimal("0"),
+                    shipping_cost=Decimal(0),
                     total=subtotal_net,
                     payment_method="mitra",
                     delivery_notes=notes,
@@ -487,3 +497,63 @@ def mitra_invoice_new(request, partner_id):
     return render(request, "merchant/mitra_invoice_new.html",
         _merchant_context(request, store, partner=partner, products=products,
                           today=date.today().isoformat()))
+
+
+# ── Stok di mitra (konsinyasi) ───────────────────────────────────────────────
+
+def _find_item(store, sku):
+    """The product, and variant if the SKU is a variant's, for a SKU typed by the user."""
+    from apps.catalog.models import Product, ProductVariant
+    sku = (sku or "").strip()
+    variant = ProductVariant.objects.select_related("product").filter(product__store=store,
+        sku=sku).first() if sku else None
+    if variant:
+        return variant.product, variant
+    return Product.objects.filter(store=store, sku=sku).first(), None
+
+
+@login_required(login_url="/merchant/login/")
+def partner_stock(request):
+    """Barang konsinyasi yang sedang dipegang mitra, plus kirim dan retur."""
+    from .consignment import (
+        ConsignmentError,
+        return_from_partner,
+        send_to_partner,
+        stock_at_partners,
+    )
+    from .models import ConsignmentMovement
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    partners = ConsignmentPartner.objects.filter(store=store, is_active=True)
+    if request.method == "POST":
+        _require_roles(request, store, SETTLEMENT_ROLES)
+        partner = get_object_or_404(partners, pk=request.POST.get("partner") or 0)
+        product, variant = _find_item(store, request.POST.get("sku"))
+        action = request.POST.get("action")
+        try:
+            quantity = int(request.POST.get("quantity") or 0)
+            if not product:
+                raise ConsignmentError("SKU tidak ditemukan di katalog.")
+            move = send_to_partner if action == "send" else return_from_partner
+            move(partner, product=product, variant=variant, quantity=quantity,
+                date=parse_date(request.POST.get("date", "")),
+                note=request.POST.get("note", ""), actor=request.user)
+            messages.success(request, f"{quantity} × {product.name} "
+                + ("dikirim ke " if action == "send" else "diretur dari ") + partner.name + ".")
+        except (ConsignmentError, ValueError) as error:
+            messages.error(request, f"Gagal: {error}")
+        return redirect("partner-stock")
+
+    rows = stock_at_partners(store)
+    recent = ConsignmentMovement.objects.filter(store=store).select_related(
+        "stock__partner", "stock__product", "stock__variant")[:30]
+    return render(request, "merchant/partner_stock.html", _merchant_context(request, store,
+        rows=rows, recent=recent, partners=partners, today=date.today().isoformat(),
+        total_value=sum((row["value"] for row in rows), Decimal(0)),
+        can_edit=_can_edit(request, store)))
+
+
+def _can_edit(request, store):
+    return store.owner_id == request.user.id or store.staff_members.filter(
+        user=request.user, role__in=SETTLEMENT_ROLES).exists()

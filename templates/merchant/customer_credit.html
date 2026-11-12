@@ -1,0 +1,15 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Kredit Pelanggan{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Kredit pelanggan</h1><p>Uang muka, kelebihan bayar, dan sisa nota kredit yang belum dipakai. Ini kewajiban toko kepada pelanggan, bukan pendapatan.</p></div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "plus" %} Terima uang muka</a></div>{% endif %}</div>
+<div class="tiles"><div class="tile accent"><small>Total kredit pelanggan</small><strong>{{ total|rp }}</strong><span>{{ rows|length }} pelanggan</span></div></div>
+<section class="panel">{% if rows %}<div class="scroll-x"><table class="tbl"><thead><tr><th>Pelanggan</th><th class="num">Saldo kredit</th><th class="num">Invoice terbuka</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td><strong>{{ r.name }}</strong></td><td class="num"><strong>{{ r.balance|rp }}</strong></td><td class="num">{{ r.invoices|length }}</td>
+  <td class="num">{% if can_edit and r.balance > 0 %}<details class="rec-create" style="text-align:left"><summary>Pakai / kembalikan</summary>
+    {% if r.invoices %}<form method="post" style="min-width:300px">{% csrf_token %}<input type="hidden" name="action" value="apply"><input type="hidden" name="customer" value="{{ r.customer.id|default:'' }}"><input type="hidden" name="buyer" value="{% if not r.customer %}{{ r.name }}{% endif %}">
+      <select name="invoice">{% for inv in r.invoices %}<option value="{{ inv.id }}">{{ inv.number }} · sisa {{ inv.amount_due|rp }}</option>{% endfor %}</select><input name="amount" placeholder="Jumlah" inputmode="decimal" data-rupiah required><input type="date" name="date" value="{{ today }}"><button class="btn-primary" style="justify-self:start">Pakai untuk invoice</button></form>{% endif %}
+    <form method="post" style="min-width:300px">{% csrf_token %}<input type="hidden" name="action" value="refund"><input type="hidden" name="customer" value="{{ r.customer.id|default:'' }}"><input type="hidden" name="buyer" value="{% if not r.customer %}{{ r.name }}{% endif %}">
+      <select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select><input name="amount" placeholder="Jumlah dikembalikan" inputmode="decimal" data-rupiah required><input type="date" name="date" value="{{ today }}"><button class="btn" style="justify-self:start">Kembalikan uang</button></form></details>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="empty-box"><strong>Tidak ada kredit pelanggan</strong>Kredit muncul saat pelanggan membayar lebih, membayar di muka, atau nota kredit melebihi sisa tagihan.</div>{% endif %}</section>
+{% endblock %}

@@ -14,3 +14,6 @@ media/
 .ruff_cache/
 .DS_Store
 backups/
+
+# local database backups taken before migrations
+db.sqlite3*.bak

@@ -1,0 +1,1 @@
+{% for group in groups %}<div class="group-title">{{ group.title }}</div>{% for row in group.rows %}<a href="{{ row.url }}" role="option"><span>{{ row.label }}</span><small>{{ row.hint }}</small></a>{% endfor %}{% endfor %}

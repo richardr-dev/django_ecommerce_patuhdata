@@ -1,0 +1,8 @@
+<script>
+document.querySelectorAll("[data-open]").forEach(function (el) {
+  el.addEventListener("click", function () { document.getElementById(el.dataset.open).showModal(); });
+});
+document.querySelectorAll("dialog [data-close]").forEach(function (el) {
+  el.addEventListener("click", function () { el.closest("dialog").close(); });
+});
+</script>

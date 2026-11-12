@@ -1,0 +1,36 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Pemeriksaan Pembukuan{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Pemeriksaan pembukuan</h1>
+    <p>Apakah semuanya cocok? Setiap bagian pembukuan dicocokkan dengan dokumen di belakangnya: invoice, tagihan, stok, mutasi bank, dan pencairan marketplace. Yang tidak cocok ditandai beserta halaman untuk memperbaikinya.</p></div>
+  <div class="dp-actions"><a class="btn" href="">{% icon "clock" %} Periksa ulang</a></div>
+</div>
+
+<div class="tiles">
+  <div class="tile {% if summary.attention %}warn{% else %}accent{% endif %}"><small>Perlu perhatian</small><strong>{{ summary.attention }}</strong><span>dari {{ summary.total }} pemeriksaan</span></div>
+  <div class="tile"><small>Cocok</small><strong>{{ summary.ok }}</strong><span>{% if summary.info %}{{ summary.info }} catatan{% else %}semuanya sesuai{% endif %}</span></div>
+</div>
+{% if not summary.attention %}<div class="notice ok">{% icon "check-circle" %}<span>Semua pemeriksaan lulus: pembukuan cocok dengan dokumen, stok, dan bank.</span></div>{% endif %}
+
+<section class="panel">
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th style="width:110px">Status</th><th>Pemeriksaan</th><th class="num">Buku</th><th class="num">Dokumen</th><th class="num">Selisih</th><th></th></tr></thead>
+    <tbody>
+    {% for c in results %}
+      <tr>
+        <td><span class="pill {% if c.status == 'ok' %}pill-paid{% elif c.status == 'info' %}pill-issued{% elif c.status == 'warn' %}pill-partial{% else %}pill-overdue{% endif %}">{% if c.status == 'ok' %}Cocok{% elif c.status == 'info' %}Catatan{% elif c.status == 'warn' %}Periksa{% elif c.status == 'fail' %}Gagal{% else %}Error{% endif %}</span></td>
+        <td style="min-width:300px"><strong>{{ c.title }}</strong><small style="white-space:normal">{{ c.summary }}</small>
+          {% for item in c.items %}<small style="white-space:normal">· {{ item }}</small>{% endfor %}</td>
+        <td class="num">{% if c.book is not None %}{{ c.book|rp }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num">{% if c.other is not None %}{{ c.other|rp }}<small>{{ c.other_label }}</small>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num {% if c.difference %}neg{% endif %}">{% if c.difference is not None %}{% if c.difference %}<strong>{{ c.difference|rp }}</strong>{% else %}<span class="muted">0</span>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num">{% if c.key in 'unposted invoice_status' and can_edit and c.status != 'ok' %}<form method="post">{% csrf_token %}<button class="btn" style="height:32px">{% if c.key == 'unposted' %}{{ c.action }}{% else %}Perbaiki sekarang{% endif %}</button></form>
+          {% elif c.url and c.action %}<a class="link-btn" style="color:var(--pd-primary);font-weight:600" href="{{ c.url }}">{{ c.action }} →</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <footer><span>Selisih di bawah Rp1 dianggap cocok. Pemeriksaan hanya membaca; tidak ada yang berubah sampai Anda memperbaikinya di halaman terkait.</span></footer>
+</section>
+{% endblock %}

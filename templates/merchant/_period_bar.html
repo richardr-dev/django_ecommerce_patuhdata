@@ -1,0 +1,5 @@
+<form class="toolbar" method="get">
+  <nav class="seg">{% for code, label in presets %}<a href="?period={{ code }}" class="{% if preset == code %}on{% endif %}">{{ label }}</a>{% endfor %}</nav>
+  <input type="date" name="start" value="{{ start|date:'Y-m-d' }}" aria-label="Dari"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}" aria-label="Sampai">
+  <button class="btn">Terapkan</button>
+</form>

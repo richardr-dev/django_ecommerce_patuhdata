@@ -1,0 +1,43 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{% if opening %}Saldo Awal{% else %}Jurnal Umum{% endif %}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-journal-list' %}">Jurnal</a> › <span>{% if opening %}Saldo awal{% else %}Jurnal umum{% endif %}</span></nav>
+<div class="pg-head"><div><h1>{% if opening %}Saldo awal{% else %}Jurnal umum{% endif %}</h1>
+  <p>{% if opening %}Masukkan saldo akun saat mulai memakai pembukuan di sini, misalnya kas, utang, dan modal pemilik. Total debit harus sama dengan total kredit.{% else %}Untuk transaksi yang tidak berasal dari penjualan, tagihan, atau biaya: setoran modal, penyusutan, dan koreksi. Total debit harus sama dengan total kredit.{% endif %}</p></div>
+  <nav class="kind-switch"><a href="?" class="{% if not opening %}on{% endif %}">Jurnal umum</a><a href="?opening=1" class="{% if opening %}on{% endif %}">Saldo awal</a></nav></div>
+{% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup: gunakan tanggal setelahnya.</span></div>{% endif %}
+<form method="post" class="panel">{% csrf_token %}
+  <div class="form-grid">
+    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label>
+    <label class="field" style="grid-column:span 3"><span>Keterangan</span><input name="memo" maxlength="300" required value="{% if opening %}Saldo awal{% endif %}" placeholder="mis. Setoran modal pemilik"></label>
+  </div>
+  <div class="scroll-x"><table class="editor">
+    <thead><tr><th>Akun</th><th class="num" style="width:180px">Debit</th><th class="num" style="width:180px">Kredit</th><th class="x"></th></tr></thead>
+    <tbody id="rows">{% for n in "123456" %}<tr>
+      <td><select name="account[]" aria-label="Akun"><option value="">— pilih akun —</option>{% for account in accounts %}<option value="{{ account.code }}">{{ account.code }} · {{ account.name }}</option>{% endfor %}</select></td>
+      <td class="num"><input name="debit[]" inputmode="decimal" data-rupiah placeholder="0" data-debit></td>
+      <td class="num"><input name="credit[]" inputmode="decimal" data-rupiah placeholder="0" data-credit></td>
+      <td class="x"><button type="button" data-remove aria-label="Hapus baris">×</button></td></tr>{% endfor %}</tbody></table></div>
+  <div class="editor-foot"><button type="button" class="add-line" id="add-line">+ Tambah baris</button>
+    <div class="sum"><div><span>Total debit</span><span id="td">Rp0</span></div><div><span>Total kredit</span><span id="tc">Rp0</span></div><div class="grand"><span id="state">Selisih</span><span id="diff">Rp0</span></div></div></div>
+  <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-accounting' %}">Batal</a><button class="btn-primary" id="save">{% icon "check" %} Catat jurnal</button></div>
+</form>
+<script>
+(function(){
+  var rows=document.getElementById("rows");
+  function num(t){return parseFloat(String(t||"").replace(/\./g,"").replace(",","."))||0;}
+  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function calc(){var d=0,c=0;rows.querySelectorAll("tr").forEach(function(tr){d+=num(tr.querySelector("[data-debit]").value);c+=num(tr.querySelector("[data-credit]").value);});
+    document.getElementById("td").textContent=fmt(d);document.getElementById("tc").textContent=fmt(c);
+    var diff=d-c,el=document.getElementById("diff"),st=document.getElementById("state");
+    el.textContent=diff===0&&d>0?"Seimbang ✓":fmt(Math.abs(diff));st.textContent=diff===0&&d>0?"Status":"Selisih";
+    el.style.color=diff===0&&d>0?"#067647":(d||c?"#b42318":"");document.getElementById("save").disabled=!(d>0&&diff===0);}
+  rows.addEventListener("input",function(e){var tr=e.target.closest("tr");
+    if(e.target.matches("[data-debit]")&&e.target.value)tr.querySelector("[data-credit]").value="";
+    if(e.target.matches("[data-credit]")&&e.target.value)tr.querySelector("[data-debit]").value="";calc();});
+  rows.addEventListener("click",function(e){if(e.target.matches("[data-remove]")&&rows.children.length>2){e.target.closest("tr").remove();calc();}});
+  document.getElementById("add-line").addEventListener("click",function(){var t=rows.querySelector("tr").cloneNode(true);t.querySelectorAll("input").forEach(function(i){i.value="";});t.querySelector("select").selectedIndex=0;rows.appendChild(t);});
+  calc();
+})();
+</script>
+{% endblock %}

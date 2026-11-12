@@ -17,8 +17,8 @@ from django.utils import timezone
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
-from .ledger import post_expense
-from .models import Expense
+from .ledger import locked_through, post_expense
+from .models import BankAccount, Expense
 
 VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
 EDIT_ROLES = {"admin", "finance"}
@@ -31,19 +31,27 @@ MAX_RECEIPT = 5 * 1024 * 1024
 class ExpenseForm(forms.ModelForm):
     class Meta:
         model = Expense
-        fields = ["date", "category", "description", "vendor", "amount", "input_vat", "receipt"]
+        fields = ["date", "category", "description", "vendor", "amount", "input_vat", "bank_account",
+            "receipt"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
         labels = {"date": "Tanggal bayar", "category": "Kategori", "description": "Keterangan",
             "vendor": "Dibayar ke", "amount": "Jumlah dibayar (Rp)",
-            "input_vat": "PPN masukan (Rp)", "receipt": "Nota / bukti bayar"}
+            "input_vat": "PPN masukan (Rp)", "bank_account": "Dibayar dari rekening",
+            "receipt": "Nota / bukti bayar"}
         help_texts = {"amount": "Total yang keluar dari rekening, termasuk PPN bila ada.",
             "input_vat": "Khusus PKP: PPN di Faktur Pajak dari penjual. Kosongkan bila tidak ada.",
             "receipt": "Opsional. Foto atau PDF, maksimal 5 MB. Hanya tim Anda yang bisa membuka.",
             "vendor": "Opsional, mis. nama pemilik ruko atau Meta Ads."}
 
-    def __init__(self, *args, is_pkp=False, **kwargs):
+    def __init__(self, *args, is_pkp=False, store=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["input_vat"].required = False
+        from .bank import bank_accounts
+        accounts = bank_accounts(store) if store else []
+        self.fields["bank_account"].queryset = BankAccount.objects.filter(
+            pk__in=[a.pk for a in accounts])
+        self.fields["bank_account"].empty_label = "Kas utama"
+        self.fields["bank_account"].required = False
         self.is_pkp = is_pkp
 
     def clean_date(self):
@@ -114,9 +122,13 @@ def merchant_expenses(request):
             initial |= {field: getattr(source, field) for field in
                 ("category", "description", "vendor", "amount", "input_vat")}
     is_pkp = _is_pkp(store)
-    form = ExpenseForm(request.POST or None, request.FILES or None, initial=initial, is_pkp=is_pkp)
+    form = ExpenseForm(request.POST or None, request.FILES or None, initial=initial, is_pkp=is_pkp,
+        store=store)
     if request.method == "POST":
         _require_roles(request, store, EDIT_ROLES)
+        locked = locked_through(store)
+        if form.is_valid() and locked and form.cleaned_data["date"] <= locked:
+            form.add_error("date", f"Pembukuan sampai {locked:%d/%m/%Y} sudah ditutup.")
         if form.is_valid():
             with transaction.atomic():
                 expense = form.save(commit=False)
@@ -166,6 +178,11 @@ def merchant_expense_delete(request, expense_id):
     store = _staff_store(request)
     _require_roles(request, store, EDIT_ROLES)
     expense = get_object_or_404(Expense, id=expense_id, store=store)
+    locked = locked_through(store)
+    if locked and expense.date <= locked:
+        messages.error(request, f"Pembukuan sampai {locked:%d/%m/%Y} sudah ditutup: biaya ini "
+            "tidak bisa dihapus.")
+        return redirect(f"/merchant/expenses/?month={expense.date:%Y-%m}")
     with transaction.atomic():
         AuditLog.objects.create(store=store, actor=request.user, action="expense.removed",
             object_type="Expense", object_id=str(expense.id),
