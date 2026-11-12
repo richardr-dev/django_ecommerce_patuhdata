@@ -457,69 +457,28 @@ def merchant_sales_invoices(request):
                         "shipped", "delivered", "completed",
                         "refund_requested", "partially_refunded", "refunded"}
 
-    # --- Filters ---
-    channel_filter = request.GET.get("channel", "")
-    status_filter  = request.GET.get("status", "")
-    month_filter   = request.GET.get("month", "")
-    date_from_raw  = request.GET.get("date_from", "")
-    date_to_raw    = request.GET.get("date_to", "")
-    q              = request.GET.get("q", "").strip()
-
-    qs = Order.objects.filter(store=store).select_related("invoice", "customer").order_by("-created_at")
-
-    if channel_filter:
-        qs = qs.filter(channel=channel_filter)
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-    if month_filter:
-        try:
-            d = _parse_date(month_filter + "-01")
-            if d:
-                qs = qs.filter(created_at__year=d.year, created_at__month=d.month)
-        except (ValueError, AttributeError):
-            pass
-    elif date_from_raw or date_to_raw:
-        try:
-            df = _parse_date(date_from_raw) if date_from_raw else None
-            dt = _parse_date(date_to_raw) if date_to_raw else None
-            if df:
-                qs = qs.filter(created_at__date__gte=df)
-            if dt:
-                qs = qs.filter(created_at__date__lte=dt)
-        except (ValueError, AttributeError):
-            pass
-
-    if q:
-        from django.db.models import Q
-        qs = qs.filter(
-            Q(customer_name__icontains=q) |
-            Q(invoice_number__icontains=q) |
-            Q(external_order_id__icontains=q) |
-            Q(invoice__number__icontains=q)
-        )
-
-    # --- Invoice status tabs (like an accounting ledger: draft, awaiting payment, paid) ---
+    # --- Filters: one shared implementation (invoice_filters) for the page and its exports ---
     from django.db.models import Q, Value
     from django.db.models.functions import Coalesce
 
     from apps.tax.models import InvoicePayment as _Pay
-    INVOICE_TABS = [
-        ("", "Semua", None),
-        ("draft", "Draft", Q(invoice__status=_Inv.STATUS_DRAFT)),
-        ("awaiting", "Menunggu pembayaran", Q(invoice__status__in=[_Inv.STATUS_ISSUED,
-            _Inv.STATUS_PARTIAL, _Inv.STATUS_OVERDUE])),
-        ("overdue", "Jatuh tempo", Q(invoice__status=_Inv.STATUS_OVERDUE)),
-        ("paid", "Lunas", Q(invoice__status=_Inv.STATUS_PAID)),
-        ("void", "Dibatalkan", Q(invoice__status=_Inv.STATUS_VOID)),
-        ("none", "Belum diterbitkan", Q(invoice__isnull=True)),
-    ]
-    inv_filter = request.GET.get("inv", "")
+
+    from apps.accounting.views import render_partial
+
+    from .invoice_filters import KEYS, PRESETS, TABS, apply_filters, apply_tab
+
+    params = request.GET
+    qs = Order.objects.filter(store=store).select_related("invoice", "customer").order_by("-created_at")
+    qs, active_filters = apply_filters(qs, params, _dt.date.today())
+    channel_filter, status_filter = params.get("channel", ""), params.get("status", "")
+    inv_filter = params.get("inv", "")
     tab_base = qs
     invoice_tabs = [(code, label, tab_base.filter(cond).count() if cond is not None
-        else tab_base.count()) for code, label, cond in INVOICE_TABS]
-    chosen = dict((code, cond) for code, _, cond in INVOICE_TABS).get(inv_filter)
-    if chosen is not None:
-        qs = qs.filter(chosen)
+        else tab_base.count()) for code, label, cond in TABS]
+    qs = apply_tab(qs, inv_filter)
+    if inv_filter and inv_filter in dict((code, label) for code, label, _ in TABS):
+        active_filters.append({"label": dict((code, label) for code, label, _ in TABS)[inv_filter],
+            "keys": ["inv"]})
 
     # Money still owed on the invoices in view, and how much of it is late.
     open_statuses = [_Inv.STATUS_ISSUED, _Inv.STATUS_PARTIAL, _Inv.STATUS_OVERDUE]
@@ -563,14 +522,9 @@ def merchant_sales_invoices(request):
         order.overdue_days = ((today - invoice.due_date).days if invoice and invoice.due_date
             and invoice.due_date < today and order.inv_due else 0)
 
-    filter_query = "&".join(f"{key}={value}" for key, value in (("channel", channel_filter),
-        ("status", status_filter), ("month", month_filter), ("date_from", date_from_raw),
-        ("date_to", date_to_raw), ("q", q)) if value)
+    from urllib.parse import urlencode
+    filter_query = urlencode({key: params[key] for key in KEYS if params.get(key)})
 
-    # One chip per channel with its invoice count, so Shopee and Tokopedia are a click apart.
-    other_query = "&".join(f"{key}={value}" for key, value in (("inv", inv_filter),
-        ("status", status_filter), ("month", month_filter), ("date_from", date_from_raw),
-        ("date_to", date_to_raw), ("q", q)) if value)
     chip_rows = (_Inv.objects.filter(store=store).exclude(status__in=(_Inv.STATUS_DRAFT,
         _Inv.STATUS_VOID)).values("order__channel").annotate(n=Count("id")).order_by("-n"))
     channel_chips = [{"code": r["order__channel"], "label": channel_label_map.get(
@@ -578,11 +532,18 @@ def merchant_sales_invoices(request):
         "active": channel_filter == r["order__channel"]} for r in chip_rows]
     channel_total = sum(chip["count"] for chip in channel_chips)
 
-    return render(request, "merchant/sales_invoices.html", _merchant_context(request, store,
+    from .invoice_filters import date_range
+    start, end, _label = date_range(params, today)
+    return render_partial(request, "merchant/sales_invoices.html", "merchant/_sales_invoices_list.html",
+        _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         channel_filter=channel_filter, status_filter=status_filter, inv_filter=inv_filter,
-        month_filter=month_filter, date_from=date_from_raw, date_to=date_to_raw,
-        query=q, filter_query=filter_query, other_query=other_query,
+        presets=PRESETS, active_filters=active_filters, range_preset=params.get("range", ""),
+        oob=bool(request.headers.get("HX-Request") and not request.headers.get("HX-History-Restore-Request")),
+        date_from=params.get("date_from") or (start.isoformat() if start and not params.get("range") else ""),
+        date_to=params.get("date_to") or (end.isoformat() if end and not params.get("range") else ""),
+        min_total=params.get("min_total", ""), max_total=params.get("max_total", ""),
+        query=params.get("q", "").strip(), filter_query=filter_query,
         channel_chips=channel_chips, channel_total=channel_total,
         channel_choices=channel_choices, status_choices=status_choices,
         revenue=revenue, order_count=order_count, outstanding=outstanding,
@@ -810,23 +771,10 @@ def merchant_invoices_csv(request):
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
 
+    from .invoice_filters import apply_filters, apply_tab
     qs = Order.objects.filter(store=store).select_related("invoice", "customer").order_by("-created_at")
-    channel_filter = request.GET.get("channel", "")
-    if channel_filter:
-        qs = qs.filter(channel=channel_filter)
-    month_filter = request.GET.get("month", "")
-    if month_filter:
-        from django.utils.dateparse import parse_date as _pd
-        d = _pd(month_filter + "-01")
-        if d:
-            qs = qs.filter(created_at__year=d.year, created_at__month=d.month)
-    q = request.GET.get("q", "").strip()
-    if q:
-        from django.db.models import Q
-        qs = qs.filter(
-            Q(customer_name__icontains=q) | Q(invoice_number__icontains=q) |
-            Q(external_order_id__icontains=q) | Q(invoice__number__icontains=q)
-        )
+    qs, _active = apply_filters(qs, request.GET)
+    qs = apply_tab(qs, request.GET.get("inv", ""))
 
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="invoice-penjualan.csv"'
@@ -1089,35 +1037,13 @@ def _resolve_invoice_qs(request, store):
                     pass
         qs = qs.filter(id__in=ids)
     else:
-        # Apply same filters as the invoice list view
-        channel = request.GET.get("channel", "")
-        if channel:
-            qs = qs.filter(order__channel=channel)
-        status = request.GET.get("status", "")
-        if status:
-            qs = qs.filter(status=status)
-        month = request.GET.get("month", "")
-        if month:
-            from django.utils.dateparse import parse_date as _pd
-            d = _pd(month + "-01")
-            if d:
-                qs = qs.filter(issued_on__year=d.year, issued_on__month=d.month)
-        date_from = request.GET.get("date_from", "")
-        if date_from:
-            from django.utils.dateparse import parse_date as _pd
-            d = _pd(date_from)
-            if d:
-                qs = qs.filter(issued_on__gte=d)
-        date_to = request.GET.get("date_to", "")
-        if date_to:
-            from django.utils.dateparse import parse_date as _pd
-            d = _pd(date_to)
-            if d:
-                qs = qs.filter(issued_on__lte=d)
-        q = request.GET.get("q", "").strip()
-        if q:
-            from django.db.models import Q
-            qs = qs.filter(Q(buyer_name__icontains=q) | Q(number__icontains=q))
+        # The same filter as the list page, so what you see is what you export.
+        from apps.orders.models import Order
+
+        from .invoice_filters import apply_filters, apply_tab
+        orders, _active = apply_filters(Order.objects.filter(store=store), request.GET)
+        orders = apply_tab(orders, request.GET.get("inv", ""))
+        qs = qs.filter(order__in=orders)
     return qs.order_by("-issued_on", "-number")
 
 

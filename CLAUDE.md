@@ -88,6 +88,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |
 | Receipts, customer credit | `tax/receipts.py` | `tax/sales_views.py` |
 | Quotes, recurring invoices | `tax/quotes.py`, `tax/recurring.py` | `tax/sales_views.py` |
+| Invoice list filter (page + CSV/Excel/PDF exports share it) | `channels/invoice_filters.py` | `channels/views.py:merchant_sales_invoices`, `_sales_invoices_list.html` |
 | Invoice recap per channel (Shopee, Tokopedia…) | `channels/invoice_recap.py` | `channels/report_views.py` |
 | Order-based margin per channel | `channels/reporting.py` | `channels/report_views.py` |
 | Marketplace import, SKU map, income | `channels/services.py`, `mapping.py`, `income.py` | `channels/` |
@@ -289,8 +290,10 @@ Lists and reports:
 - [ ] Shared list pattern: sticky header, saved filters, column chooser, bulk actions bar,
       consistent pagination, row click opens the detail.
 - [x] Invoice list filter bar cleaned (labelled dates, one "Lainnya" menu).
-- [ ] The invoice list is still a full page reload per filter; give it the htmx partial
-      pattern like `bills`.
+- [x] The invoice list filters live with htmx (search by invoice, name, phone, product/SKU; period
+      presets and custom range; channel; status tabs with counts; amount; removable chips;
+      per-device saved views). Any new export or report on invoices must call
+      `invoice_filters.apply_filters` / `apply_tab`, never re-implement the filter.
 - [ ] Real charts on Ringkasan keuangan and Laba rugi (follow the `dataviz` skill), with
       period comparison and drill-down.
 - [ ] Empty states with one clear next action on every list.

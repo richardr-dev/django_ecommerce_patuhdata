@@ -240,13 +240,16 @@
       if (a.closest("[hx-get],[hx-post],[hx-boost]") || a.hasAttribute("data-confirm") || a.hasAttribute("data-open")
           || a.hasAttribute("onclick") || a.hasAttribute("hx-get")) return;
       var href = a.getAttribute("href");
+      if (href && href.charAt(0) === "?") href = location.pathname + href;   // pagination links
       if (!href || href.charAt(0) !== "/" || href.indexOf("/merchant/") !== 0 || SKIP.test(href)) return;
       if (href.indexOf("#") > -1 && samePath(href.split("#")[0] || location.pathname, location.href)) return;
       event.preventDefault();
       if (samePath(href, location.href)) { window.scrollTo(0, 0); return; }
       softLoad(href, true);
     });
-    window.addEventListener("popstate", function () { softLoad(location.href, false); });
+    // Capture phase: also takes over history entries htmx pushed for filters, so Back restores the
+    // whole page (list, filter form, tab counts) from the server instead of a stale snapshot.
+    window.addEventListener("popstate", function (event) { event.stopImmediatePropagation(); softLoad(location.href, false); }, true);
     history.replaceState({soft: 1}, "", location.href);
   }
 
