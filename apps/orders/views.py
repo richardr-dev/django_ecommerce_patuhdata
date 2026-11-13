@@ -1004,13 +1004,24 @@ def _staff_store(request):
     raise Http404
 
 
+def _approvals_pending(store, user):
+    from apps.accounting.approvals import pending_count
+    return pending_count(store, user) or None
+
+
 def _merchant_context(request, store, **context):
     from apps.shops.models import Customer as _Customer
     stores = (Store.objects.filter(owner=request.user) |
         Store.objects.filter(staff_members__user=request.user)).distinct().order_by("name")
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
+    role_label = ""
+    if role == "accountant":
+        # Read-only like a viewer everywhere the screens decide what to show; named for what they are.
+        role, role_label = "viewer", "Akuntan / Auditor"
     pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "merchant_role_label": role_label, "merchant_is_accountant": bool(role_label),
+        "approvals_pending": _approvals_pending(store, request.user),
         "merchant_is_owner": store.owner_id == request.user.id,
         "merchant_store_url": store_url(store), "merchant_preview_url": preview_url(store),
         "pending_customers_count": pending_count,
@@ -1025,9 +1036,18 @@ def _require_editor(request, store):
         raise Http404
 
 
+READ_ONLY_PAGES = {"viewer", "finance"}
+
+
 def _require_roles(request, store, roles):
     if store.owner_id == request.user.id:
         return
+    member = store.staff_members.filter(user=request.user).first()
+    if member and member.role == "accountant":
+        # An accountant or auditor reads everything financial and downloads it, and changes nothing.
+        if request.method in {"GET", "HEAD"} and set(roles) & READ_ONLY_PAGES:
+            return
+        raise Http404
     if not store.staff_members.filter(user=request.user, role__in=roles).exists():
         raise Http404
 
@@ -1107,7 +1127,7 @@ def merchant_dashboard(request):
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     from apps.accounting.todo import todo_items
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
-        finance_todo=todo_items(store, today), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
+        finance_todo=todo_items(store, today, request.user), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
         low_stock_count=low_stock_count, recent_orders=recent,
@@ -1359,6 +1379,7 @@ def merchant_return_detail(request, return_id):
     ret = get_object_or_404(ReturnRequest, pk=return_id, order__store=store)
 
     from apps.accounting.bank import bank_accounts
+    from apps.shops.audit import trail as audit_trail
     from apps.tax import returns as return_service
 
     if request.method == "POST":
@@ -1461,6 +1482,7 @@ def merchant_return_detail(request, return_id):
     done = keys[:position + 1] if final else keys[:position]
     return render(request, "merchant/return_detail.html", _merchant_context(request, store,
         ret=ret, available_variants=available_variants, steps=[(k, labels[k]) for k in keys],
+        audit=audit_trail(store, ret),
         done=done,
         lines=return_service.returnable_lines(ret) if ret.request_type == "return_refund" else [],
         banks=list(bank_accounts(store)), today=timezone.localdate(),

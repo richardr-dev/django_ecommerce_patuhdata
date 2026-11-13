@@ -6,6 +6,7 @@ fail with the two figures and the difference. Nothing here writes; a failing che
 where it is fixed. A check that itself breaks reports "error" and never hides the others."""
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
@@ -93,7 +94,8 @@ def unposted_documents(store, today, ledger):
             kind="payment", status="succeeded", journal_entry__isnull=True)),
         "refund": list(Refund.objects.filter(order__store=store, status="succeeded",
             journal_entry__isnull=True)),
-        "biaya operasional": list(Expense.objects.filter(store=store, journal_entry__isnull=True)),
+        "biaya operasional": list(Expense.objects.filter(store=store, journal_entry__isnull=True,
+            approval_pending=False)),
     }
     counts = {label: len(rows) for label, rows in found.items() if rows}
     total = sum(counts.values())
@@ -349,10 +351,99 @@ def budget_control(store, today, ledger):
     return check
 
 
+def duplicate_bills(store, today, ledger):
+    """The same supplier bill entered twice is the commonest way to pay a supplier twice."""
+    from django.db.models import Count
+    bills = Bill.objects.filter(store=store).exclude(status=Bill.STATUS_VOID)
+    same_number = (bills.exclude(number="").values("supplier", "number").annotate(n=Count("id")).filter(n__gt=1))
+    same_amount = (bills.values("supplier", "bill_date", "total").annotate(n=Count("id")).filter(n__gt=1))
+    items = []
+    for row in same_number:
+        b = bills.filter(supplier=row["supplier"], number=row["number"]).select_related("supplier").first()
+        items.append(f"{b.supplier.name}: nomor faktur {row['number']} tercatat {row['n']}×")
+    for row in same_amount:
+        b = bills.filter(supplier=row["supplier"], bill_date=row["bill_date"], total=row["total"]).select_related("supplier").first()
+        text = f"{b.supplier.name}: Rp{row['total']:,.0f} pada {row['bill_date']:%d %b %Y} tercatat {row['n']}×".replace(",", ".")
+        if text not in items:
+            items.append(text)
+    if not items:
+        return Check("duplicate_bills", "Tagihan supplier ganda", OK, "Tidak ada tagihan supplier yang tercatat dua kali.")
+    check = Check("duplicate_bills", "Tagihan supplier mungkin ganda", WARN,
+        f"{len(items)} tagihan terlihat sama. Batalkan yang kedua sebelum dibayar.",
+        url=reverse("merchant-bills"), action="Buka tagihan")
+    check.items = items[:10]
+    return check
+
+
+def unusual_expenses(store, today, ledger):
+    """A cost far above what the store usually pays is worth a second look."""
+    import statistics
+    since = today - timedelta(days=90)
+    rows = list(Expense.objects.filter(store=store, date__gte=since).values_list("amount", "description", "date"))
+    if len(rows) < 6:
+        return Check("unusual_expenses", "Biaya tidak biasa", OK, "Belum cukup biaya untuk dibandingkan.")
+    median = statistics.median(float(a) for a, _, _ in rows)
+    odd = [(a, d, when) for a, d, when in rows if float(a) > 3 * median and a >= 1_000_000]
+    if not odd:
+        return Check("unusual_expenses", "Biaya tidak biasa", OK, "Tidak ada biaya yang jauh di atas kebiasaan.")
+    check = Check("unusual_expenses", "Biaya jauh di atas biasanya", INFO,
+        f"{len(odd)} biaya lebih dari 3× biaya tengah Anda (Rp{median:,.0f}) dalam 90 hari.".replace(",", "."),
+        url=reverse("merchant-expenses"), action="Buka biaya")
+    check.items = [f"{when:%d %b}: {desc} Rp{a:,.0f}".replace(",", ".") for a, desc, when in odd[:10]]
+    return check
+
+
+def large_manual_journals(store, today, ledger):
+    """Manual journals bypass every document, so the big ones get listed for review."""
+    from .models import JournalEntry
+    since = today - timedelta(days=30)
+    entries = JournalEntry.objects.filter(store=store, source_type="journal", date__gte=since,
+        superseded=False).prefetch_related("lines")
+    big = [(e, sum(line.debit for line in e.lines.all())) for e in entries]
+    big = [(e, total) for e, total in big if total >= 10_000_000]
+    if not big:
+        return Check("manual_journals", "Jurnal manual besar", OK, "Tidak ada jurnal manual besar dalam 30 hari.")
+    check = Check("manual_journals", "Jurnal manual besar untuk ditinjau", INFO,
+        f"{len(big)} jurnal manual di atas Rp10 juta dalam 30 hari terakhir.",
+        url=reverse("merchant-journal-list"), action="Buka jurnal")
+    check.items = [f"{e.date:%d %b}: {e.memo} Rp{total:,.0f}".replace(",", ".") for e, total in big[:10]]
+    return check
+
+
+def backdated_entries(store, today, ledger):
+    """Entries recorded this week but dated more than a month back change a period people may
+    already have reported on."""
+    from .models import JournalEntry
+    week = today - timedelta(days=7)
+    old = JournalEntry.objects.filter(store=store, created_at__date__gte=week,
+        date__lt=today - timedelta(days=37)).exclude(source_type__in=["year_close", "opening"]).count()
+    if not old:
+        return Check("backdated", "Jurnal bertanggal mundur", OK, "Tidak ada jurnal baru yang bertanggal jauh ke belakang.")
+    return Check("backdated", "Jurnal bertanggal mundur", INFO,
+        f"{old} jurnal dicatat minggu ini dengan tanggal lebih dari sebulan lalu. Pastikan periodenya belum dilaporkan.",
+        url=reverse("merchant-journal-list"), action="Buka jurnal")
+
+
+def voids_after_payment(store, today, ledger):
+    """An invoice cancelled after money was received needs an explanation."""
+    from apps.tax.models import Invoice, InvoicePayment
+    paid = set(InvoicePayment.objects.filter(invoice__store=store, invoice__status=Invoice.STATUS_VOID
+        ).values_list("invoice__number", flat=True))
+    if not paid:
+        return Check("voids_after_payment", "Invoice dibatalkan setelah dibayar", OK,
+            "Tidak ada invoice yang dibatalkan setelah menerima pembayaran.")
+    check = Check("voids_after_payment", "Invoice dibatalkan setelah dibayar", WARN,
+        f"{len(paid)} invoice dibatalkan padahal sudah ada pembayaran. Pastikan uangnya dikembalikan.",
+        url=reverse("merchant-sales-invoices") + "?inv=void", action="Buka invoice batal")
+    check.items = sorted(paid)[:10]
+    return check
+
+
 CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_status, receivable, payable,
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
-    marketplace_income, period_lock, budget_control]
+    marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
+    large_manual_journals, backdated_entries, voids_after_payment]
 
 
 def run_checks(store, today):

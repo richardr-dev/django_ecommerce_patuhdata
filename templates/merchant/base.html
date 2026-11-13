@@ -73,7 +73,7 @@
       <details class="pd-user">
         <summary aria-label="Akun"><span class="avatar">{{ request.user.username|slice:':1'|upper }}</span></summary>
         <div class="menu-panel">
-          <div class="pd-user-head"><strong>{{ request.user.username }}</strong><small>{{ merchant_role|title }} · {{ merchant_store.name }}</small></div>
+          <div class="pd-user-head"><strong>{{ request.user.username }}</strong><small>{{ merchant_role_label|default:merchant_role|title }} · {{ merchant_store.name }}</small></div>
           <a href="{% url 'merchant-billing' %}">{% icon "wallet" %}<span>Paket langganan</span></a>
           <a href="{% url 'merchant-billing' %}#ajak-teman">{% icon "gift" %}<span>Ajak teman</span></a>
           {% if merchant_is_owner %}<a href="{% url 'merchant-brand-new' %}">{% icon "store" %}<span>Tambah brand</span></a>{% endif %}

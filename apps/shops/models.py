@@ -205,7 +205,8 @@ class StoreStaff(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=[("admin", "Group/Brand Admin"),
         ("manager", "Brand Manager"), ("warehouse", "Warehouse"), ("finance", "Finance"),
-        ("customer_service", "Customer Service"), ("ops", "Operations"), ("viewer", "Viewer")])
+        ("customer_service", "Customer Service"), ("ops", "Operations"), ("viewer", "Viewer"),
+        ("accountant", "Akuntan / Auditor (hanya lihat)")])
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "user"], name="unique_store_staff")]
 

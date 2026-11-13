@@ -21,7 +21,7 @@ def depreciation_due(store, today):
     return due
 
 
-def todo_items(store, today):
+def todo_items(store, today, user=None):
     from apps.channels.models import UnmappedSku
     from apps.tax.models import Invoice, RecurringInvoice
 
@@ -34,6 +34,9 @@ def todo_items(store, today):
                 "icon": icon, "tone": tone})
 
     from . import budgets
+    from .approvals import pending_count
+    add(pending_count(store, user) if user else 0, "permintaan menunggu persetujuan Anda",
+        reverse("merchant-approvals"), "Periksa →", "check-circle", "warn")
     budget_alerts = budgets.alerts(store, today)
     add(len(budget_alerts["over"]), "pos biaya melebihi anggaran bulan ini", reverse("merchant-budget"),
         "Periksa →", "alert", "danger")

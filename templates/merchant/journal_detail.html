@@ -36,6 +36,8 @@
     {% if entry.reverses %}<section class="dp-card"><header><h2>Membalik</h2></header><div class="dp-card-body"><a href="{% url 'merchant-journal-detail' entry.reverses_id %}">JU-{{ entry.reverses_id }}</a><p class="dp-help">{{ entry.reverses.memo }}</p></div></section>{% endif %}
     {% if reversal %}<section class="dp-card"><header><h2>Dibalik oleh</h2></header><div class="dp-card-body"><a href="{% url 'merchant-journal-detail' reversal.id %}">JU-{{ reversal.id }}</a><p class="dp-help">{{ reversal.date|date:"d M Y" }}</p></div></section>{% endif %}
     <section class="dp-card"><header><h2>Catatan</h2></header><div class="dp-card-body"><p class="dp-help" style="margin:0">Jurnal tidak diubah atau dihapus. Koreksi dilakukan dengan jurnal pembalik, sehingga jejak audit tetap lengkap.{% if not can_reverse and entry.source_type != 'journal' %} Jurnal otomatis dibalik dengan membatalkan dokumen sumbernya.{% endif %}</p></div></section>
+    {% include "merchant/_attachments_card.html" %}
+  {% include "merchant/_audit_card.html" %}
   </aside>
 </div>
 {% if can_reverse %}

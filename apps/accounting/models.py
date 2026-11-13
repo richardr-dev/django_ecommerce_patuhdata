@@ -100,6 +100,8 @@ class Expense(models.Model):
     # The money account it was paid from (the main cash account when empty).
     cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="expenses", verbose_name="Pusat biaya")
+    # True while the expense waits for a second person to approve it: it is not on the books yet.
+    approval_pending = models.BooleanField(default=False)
     bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
         blank=True, related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
@@ -485,3 +487,70 @@ class BudgetLine(models.Model):
                 condition=models.Q(cost_center__isnull=True), name="unique_budget_line_no_center"),
             models.CheckConstraint(condition=models.Q(month__gte=1, month__lte=12), name="budget_month_valid"),
         ]
+
+
+@deconstructible
+class AttachmentPath:
+    def __call__(self, instance, filename):
+        import uuid
+
+        safe = "".join(c for c in filename if c.isalnum() or c in "._- ")[:120] or "lampiran"
+        return f"attachments/{instance.store.slug}/{instance.kind}/{uuid.uuid4().hex}/{safe}"
+
+
+class Attachment(models.Model):
+    """A supporting document (supplier invoice, receipt, transfer proof, contract) kept with the
+    record it supports, for the audit. Stored privately: only the store's team can open it."""
+    KINDS = [("bill", "Tagihan supplier"), ("journal", "Jurnal"), ("cash", "Transaksi kas"),
+        ("invoice", "Invoice penjualan")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="attachments")
+    kind = models.CharField(max_length=12, choices=KINDS)
+    object_id = models.CharField(max_length=64)
+    file = models.FileField(upload_to=AttachmentPath(), storage=private_storage_callable)
+    name = models.CharField(max_length=160)
+    size = models.PositiveIntegerField(default=0)
+    note = models.CharField(max_length=200, blank=True)
+    uploaded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["store", "kind", "object_id"])]
+
+
+class ApprovalPolicy(models.Model):
+    """From what amount an action needs a second person to approve it (maker and checker)."""
+    KINDS = [("bill_payment", "Pembayaran tagihan supplier"), ("expense", "Biaya operasional"),
+        ("journal", "Jurnal manual"), ("invoice_void", "Pembatalan invoice"),
+        ("bill_void", "Pembatalan tagihan supplier")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="approval_policies")
+    kind = models.CharField(max_length=20, choices=KINDS)
+    threshold = models.DecimalField(max_digits=16, decimal_places=2, default=0,
+        help_text="Persetujuan diminta untuk jumlah sebesar ini atau lebih. 0 berarti semuanya.")
+    enabled = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "kind"], name="unique_approval_policy")]
+
+
+class ApprovalRequest(models.Model):
+    """A pending action: what was asked, by whom, and what was decided. The action runs only when a
+    different person approves it, and runs as the person who asked."""
+    PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
+    STATUS = [(PENDING, "Menunggu"), (APPROVED, "Disetujui"), (REJECTED, "Ditolak")]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="approval_requests")
+    kind = models.CharField(max_length=20, choices=ApprovalPolicy.KINDS)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    summary = models.CharField(max_length=300)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=STATUS, default=PENDING, db_index=True)
+    requester = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    decided_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

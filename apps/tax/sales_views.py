@@ -17,6 +17,7 @@ from apps.accounting import bank as bank_service
 from apps.accounting.ledger import LedgerError, entries_for
 from apps.catalog.models import Product
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog, Customer
 
 from . import credit_notes, quotes, receipts, recurring
@@ -185,7 +186,8 @@ def merchant_credit_note_detail(request, note_id):
         return redirect("merchant-credit-note-detail", note.pk)
     journal = entries_for(store, [("credit_note", note.pk)])
     return render(request, "merchant/credit_note_detail.html", _merchant_context(request, store,
-        note=note, items=note.items.all(), journal=journal, can_edit=_can_edit(request, store)))
+        note=note, items=note.items.all(), journal=journal, can_edit=_can_edit(request, store),
+        audit=audit_trail(store, note)))
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +383,7 @@ def merchant_quote_detail(request, quote_id):
             messages.error(request, str(error))
         return redirect("merchant-quote-detail", quote.pk)
     return render(request, "merchant/quote_detail.html", _merchant_context(request, store,
-        quote=quote, items=quote.items.select_related("product"),
+        quote=quote, items=quote.items.select_related("product"), audit=audit_trail(store, quote),
         expired=quotes.is_expired(quote), can_edit=_can_edit(request, store)))
 
 

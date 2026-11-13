@@ -11,8 +11,12 @@ from django.utils import timezone
 
 from apps.billing.plans import can_reconcile_payouts
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.audit import log as audit_log
+from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog
 
+from . import approvals
+from .attachments import for_record as attachment_list
 from .ledger import account_balances, chart_of_accounts, locked_through
 from .models import (
     BILL_CATEGORIES,
@@ -80,7 +84,7 @@ def merchant_accounting(request):
     }
     total_accounts = sum(account_counts.values())
     recent_expenses = Expense.objects.filter(
-        store=store, date__gte=thirty_days_ago
+        store=store, date__gte=thirty_days_ago, approval_pending=False
     ).aggregate(total=Sum("amount"))["total"] or Decimal(0)
     recent_journal_count = JournalEntry.objects.filter(
         store=store, date__gte=thirty_days_ago
@@ -419,6 +423,7 @@ def merchant_bill_new(request):
                 cost_center=CostCenter.objects.filter(store=store, is_active=True,
                     pk=request.POST.get("cost_center") or 0).first())
 
+            audit_log(store, request.user, "bill.created", bill, total=bill.total, supplier=supplier.name)
             messages.success(request, f"Bill {number or str(bill.id)[:8]} berhasil dibuat.")
             return redirect("merchant-bill-detail", bill_id=bill.id)
         except Exception as exc:
@@ -455,10 +460,21 @@ def merchant_bill_detail(request, bill_id):
                 from .bank import bank_accounts
                 bank = next((b for b in bank_accounts(store)
                     if str(b.pk) == request.POST.get("bank_account")), None)
+                if approvals.required(store, "bill_payment", amount, request.user):
+                    approvals.submit(store, "bill_payment", amount,
+                        f"Bayar tagihan {bill.supplier.name} {bill.number}".strip(),
+                        {"bill_id": str(bill.pk), "amount": str(amount), "paid_on": paid_on.isoformat(),
+                         "method": request.POST.get("method", "transfer"),
+                         "reference": request.POST.get("reference", "")[:120],
+                         "bank_account_id": bank.pk if bank else None}, request.user, subject=bill)
+                    messages.info(request, "Pembayaran ini perlu persetujuan orang lain karena nilainya besar. "
+                        "Sudah diajukan di menu Persetujuan.")
+                    return redirect("merchant-bill-detail", bill_id=bill.id)
                 pay_bill(bill, amount=amount, paid_on=paid_on,
                     method=request.POST.get("method", "transfer"),
                     reference=request.POST.get("reference", "")[:120], actor=request.user,
                     bank_account=bank)
+                audit_log(store, request.user, "bill.paid", bill, amount=amount)
                 messages.success(request, "Pembayaran dicatat.")
             except (PayableError, InvalidOperation, ValueError) as exc:
                 messages.error(request, f"Gagal: {exc}")
@@ -471,7 +487,14 @@ def merchant_bill_detail(request, bill_id):
                 messages.error(request, f"Gagal: {exc}")
         elif action == "void":
             try:
+                if approvals.required(store, "bill_void", bill.total, request.user):
+                    approvals.submit(store, "bill_void", bill.total,
+                        f"Batalkan tagihan {bill.supplier.name} {bill.number}".strip(),
+                        {"bill_id": str(bill.pk)}, request.user, subject=bill)
+                    messages.info(request, "Pembatalan ini perlu persetujuan orang lain. Sudah diajukan.")
+                    return redirect("merchant-bill-detail", bill_id=bill.id)
                 void_bill(bill, actor=request.user)
+                audit_log(store, request.user, "bill.voided", bill, total=bill.total)
                 messages.success(request, "Bill dibatalkan.")
             except PayableError as exc:
                 messages.error(request, f"Gagal: {exc}")
@@ -488,7 +511,8 @@ def merchant_bill_detail(request, bill_id):
     to_receive = sum((int(item.quantity) - item.received_quantity for item in goods
         if int(item.quantity) > item.received_quantity), 0)
     return render(request, "merchant/bill_detail.html", _merchant_context(request, store,
-        bill=bill, items=items, payments=payments, journal=journal,
+        bill=bill, items=items, payments=payments, journal=journal, audit=audit_trail(store, bill),
+        attachments=attachment_list(store, "bill", bill.pk), attach_kind="bill", attach_id=bill.pk,
         amount_paid=amount_paid, amount_due=amount_due, today=today,
         paid_pct=min(100, int(amount_paid * 100 / bill.total)) if bill.total else 0,
         has_goods=bool(goods), to_receive=to_receive,
@@ -616,6 +640,15 @@ def merchant_journal_new(request):
             if total_debit != total_credit:
                 raise LedgerError(f"Jurnal tidak seimbang: debit Rp{total_debit:,.0f}, "
                     f"kredit Rp{total_credit:,.0f}.")
+            if approvals.required(store, "journal", total_debit, request.user):
+                center = CostCenter.objects.filter(store=store, is_active=True,
+                    pk=request.POST.get("cost_center") or 0).first()
+                approvals.submit(store, "journal", total_debit, f"Jurnal manual: {memo}",
+                    {"date": date.isoformat(), "memo": memo, "cost_center_id": center.pk if center else None,
+                     "lines": [[code, str(d), str(c)] for code, d, c in lines]}, request.user)
+                messages.info(request, "Jurnal ini perlu persetujuan orang lain karena nilainya besar. "
+                    "Sudah diajukan di menu Persetujuan.")
+                return redirect("merchant-journal-new")
             entry = post_journal(store, date=date, memo=memo, lines=lines, actor=request.user,
                 cost_center=CostCenter.objects.filter(store=store, is_active=True,
                     pk=request.POST.get("cost_center") or 0).first())

@@ -1,0 +1,41 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Persetujuan{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pengendalian internal</span><h1>Persetujuan</h1><p>Tindakan bernilai besar dijalankan setelah orang lain menyetujuinya: yang mengajukan tidak bisa menyetujui sendiri. Ini memisahkan tugas dan mencegah kecurangan.</p></div></div>
+
+<section class="panel">
+  <header><div><h2>Menunggu keputusan</h2><p>{{ pending|length }} permintaan.</p></div></header>
+  <div class="grid gap-1 p-3">
+    {% for item in pending %}<div class="rounded-2xl p-4 ring-1 ring-slate-100">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0"><b class="block text-slate-900">{{ item.summary }}</b><small class="text-slate-500">{{ item.get_kind_display }} · diajukan {{ item.requester.get_username|default:"—" }} · {{ item.created_at|date:"d M Y H:i" }}</small></div>
+        <b class="text-lg text-slate-900">{{ item.amount|rp }}</b></div>
+      {% if item.can_decide %}<form method="post" action="{% url 'merchant-approval-decide' item.pk %}" class="mt-3 flex flex-wrap items-center gap-2">{% csrf_token %}
+        <input name="note" placeholder="Catatan (wajib bila menolak)" maxlength="300" class="min-w-[220px] flex-1">
+        <button name="decision" value="approve" class="btn-primary" data-confirm="Setujui dan jalankan sekarang: {{ item.summary }}?" data-confirm-tone="neutral" data-confirm-ok="Setujui">{% icon "check" %} Setujui</button>
+        <button name="decision" value="reject" class="btn btn-danger" data-confirm="Tolak permintaan ini?">Tolak</button></form>
+      {% else %}<p class="dp-help mt-2" style="margin-bottom:0">{% if item.requester == request.user %}Ini permintaan Anda. Menunggu orang lain menyetujui.{% else %}Anda tidak punya hak memutuskan.{% endif %}</p>{% endif %}
+    </div>{% empty %}<p class="px-3 py-8 text-center text-sm text-slate-400">Tidak ada permintaan yang menunggu.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <header><div><h2>Aturan</h2><p>Mulai dari jumlah berapa sebuah tindakan perlu persetujuan.{% if not others %} <b class="text-amber-700">Anda satu-satunya yang bisa menyetujui, jadi aturan belum berlaku sampai ada admin, manajer, atau finance lain.</b>{% endif %}</p></div></header>
+  <form method="post" class="p-3" {% if not is_admin %}onsubmit="return false"{% endif %}>{% csrf_token %}
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Tindakan</th><th style="width:90px">Aktif</th><th style="width:220px" class="num">Mulai dari (Rp)</th></tr></thead><tbody>
+      {% for r in rules %}<tr><td><b class="rowlink">{{ r.label }}</b></td><td><input type="checkbox" name="on_{{ r.kind }}" value="1" {% if r.policy.enabled %}checked{% endif %} {% if not is_admin %}disabled{% endif %}></td>
+        <td class="num"><input name="min_{{ r.kind }}" data-rupiah inputmode="decimal" value="{% if r.policy %}{{ r.policy.threshold|floatformat:0 }}{% else %}0{% endif %}" style="width:160px;text-align:right" {% if not is_admin %}disabled{% endif %}></td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if is_admin %}<div class="mt-3"><button class="btn-primary">{% icon "check" %} Simpan aturan</button></div>{% else %}<p class="dp-help mt-3">Hanya admin yang bisa mengubah aturan.</p>{% endif %}
+  </form>
+</section>
+
+<section class="panel">
+  <header><h2>Riwayat keputusan</h2></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Permintaan</th><th>Diajukan</th><th>Diputuskan</th><th class="num">Jumlah</th><th>Hasil</th></tr></thead><tbody>
+    {% for item in done %}<tr><td><b class="rowlink">{{ item.summary }}</b><small>{{ item.get_kind_display }}</small></td><td>{{ item.requester.get_username|default:"—" }}<small>{{ item.created_at|date:"d M Y" }}</small></td><td>{{ item.decided_by.get_username|default:"—" }}<small>{{ item.decided_at|date:"d M Y H:i" }}</small></td><td class="num">{{ item.amount|rp }}</td>
+      <td><span class="pill {% if item.status == 'approved' %}pill-paid{% else %}pill-overdue{% endif %}">{{ item.get_status_display }}</span>{% if item.decision_note %}<small>{{ item.decision_note }}</small>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Belum ada keputusan.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

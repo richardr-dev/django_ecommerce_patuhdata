@@ -14,11 +14,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog
 
 from . import assets as asset_service
 from . import bank as bank_service
 from . import reports
+from .attachments import for_record as attachment_list
 from .ledger import (
     ACCUMULATED_DEPRECIATION,
     EQUITY,
@@ -274,6 +276,8 @@ def merchant_cash_detail(request, txn_id):
     journal = entries_for(store, [("cash", txn.pk)])
     matched = BankStatementLine.objects.filter(matched_line__entry__in=journal).first()
     return render(request, "merchant/cash_detail.html", _merchant_context(request, store,
+        attachments=attachment_list(store, "cash", txn.pk), attach_kind="cash", attach_id=txn.pk,
+        audit=audit_trail(store, txn),
         txn=txn, items=txn.lines.select_related("account"), journal=journal, matched=matched,
         can_edit=_can_edit(request, store)))
 
@@ -353,6 +357,8 @@ def merchant_journal_detail(request, entry_id):
     total = sum((row.debit for row in rows), Decimal(0))
     return render(request, "merchant/journal_detail.html", _merchant_context(request, store,
         entry=entry, rows=rows, total=total, source_label=label, source_url=url,
+        audit=audit_trail(store, entry), attachments=attachment_list(store, "journal", entry.pk),
+        attach_kind="journal", attach_id=entry.pk,
         reversal=reversal, can_reverse=entry.source_type == "journal" and not entry.superseded
             and _can_edit(request, store), today=timezone.localdate().isoformat()))
 
@@ -776,3 +782,109 @@ def merchant_cost_centers(request):
         return redirect("merchant-cost-centers")
     return render(request, "merchant/cost_centers.html", _merchant_context(request, store,
         centers=CostCenter.objects.filter(store=store)))
+
+
+# ── Attachments ──────────────────────────────────────────────────────────────
+
+@login_required(login_url="/merchant/login/")
+@require_POST
+def merchant_attachment_add(request):
+    from . import attachments
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance"})
+    try:
+        attachments.add(store, request.POST.get("kind", ""), request.POST.get("object_id", ""),
+            request.FILES.get("file"), actor=request.user, note=request.POST.get("note", ""))
+    except attachments.AttachmentError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Lampiran disimpan.")
+    return attachments.back(request)
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_attachment_file(request, attachment_id):
+    from . import attachments
+    from .models import Attachment
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    attachment = get_object_or_404(Attachment, pk=attachment_id, store=store)
+    return attachments.response(attachment)
+
+
+@login_required(login_url="/merchant/login/")
+@require_POST
+def merchant_attachment_delete(request, attachment_id):
+    from . import attachments
+    from .models import Attachment
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "finance"})
+    attachment = get_object_or_404(Attachment, pk=attachment_id, store=store)
+    record = attachments._target(store, attachment.kind, attachment.object_id)
+    if record is not None:
+        from apps.shops.audit import log as audit_log
+        audit_log(store, request.user, "attachment.removed", record, file=attachment.name)
+    attachment.file.delete(save=False)
+    attachment.delete()
+    messages.success(request, "Lampiran dihapus.")
+    return attachments.back(request)
+
+
+# ── Persetujuan (maker and checker) ──────────────────────────────────────────
+
+@login_required(login_url="/merchant/login/")
+def merchant_approvals(request):
+    """Requests waiting for a second person, and the rules that create them."""
+    from . import approvals
+    from .models import ApprovalPolicy, ApprovalRequest
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    is_admin = store.owner_id == request.user.id or store.staff_members.filter(
+        user=request.user, role="admin").exists()
+    if request.method == "POST":
+        if not is_admin:
+            raise Http404
+        for kind, _label in ApprovalPolicy.KINDS:
+            enabled = request.POST.get(f"on_{kind}") == "1"
+            raw = (request.POST.get(f"min_{kind}") or "0").replace(".", "").replace(",", ".")
+            try:
+                threshold = max(Decimal(raw), Decimal(0))
+            except InvalidOperation:
+                threshold = Decimal(0)
+            ApprovalPolicy.objects.update_or_create(store=store, kind=kind,
+                defaults={"enabled": enabled, "threshold": threshold})
+        AuditLog.objects.create(store=store, actor=request.user, action="approval.policy_saved",
+            object_type="ApprovalPolicy", object_id=str(store.pk), details={})
+        messages.success(request, "Aturan persetujuan disimpan.")
+        return redirect("merchant-approvals")
+    policies = {p.kind: p for p in ApprovalPolicy.objects.filter(store=store)}
+    rules = [{"kind": kind, "label": label, "policy": policies.get(kind)} for kind, label in ApprovalPolicy.KINDS]
+    pending = ApprovalRequest.objects.filter(store=store, status=ApprovalRequest.PENDING).select_related("requester")
+    done = ApprovalRequest.objects.filter(store=store).exclude(status=ApprovalRequest.PENDING).select_related(
+        "requester", "decided_by")[:30]
+    for item in pending:
+        item.can_decide = approvals.can_decide(store, request.user, item)
+    return render(request, "merchant/approvals.html", _merchant_context(request, store, pending=pending,
+        done=done, rules=rules, is_admin=is_admin, others=len(approvals.approvers(store, exclude=request.user))))
+
+
+@login_required(login_url="/merchant/login/")
+@require_POST
+def merchant_approval_decide(request, request_id):
+    from . import approvals
+    from .models import ApprovalRequest
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance"})
+    item = get_object_or_404(ApprovalRequest, pk=request_id, store=store)
+    try:
+        if request.POST.get("decision") == "approve":
+            approvals.approve(item, request.user)
+            messages.success(request, f"Disetujui dan dijalankan: {item.summary}.")
+        else:
+            approvals.reject(item, request.user, request.POST.get("note", ""))
+            messages.success(request, "Permintaan ditolak.")
+    except approvals.ApprovalError as error:
+        messages.error(request, str(error))
+    return redirect("merchant-approvals")

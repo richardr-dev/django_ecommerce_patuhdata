@@ -106,6 +106,18 @@ Four test files failed before this work and still do: `test_digital_products`,
   when marketplace fees were not imported and when sold products have no cost price: never show a
   margin without those warnings. Exports (`merchant-customers-export`, `merchant-sales-analytics-xlsx`)
   take the same query string as the screen they come from; their buttons read the live form.
+- **Internal control** (see `accounting/approvals.py`, `accounting/attachments.py`, `shops/audit.py`):
+  `accountant` is a read-only role (`_require_roles` lets it through on GET for pages that allow
+  viewer or finance, never on POST; screens treat it as `viewer`). Above a per-store threshold, bill
+  payments, expenses, manual journals and invoice or bill voids become an `ApprovalRequest` that a
+  different admin, manager or finance user must approve; it then runs as the requester, and a store
+  with no other approver is never blocked. A new money action must call `approvals.required(...)`
+  before it posts. Every detail page shows its history (`shops/audit.trail`, so log new actions with
+  `shops.audit.log`) and bills, journals, cash transactions and invoices take attachments.
+  Fraud checks (duplicate bills, unusual expenses, big manual journals, back-dated entries, voided
+  paid invoices) live in `accounting/controls.py`.
+- **Budgets and cost centres** (`accounting/budgets.py`): actuals are read from the ledger, cost-centre
+  actuals from `JournalEntry.cost_center`, so a posting that should count for a centre must pass it.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live

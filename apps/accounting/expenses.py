@@ -17,6 +17,7 @@ from django.utils import timezone
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
 
+from . import approvals
 from .ledger import locked_through, post_expense
 from .models import BankAccount, Expense
 
@@ -116,7 +117,8 @@ def merchant_expenses(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
     month = _month(request)
-    expenses = Expense.objects.filter(store=store, date__gte=month, date__lt=_next_month(month))
+    expenses = Expense.objects.filter(store=store, date__gte=month, date__lt=_next_month(month),
+        approval_pending=False)
     if request.GET.get("format") == "csv":
         return _csv(store, month, expenses)
     initial = {"date": timezone.localdate()}
@@ -138,14 +140,25 @@ def merchant_expenses(request):
             with transaction.atomic():
                 expense = form.save(commit=False)
                 expense.store, expense.created_by = store, request.user
+                parked = approvals.required(store, "expense", expense.amount, request.user)
+                expense.approval_pending = parked
                 expense.save()
-                post_expense(expense)
+                if parked:   # not on the books until someone else approves it
+                    approvals.submit(store, "expense", expense.amount,
+                        f"Biaya: {expense.get_category_display()} · {expense.description}",
+                        {"expense_id": expense.pk}, request.user, subject=expense)
+                else:
+                    post_expense(expense)
                 AuditLog.objects.create(store=store, actor=request.user, action="expense.created",
                     object_type="Expense", object_id=str(expense.id),
                     details={"amount": str(expense.amount), "category": expense.category,
                         "label": expense.description})
-            messages.success(request, f"Biaya Rp{expense.amount:,.0f} dicatat dan masuk ke laba "
-                "rugi.".replace(",", "."))
+            if expense.approval_pending:
+                messages.info(request, f"Biaya Rp{expense.amount:,.0f} perlu persetujuan orang lain "
+                    "sebelum masuk pembukuan. Sudah diajukan di menu Persetujuan.".replace(",", "."))
+            else:
+                messages.success(request, f"Biaya Rp{expense.amount:,.0f} dicatat dan masuk ke laba "
+                    "rugi.".replace(",", "."))
             return redirect(f"{request.path}?month={expense.date:%Y-%m}")
     by_category = (expenses.values("category").annotate(total=Sum("amount"))
         .order_by("-total"))

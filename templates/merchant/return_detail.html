@@ -125,6 +125,7 @@
         {% if ret.credit_note %}<p class="mt-3"><a class="btn" href="{% url 'merchant-credit-note-detail' ret.credit_note.id %}">Lihat jurnal nota kredit</a></p>{% endif %}
       </div>
     </section>
+    {% include "merchant/_audit_card.html" %}
   </aside>
 </div>
 {% endwith %}

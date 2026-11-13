@@ -234,6 +234,8 @@
       {% if credit_available and amount_due > 0 %}<a href="{% url 'merchant-customer-credit' %}"><span>Kredit pelanggan tersedia</span><small>Rp{{ credit_available|floatformat:"0g" }} →</small></a>{% endif %}
       <a href="{% url 'merchant-sales-invoices' %}?channel={{ order.channel }}"><span>Invoice {{ order.get_channel_display }} lainnya</span><small>→</small></a>
     </section>
+    {% include "merchant/_attachments_card.html" %}
+  {% include "merchant/_audit_card.html" %}
   </aside>
 </div>
 

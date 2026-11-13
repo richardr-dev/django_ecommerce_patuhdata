@@ -1,0 +1,33 @@
+"""The history of one document: who did what, and when. Read from the audit log, so the page
+shows exactly what was recorded and nothing is added by hand."""
+from .models import AuditLog
+
+LABELS = {
+    "invoice.created": "Invoice dibuat", "invoice.updated": "Invoice diubah",
+    "invoice.paid": "Pembayaran dicatat", "invoice.voided": "Invoice dibatalkan",
+    "invoice.sent": "Invoice dikirim", "bill.created": "Tagihan dibuat", "bill.paid": "Pembayaran tagihan",
+    "bill.voided": "Tagihan dibatalkan", "bill.attachment": "Lampiran ditambahkan",
+    "journal.created": "Jurnal dicatat", "journal.reversed": "Jurnal dibalik",
+    "credit_note.created": "Nota kredit dibuat", "credit_note.voided": "Nota kredit dibatalkan",
+    "quote.saved": "Penawaran disimpan", "quote.invoiced": "Penawaran dijadikan invoice",
+    "expense.created": "Biaya dicatat", "expense.removed": "Biaya dihapus",
+    "return.created": "Retur dicatat", "return.status_updated": "Status retur berubah",
+    "return.settle_refund": "Retur diselesaikan (refund)", "return.settle_exchange": "Retur diselesaikan (tukar)",
+    "cash.created": "Transaksi kas dicatat", "cash.voided": "Transaksi kas dibatalkan",
+    "approval.requested": "Diajukan untuk persetujuan", "approval.approved": "Disetujui",
+    "approval.rejected": "Ditolak", "attachment.added": "Lampiran ditambahkan",
+    "attachment.removed": "Lampiran dihapus",
+}
+
+
+def trail(store, obj, limit=40):
+    """Audit entries for ``obj`` (a model instance), newest first."""
+    rows = AuditLog.objects.filter(store=store, object_type=type(obj).__name__, object_id=str(obj.pk)
+        ).select_related("actor").order_by("-created_at")[:limit]
+    return [{"when": row.created_at, "who": row.actor.get_username() if row.actor else "Sistem",
+        "what": LABELS.get(row.action, row.action), "details": row.details} for row in rows]
+
+
+def log(store, actor, action, obj, **details):
+    AuditLog.objects.create(store=store, actor=actor, action=action, object_type=type(obj).__name__,
+        object_id=str(obj.pk), details={k: str(v) for k, v in details.items()})

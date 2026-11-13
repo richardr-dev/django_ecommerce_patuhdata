@@ -415,7 +415,6 @@ def merchant_sales_invoices(request):
     from decimal import Decimal
 
     from django.db.models import Count, Sum
-    from django.utils.dateparse import parse_date as _parse_date
 
     from apps.orders.models import Order
 
@@ -458,14 +457,22 @@ def merchant_sales_invoices(request):
                         "refund_requested", "partially_refunded", "refunded"}
 
     # --- Filters: one shared implementation (invoice_filters) for the page and its exports ---
-    from django.db.models import Q, Value
+    from django.db.models import Value
     from django.db.models.functions import Coalesce
 
+    from apps.accounting.views import render_partial
     from apps.tax.models import InvoicePayment as _Pay
 
-    from apps.accounting.views import render_partial
-
-    from .invoice_filters import KEYS, PRESETS, SORTS, TABS, apply_filters, apply_sort, apply_tab, values
+    from .invoice_filters import (
+        KEYS,
+        PRESETS,
+        SORTS,
+        TABS,
+        apply_filters,
+        apply_sort,
+        apply_tab,
+        values,
+    )
 
     params = request.GET
     qs = Order.objects.filter(store=store).select_related("invoice", "customer").order_by("-created_at")
@@ -681,6 +688,8 @@ def merchant_invoice_detail(request, invoice_id):
                     if str(b.pk) == request.POST.get("bank_account")), None)
                 record_payment(invoice, amount, paid_on, method, reference, note, request.user,
                     bank_account=bank)
+                from apps.shops.audit import log as audit_log
+                audit_log(store, request.user, "invoice.paid", invoice, amount=amount, method=method)
                 messages.success(request, "Pembayaran berhasil dicatat.")
             except Exception as exc:
                 messages.error(request, f"Gagal: {exc}")
@@ -689,11 +698,19 @@ def merchant_invoice_detail(request, invoice_id):
         if action == "void":
             from apps.accounting.ledger import LedgerError
             from apps.tax.posting import void_invoice
+            from apps.accounting import approvals
+            if approvals.required(store, "invoice_void", invoice.total, request.user):
+                approvals.submit(store, "invoice_void", invoice.total, f"Batalkan invoice {invoice.number}",
+                    {"invoice_id": str(invoice.pk)}, request.user, subject=invoice)
+                messages.info(request, "Pembatalan ini perlu persetujuan orang lain. Sudah diajukan di menu Persetujuan.")
+                return redirect("merchant-invoice-detail", invoice_id=invoice.id)
             try:
                 void_invoice(invoice, actor=request.user)
             except LedgerError as error:
                 messages.error(request, str(error))
             else:
+                from apps.shops.audit import log as audit_log
+                audit_log(store, request.user, "invoice.voided", invoice, total=invoice.total)
                 messages.success(request, "Invoice dibatalkan.")
             return redirect("merchant-invoice-detail", invoice_id=invoice.id)
 
@@ -719,6 +736,8 @@ def merchant_invoice_detail(request, invoice_id):
     paid_pct = min(100, int((amount_paid + credited) * 100 / invoice.total)) if invoice.total else 0
     from datetime import date as _date
 
+    from apps.accounting.attachments import for_record as attachment_list
+    from apps.shops.audit import trail as audit_trail
     from apps.tax import sharing
 
     from .invoice_recap import marketplace_summary
@@ -730,7 +749,8 @@ def merchant_invoice_detail(request, invoice_id):
         share_url=share_url, wa_link=sharing.whatsapp_link(order.phone, text) if text else "",
         reminder=bool(invoice.due_date and invoice.due_date < _date.today() and amount_due > 0),
         buyer_email=(order.customer.email if order.customer_id else ""),
-        marketplace=marketplace_summary(store, order),
+        marketplace=marketplace_summary(store, order), audit=audit_trail(store, invoice),
+        attachments=attachment_list(store, "invoice", invoice.pk), attach_kind="invoice", attach_id=invoice.pk,
         invoice=invoice, items=items, payments=payments, order=order, credited=credited,
         credit_notes=credit_notes, banks=bank_accounts(store),
         credit_available=max(credit_balance(store, order.customer, invoice.buyer_name), 0),

@@ -27,6 +27,8 @@ ROLE_HELP = {
     "finance": "Laporan keuangan, pencairan, pajak, dan langganan.",
     "customer_service": "Pesanan dan pelanggan, termasuk membuat pesanan manual.",
     "viewer": "Hanya melihat, tanpa mengubah apa pun.",
+    "accountant": "Akuntan atau auditor eksternal: melihat dan mengunduh semua laporan, buku besar, "
+        "pajak, dan paket audit, tanpa bisa mengubah data.",
 }
 
 

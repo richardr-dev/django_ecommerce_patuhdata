@@ -1,0 +1,6 @@
+{% if audit %}<section class="dp-card">
+  <header><h2>Riwayat dokumen</h2><small>Siapa melakukan apa</small></header>
+  <div class="dp-card-body"><ol class="timeline" style="margin:0">
+    {% for e in audit %}<li><strong>{{ e.what }}</strong><small>{{ e.when|date:"d M Y H:i" }} · {{ e.who }}</small></li>{% endfor %}
+  </ol></div>
+</section>{% endif %}

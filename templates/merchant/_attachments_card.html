@@ -1,0 +1,15 @@
+{% load icons %}<section class="dp-card" id="lampiran">
+  <header><h2>Lampiran</h2><small>Bukti dan dokumen pendukung</small></header>
+  <div class="dp-card-body">
+    {% for a in attachments %}<div class="flex items-center gap-2 border-b border-slate-100 py-2 text-sm last:border-0">
+      <span class="bb-bubble !h-8 !w-8 [&>svg]:h-4 [&>svg]:w-4">{% icon "file" %}</span>
+      <a class="min-w-0 flex-1 truncate font-semibold text-blue-700 hover:underline" href="{% url 'merchant-attachment-file' a.id %}" target="_blank" rel="noopener" data-no-soft>{{ a.name }}</a>
+      <small class="text-slate-400">{{ a.size|filesizeformat }} · {{ a.created_at|date:"d M" }}</small>
+      {% if merchant_role == 'admin' or merchant_role == 'finance' %}<form method="post" action="{% url 'merchant-attachment-delete' a.id %}" data-confirm="Hapus lampiran {{ a.name }}?">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="rounded-full px-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Hapus">×</button></form>{% endif %}
+    </div>{% empty %}<p class="dp-help" style="margin:0">Belum ada lampiran. Simpan faktur supplier, bukti transfer, atau kontrak di sini agar siap diperiksa auditor.</p>{% endfor %}
+    {% if merchant_role == 'admin' or merchant_role == 'finance' or merchant_role == 'manager' %}<form method="post" action="{% url 'merchant-attachment-add' %}" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-center gap-2">{% csrf_token %}
+      <input type="hidden" name="kind" value="{{ attach_kind }}"><input type="hidden" name="object_id" value="{{ attach_id }}"><input type="hidden" name="next" value="{{ request.path }}">
+      <input type="file" name="file" accept="application/pdf,image/png,image/jpeg,image/webp" required class="min-w-0 flex-1 text-xs">
+      <button class="btn" data-no-loading>{% icon "upload" %} Unggah</button></form>{% endif %}
+  </div>
+</section>

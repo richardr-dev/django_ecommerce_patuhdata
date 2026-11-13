@@ -25,6 +25,7 @@
       <div class="dp-totals"><div><span>Subtotal</span><span>{{ note.subtotal|rp }}</span></div>{% if note.tax %}<div><span>PPN {{ note.tax_rate|floatformat:"-2" }}%</span><span>{{ note.tax|rp }}</span></div>{% endif %}<div class="grand"><span>Total kredit</span><span>{{ note.total|rp }}</span></div></div></div>
     {% if note.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
   </article>
-  <aside class="dp-stack">{% include "merchant/_journal_card.html" %}</aside>
+  <aside class="dp-stack">{% include "merchant/_journal_card.html" %}  {% include "merchant/_audit_card.html" %}
+  </aside>
 </div>
 {% endblock %}
