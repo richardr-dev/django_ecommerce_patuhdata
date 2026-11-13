@@ -1,0 +1,24 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Pinjaman{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Pinjaman</h1>
+  <p>Pinjaman bank dan jadwal angsurannya. Setiap angsuran dipecah menjadi pokok (mengurangi utang) dan bunga (beban), sehingga laba rugi dan neraca benar.</p></div>
+  <div class="dp-actions">{% if can_edit %}<button type="button" class="btn-primary" data-open="loan-dialog">{% icon "plus" %} Pinjaman baru</button>{% endif %}</div></div>
+<div class="tiles"><div class="tile accent"><small>Sisa pokok</small><strong>{{ owed|rp }}</strong><span>seluruh pinjaman berjalan</span></div>
+  <div class="tile {% if late %}warn{% endif %}"><small>Angsuran lewat jatuh tempo</small><strong>{{ late }}</strong><span>belum dibayar</span></div></div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Pemberi pinjaman</th><th>Mulai</th><th class="num">Pokok</th><th class="num">Bunga/tahun</th><th class="num">Sisa pokok</th><th>Angsuran berikutnya</th><th>Status</th></tr></thead><tbody>
+  {% for l in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-loan' l.pk %}"><b>{{ l.lender }}</b></a><small>{{ l.term_months }} bulan · {% if l.method == 'flat' %}bunga flat{% else %}anuitas{% endif %}</small></td><td>{{ l.start_date|date:"M Y" }}</td>
+    <td class="num">{{ l.principal|rp }}</td><td class="num">{{ l.annual_rate|floatformat:"-2" }}%</td><td class="num"><b>{{ l.rest|rp }}</b></td>
+    <td>{% if l.next %}{{ l.next.due_date|date:"d M Y" }} · {{ l.next.amount|rp }}{% else %}—{% endif %}</td><td>{% if l.status == 'paid' %}<span class="pill pill-paid">Lunas</span>{% else %}<span class="pill pill-info">Berjalan</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada pinjaman.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if can_edit %}<dialog id="loan-dialog" class="pd-dialog" aria-labelledby="ln-title" style="max-width:640px"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="ln-title">Pinjaman baru</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <label class="field"><span>Pemberi pinjaman</span><input name="lender" maxlength="160" required placeholder="mis. Bank Mandiri"></label>
+    <div class="field-row"><label class="field"><span>Jumlah pinjaman</span><input name="principal" data-rupiah required></label><label class="field"><span>Bunga per tahun (%)</span><input name="annual_rate" inputmode="decimal" required value="12"></label></div>
+    <div class="field-row"><label class="field"><span>Jangka waktu (bulan)</span><input type="number" name="term_months" min="1" max="360" value="12" required></label><label class="field"><span>Tanggal pencairan</span><input type="date" name="start_date" value="{{ today }}" required></label></div>
+    <div class="field-row"><label class="field"><span>Metode bunga</span><select name="method"><option value="annuity">Anuitas (angsuran tetap)</option><option value="flat">Flat (bunga dari pokok awal)</option></select></label>
+      <label class="field"><span>Diterima di</span><select name="received_into">{% for b in banks %}<option value="{{ b.account.code }}">{{ b.name }}</option>{% endfor %}</select></label></div>
+    <p class="dp-help">Pencairan dibukukan: kas/bank (debit) dan Utang bank & pinjaman (kredit). Jadwal angsuran dibuat otomatis.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan pinjaman</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

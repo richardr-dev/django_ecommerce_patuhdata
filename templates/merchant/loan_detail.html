@@ -1,0 +1,20 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Pinjaman {{ loan.lender }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-loans' %}">Pinjaman</a> / {{ loan.lender }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ loan.lender }} <span class="pill {% if loan.status == 'paid' %}pill-paid{% else %}pill-info{% endif %}">{% if loan.status == 'paid' %}Lunas{% else %}Berjalan{% endif %}</span></h1>
+  <p>{{ loan.principal|rp }} · {{ loan.annual_rate|floatformat:"-2" }}% per tahun · {{ loan.term_months }} bulan · {% if loan.method == 'flat' %}bunga flat{% else %}anuitas{% endif %} · cair {{ loan.start_date|date:"d F Y" }}</p></div>
+  <div class="dp-actions">{% if can_edit and next_due %}<button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Bayar angsuran {{ next_due.number }}</button>{% endif %}</div></div>
+<div class="tiles"><div class="tile accent"><small>Sisa pokok</small><strong>{{ rest|rp }}</strong><span>belum dibayar</span></div>
+  <div class="tile"><small>Total bunga</small><strong>{{ total_interest|rp }}</strong><span>seluruh jangka waktu</span></div><div class="tile"><small>Bunga sudah dibayar</small><strong>{{ paid_interest|rp }}</strong><span>masuk beban bunga</span></div></div>
+<section class="panel"><header><h2>Jadwal angsuran</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Ke</th><th>Jatuh tempo</th><th class="num">Pokok</th><th class="num">Bunga</th><th class="num">Angsuran</th><th>Status</th></tr></thead><tbody>
+  {% for i in items %}<tr><td>{{ i.number }}</td><td>{{ i.due_date|date:"d M Y" }}</td><td class="num">{{ i.principal|rp }}</td><td class="num">{{ i.interest|rp }}</td><td class="num"><b>{{ i.amount|rp }}</b></td>
+    <td>{% if i.paid_on %}<span class="pill pill-paid">Dibayar {{ i.paid_on|date:"d M Y" }}</span>{% elif i.due_date < today %}<span class="pill pill-overdue">Lewat jatuh tempo</span>{% else %}<span class="pill pill-pending">Belum</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>
+{% include "merchant/_journal_card.html" %}
+{% if can_edit and next_due %}<dialog id="pay-dialog" class="pd-dialog" aria-labelledby="pay-title"><form method="post">{% csrf_token %}<input type="hidden" name="installment" value="{{ next_due.pk }}">
+  <header><h2 id="pay-title">Bayar angsuran {{ next_due.number }}</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <p class="dp-help">Pokok {{ next_due.principal|rp }} + bunga {{ next_due.interest|rp }} = <b>{{ next_due.amount|rp }}</b>. Pokok mengurangi utang, bunga menjadi beban, selisihnya keluar dari kas.</p>
+    <div class="field-row"><label class="field"><span>Tanggal bayar</span><input type="date" name="paid_on" value="{{ today }}" required></label><label class="field"><span>Dibayar dari</span><select name="paid_from">{% for b in banks %}<option value="{{ b.account.code }}">{{ b.name }}</option>{% endfor %}</select></label></div></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Catat pembayaran</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

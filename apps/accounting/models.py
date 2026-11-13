@@ -912,3 +912,44 @@ class JournalTemplate(models.Model):
 
     class Meta:
         ordering = ["name", "id"]
+
+
+class Loan(models.Model):
+    """Pinjaman bank: the money borrowed (Kas/bank / Utang bank & pinjaman) and its schedule. Each
+    installment splits into principal and interest; paying one books Utang bank (principal), Beban bunga
+    (interest) and Kas/bank. ``method`` is "annuity" (equal installments) or "flat" (interest on the
+    original principal, equal principal)."""
+    ACTIVE, PAID = "active", "paid"
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="loans")
+    lender = models.CharField(max_length=160)
+    principal = models.DecimalField(max_digits=14, decimal_places=2)
+    annual_rate = models.DecimalField(max_digits=6, decimal_places=3)  # percent per year
+    term_months = models.PositiveIntegerField()
+    start_date = models.DateField()
+    method = models.CharField(max_length=10, default="annuity")
+    received_into = models.ForeignKey("Account", on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, default=ACTIVE)
+    notes = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date", "-id"]
+
+
+class LoanInstallment(models.Model):
+    loan = models.ForeignKey(Loan, on_delete=models.CASCADE, related_name="installments")
+    number = models.PositiveIntegerField()
+    due_date = models.DateField()
+    principal = models.DecimalField(max_digits=14, decimal_places=2)
+    interest = models.DecimalField(max_digits=14, decimal_places=2)
+    paid_on = models.DateField(null=True, blank=True)
+    paid_from = models.ForeignKey("Account", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["number"]
+        constraints = [models.UniqueConstraint(fields=["loan", "number"], name="unique_loan_installment")]
+
+    @property
+    def amount(self):
+        return self.principal + self.interest

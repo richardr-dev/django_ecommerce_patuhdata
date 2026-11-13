@@ -109,6 +109,7 @@ NAV = [
             Link("Saldo awal", "merchant-opening-balances"),
             Link("Jurnal umum", "merchant-journal-new"),
             Link("Jurnal penyesuaian", "merchant-adjustments"),
+            Link("Pinjaman", "merchant-loans", match=("/merchant/accounting/pinjaman/",)),
             Link("Bagan akun", "merchant-chart-of-accounts"),
             Link("Nilai persediaan", "merchant-inventory-value"),
             Link("Penutupan persediaan", "merchant-inventory-close"),
