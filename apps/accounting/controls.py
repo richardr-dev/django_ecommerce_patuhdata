@@ -174,9 +174,9 @@ def payable(store, today, ledger):
 def inventory_value(store, today, ledger):
     from . import inventory
     data = inventory.reconciliation(store)
-    expected = data["shelf_value"] + data["in_transit"]
+    expected = data["shelf_value"] + data["in_transit"] - data["deficit_value"]
     check = _tie("inventory", "Persediaan sama dengan nilai stok", data["book"], expected,
-        "Nilai stok + barang belum diterima", url=reverse("merchant-inventory-value"),
+        "Nilai stok + barang belum diterima − stok minus", url=reverse("merchant-inventory-value"),
         action="Buka nilai persediaan",
         ok="Persediaan di buku sama dengan nilai stok di gudang.",
         off="Persediaan di buku berbeda dari nilai stok (stok awal belum dicatat, atau HPP "
@@ -366,6 +366,19 @@ def intercompany_tie(store, today, ledger):
         status_off=INFO)
 
 
+def negative_stock(store, today, ledger):
+    """Open stok minus: sales beyond the shelf whose cost of goods is still provisional."""
+    from apps.orders.deficits import summary
+    minus = summary(store)
+    if not minus["units"]:
+        return Check("negative_stock", "Tidak ada stok minus", OK,
+            "Tidak ada penjualan melebihi stok yang masih terbuka.")
+    return Check("negative_stock", "Stok minus dengan harga pokok sementara", WARN,
+        f"{minus['units']} unit dari {minus['items']} barang dijual melebihi stok (nilai sementara "
+        f"Rp{minus['value']:,.0f}). HPP-nya dikoreksi saat barang diterima.".replace(",", "."),
+        url=reverse("merchant-stock-minus"), action="Buka stok minus")
+
+
 def grni_tie(store, today, ledger):
     """Barang diterima belum ditagih equals the value of receipts still waiting for their bill."""
     from .models import GoodsReceipt
@@ -513,7 +526,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie, negative_stock]
 
 
 def run_checks(store, today):

@@ -134,11 +134,12 @@ def stock_shortages(store, wants):
     return short
 
 
-def deduct_invoice_stock(order):
+def deduct_invoice_stock(order, *, allow_negative=False, actor=None):
     """Reserve then immediately commit stock for all items on a manual paid invoice.
     Net effect: on_hand decreases by quantity sold.
     Silently skips items without inventory levels (services, digital products).
-    Returns list of (sku, wanted, available) shortages for display."""
+    Returns list of (sku, wanted, available) shortages for display. With ``allow_negative`` a
+    warehouse-tracked product gives what it has and the rest becomes stok minus (``deficits``)."""
     from apps.catalog.models import InventoryLevel
     from apps.catalog.models import ProductVariant as _PV
     shortages = []
@@ -167,7 +168,13 @@ def deduct_invoice_stock(order):
                     continue  # product not tracked in inventory
                 available = sum(level.available for level in levels)
                 if available < qty:
-                    shortages.append((item.sku, qty, available))
+                    if not allow_negative or item.product.cost_price is None:
+                        shortages.append((item.sku, qty, available))
+                        continue
+                    from .deficits import sell_short
+                    if available > 0:
+                        reserve_from_levels(item, levels, available, reason="manual_invoice")
+                    sell_short(item, levels[0], qty - available, actor=actor)
                     continue
                 reserve_from_levels(item, levels, qty, reason="manual_invoice")
         commit_order_inventory(order)
@@ -178,6 +185,8 @@ def deduct_invoice_stock(order):
 def return_order_inventory(order, *, actor=None, reason="pesanan_dibatalkan"):
     """Give an order's stock back: still-reserved stock is released and stock already taken out
     is added back to the shelf. Safe to call again; each item returns once."""
+    from .deficits import release as release_deficits
+    release_deficits(order, actor=actor, reason=reason)
     release_order_inventory(order, actor=actor, reason=reason)
     allocations = InventoryAllocation.objects.select_for_update().filter(
         order_item__order=order, committed_at__isnull=False).select_related(

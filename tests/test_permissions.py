@@ -24,6 +24,7 @@ EXPECTED = {
     "orders.manage": {"admin", "manager", "ops", "customer_service"}, "giftcards.manage": {"admin", "manager", "customer_service"},
     "settlement.manage": {"admin", "manager", "finance"}, "settlement.view": {"admin", "manager", "finance", "viewer"},
     "stock.fulfil": {"admin", "manager", "ops", "warehouse"}, "stock.receive": {"admin", "manager", "finance", "warehouse"},
+    "stock.oversell": {"admin", "manager"},
     "customers.view": {"admin", "manager", "ops", "customer_service", "viewer"},
     "customers.edit": {"admin", "manager", "customer_service"}, "customers.broadcast": {"admin", "manager"},
     "channels.manage": {"admin", "manager", "ops"}, "channels.mapping": {"admin", "manager", "ops"},

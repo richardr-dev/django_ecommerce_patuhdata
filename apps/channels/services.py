@@ -369,7 +369,15 @@ def _reserve(item, product, variant, quantity):
         .order_by("warehouse__priority", "warehouse_id"))
     available = sum(level.available for level in levels)
     if available < quantity:
-        raise ChannelImportError(_shortage(item.sku, quantity, available))
+        # The marketplace already sold it. A store that allows stok minus records the shortfall
+        # instead of refusing the import; the next goods receipt covers it and corrects the cost.
+        if not (levels and product.store.allow_negative_stock and product.cost_price is not None):
+            raise ChannelImportError(_shortage(item.sku, quantity, available))
+        from apps.orders.deficits import sell_short
+        if available > 0:
+            reserve_from_levels(item, levels, available, reason="marketplace_order")
+        sell_short(item, levels[0], quantity - available)
+        return
     reserve_from_levels(item, levels, quantity, reason="marketplace_order")
 
 

@@ -44,6 +44,9 @@ class Store(models.Model):
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Logo PNG, JPG, or WebP. Recommended square or horizontal, maximum 5 MB.")
     logo_size = models.CharField(max_length=10, choices=LOGO_SIZES, default="medium")
+    allow_negative_stock = models.BooleanField(default=False, verbose_name="Izinkan stok minus",
+        help_text="Admin dan manajer boleh menjual melebihi stok tercatat. Kekurangannya dicatat sebagai "
+            "stok minus dengan harga pokok sementara, lalu dikoreksi saat barang diterima.")
     show_store_name = models.BooleanField(default=True,
         help_text="Matikan jika logo sudah memuat nama toko.")
     slug = models.SlugField(unique=True)

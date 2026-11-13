@@ -82,8 +82,13 @@ def reconciliation(store):
 
     def settle(value):
         return ZERO if abs(value) <= noise else value
+    # Stok minus: HPP for units the shelf did not have is already booked, so the books run below
+    # the shelf value by the open deficits at their provisional cost.
+    from apps.orders.deficits import summary as deficit_summary
+    minus = deficit_summary(store)
     return {**valuation, "book": book, "book_mitra": book_mitra, "in_transit": transit,
-        "difference": settle(book - (valuation["shelf_value"] + transit)),
+        "deficit_units": minus["units"], "deficit_value": minus["value"],
+        "difference": settle(book - (valuation["shelf_value"] + transit - minus["value"])),
         "difference_mitra": settle(book_mitra - valuation["mitra_value"])}
 
 

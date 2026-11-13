@@ -137,7 +137,15 @@ def receive_goods(*, store, product, variant=None, quantity, unit_cost, warehous
     movement = stock_in(store=store, product=product, variant=variant, quantity=quantity,
         kind="receipt", reason=reason, source=source, warehouse=warehouse, unit_cost=unit_cost,
         actor=actor)
-    holder.cost_price = moving_average(max(held, 0), holder.cost_price, quantity, unit_cost)
+    # Open stok minus is served first, at this receipt's real cost; only the rest joins the average.
+    used = 0
+    if not variant:
+        from .deficits import cover
+        used = cover(store=store, product=product, quantity=quantity, unit_cost=unit_cost, actor=actor)
+    if quantity - used > 0:
+        holder.cost_price = moving_average(max(held, 0), holder.cost_price, quantity - used, unit_cost)
+    elif held <= 0:
+        holder.cost_price = Decimal(unit_cost).quantize(Decimal("0.01"))  # the last known cost
     holder.save(update_fields=["cost_price"])
     return movement
 

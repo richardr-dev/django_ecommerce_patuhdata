@@ -85,6 +85,7 @@ NAV = [
             Link("Kategori", "merchant-entity-list", ("categories",)),
             Link("Paket (bundle)", "merchant-bundles"),
             Link("Stok gudang", "merchant-stock"),
+            Link("Stok minus", "merchant-stock-minus"),
             Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
             Link("Lokasi stok", "merchant-entity-list", ("inventory",)),
             Link("Impor produk", "merchant-product-import"),

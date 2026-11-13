@@ -1,0 +1,28 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Stok minus{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Inventori</span><h1>Stok minus</h1>
+  <p>Penjualan yang melebihi stok tercatat. Harga pokoknya masih sementara sampai barangnya diterima; saat itu sistem menutup stok minus lebih dulu dan mengoreksi HPP secara otomatis.</p></div></div>
+
+<div class="tiles">
+  <div class="tile {% if summary.units %}warn{% else %}accent{% endif %}"><small>Unit minus</small><strong>{{ summary.units }}</strong><span>{{ summary.items }} barang</span></div>
+  <div class="tile"><small>Nilai sementara</small><strong>{{ summary.value|rp }}</strong><span>pada harga pokok saat dijual</span></div>
+  <div class="tile"><small>Status</small><strong>{% if allowed %}Diizinkan{% else %}Tidak diizinkan{% endif %}</strong><span>{% if allowed %}admin dan manajer boleh menjual melebihi stok{% else %}invoice yang melebihi stok ditolak{% endif %}</span></div>
+</div>
+
+<section class="panel"><header><div><h2>Pengaturan</h2><p>Bila diizinkan, admin dan manajer boleh membuat invoice melebihi stok, dan impor pesanan marketplace tidak ditolak karena stok kurang. Barang tanpa harga pokok dan produk bervarian tetap ditolak. Toko online tidak pernah menjual melebihi stok.</p></div></header>
+  <div class="dp-card-body">{% if can_switch %}<form method="post">{% csrf_token %}<input type="hidden" name="allow" value="{% if allowed %}0{% else %}1{% endif %}">
+    <button class="{% if allowed %}btn{% else %}btn-primary{% endif %}" data-confirm="{% if allowed %}Matikan stok minus? Invoice yang melebihi stok akan ditolak lagi.{% else %}Izinkan stok minus? Laba bulan berjalan memakai harga pokok sementara sampai barang diterima.{% endif %}" data-confirm-ok="{% if allowed %}Matikan{% else %}Izinkan{% endif %}" data-confirm-tone="neutral">{% if allowed %}Matikan stok minus{% else %}Izinkan stok minus{% endif %}</button></form>
+  {% else %}<p class="dp-help">Hanya admin atau manajer yang bisa mengubah pengaturan ini.</p>{% endif %}</div></section>
+
+<section class="panel"><header><div><h2>Masih terbuka</h2><p>Ditutup otomatis lewat Penerimaan barang atau "Terima barang" pada tagihan supplier, yang terlama lebih dulu.</p></div>
+  <a class="btn" href="{% url 'merchant-goods-receipt-new' %}">{% icon "plus" %} Terima barang</a></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th>Pesanan</th><th>Tanggal</th><th class="num">Minus</th><th class="num">Harga pokok sementara</th><th class="num">Nilai</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><b>{{ r.product.name }}</b><small>{{ r.product.sku }}</small></td>
+    <td><a class="rowlink" href="{% url 'merchant-order-detail' r.order_item.order_id %}">{{ r.order_item.order.customer_name }}</a><small>{{ r.created_by.username|default:"impor marketplace" }}</small></td>
+    <td>{{ r.created_at|date:"d M Y" }}</td><td class="num"><span class="pill pill-overdue">−{{ r.open }}</span></td><td class="num">{{ r.provisional_cost|rp }}</td><td class="num"><b>{{ r.value|rp }}</b></td></tr>
+  {% empty %}<tr><td colspan="6" class="!py-10 text-center text-slate-400">Tidak ada stok minus.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{% if recent %}<section class="panel"><header><h2>Sudah ditutup</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Unit</th><th class="num">Sementara</th><th class="num">Harga terima</th><th class="num">Koreksi HPP</th></tr></thead><tbody>
+  {% for d in recent %}{% for c in d.covers.all %}<tr><td><b>{{ d.product.name }}</b><small>{{ c.covered_on|date:"d M Y" }}</small></td><td class="num">{{ c.quantity }}</td><td class="num">{{ d.provisional_cost|rp }}</td><td class="num">{{ c.unit_cost|rp }}</td><td class="num"><b>{{ c.adjustment|signed_rp }}</b></td></tr>{% endfor %}{% endfor %}
+  </tbody></table></div></section>{% endif %}
+{% endblock %}

@@ -164,6 +164,10 @@ def month_checklist(store, year, month, today):
     pph = Withholding.objects.filter(store=store, deposit__isnull=True, date__lt=last).count()
     step("PPh yang dipotong sudah disetor", not pph, "Semua PPh sudah disetor." if not pph
         else f"{pph} pemotongan belum disetor.", reverse("merchant-withholdings"), "Setor")
+    minus = results.get("negative_stock")
+    step("Tidak ada stok minus (harga pokok sementara)", not minus or minus.status == controls.OK,
+        "Tidak ada stok minus." if not minus or minus.status == controls.OK else minus.summary,
+        reverse("merchant-stock-minus"), "Lihat stok minus")
     step("SPT Masa PPN bulan ini sudah diperiksa", False,
         "Cocokkan PPN keluaran dan masukan sebelum periode dikunci.",
         reverse("merchant-spt-ppn") + f"?month={year}-{month:02d}", "Buka SPT")

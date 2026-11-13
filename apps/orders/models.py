@@ -408,7 +408,8 @@ class InventoryMovement(models.Model):
         ("adjust", "Adjust"), ("return", "Return"), ("receipt", "Barang masuk"),
         ("transfer_in", "Transfer masuk"), ("transfer_out", "Transfer keluar"),
         ("consign_out", "Kirim ke mitra"), ("consign_in", "Kembali dari mitra"),
-        ("opname", "Stok opname")]
+        ("opname", "Stok opname"), ("deficit", "Jual melebihi stok"),
+        ("deficit_cover", "Tutup stok minus")]
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="inventory_movements")
     order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="inventory_movements",
         null=True, blank=True)
@@ -441,6 +442,45 @@ class InventoryMovement(models.Model):
 
     def delete(self, *args, **kwargs):
         raise MovementImmutable("Pergerakan stok tidak boleh dihapus. Buat pergerakan koreksi.")
+
+class StockDeficit(models.Model):
+    """Stok minus: units sold beyond what the shelf held (only when the store allows it). The shelf
+    figure itself never goes below zero; the shortfall lives here, valued at the cost known at the
+    sale (provisional). The next goods receipt covers it first and corrects the cost of goods sold."""
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="stock_deficits")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_deficits")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="stock_deficits")
+    inventory_level = models.ForeignKey("catalog.InventoryLevel", on_delete=models.PROTECT, related_name="+")
+    quantity = models.PositiveIntegerField()
+    covered = models.PositiveIntegerField(default=0)
+    provisional_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    released_at = models.DateTimeField(null=True, blank=True)  # the sale was cancelled or edited
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [models.CheckConstraint(condition=models.Q(covered__lte=models.F("quantity")),
+            name="deficit_covered_lte_quantity")]
+
+    @property
+    def open(self):
+        return 0 if self.released_at else self.quantity - self.covered
+
+
+class StockDeficitCover(models.Model):
+    """Units of a goods receipt that went to cover a deficit, at the receipt's real cost."""
+    deficit = models.ForeignKey(StockDeficit, on_delete=models.PROTECT, related_name="covers")
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    covered_on = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def adjustment(self):
+        """What the cost of goods sold was short by (negative: it was too high)."""
+        return self.quantity * (self.unit_cost - self.deficit.provisional_cost)
+
 
 class PaymentEvent(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)

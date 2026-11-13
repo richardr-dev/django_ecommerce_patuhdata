@@ -53,6 +53,33 @@ Four test files failed before this work and still do: `test_digital_products`,
 - **An invoice that asks for more than the shelf holds is refused** (`StockShortage` in
   `tax/sales.py`): stock leaves and HPP is booked in the same transaction, so the shelf and
   Persediaan cannot disagree. Products with no inventory level are untracked and not blocked.
+  The one exception is stok minus, below.
+- **Stok minus (negative stock) is a per-store switch, off by default** (`Store.allow_negative_stock`,
+  page "Stok minus", service `orders/deficits.py`). Decided rules: the switch is per store only (not per
+  product or warehouse); only admin and manager may sell short (`stock.oversell`), automatic jobs never
+  do; open minus is a warning at month-end (control `negative_stock`, a Tutup buku step), not a block.
+  - The shelf figure never goes below zero. A sale beyond it takes what is there and records the rest as
+    a `StockDeficit` at the cost known then (provisional), with a `deficit` movement, so the full
+    quantity is traceable. HPP for the full quantity is booked with the invoice as always, so Persediaan
+    runs below the shelf value by the open deficits (`inventory.reconciliation` subtracts them).
+  - The next goods receipt (`receive_goods`: bill "Terima barang", Penerimaan barang, intercompany)
+    covers open deficits first, oldest first: a `deficit_cover` movement takes those units off again and
+    `("stock_revalue", cover id)` posts units x (receipt cost - provisional cost) to HPP against
+    Persediaan. Only the rest of the receipt joins the moving average.
+  - Worked example (pinned by `tests/test_negative_stock.py`): 100 units at Rp60.000, sell 120 → shelf 0,
+    minus 20, HPP Rp7.200.000. Receive 50 at Rp65.000 → 20 cover the minus, HPP +Rp100.000 (final
+    Rp7.300.000), shelf 30 at Rp65.000 = Rp1.950.000.
+  - Refused, never guessed: a product with no cost price, and products with variants. The online
+    storefront never sells short. A marketplace import does (the sale already happened) when the switch
+    is on. Voiding or editing the sale releases its deficit; units a receipt already gave it return to
+    the shelf and the correction is reversed. A manual stock edit on Kelola stok does not cover a deficit.
+- **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
+  one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
+  journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,
+  stock value and the books are unchanged; each location's own count changes. A transfer is refused when
+  the source lacks free stock (it never creates stok minus). Outlets are `Warehouse` rows with
+  `is_outlet`. Not built yet: a request → approve → send → receive screen (only the service exists) and
+  variant stock per location. Goods moving to a *different brand* are an intercompany transfer instead.
 - Opening receivables/payables are totals in the books (not itemised by invoice); the aging
   pages show the difference. Itemised opening invoices need `Invoice.order` to be optional.
 - **Marketplace orders are dated by the marketplace's order time** (`MarketplaceOrder.placed_at` /
@@ -187,6 +214,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Goods received before the bill (GRNI 2350), bill made from a receipt | `accounting/receipts.py` | `accounting/views_receipts.py` |
 | Sell stock between two brands of one Organization (two books) | `accounting/intercompany.py` | `accounting/views_intercompany.py` |
 | Who may do what (matrix, Hak akses page, segregation of duties) | `shops/permissions.py` | `shops/staff_views.py:merchant_access` |
+| Stok minus: switch, open list, cover on receipt, HPP correction | `orders/deficits.py` | `orders/deficit_views.py`, `templates/merchant/stock_minus.html` |
 | Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |

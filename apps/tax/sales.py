@@ -72,14 +72,27 @@ def _wants(lines):
     return [(line["product"], int(line["qty"])) for line in lines if line.get("product")]
 
 
-def _check_stock(store, lines):
+def _check_stock(store, lines, actor=None):
+    """Refuse an invoice the shelf cannot cover, unless the store allows stok minus and ``actor`` may
+    use it. Returns True when the invoice will sell short."""
+    from apps.orders.deficits import may_sell_short
     from apps.orders.inventory import stock_shortages
     short = stock_shortages(store, _wants(lines))
-    if short:
-        raise StockShortage("Stok tidak cukup: " + "; ".join(
-            f"{product.name} ({product.sku}) butuh {wanted}, tersedia {available}"
-            for product, wanted, available in short)
+    if not short:
+        return False
+    detail = "; ".join(f"{product.name} ({product.sku}) butuh {wanted}, tersedia {available}"
+        for product, wanted, available in short)
+    if not store.allow_negative_stock:
+        raise StockShortage("Stok tidak cukup: " + detail
             + ". Tambah stok lebih dulu (terima barang dari tagihan supplier atau stok opname).")
+    if not may_sell_short(store, actor):
+        raise StockShortage("Stok tidak cukup: " + detail
+            + ". Menjual melebihi stok (stok minus) hanya boleh dilakukan admin atau manajer.")
+    no_cost = [product.name for product, _w, _a in short if product.cost_price is None]
+    if no_cost:
+        raise StockShortage("Stok tidak cukup dan harga pokok belum diisi: " + ", ".join(no_cost)
+            + ". Isi harga pokoknya dulu; sistem tidak menebak harga pokok.")
+    return True
 
 
 def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phone, address, notes,
@@ -115,9 +128,9 @@ def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phon
     return order
 
 
-def _deduct(order):
+def _deduct(order, *, allow_negative=False, actor=None):
     from apps.orders.inventory import deduct_invoice_stock
-    if deduct_invoice_stock(order):  # someone else took the stock since the check
+    if deduct_invoice_stock(order, allow_negative=allow_negative, actor=actor):  # someone else took the stock since the check
         raise StockShortage("Stok baru saja berkurang karena penjualan lain. Coba lagi.")
 
 
@@ -149,7 +162,7 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``)."""
     lines = clean_lines(lines)
-    _check_stock(store, lines)
+    short = _check_stock(store, lines, actor)
     issued_on = issued_on or timezone.localdate()
     discount, shipping = Decimal(discount or 0), Decimal(shipping or 0)
     subtotal, tax, total = price_lines(lines, discount, shipping, store=store)
@@ -158,7 +171,7 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         external_order_id=external_order_id, discount=discount, shipping=shipping,
         status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total,
         courier=courier, tracking_number=tracking_number, partner=partner)
-    _deduct(order)
+    _deduct(order, allow_negative=short, actor=actor)
     invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods
     patch = {"buyer_name": _buyer_label(buyer_name, company_name)}
@@ -245,7 +258,7 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
     if amounts_changed:
         memo = f"Edit invoice {invoice.number}"
         return_order_inventory(order, actor=actor, reason=memo)  # the old goods come back first
-        _check_stock(invoice.store, lines)  # so the check sees what the edit can use
+        short = _check_stock(invoice.store, lines, actor)  # so the check sees what the edit can use
         subtotal, tax, total = price_lines(lines, discount, shipping, store=invoice.store,
             is_pkp=invoice.seller_is_pkp)
         new_order = _build_order(invoice.store, lines=lines, buyer_name=buyer_name,
@@ -254,7 +267,7 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
             external_order_id=external_order_id or order.external_order_id, discount=discount,
             shipping=shipping, status=order.status if order.status in {"pending", "paid"} else "paid",
             subtotal=subtotal, tax=tax, total=total, partner=order.consignment_partner)
-        _deduct(new_order)
+        _deduct(new_order, allow_negative=short, actor=actor)
         Order.objects.filter(pk=order.pk).update(status="cancelled")  # no signals for a swap
         OrderStatusEvent.objects.create(order=order, status="cancelled",
             note=f"Diganti pesanan {new_order.invoice_number} karena invoice {invoice.number} diedit")
