@@ -1104,7 +1104,7 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .close-steps li.done b{color:var(--ds-muted);font-weight:500}
 
 /* line-item editors: fixed columns so the description gets the room */
-.tbl.editor { table-layout: fixed; width: 100%; }
+.tbl.editor { table-layout: fixed; width: 100%; min-width: 680px; }
 .tbl.editor input, .tbl.editor select { width: 100%; min-width: 0; }
 .tbl.editor td { vertical-align: middle; }
 
