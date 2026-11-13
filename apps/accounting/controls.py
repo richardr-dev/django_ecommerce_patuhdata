@@ -338,6 +338,21 @@ def period_lock(store, today, ledger):
         url=reverse("merchant-accounting"), action="Tutup buku")
 
 
+def withholding_tie(store, today, ledger):
+    from .models import Withholding
+    owed = sum((w.amount for w in Withholding.objects.filter(store=store, deposit__isnull=True)), ZERO)
+    book = ledger.get("2150", ZERO)
+    check = _tie("withholding", "Utang PPh sama dengan PPh yang belum disetor", book, owed,
+        "PPh belum disetor di register", url=reverse("merchant-withholdings"), action="Buka PPh dipotong",
+        ok="Utang PPh di buku sama dengan PPh dipotong yang belum disetor.",
+        off="Saldo Utang PPh berbeda dari register PPh dipotong (ada jurnal manual atau pemotongan tanpa bukti potong).")
+    old = Withholding.objects.filter(store=store, deposit__isnull=True,
+        date__lt=today.replace(day=1) - timedelta(days=1)).count()
+    if old and check.status == OK:
+        check.status, check.summary = INFO, f"{old} pemotongan dari bulan sebelumnya belum disetor (batas setor tanggal 10 bulan berikutnya)."
+    return check
+
+
 def budget_control(store, today, ledger):
     from . import budgets
     alerts = budgets.alerts(store, today)
@@ -443,7 +458,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie]
 
 
 def run_checks(store, today):

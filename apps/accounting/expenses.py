@@ -19,7 +19,7 @@ from apps.shops.models import AuditLog
 
 from . import approvals
 from .ledger import locked_through, post_expense
-from .models import BankAccount, Expense
+from .models import WITHHOLDING_KINDS, BankAccount, Expense
 
 VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
 EDIT_ROLES = {"admin", "finance"}
@@ -30,6 +30,12 @@ MAX_RECEIPT = 5 * 1024 * 1024
 
 
 class ExpenseForm(forms.ModelForm):
+    pph_kind = forms.ChoiceField(required=False, label="Potong PPh",
+        choices=[("", "Tidak ada")] + [(code, label) for code, label, _t, _r in WITHHOLDING_KINDS],
+        help_text="Bila dipilih, jumlah di atas dianggap bruto: PPh ditahan dan sisanya dibayar ke rekening.")
+    pph_rate = forms.DecimalField(required=False, label="Tarif PPh (%)", max_digits=5, decimal_places=2,
+        help_text="Kosongkan untuk tarif standar jenis PPh itu.")
+
     class Meta:
         model = Expense
         fields = ["date", "category", "description", "vendor", "amount", "input_vat", "bank_account",
@@ -140,15 +146,27 @@ def merchant_expenses(request):
             with transaction.atomic():
                 expense = form.save(commit=False)
                 expense.store, expense.created_by = store, request.user
-                parked = approvals.required(store, "expense", expense.amount, request.user)
+                kind = form.cleaned_data.get("pph_kind") or ""
+                rate = form.cleaned_data.get("pph_rate")
+                if kind:   # the amount typed is gross; the bank pays it less the PPh
+                    from . import withholding as pph
+                    base = expense.amount - expense.input_vat
+                    _, held = pph.compute(kind, base, rate)
+                    expense.withheld, expense.amount = held, expense.amount - held
+                parked = approvals.required(store, "expense", expense.amount + expense.withheld, request.user)
                 expense.approval_pending = parked
                 expense.save()
                 if parked:   # not on the books until someone else approves it
-                    approvals.submit(store, "expense", expense.amount,
+                    approvals.submit(store, "expense", expense.amount + expense.withheld,
                         f"Biaya: {expense.get_category_display()} · {expense.description}",
-                        {"expense_id": expense.pk}, request.user, subject=expense)
+                        {"expense_id": expense.pk, "pph_kind": kind, "pph_rate": str(rate) if rate else ""},
+                        request.user, subject=expense)
                 else:
                     post_expense(expense)
+                    if kind:
+                        pph.record(store, kind=kind, date=expense.date, base=expense.amount + expense.withheld
+                            - expense.input_vat, rate=rate, payee_name=expense.vendor or expense.description,
+                            source_type="expense", source_id=expense.pk, actor=request.user)
                 AuditLog.objects.create(store=store, actor=request.user, action="expense.created",
                     object_type="Expense", object_id=str(expense.id),
                     details={"amount": str(expense.amount), "category": expense.category,

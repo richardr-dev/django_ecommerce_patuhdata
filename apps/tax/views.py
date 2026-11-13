@@ -120,3 +120,43 @@ def order_invoice(request, order_id):
     order = get_customer_order_or_404(request, order_id)
     invoice = get_object_or_404(Invoice, order=order)
     return render(request, "tax/invoice.html", {"invoice": invoice})
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_spt_ppn(request):
+    """Lembar kerja SPT Masa PPN: keluaran, masukan, kompensasi, dan yang harus disetor."""
+    from . import spt
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    year, month = _month(request)
+    data = spt.worksheet(store, year, month)
+    profile = tax_profile(store)
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="spt-masa-ppn-{year}-{month:02d}.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response)
+        writer.writerow(["Lembar kerja SPT Masa PPN", f"{month:02d}/{year}", profile.legal_name or store.name,
+            profile.npwp])
+        for label, value in (("DPP penyerahan", data["dpp_out"]), ("DPP retur", data["dpp_returns"]),
+                ("PPN keluaran", data["out"]), ("PPN masukan", data["in"]), ("PPN keluaran dikurangi masukan", data["net"]),
+                ("Kompensasi dari masa sebelumnya", data["carry_in"]), ("PPN kurang bayar (disetor)", data["to_pay"]),
+                ("PPN lebih bayar (dikompensasikan)", data["overpaid"])):
+            writer.writerow([label, value])
+        writer.writerow([])
+        writer.writerow(["PPN KELUARAN", "Nomor invoice", "Tanggal", "Pembeli", "NPWP", "DPP", "PPN"])
+        for invoice in data["sales"]:
+            writer.writerow(["", invoice.number, invoice.issued_on.isoformat(), invoice.buyer_name,
+                invoice.buyer_npwp, invoice.tax_base, invoice.tax])
+        writer.writerow([])
+        writer.writerow(["PPN MASUKAN", "Nomor faktur", "Tanggal", "Penjual", "NPWP", "DPP", "PPN"])
+        for bill in data["purchases"]:
+            writer.writerow(["", bill.number, bill.bill_date.isoformat(), bill.supplier.name, bill.supplier.npwp,
+                bill.subtotal, bill.tax])
+        for expense in data["expenses"]:
+            writer.writerow(["", "", expense.date.isoformat(), expense.vendor or expense.description, "",
+                expense.amount - expense.input_vat, expense.input_vat])
+        return response
+    return render(request, "merchant/spt_ppn.html", _merchant_context(request, store, w=data, profile=profile,
+        month=f"{year}-{month:02d}", month_label=data["start"]))

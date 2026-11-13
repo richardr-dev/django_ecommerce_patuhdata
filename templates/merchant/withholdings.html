@@ -1,0 +1,35 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}PPh dipotong{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pajak</span><h1>PPh dipotong</h1><p>PPh 21, 23, dan 4(2) yang Anda tahan saat membayar supplier atau penerima penghasilan. Dari sini bukti potong dicetak dan setoran ke kas negara dicatat.</p></div>
+  <div class="dp-actions"><a class="btn" href="?month={{ year }}-{{ month|stringformat:'02d' }}&format=csv" data-no-soft>{% icon "download" %} CSV bulan ini</a></div></div>
+
+<form method="get" class="toolbar"><label class="field"><span>Bulan</span><input type="month" name="month" value="{{ year }}-{{ month|stringformat:'02d' }}" onchange="this.form.submit()"></label></form>
+
+<div class="tiles">
+  <div class="tile accent"><small>Dipotong {{ month_label|date:"F Y" }}</small><strong>{{ rows|length }} bukti potong</strong><span>{% for tax, total in by_tax.items %}{{ tax }} {{ total|rp }}{% if not forloop.last %} · {% endif %}{% empty %}Belum ada pemotongan{% endfor %}</span></div>
+  <div class="tile {% if owed %}warn{% endif %}"><small>Belum disetor</small><strong>{{ owed|rp }}</strong><span>{{ waiting|length }} pemotongan menunggu disetor</span></div>
+</div>
+
+<section class="panel">
+  <header><div><h2>Pemotongan bulan ini</h2><p>Centang yang akan disetor, lalu catat setorannya di bawah.</p></div></header>
+  <form method="post" action="{% url 'merchant-withholding-deposit' %}">{% csrf_token %}
+  <div class="scroll-x"><table class="tbl"><thead><tr><th style="width:36px"></th><th>Bukti potong</th><th>Penerima</th><th>Jenis</th><th class="num">DPP</th><th class="num">Tarif</th><th class="num">PPh</th><th>Setor</th></tr></thead><tbody>
+    {% for r in rows %}<tr><td>{% if not r.deposit_id %}<input type="checkbox" name="ids" value="{{ r.pk }}" aria-label="Pilih {{ r.number }}">{% endif %}</td>
+      <td><a class="rowlink" href="{% url 'merchant-withholding-slip' r.pk %}" target="_blank" rel="noopener" data-no-soft>{{ r.number }}</a><small>{{ r.date|date:"d M Y" }}</small></td>
+      <td><b>{{ r.payee_name }}</b><small>{% if r.payee_npwp %}NPWP {{ r.payee_npwp }}{% else %}<span class="text-amber-600">NPWP belum ada</span>{% endif %}</small></td>
+      <td>{{ r.tax_name }}<small>{{ r.get_kind_display }}</small></td><td class="num">{{ r.base|rp }}</td><td class="num">{{ r.rate|floatformat:"-2" }}%</td><td class="num"><b>{{ r.amount|rp }}</b></td>
+      <td>{% if r.deposit_id %}<span class="pill pill-paid">Disetor {{ r.deposit.date|date:"d M" }}</span>{% else %}<span class="pill pill-pending">Belum</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="8" class="!py-10 text-center text-slate-400">Belum ada PPh dipotong bulan ini. Pilih "Potong PPh" saat membayar tagihan supplier atau mencatat biaya.</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if merchant_role == 'admin' or merchant_role == 'finance' %}<div class="toolbar" style="padding:14px 18px 18px;margin:0;border-top:1px solid var(--pd-line)">
+    <label class="field"><span>Tanggal setor</span><input type="date" name="date" value="{{ today }}" required></label>
+    <label class="field"><span>Dari rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label class="field"><span>NTPN <em>(opsional)</em></span><input name="reference" maxlength="60" placeholder="No. bukti penerimaan negara"></label>
+    <button class="btn-primary self-end">{% icon "check" %} Catat setoran</button></div>{% endif %}
+  </form>
+</section>
+
+{% if deposits %}<section class="panel"><header><h2>Setoran terakhir</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>NTPN</th><th class="num">Jumlah</th></tr></thead><tbody>
+  {% for d in deposits %}<tr><td>{{ d.date|date:"d M Y" }}</td><td>{{ d.reference|default:"—" }}</td><td class="num"><b>{{ d.amount|rp }}</b></td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endblock %}

@@ -172,6 +172,9 @@
       </div>
       {% if banks %}<label class="field"><span>Dibayar dari rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>{% endif %}
       <label class="field"><span>No. referensi <em>(opsional)</em></span><input type="text" name="reference" maxlength="120" placeholder="No. transfer atau bukti bayar"></label>
+      <div class="field-row"><label class="field"><span>Potong PPh <em>(opsional)</em></span><select name="pph_kind" id="pph-kind"><option value="">Tidak ada</option>{% for code, label, tax, rate in pph_kinds %}<option value="{{ code }}" data-rate="{{ rate }}">{{ label }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Tarif (%)</span><input name="pph_rate" id="pph-rate" inputmode="decimal" placeholder="otomatis"></label></div>
+      <p class="dp-help" id="pph-help" hidden>PPh dihitung dari nilai sebelum PPN. Bank membayar lebih sedikit; selisihnya jadi utang PPh yang disetor ke kas negara dan bukti potongnya dibuat.</p>
       <p class="dp-help">Kas berkurang dan utang ke {{ bill.supplier.name }} berkurang di buku besar.</p>
     </div>
     <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan pembayaran</button></footer>
@@ -185,5 +188,14 @@ document.querySelectorAll("[data-open]").forEach(function (el) {
 document.querySelectorAll("dialog [data-close]").forEach(function (el) {
   el.addEventListener("click", function () { el.closest("dialog").close(); });
 });
+</script>
+<script>
+(function () {
+  var kind = document.getElementById("pph-kind"), rate = document.getElementById("pph-rate"), help = document.getElementById("pph-help");
+  if (!kind) return;
+  kind.addEventListener("change", function () {
+    var o = kind.selectedOptions[0]; rate.value = o && o.dataset.rate ? o.dataset.rate : ""; help.hidden = !kind.value;
+  });
+})();
 </script>
 {% endblock %}

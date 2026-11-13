@@ -25,6 +25,7 @@ CASH, GATEWAY, RECEIVABLE, MARKETPLACE = "1100", "1200", "1250", "1300"
 INVENTORY, CONSIGNED, INPUT_VAT = "1400", "1450", "1500"
 VAT, UNIDENTIFIED, PAYABLE = "2100", "2200", "2300"
 CUSTOMER_CREDIT = "2400"
+WITHHELD = "2150"  # PPh 21 / 23 / 4(2) held back from a payment, owed to the tax office
 FIXED_ASSETS, ACCUMULATED_DEPRECIATION = "1600", "1690"
 LOANS = "2500"
 EQUITY, DRAWINGS = "3100", "3200"
@@ -49,6 +50,7 @@ CHART = [
     (FIXED_ASSETS, "Aset tetap", "asset"),
     (ACCUMULATED_DEPRECIATION, "Akumulasi penyusutan", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
+    (WITHHELD, "Utang PPh dipotong (21/23/4(2))", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (PAYABLE, "Utang usaha", "liability"),
     (CUSTOMER_CREDIT, "Uang muka & kredit pelanggan", "liability"),
@@ -313,8 +315,8 @@ def post_expense(expense):
     return _post(expense.store, date=expense.date, expense=expense, strict=True,
         cost_center=expense.cost_center,
         memo=f"Biaya: {expense.get_category_display()} · {expense.description}",
-        amounts={expense.category: expense.amount - expense.input_vat,
-            INPUT_VAT: expense.input_vat,
+        amounts={expense.category: expense.amount + expense.withheld - expense.input_vat,
+            INPUT_VAT: expense.input_vat, WITHHELD: -expense.withheld,
             (expense.bank_account.account.code if expense.bank_account_id else CASH):
                 -expense.amount})
 

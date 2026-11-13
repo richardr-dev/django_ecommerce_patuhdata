@@ -888,3 +888,80 @@ def merchant_approval_decide(request, request_id):
     except approvals.ApprovalError as error:
         messages.error(request, str(error))
     return redirect("merchant-approvals")
+
+
+# ── PPh dipotong (withholding tax) ───────────────────────────────────────────
+
+def _month_param(request):
+    today = timezone.localdate()
+    try:
+        year, month = (int(x) for x in (request.GET.get("month") or "").split("-"))
+        datetime.date(year, month, 1)
+    except ValueError:
+        year, month = today.year, today.month
+    return year, month
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_withholdings(request):
+    """PPh 21/23/4(2) held back from payments: the month's register, bukti potong, and deposits."""
+    from . import withholding as pph
+    from .bank import bank_accounts
+    from .models import WithholdingDeposit
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    year, month = _month_param(request)
+    rows = list(pph.month_rows(store, year, month))
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="pph-dipotong-{year}-{month:02d}.csv"'
+        response.write("﻿")
+        writer = csv.writer(response)
+        writer.writerow(["No. bukti potong", "Tanggal", "Jenis", "Nama penerima", "NPWP penerima", "DPP", "Tarif (%)",
+            "PPh dipotong", "Sudah disetor", "NTPN"])
+        for r in rows:
+            writer.writerow([r.number, r.date.isoformat(), r.tax_name + " " + r.get_kind_display(), r.payee_name,
+                r.payee_npwp, r.base, r.rate, r.amount, "Ya" if r.deposit_id else "Tidak",
+                r.deposit.reference if r.deposit_id else ""])
+        return response
+    by_tax = {}
+    for r in rows:
+        by_tax[r.tax_name] = by_tax.get(r.tax_name, Decimal(0)) + r.amount
+    waiting = pph.undeposited(store)
+    return render(request, "merchant/withholdings.html", _merchant_context(request, store, rows=rows,
+        year=year, month=month, month_label=datetime.date(year, month, 1), by_tax=by_tax,
+        owed=sum((r.amount for r in waiting), Decimal(0)), waiting=waiting, banks=bank_accounts(store),
+        deposits=WithholdingDeposit.objects.filter(store=store)[:10], today=timezone.localdate().isoformat()))
+
+
+@login_required(login_url="/merchant/login/")
+@require_POST
+def merchant_withholding_deposit(request):
+    from . import withholding as pph
+    from .bank import bank_accounts
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "finance"})
+    try:
+        date = datetime.date.fromisoformat(request.POST.get("date", ""))
+        bank = next((b for b in bank_accounts(store) if str(b.pk) == request.POST.get("bank_account")), None)
+        paid = pph.deposit(store, request.POST.getlist("ids"), date=date, bank_account=bank,
+            reference=request.POST.get("reference", ""), actor=request.user)
+    except (pph.WithholdingError, ValueError) as error:
+        messages.error(request, str(error) or "Isi tanggal setor.")
+    else:
+        messages.success(request, f"Setoran PPh Rp{paid.amount:,.0f} dicatat.".replace(",", "."))
+    return redirect("merchant-withholdings")
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_withholding_slip(request, withholding_id):
+    """Bukti potong to print or send to the payee."""
+    from .models import Withholding
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    item = get_object_or_404(Withholding, pk=withholding_id, store=store)
+    from apps.tax.services import tax_profile
+    return render(request, "tax/withholding_slip.html", {"w": item, "store": store, "profile": tax_profile(store)})

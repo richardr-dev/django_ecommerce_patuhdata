@@ -1,0 +1,25 @@
+{% load books branding %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Bukti potong {{ w.number }}</title>{% brand store as b %}
+<style>
+  body{margin:0;background:#f5f8fd;color:#0f1f38;font:14px/1.55 Inter,system-ui,sans-serif}
+  .bar{max-width:760px;margin:16px auto 0;padding:0 16px;display:flex;justify-content:flex-end}
+  button{height:38px;padding:0 18px;border:0;border-radius:99px;background:{{ b.accent }};color:#fff;font:650 13px Inter,system-ui,sans-serif;cursor:pointer}
+  .sheet{max-width:760px;margin:12px auto 32px;background:#fff;padding:36px;border-radius:20px;box-shadow:0 0 0 1px rgba(15,23,42,.06)}
+  header{display:flex;justify-content:space-between;gap:20px;border-bottom:3px solid {{ b.accent }};padding-bottom:14px;flex-wrap:wrap}
+  h1{margin:0;font-size:20px;letter-spacing:.06em;color:{{ b.accent }}} h2{margin:22px 0 6px;color:#6a7a92;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  table{width:100%;border-collapse:collapse} td,th{padding:9px 10px;border-bottom:1px solid #e3e9f3;text-align:left} th{width:34%;color:#6a7a92;font-weight:600}
+  .big{font-size:18px;font-weight:800;color:{{ b.accent }}} .note{margin-top:22px;color:#6a7a92;font-size:12px}
+  .sign{margin-top:40px;display:flex;justify-content:flex-end;text-align:center} .sign div{width:220px;padding-top:62px;border-top:1px solid #0f1f38;font-size:13px}
+  @media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;max-width:none}}
+</style></head><body>
+<div class="bar"><button onclick="window.print()">Cetak bukti potong</button></div>
+<main class="sheet">
+  <header><div><h1>BUKTI PEMOTONGAN {{ w.tax_name|upper }}</h1><div>No. {{ w.number }} · {{ w.date|date:"d F Y" }}</div></div>
+    <div style="text-align:right">{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:44px;max-width:140px;object-fit:contain"><br>{% endif %}<b>{{ profile.legal_name|default:store.name }}</b></div></header>
+  <h2>Pemotong</h2><table><tr><th>Nama</th><td>{{ profile.legal_name|default:store.name }}</td></tr><tr><th>NPWP</th><td>{{ profile.npwp|default:"—" }}</td></tr><tr><th>Alamat</th><td>{{ profile.address|default:"—" }}</td></tr></table>
+  <h2>Penerima penghasilan</h2><table><tr><th>Nama</th><td>{{ w.payee_name }}</td></tr><tr><th>NPWP / NIK</th><td>{{ w.payee_npwp|default:"—" }}</td></tr></table>
+  <h2>Pemotongan</h2><table><tr><th>Jenis pajak</th><td>{{ w.tax_name }} · {{ w.get_kind_display }}</td></tr><tr><th>Dasar pengenaan pajak</th><td>{{ w.base|rp }}</td></tr><tr><th>Tarif</th><td>{{ w.rate|floatformat:"-2" }}%</td></tr><tr><th>PPh dipotong</th><td class="big">{{ w.amount|rp }}</td></tr></table>
+  <p class="note">Dokumen ini dibuat dari pembukuan sebagai bukti pemotongan. Untuk pelaporan resmi, terbitkan bukti potong melalui Coretax DJP dengan data di atas.</p>
+  <div class="sign"><div>{{ profile.legal_name|default:store.name }}</div></div>
+</main></body></html>

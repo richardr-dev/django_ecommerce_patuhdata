@@ -30,6 +30,7 @@ from .models import (
     JournalEntry,
     LedgerLock,
     Payout,
+    WITHHOLDING_KINDS,
     Supplier,
 )
 from .payables import PayableError, create_bill, pay_bill, receive_bill, void_bill
@@ -460,12 +461,15 @@ def merchant_bill_detail(request, bill_id):
                 from .bank import bank_accounts
                 bank = next((b for b in bank_accounts(store)
                     if str(b.pk) == request.POST.get("bank_account")), None)
+                pph_kind = request.POST.get("pph_kind") or ""
+                pph_rate = request.POST.get("pph_rate") or None
                 if approvals.required(store, "bill_payment", amount, request.user):
                     approvals.submit(store, "bill_payment", amount,
                         f"Bayar tagihan {bill.supplier.name} {bill.number}".strip(),
                         {"bill_id": str(bill.pk), "amount": str(amount), "paid_on": paid_on.isoformat(),
                          "method": request.POST.get("method", "transfer"),
                          "reference": request.POST.get("reference", "")[:120],
+                         "pph_kind": pph_kind, "pph_rate": pph_rate,
                          "bank_account_id": bank.pk if bank else None}, request.user, subject=bill)
                     messages.info(request, "Pembayaran ini perlu persetujuan orang lain karena nilainya besar. "
                         "Sudah diajukan di menu Persetujuan.")
@@ -473,7 +477,7 @@ def merchant_bill_detail(request, bill_id):
                 pay_bill(bill, amount=amount, paid_on=paid_on,
                     method=request.POST.get("method", "transfer"),
                     reference=request.POST.get("reference", "")[:120], actor=request.user,
-                    bank_account=bank)
+                    bank_account=bank, withholding=(pph_kind, pph_rate) if pph_kind else None)
                 audit_log(store, request.user, "bill.paid", bill, amount=amount)
                 messages.success(request, "Pembayaran dicatat.")
             except (PayableError, InvalidOperation, ValueError) as exc:
@@ -516,7 +520,7 @@ def merchant_bill_detail(request, bill_id):
         amount_paid=amount_paid, amount_due=amount_due, today=today,
         paid_pct=min(100, int(amount_paid * 100 / bill.total)) if bill.total else 0,
         has_goods=bool(goods), to_receive=to_receive,
-        payment_methods=BillPayment.METHOD_CHOICES, banks=_banks(store)))
+        payment_methods=BillPayment.METHOD_CHOICES, banks=_banks(store), pph_kinds=WITHHOLDING_KINDS))
 
 
 # ---------------------------------------------------------------------------

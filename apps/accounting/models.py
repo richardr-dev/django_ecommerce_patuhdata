@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.db import models
 from django.utils.deconstruct import deconstructible
@@ -102,6 +103,7 @@ class Expense(models.Model):
         related_name="expenses", verbose_name="Pusat biaya")
     # True while the expense waits for a second person to approve it: it is not on the books yet.
     approval_pending = models.BooleanField(default=False)
+    withheld = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # PPh held back from the payee
     bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
         blank=True, related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
@@ -297,6 +299,7 @@ class BillPayment(models.Model):
     note = models.CharField(max_length=200, blank=True)
     bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
         blank=True, related_name="+")
+    withheld = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # PPh held back from this payment
     recorded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -554,3 +557,50 @@ class ApprovalRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+WITHHOLDING_KINDS = [
+    ("pph23_jasa", "PPh 23 · jasa (2%)", "PPh 23", Decimal("2")),
+    ("pph23_royalti", "PPh 23 · royalti, bunga, hadiah (15%)", "PPh 23", Decimal("15")),
+    ("pph4_2_sewa", "PPh 4(2) · sewa tanah/bangunan (10%)", "PPh 4(2)", Decimal("10")),
+    ("pph4_2_konstruksi", "PPh 4(2) · jasa konstruksi kecil (1,75%)", "PPh 4(2)", Decimal("1.75")),
+    ("pph21", "PPh 21 · gaji, honorarium, jasa perorangan", "PPh 21", Decimal("5")),
+]
+
+
+class WithholdingDeposit(models.Model):
+    """The PPh held back from payments, paid to the tax office (setor, with an NTPN)."""
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="withholding_deposits")
+    date = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    reference = models.CharField(max_length=60, blank=True, help_text="NTPN / nomor bukti penerimaan negara")
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Withholding(models.Model):
+    """PPh withheld from a payment to a supplier or payee, with its bukti potong."""
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="withholdings")
+    kind = models.CharField(max_length=20, choices=[(code, label) for code, label, _t, _r in WITHHOLDING_KINDS])
+    date = models.DateField()
+    base = models.DecimalField(max_digits=14, decimal_places=2)    # DPP the rate applies to
+    rate = models.DecimalField(max_digits=5, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    payee_name = models.CharField(max_length=160)
+    payee_npwp = models.CharField(max_length=20, blank=True)
+    number = models.CharField(max_length=40, blank=True)           # nomor bukti potong
+    source_type = models.CharField(max_length=20)                  # bill_payment | expense
+    source_id = models.CharField(max_length=64)
+    deposit = models.ForeignKey(WithholdingDeposit, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="items")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [models.UniqueConstraint(fields=["source_type", "source_id"], name="one_withholding_per_source")]
+
+    @property
+    def tax_name(self):
+        return next((t for code, _l, t, _r in WITHHOLDING_KINDS if code == self.kind), "PPh")

@@ -1,0 +1,41 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}SPT Masa PPN{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pajak</span><h1>Lembar kerja SPT Masa PPN</h1><p>PPN keluaran dikurangi PPN masukan dari pembukuan, dengan lebih bayar masa sebelumnya yang dikompensasikan. Angkanya sama dengan buku besar.</p></div>
+  <div class="dp-actions"><a class="btn" href="?month={{ month }}&format=csv" data-no-soft>{% icon "download" %} CSV</a></div></div>
+
+<form method="get" class="toolbar"><label class="field"><span>Masa pajak</span><input type="month" name="month" value="{{ month }}" onchange="this.form.submit()"></label></form>
+
+{% if not profile.is_pkp %}<div class="notice">Toko ini belum terdaftar sebagai PKP, sehingga PPN masukan tidak dikreditkan. Lembar kerja ini baru bermakna setelah status PKP diatur di Pengaturan pajak.</div>{% endif %}
+
+<div class="tiles">
+  <div class="tile"><small>PPN keluaran</small><strong>{{ w.out|rp }}</strong><span>DPP {{ w.dpp_out|rp }}{% if w.dpp_returns %} · retur {{ w.dpp_returns|rp }}{% endif %}</span></div>
+  <div class="tile"><small>PPN masukan</small><strong>{{ w.in|rp }}</strong><span>{{ w.purchases|length }} tagihan · {{ w.expenses|length }} biaya</span></div>
+  <div class="tile {% if w.to_pay %}warn{% else %}accent{% endif %}"><small>{% if w.overpaid %}Lebih bayar (dikompensasikan){% else %}Kurang bayar (disetor){% endif %}</small><strong>{% if w.overpaid %}{{ w.overpaid|rp }}{% else %}{{ w.to_pay|rp }}{% endif %}</strong><span>Setor & lapor paling lambat {{ w.deadline|date:"d M Y" }}</span></div>
+</div>
+
+<section class="panel"><header><h2>Perhitungan</h2></header>
+<div class="scroll-x"><table class="tbl"><tbody>
+  <tr><td>PPN keluaran</td><td class="num">{{ w.out|rp }}</td></tr>
+  <tr><td>PPN masukan yang dapat dikreditkan</td><td class="num">− {{ w.in|rp }}</td></tr>
+  <tr><td><b>Selisih bulan ini</b></td><td class="num"><b>{{ w.net|signed_rp }}</b></td></tr>
+  <tr><td>Kompensasi lebih bayar dari masa sebelumnya</td><td class="num">− {{ w.carry_in|rp }}</td></tr>
+  <tr><td><b>{% if w.overpaid %}PPN lebih bayar, dibawa ke masa berikutnya{% else %}PPN kurang bayar, disetor{% endif %}</b></td><td class="num"><b>{% if w.overpaid %}{{ w.overpaid|rp }}{% else %}{{ w.to_pay|rp }}{% endif %}</b></td></tr>
+</tbody></table></div></section>
+
+{% if w.missing_npwp %}<div class="notice">{{ w.missing_npwp }} invoice bulan ini belum punya NPWP pembeli. Lengkapi bila faktur pajak harus diterbitkan atas nama pembeli.</div>{% endif %}
+
+<section class="panel"><header><div><h2>PPN keluaran</h2><p>Invoice penjualan ber-PPN bulan ini.</p></div></header>
+<div class="scroll-x"><table class="tbl"><thead><tr><th>Invoice</th><th>Tanggal</th><th>Pembeli</th><th class="num">DPP</th><th class="num">PPN</th></tr></thead><tbody>
+  {% for i in w.sales %}<tr><td>{{ i.number }}</td><td>{{ i.issued_on|date:"d M Y" }}</td><td>{{ i.buyer_name }}</td><td class="num">{{ i.tax_base|rp }}</td><td class="num">{{ i.tax|rp }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Tidak ada penjualan ber-PPN bulan ini.</td></tr>{% endfor %}
+  {% for c in w.credits %}<tr><td>{{ c.number }} <small>(retur)</small></td><td>{{ c.issued_on|date:"d M Y" }}</td><td>{{ c.buyer_name }}</td><td class="num">− {{ c.subtotal|rp }}</td><td class="num">− {{ c.tax|rp }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+
+<section class="panel"><header><div><h2>PPN masukan</h2><p>Tagihan supplier dan biaya ber-PPN bulan ini.</p></div></header>
+<div class="scroll-x"><table class="tbl"><thead><tr><th>Dokumen</th><th>Tanggal</th><th>Penjual</th><th class="num">DPP</th><th class="num">PPN</th></tr></thead><tbody>
+  {% for b in w.purchases %}<tr><td>{{ b.number|default:"Tagihan" }}</td><td>{{ b.bill_date|date:"d M Y" }}</td><td>{{ b.supplier.name }}</td><td class="num">{{ b.subtotal|rp }}</td><td class="num">{{ b.tax|rp }}</td></tr>{% endfor %}
+  {% for e in w.expenses %}<tr><td>Biaya</td><td>{{ e.date|date:"d M Y" }}</td><td>{{ e.vendor|default:e.description }}</td><td class="num">{{ e.amount|rp }}</td><td class="num">{{ e.input_vat|rp }}</td></tr>{% endfor %}
+  {% if not w.purchases and not w.expenses %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Tidak ada pembelian ber-PPN bulan ini.</td></tr>{% endif %}
+</tbody></table></div></section>
+{% endblock %}

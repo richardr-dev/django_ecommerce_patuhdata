@@ -57,7 +57,8 @@ def _bill_payment(store, p, actor):
     bill = Bill.objects.get(pk=p["bill_id"], store=store)
     bank = BankAccount.objects.filter(pk=p.get("bank_account_id"), store=store).first() if p.get("bank_account_id") else None
     pay_bill(bill, amount=Decimal(p["amount"]), paid_on=datetime.date.fromisoformat(p["paid_on"]),
-        method=p.get("method", "transfer"), reference=p.get("reference", ""), actor=actor, bank_account=bank)
+        method=p.get("method", "transfer"), reference=p.get("reference", ""), actor=actor, bank_account=bank,
+        withholding=(p["pph_kind"], p.get("pph_rate")) if p.get("pph_kind") else None)
     audit_log(store, actor, "bill.paid", bill, amount=p["amount"], approved=True)
 
 
@@ -93,6 +94,11 @@ def _expense(store, p, actor):
     expense.approval_pending = False
     expense.save(update_fields=["approval_pending"])
     post_expense(expense)
+    if p.get("pph_kind"):
+        from . import withholding as pph
+        pph.record(store, kind=p["pph_kind"], date=expense.date, base=expense.amount + expense.withheld
+            - expense.input_vat, rate=p.get("pph_rate") or None, payee_name=expense.vendor or expense.description,
+            source_type="expense", source_id=expense.pk, actor=actor)
     audit_log(store, actor, "expense.created", expense, amount=expense.amount, approved=True)
 
 

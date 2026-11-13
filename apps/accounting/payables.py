@@ -10,6 +10,7 @@ from .ledger import (
     CASH,
     INPUT_VAT,
     PAYABLE,
+    WITHHELD,
     LedgerError,
     post_entry,
     register_backlog,
@@ -45,9 +46,9 @@ def post_bill_payment(payment, *, strict=False, actor=None):
     return post_entry(bill.store, date=payment.paid_on, strict=strict, actor=actor,
         source=("bill_payment", payment.pk),
         memo=f"Bayar tagihan {bill.supplier.name} {bill.number}".strip(),
-        amounts={PAYABLE: payment.amount,
+        amounts={PAYABLE: payment.amount, WITHHELD: -payment.withheld,
             (payment.bank_account.account.code if payment.bank_account_id else CASH):
-                -payment.amount})
+                -(payment.amount - payment.withheld)})
 
 
 def _find_goods(store, sku):
@@ -134,7 +135,8 @@ def create_bill(store, *, supplier, lines, bill_date, due_date=None, number="", 
 
 @transaction.atomic
 def pay_bill(bill, *, amount, paid_on, method="transfer", reference="", actor=None,
-        bank_account=None):
+        bank_account=None, withholding=None):
+    """``withholding`` is ``(kind, rate)``: PPh held back from this payment (on the part before PPN)."""
     bill = Bill.objects.select_for_update().get(pk=bill.pk)
     if bill.status in UNPOSTED_STATUSES:
         raise PayableError("Tagihan ini tidak bisa dibayar.")
@@ -144,6 +146,20 @@ def pay_bill(bill, *, amount, paid_on, method="transfer", reference="", actor=No
         raise PayableError(f"Pembayaran melebihi sisa tagihan (Rp{bill.amount_due:,.0f}).")
     payment = BillPayment.objects.create(bill=bill, paid_on=paid_on, amount=amount,
         method=method, reference=reference, recorded_by=actor, bank_account=bank_account)
+    if withholding:
+        from . import withholding as pph
+        kind, rate = withholding
+        base = (amount * bill.subtotal / bill.total).quantize(Decimal("1")) if bill.total else amount
+        try:
+            held = pph.record(bill.store, kind=kind, date=paid_on, base=base, rate=rate,
+                payee_name=bill.supplier.name, payee_npwp=bill.supplier.npwp, source_type="bill_payment",
+                source_id=payment.pk, actor=actor)
+        except pph.WithholdingError as error:
+            raise PayableError(str(error)) from error
+        if held.amount >= amount:
+            raise PayableError("PPh yang dipotong tidak boleh sebesar pembayaran.")
+        payment.withheld = held.amount
+        payment.save(update_fields=["withheld"])
     try:
         post_bill(bill, actor=actor)  # bills older than ledger posting
         post_bill_payment(payment, strict=True, actor=actor)
