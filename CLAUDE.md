@@ -381,6 +381,67 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
   CDN has no `@apply`, so write plain CSS. Page-level Tailwind is for layout (grid, gap,
   spacing) only; when a utility string for colour/shape repeats a third time, add a `bb-*` class.
 
+## Architecture check against `architecture.md` (checked 2026-11-13)
+
+Verdict: sufficient for one company (or a few brands) trading goods through its own store and
+marketplaces, with real books. Not yet the full ERP baseline of `architecture.md`: purchasing, warehouse
+documents and database-level isolation are the gaps. Deliberately not adopted: React/Next.js, DRF as the
+main interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layout.
+
+**Met**
+- Modular monolith on Django + PostgreSQL (dev, CI and production); suite passes on PostgreSQL and SQLite.
+- Double-entry ledger as the only money record, balanced entries, reversal instead of edit, one live
+  entry per source document, backlog poster per module (our form of "no lost postings").
+- Perpetual inventory, moving weighted average, cost booked with the sale.
+- Append-only movement ledger (app + PostgreSQL trigger), balances replayable from movements.
+- Reservations: on-hand, reserved, available; the storefront cannot oversell; row locks on stock.
+- Hybrid negative stock with provisional cost and automatic revaluation on receipt (store switch).
+- GRNI: goods receipt before the bill, bill clears GRNI, price difference to 5150.
+- Multi-company: each store its own chart and ledger; intercompany transfer with an entry in each book.
+- Period control: `LedgerLock`, year-end closing to 3300, month-end checklist, reopen by admin only.
+- Reconciliation: stock value vs Persediaan, movements vs balances, AR/AP/GRNI/PPh/intercompany ties,
+  all in `accounting/controls.py`.
+- Idempotency keys on the money forms; audit log per document; maker-checker approvals; one role matrix.
+- Reports from the ledger: P&L, neraca, arus kas, neraca saldo, buku besar, Excel, SAK EMKM, audit pack.
+- Transactional outbox exists for integrations (`integrations.OutboxEvent`, `process_outbox`); ledger
+  posting does not use it (it posts in the same transaction, with the backlog as the safety net).
+
+**Partly met**
+- Negative stock policy: store level and role only. No warehouse or product level rule, no "critical"
+  tier that needs approval, variants excluded, a manual stock edit does not cover a deficit.
+- Valuation pool: one cost per product (or variant) per store. No per-warehouse pool, no cost layers,
+  no landed cost (freight, duty) spread into unit cost; a non-PKP's PPN is the only uplift.
+- Warehouse transfer and stock count: services only (`transfer_stock`, `count_stock`). No screens, no
+  count document, no approval of a count difference, and a count posts no journal (the stock-value
+  check shows the gap and `inventory.adjust_books` books it by hand).
+- Returns: customer returns are complete; there is no purchase return to a supplier.
+- Idempotency: forms only. The JSON API and the stock services have no key of their own.
+- Isolation between stores: enforced in views and services (`store=` on every query). No composite
+  foreign keys and no PostgreSQL Row-Level Security.
+- Fiscal periods: one lock date per store, not a period table with open/closed status per month.
+- Posting rules: account codes are constants in code (`ledger.py`), not a configurable mapping table.
+- Tests: example-based, including the architecture's worked examples. No property-based tests and no
+  two-connection concurrency test for stock (only `tests/test_postgres_concurrency.py` for other paths).
+
+**Missing**
+1. Purchase order → partial goods receipt → bill (three-way match). Today a receipt or a bill stands alone.
+2. Sales order with partial fulfilment and backorder: an invoice takes all its stock at once, and
+   "incoming" and "backordered" quantities are not tracked.
+3. Goods issue as its own document (surat jalan that moves stock). Stock leaves with the invoice.
+4. Outlet/warehouse request flow (request → approve → send → receive) and variant stock per location.
+5. Units of measure and conversions (box/pcs), decimal quantities, lots/batches, serial numbers, bins.
+6. Supplier side: purchase return, debit note, supplier credit, one payment over several bills.
+7. Stock count document with approval, and the shrinkage journal posted automatically.
+8. Database-level tenant isolation (RLS or composite keys); branches as an entity under a company.
+9. Consolidation: group reports with intercompany elimination; PPN on intercompany sales.
+10. Inventory close dashboard (negative SKUs, provisional values, unposted, GL difference on one page;
+    the pieces exist in the checks and the Tutup buku checklist).
+11. Reports: stock card per item, slow-moving stock, stock adjustment report.
+12. Monitoring (Sentry is wired but needs a DSN), S3 media in production, and a restore drill for backups.
+
+**Suggested order**: 1 and 6 (purchasing is the weakest module) → 7 and 4 (warehouse control) → 2 and 3
+→ 5 only when a client needs it → 8 before hosting unrelated clients in one database → 9.
+
 ## Backlog
 
 ### 1. Architecture debt
@@ -395,7 +456,7 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
       Marketplace/gateway `Payout`s and mitra `SettlementPayment`s carry it too (import forms and
       the settlement payment form ask for the receiving account); a bank statement line quoting a
       payout reference ranks that payout first. All money can now be reconciled per account.
-- [ ] Supplier side has no multi-bill payment, supplier credit, or debit note. Mirror
+- [ ] Supplier side has no multi-bill payment, supplier credit, debit note or purchase return. Mirror
       `tax/receipts.py` and `tax/credit_notes.py` in `accounting/`.
 - [ ] Voiding a receipt reverses the cash. Offer "keep as customer credit" instead.
 - [x] Marketplace payouts land in a chosen bank account and are matched to the statement line.
