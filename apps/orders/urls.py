@@ -6,7 +6,16 @@ from apps.shops import segment_views
 from apps.shops.auth import customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
-from . import deficit_views, delivery_views, gift_card_views, manual_views, search, setup_views, views
+from . import (
+    deficit_views,
+    delivery_views,
+    gift_card_views,
+    manual_views,
+    search,
+    setup_views,
+    stock_request_views,
+    views,
+)
 from .forms import CustomerLoginForm, MerchantLoginForm
 
 # Per IP and per submitted username/email; see config/ratelimit.py.
@@ -74,6 +83,9 @@ urlpatterns = [
     path("orders/<uuid:order_id>/pay/", rate_limit("order-pay", limit=20, window=600)(
         manual_views.order_pay), name="order-pay"),
     path("merchant/stock/", views.merchant_stock, name="merchant-stock"),
+    path("merchant/stock/permintaan/", stock_request_views.merchant_stock_requests, name="merchant-stock-requests"),
+    path("merchant/stock/permintaan/baru/", stock_request_views.merchant_stock_request_new, name="merchant-stock-request-new"),
+    path("merchant/stock/permintaan/<int:request_id>/", stock_request_views.merchant_stock_request, name="merchant-stock-request"),
     path("merchant/stock/minus/", deficit_views.merchant_stock_minus, name="merchant-stock-minus"),
     path("merchant/orders.csv", views.merchant_orders_csv, name="merchant-orders-csv"),
     path("merchant/subscribers.csv", views.merchant_subscribers_csv, name="merchant-subscribers-csv"),

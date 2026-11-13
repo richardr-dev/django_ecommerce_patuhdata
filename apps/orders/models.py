@@ -482,6 +482,54 @@ class StockDeficitCover(models.Model):
         return self.quantity * (self.unit_cost - self.deficit.provisional_cost)
 
 
+class StockRequest(models.Model):
+    """Permintaan stok: an outlet (or any warehouse) asks another warehouse of the same company for goods.
+    requested → approved → sent → received. Goods leave the source warehouse when sent and are *in transit*
+    (still the company's Persediaan, on no shelf) until the receiver counts them in. Fewer received than sent
+    is a loss in transit, booked as Selisih persediaan at cost. Inside one company this never touches the
+    books otherwise: no sale, no HPP, same average cost."""
+    REQUESTED, APPROVED, SENT, RECEIVED, REJECTED, CANCELLED = "requested", "approved", "sent", "received", "rejected", "cancelled"
+    STATUS_CHOICES = [(REQUESTED, "Diminta"), (APPROVED, "Disetujui"), (SENT, "Dikirim"), (RECEIVED, "Diterima"),
+        (REJECTED, "Ditolak"), (CANCELLED, "Dibatalkan")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="stock_requests")
+    number = models.CharField(max_length=40)
+    from_warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, related_name="requests_out")
+    to_warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, related_name="requests_in")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=REQUESTED)
+    notes = models.CharField(max_length=300, blank=True)
+    requested_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    sent_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    received_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_stock_request_number"),
+            models.CheckConstraint(condition=~models.Q(from_warehouse=models.F("to_warehouse")),
+                name="stock_request_two_warehouses")]
+
+
+class StockRequestLine(models.Model):
+    request = models.ForeignKey(StockRequest, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="+")
+    quantity = models.PositiveIntegerField()
+    sent_quantity = models.PositiveIntegerField(default=0)
+    received_quantity = models.PositiveIntegerField(default=0)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # frozen when sent
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.CheckConstraint(condition=models.Q(sent_quantity__lte=models.F("quantity"),
+            received_quantity__lte=models.F("sent_quantity")), name="stock_request_quantities_in_order")]
+
+    @property
+    def in_transit(self):
+        return self.sent_quantity - self.received_quantity
+
+
 class PaymentEvent(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     provider = models.CharField(max_length=40)

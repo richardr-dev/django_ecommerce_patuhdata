@@ -1,0 +1,17 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Minta stok{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-stock-requests' %}">Permintaan stok</a></span><h1>Minta stok</h1><p>Pilih gudang yang kirim dan gudang yang menerima (mis. outlet), lalu barang dan jumlahnya. Belum ada stok yang bergerak sampai disetujui dan dikirim.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Dari mana ke mana</h2></div></header><div class="dp-card-body"><div class="field-row">
+      <label class="field"><span>Gudang pengirim</span><select name="from_warehouse" required>{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Gudang / outlet penerima</span><select name="to_warehouse" required>{% for w in warehouses %}<option value="{{ w.pk }}"{% if forloop.last %} selected{% endif %}>{{ w.name }}{% if w.is_outlet %} (outlet){% endif %}</option>{% endfor %}</select></label></div></div></section>
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><h2>Barang</h2></div></header>
+      <div class="scroll-x"><table class="tbl editor"><thead><tr><th>SKU</th><th class="num" style="width:140px">Jumlah</th></tr></thead><tbody>
+        {% for i in "12345" %}<tr><td><input name="sku[]" maxlength="60" aria-label="SKU baris {{ forloop.counter }}"></td><td><input name="qty[]" inputmode="numeric" class="num" aria-label="Jumlah baris {{ forloop.counter }}"></td></tr>{% endfor %}</tbody></table></div></section>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300"></textarea></label>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Alur</small><p style="margin:8px 0 14px;opacity:.9">Diminta → disetujui orang lain → dikirim gudang → diterima outlet. Barang yang dalam perjalanan tetap milik perusahaan.</p><button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Ajukan permintaan</button></div></aside>
+</form>
+{% endblock %}

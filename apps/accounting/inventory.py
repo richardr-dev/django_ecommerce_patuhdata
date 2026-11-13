@@ -86,9 +86,11 @@ def reconciliation(store):
     # the shelf value by the open deficits at their provisional cost.
     from apps.orders.deficits import summary as deficit_summary
     minus = deficit_summary(store)
-    return {**valuation, "book": book, "book_mitra": book_mitra, "in_transit": transit,
+    from apps.orders.stock_requests import in_transit_value
+    moving = in_transit_value(store)  # sent between warehouses, not received yet: still Persediaan
+    return {**valuation, "book": book, "book_mitra": book_mitra, "in_transit": transit, "moving": moving,
         "deficit_units": minus["units"], "deficit_value": minus["value"],
-        "difference": settle(book - (valuation["shelf_value"] + transit - minus["value"])),
+        "difference": settle(book - (valuation["shelf_value"] + transit + moving - minus["value"])),
         "difference_mitra": settle(book_mitra - valuation["mitra_value"])}
 
 

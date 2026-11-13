@@ -1,0 +1,12 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Permintaan stok{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Inventori</span><h1>Permintaan stok</h1>
+  <p>Outlet atau gudang meminta barang dari gudang lain di perusahaan yang sama: diminta, disetujui, dikirim, diterima. Ini perpindahan stok, bukan penjualan: tidak ada HPP dan pembukuan tidak berubah kecuali barang hilang di jalan.</p></div>
+  <div class="dp-actions">{% if can_request %}<a class="btn-primary" href="{% url 'merchant-stock-request-new' %}">{% icon "plus" %} Minta stok</a>{% endif %}</div></div>
+<div class="tabs"><a href="?show=open" class="{% if show == 'open' %}on{% endif %}">Berjalan</a><a href="?show=all" class="{% if show == 'all' %}on{% endif %}">Semua</a></div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Permintaan</th><th>Dari</th><th>Ke</th><th>Diminta oleh</th><th>Status</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-stock-request' r.pk %}"><b>{{ r.number }}</b></a><small>{{ r.created_at|date:"d M Y" }}</small></td><td>{{ r.from_warehouse.name }}</td><td>{{ r.to_warehouse.name }}</td><td>{{ r.requested_by.username|default:"—" }}</td>
+    <td>{% if r.status == 'received' %}<span class="pill pill-paid">{{ r.get_status_display }}</span>{% elif r.status == 'sent' %}<span class="pill pill-info">{{ r.get_status_display }}</span>{% elif r.status == 'requested' or r.status == 'approved' %}<span class="pill pill-pending">{{ r.get_status_display }}</span>{% else %}<span class="pill pill-draft">{{ r.get_status_display }}</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada permintaan stok.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

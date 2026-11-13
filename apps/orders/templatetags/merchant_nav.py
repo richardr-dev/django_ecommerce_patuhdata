@@ -88,6 +88,7 @@ NAV = [
             Link("Paket (bundle)", "merchant-bundles"),
             Link("Stok gudang", "merchant-stock"),
             Link("Stok opname", "merchant-stock-counts", match=("/merchant/accounting/stok-opname/",)),
+            Link("Permintaan stok", "merchant-stock-requests", match=("/merchant/stock/permintaan/",)),
             Link("Stok minus", "merchant-stock-minus"),
             Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
             Link("Lokasi stok", "merchant-entity-list", ("inventory",)),

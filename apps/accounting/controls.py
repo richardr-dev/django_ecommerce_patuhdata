@@ -174,9 +174,9 @@ def payable(store, today, ledger):
 def inventory_value(store, today, ledger):
     from . import inventory
     data = inventory.reconciliation(store)
-    expected = data["shelf_value"] + data["in_transit"] - data["deficit_value"]
+    expected = data["shelf_value"] + data["in_transit"] + data["moving"] - data["deficit_value"]
     check = _tie("inventory", "Persediaan sama dengan nilai stok", data["book"], expected,
-        "Nilai stok + barang belum diterima − stok minus", url=reverse("merchant-inventory-value"),
+        "Nilai stok + barang belum diterima + kiriman antar gudang − stok minus", url=reverse("merchant-inventory-value"),
         action="Buka nilai persediaan",
         ok="Persediaan di buku sama dengan nilai stok di gudang.",
         off="Persediaan di buku berbeda dari nilai stok (stok awal belum dicatat, atau HPP "
