@@ -452,6 +452,26 @@ interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layo
 **Suggested order**: 1 and 2 (sales side) → 4 → 3 only when a client needs it → 5 before hosting unrelated
 clients in one database → 6.
 
+## Accountant's quarter: what exists and what is missing (checked 2026-11-13)
+
+Exists: buku besar per account with running balance (`merchant-account-ledger`, Excel for every account),
+neraca saldo, neraca with comparison, laba rugi with prior-period comparison and a "Kuartal ini" preset, arus
+kas, SAK EMKM pack (annual), audit pack, budget vs actual (monthly), bank reconciliation, AR/AP aging, fixed
+assets with monthly depreciation, SPT Masa PPN with kompensasi, PPh 21/23/4(2) with bukti potong and
+deposit, month-end checklist, inventory close, year-end closing, reconciliation checks.
+
+Missing for a real quarterly close:
+1. **Adjusting entries**: accruals (utang biaya), prepaid expenses with monthly amortisation, recurring and
+   auto-reversing journals, doubtful-receivable provision. Today only one-off manual journals.
+2. **Quarterly statements**: the SAK EMKM pack is annual only; no quarter pack, no Q1..Q4 side-by-side P&L,
+   no management summary (KPIs, margin, budget variance for the quarter).
+3. **Statement of changes in equity** (needed outside SAK EMKM) and a cash flow by the indirect method.
+4. **Tax**: PPh 25 instalment and PPh 29, annual badan computation with fiscal reconciliation (koreksi
+   fiskal) and an SPT Tahunan worksheet, tax calendar with due dates (PPN end of next month; PPh 21/23 pay by
+   the 10th and report by the 20th; PPh 25 by the 15th; SPT Tahunan badan 30 April, OP 31 March).
+5. **Loans**: schedule and interest accrual for Utang bank & pinjaman (account 2500 is a plain balance).
+6. **Period lock by quarter**: `LedgerLock` takes any date, but the close checklist is monthly only.
+
 ## Backlog
 
 ### 1. Architecture debt
