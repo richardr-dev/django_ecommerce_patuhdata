@@ -1133,3 +1133,24 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .ds-check input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ds-primary); flex: none; box-shadow: none; }
 .ds-check-wrap > small { display: block; margin: 3px 0 0 28px; color: var(--ds-muted); font-size: 12px; }
 .ds-steps { display: grid; gap: 14px; }
+
+
+/* store setup page (Setup cepat) */
+.st-steps { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.st-steps a { display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px 8px 8px; border-radius: 99px; background: #fff; box-shadow: var(--ds-shadow);
+  color: var(--ds-ink); text-decoration: none; font-weight: 600; transition: transform .12s, box-shadow .12s; }
+.st-steps a:hover { transform: translateY(-1px); box-shadow: var(--ds-shadow-lift); }
+.st-steps .bb-bubble { width: 32px; height: 32px; font-size: 13px; }
+.st-quick .tile > a, .st-quick .tile form { position: relative; z-index: 1; }
+.st-banners { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.st-banner { position: relative; display: grid; gap: 6px; width: 180px; padding: 8px; border-radius: 16px; background: var(--ds-subcard); box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .1); font-size: 12px; }
+.st-banner img { width: 100%; height: 84px; object-fit: cover; border-radius: 10px; }
+.st-banner em { position: absolute; top: 14px; left: 14px; padding: 2px 8px; border-radius: 99px; background: var(--ds-warn-bg); color: var(--ds-warn); font-style: normal; font-weight: 600; }
+.st-cover { height: 140px; margin-bottom: 12px; border-radius: 16px; background-size: cover; background-position: center; }
+.st-save { position: sticky; bottom: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-radius: 99px;
+  background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px); box-shadow: 0 12px 30px -10px rgba(15, 30, 54, .25); }
+.st-save small { display: block; color: var(--ds-muted); }
+@media (max-width: 640px) { .st-save { border-radius: 24px; flex-direction: column; align-items: stretch; } }
+/* the theme cards keep their preview (setup.css) but take the new shape */
+.template-card { border: 0 !important; border-radius: 20px !important; background: var(--ds-subcard) !important; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .1); }
+.template-card.active { box-shadow: 0 0 0 2px var(--ds-primary), 0 10px 24px -12px rgba(0, 102, 255, .5); background: #fff !important; }

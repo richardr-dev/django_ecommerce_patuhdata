@@ -626,8 +626,16 @@ class StoreSettingsForm(StyledModelForm):
                 store=self.instance)
         labels = {"catalog_title": "Judul katalog", "announcement_text": "Teks pengumuman",
             "announcement_link_label": "Teks tautan pengumuman",
-            "announcement_link_url": "Tujuan pengumuman"}
-        for name, label in labels.items(): self.fields[name].label = label
+            "announcement_link_url": "Tujuan pengumuman",
+            "name": "Nama toko", "logo": "Logo", "logo_size": "Ukuran logo", "show_store_name": "Tampilkan nama toko di samping logo",
+            "description": "Deskripsi toko", "theme": "Gaya tampilan", "primary_color": "Warna utama",
+            "background_color": "Warna latar", "font_family": "Jenis huruf", "currency": "Mata uang", "tax_rate": "Tarif PPN (%)",
+            "support_phone": "Nomor WhatsApp / telepon toko", "instagram": "Instagram", "support_email": "Email toko",
+            "terms_url": "Tautan syarat & ketentuan", "privacy_url": "Tautan kebijakan privasi",
+            "return_policy": "Kebijakan retur", "listed_in_directory": "Tampilkan toko di direktori"}
+        for name, label in labels.items():
+            if name in self.fields:
+                self.fields[name].label = label
         if "domain" in self.fields:
             domain_field = self.fields["domain"]
             domain_field.label = "Domain sendiri"
