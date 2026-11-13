@@ -1110,10 +1110,29 @@ def merchant_dashboard(request):
             payment_provider="bank_transfer").count(),
         month_revenue=sum((row["revenue"] for row in daily), Decimal(0))))
 
+def _order_kpis(orders):
+    """The four numbers the page opens with: today's sales, orders, and what waits for the seller."""
+    from django.utils import timezone as tz
+    today = tz.localdate()
+    paid = {"paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered", "completed"}
+    todays = orders.filter(created_at__date=today)
+    return {
+        "revenue": todays.filter(status__in=paid).aggregate(t=Sum("total"))["t"] or 0,
+        "orders": todays.exclude(status__in={"cancelled", "payment_failed"}).count(),
+        "to_check": orders.filter(status="pending").count(),
+        "to_ship": orders.filter(status__in={"paid", "confirmed", "allocated", "picking", "packed"}).count(),
+    }
+
+
 @login_required(login_url="/merchant/login/")
 def merchant_orders(request):
+    from .scope import MARKETPLACE_CHANNELS, marketplace_orders, website_orders
     store = _staff_store(request)
-    all_orders = Order.objects.filter(store=store)
+    # Marketplace imports are not website orders: hidden unless asked for (or filtered to).
+    chosen = set(request.GET.getlist("channel")) | {c for v in request.GET.getlist("channel") for c in v.split(",")}
+    with_marketplace = request.GET.get("sumber") == "semua" or bool(chosen & MARKETPLACE_CHANNELS)
+    hidden_marketplace = 0 if with_marketplace else marketplace_orders(store).count()
+    all_orders = Order.objects.filter(store=store) if with_marketplace else website_orders(store)
     counts = dict(all_orders.values_list("status").annotate(total=Count("id")))
     tabs = [{"key": key, "label": label, "count": sum(counts.get(status, 0) for status in statuses)}
         for key, label, statuses in ORDER_GROUPS]
@@ -1184,8 +1203,10 @@ def merchant_orders(request):
         _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         active_filters=active_filters, presets=PRESETS, sorts=SORTS, sort=sort or "newest",
+        with_marketplace=with_marketplace, hidden_marketplace=hidden_marketplace,
+        kpi=_order_kpis(all_orders),
         range_preset=request.GET.get("range", ""), channel_selected=channel_filter,
-        filter_query=urlencode([(k, v) for k in KEYS if k not in {"inv", "status", "crm"}
+        filter_query=urlencode([(k, v) for k in (*KEYS, "sumber") if k not in {"inv", "status", "crm"}
             for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),
         tabs=tabs, tab=group, query=query, total=all_orders.count(),
         outlets=Warehouse.objects.filter(store=store, is_outlet=True),

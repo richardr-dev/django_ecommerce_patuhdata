@@ -130,7 +130,7 @@ class CustomerHistoryTests(InvoiceFilterTests):
 
 class OrderPageFilterTests(InvoiceFilterTests):
     def ids(self, **params):
-        page = self.client.get(reverse("merchant-orders"), {"tab": "all", **params})
+        page = self.client.get(reverse("merchant-orders"), {"tab": "all", "sumber": "semua", **params})
         return {o.pk for o in page.context["orders"]}
 
     def test_same_search_and_period_as_the_invoice_list(self):
@@ -147,9 +147,9 @@ class OrderPageFilterTests(InvoiceFilterTests):
         self.assertEqual(self.ids(q=str(self.b.order_id)[:8]), {self.b.order_id})
 
     def test_sort_and_live_partial(self):
-        page = self.client.get(reverse("merchant-orders"), {"tab": "all", "sort": "oldest"})
+        page = self.client.get(reverse("merchant-orders"), {"tab": "all", "sort": "oldest", "sumber": "semua"})
         self.assertEqual(page.context["orders"][0].pk, self.b.order_id)
-        part = self.client.get(reverse("merchant-orders"), {"tab": "all", "q": "Siti"},
+        part = self.client.get(reverse("merchant-orders"), {"tab": "all", "q": "Siti", "sumber": "semua"},
             HTTP_HX_REQUEST="true")
         self.assertNotContains(part, "<html")
         self.assertContains(part, "Siti Aminah")

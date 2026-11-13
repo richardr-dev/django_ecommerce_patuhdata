@@ -1,5 +1,10 @@
 {% extends "merchant/base.html" %}{% load icons %}{% load static %}{% block title %}Pesanan{% endblock %}{% block head_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}{% block content %}
 <div class="bo-heading"><div><span class="eyebrow">PESANAN</span><h1>Pesanan & pengiriman</h1><p>Cek pembayaran → kemas → kirim. Satu tombol untuk setiap langkah.</p></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'merchant-orders-csv' %}">Unduh CSV</a>{% if merchant_role != "viewer" and merchant_role != "warehouse" and merchant_role != "finance" %}<a class="bo-button" href="{% url 'merchant-order-new' %}">+ Buat pesanan</a>{% endif %}<a class="bo-button" href="{% url 'merchant-order-labels' %}?tab={% if tab == 'all' %}pack{% else %}{{ tab }}{% endif %}&print=1" target="_blank" rel="noopener">{% icon "printer" %} Cetak semua label di tab ini</a></div></div>
+<div class="tiles">
+  <div class="tile accent"><small>Penjualan hari ini</small><strong>Rp{{ kpi.revenue|floatformat:"0g" }}</strong><span>{{ kpi.orders }} pesanan masuk</span></div>
+  <div class="tile {% if kpi.to_check %}warn{% endif %}"><small>Perlu dicek pembayarannya</small><strong>{{ kpi.to_check }}</strong><span>menunggu pembayaran / transfer</span></div>
+  <div class="tile"><small>Perlu dikemas &amp; dikirim</small><strong>{{ kpi.to_ship }}</strong><span>sudah dibayar, belum sampai</span></div>
+</div>
 <nav class="order-tabs" aria-label="Tahap pesanan">{% for item in tabs %}<a class="{% if tab == item.key %}active{% endif %}{% if item.count and forloop.counter <= 3 %} has-work{% endif %}" href="?tab={{ item.key }}{% if filter_query %}&{{ filter_query }}{% endif %}">{{ item.label }}<b>{{ item.count }}</b></a>{% endfor %}<a class="{% if tab == 'all' %}active{% endif %}" href="?tab=all{% if filter_query %}&{{ filter_query }}{% endif %}">Semua<b>{{ total }}</b></a></nav>
 <form id="ord-filter" method="get" class="mb-4 grid gap-3"
   hx-get="{% url 'merchant-orders' %}" hx-target="#ord-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
@@ -32,6 +37,11 @@
     </div>
   </div>
 </form>
+<div class="mb-3 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-4 py-2.5 text-sm text-blue-900 ring-1 ring-blue-100">
+  <span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "store" %}</span>
+  <span class="flex-1">Daftar ini untuk <b>pesanan website, manual, dan kasir</b>.{% if not with_marketplace %} {% if hidden_marketplace %}{{ hidden_marketplace }} pesanan marketplace tidak ditampilkan di sini (sudah ada di <a href="{% url 'merchant-sales-invoices' %}" class="font-semibold underline">Invoice penjualan</a>).{% else %} Pesanan Shopee dan Tokopedia ada di <a href="{% url 'merchant-sales-invoices' %}" class="font-semibold underline">Invoice penjualan</a>.{% endif %}{% endif %}</span>
+  <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold"><input type="checkbox" name="sumber" value="semua" form="ord-filter" class="h-4 w-4 rounded border-slate-300 text-blue-600"{% if with_marketplace %} checked{% endif %}> Tampilkan juga marketplace</label>
+</div>
 <div id="ord-list" aria-live="polite">{% include "merchant/_orders_list.html" %}</div>
 <datalist id="courier-codes"><option value="jne"><option value="jnt"><option value="sicepat"><option value="anteraja"><option value="ninja"><option value="tiki"><option value="pos"><option value="wahana"><option value="lion"><option value="ide"><option value="spx"><option value="gosend"><option value="grab"></datalist>
 <script>

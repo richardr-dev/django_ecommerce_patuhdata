@@ -72,6 +72,12 @@ Four test files failed before this work and still do: `test_digital_products`,
 - **Buyer links** (`/i/<token>/`) are public and must stay in `ALWAYS_OPEN` (`shops/availability.py`):
   they work while the shop is in setup or closed. The token is the only key; never put a store
   admin action behind that URL.
+- **Pesanan is the website's queue** (online shop, manual, POS, TV, reseller). Orders imported from a
+  marketplace file or sold on shopee/tokopedia/tiktok_shop/lazada are hidden there
+  (`orders/scope.py`) because they already live in Invoice penjualan, the channel recap and the
+  books; a switch shows them. New lists of "orders to fulfil" must use `website_orders(store)`.
+  `manage.py clean_orders` reports empty import batches, duplicate imports and look-alike orders
+  (`--apply` removes only the empty batches, never orders).
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
