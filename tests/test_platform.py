@@ -48,7 +48,7 @@ class HostRoutingTests(TestCase):
             response = _host(host).get("/favicon.ico")
             self.assertEqual(response.status_code, 302, host)
             self.assertTrue(response["Location"].endswith("img/brand/favicon.ico"), host)
-        self.assertContains(_host(f"teh.{PLATFORM}").get("/"), "img/brand/lakuin-icon.svg")
+        self.assertContains(_host(f"teh.{PLATFORM}").get("/"), "img/brand/icon.svg")
 
     def test_subdomain_serves_that_store_only(self):
         response = _host(f"teh.{PLATFORM}").get("/")

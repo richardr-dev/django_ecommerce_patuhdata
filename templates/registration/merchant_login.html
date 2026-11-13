@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
 <body class="ln"><main class="ln-wrap">
   <div class="ln-card">
-    <div class="ln-brand"><div class="ln-mark" aria-hidden="true">{{ platform_name|slice:":1"|upper }}</div><div><strong>{{ platform_name }}</strong><span>Penjualan, stok, dan pembukuan</span></div></div>
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo.png' %}" alt="{{ platform_name }}" width="179" height="44"></div>
     <h1>Masuk</h1>
     <p class="ln-sub">Gunakan email atau nomor WhatsApp yang terdaftar.</p>
     {% if request.GET.keluar %}<p class="ln-msg ok" role="status">Anda sudah keluar.</p>{% endif %}

@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
 <body class="ln ln-wide"><main class="ln-wrap">
   <div class="ln-card">
-    <div class="ln-brand"><div class="ln-mark" aria-hidden="true">{{ platform_name|slice:":1"|upper }}</div><div><strong>{{ platform_name }}</strong><span>Instalasi oleh partner</span></div></div>
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo.png' %}" alt="{{ platform_name }}" width="179" height="44"><div><span>Instalasi oleh partner</span></div></div>
     <h1>Pasang toko untuk klien</h1>
     <p class="ln-sub">Satu langkah membuat akun pemilik, organisasi, toko, gudang utama, bagan akun, dan profil pajak. Tidak ada pendaftaran publik.</p>
     {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
