@@ -6,6 +6,8 @@ body.platform{margin:0;background:var(--pf-bg);color:var(--pf-ink);font:16px/1.5
 .pf-header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:16px max(16px,calc((100% - 1120px)/2))}
 .pf-brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--pf-ink)!important;text-decoration:none}
 .pf-brand img{display:block;width:auto;height:36px}
+.pf-wordmark{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--pf-ink)}
+.pf-footer .pf-wordmark{font-size:22px}
 .pf-footer .pf-brand img{height:32px}
 .pf-header nav{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
 .pf-header nav a{color:var(--pf-ink);text-decoration:none;font-weight:600}
