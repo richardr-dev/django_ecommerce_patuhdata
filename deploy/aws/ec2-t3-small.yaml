@@ -101,7 +101,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "lakuin-storage-${AWS::AccountId}"
+      BucketName: !Sub "${AWS::StackName}-storage-${AWS::AccountId}"
       VersioningConfiguration: {Status: Enabled}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
