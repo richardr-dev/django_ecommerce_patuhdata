@@ -160,3 +160,17 @@ def merchant_spt_ppn(request):
         return response
     return render(request, "merchant/spt_ppn.html", _merchant_context(request, store, w=data, profile=profile,
         month=f"{year}-{month:02d}", month_label=data["start"]))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_faktur_export(request):
+    """Faktur Pajak Keluaran worksheet for a month (one row per line, problems flagged)."""
+    from apps.accounting.exports import response as xlsx_response
+
+    from . import faktur
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    year, month = _month(request)
+    wb, _data = faktur.workbook(store, year, month)
+    return xlsx_response(wb, f"faktur-keluaran-{year}-{month:02d}.xlsx")
