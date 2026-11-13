@@ -484,11 +484,11 @@ threshold (only the one-off manual journal is).
 Legacy pages still on the old markup (found by scanning `templates/merchant` for `bo-card`, `kpi-grid`,
 `data-table`, `bo-heading`, Tailwind `bg-gray-*`): settings, sales (sales overview), delivery, channel_detail,
 channels, channel_stock, channel_buyers, order_new, order_detail, orders list partial, entity_form (product
-form, large), billing, whatsapp, staff, settlement_new, sales_report, platform_balance, production_recap,
+form, large), billing, whatsapp, staff, settlement_new, production_recap,
 product_import, payments, mitra_invoice_new/list, feeds_qr, customers, campaign_links, broadcasts, abshop,
-tracking, income_import, gift_cards, engagement, activity, settlement_partners, import, customer_detail,
+tracking, gift_cards, engagement, activity, settlement_partners, import, customer_detail,
 _customer_history. Rebuilt in this pass: finance (Buku besar), payout_detail, settlements,
-settlement_detail, settlement_partner_detail.
+settlement_detail, settlement_partner_detail, income_import, platform_balance, sales_report.
 
 ## Backlog
 
