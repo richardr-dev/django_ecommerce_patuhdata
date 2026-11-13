@@ -435,8 +435,13 @@ def parse_orders_csv(upload):
 
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
-                  category: str = "regular"):
-    """Import each order, create an ImportBatch record, return summary."""
+                  category: str = "regular", finished_only: bool = False):
+    """Import each order, create an ImportBatch record, return summary.
+
+    ``finished_only``: a marketplace file lists orders at every stage. Only an order the marketplace
+    calls finished (Selesai) becomes a sale; one still being packed or shipped is left for a later
+    file, and a cancelled or returned one is not recorded at all. An order imported earlier is still
+    brought up to date, so a return after completion takes the sale back."""
     from decimal import Decimal
     batch = ImportBatch.objects.create(
         store=channel.store, channel=channel, imported_by=imported_by,
@@ -445,11 +450,20 @@ def import_orders(channel, orders, soft: bool = False,
     )
 
     summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],
-               "soft": soft,
+               "soft": soft, "not_finished": 0,
                "batch_id": str(batch.id)}
     total_amount = Decimal(0)
+    known = set()
+    if finished_only:
+        ids = [data.external_id for data in orders]
+        for start in range(0, len(ids), 500):
+            known.update(ChannelOrder.objects.filter(channel=channel,
+                external_order_id__in=ids[start:start + 500]).values_list("external_order_id", flat=True))
 
     for data in orders:
+        if finished_only and data.state != STATE_COMPLETED and data.external_id not in known:
+            summary["not_finished"] += 1
+            continue
         try:
             order, outcome = import_order_outcome(channel, data, soft=soft, batch=batch)
         except ChannelImportError as error:
@@ -472,7 +486,7 @@ def import_orders(channel, orders, soft: bool = False,
     batch.duplicate_count = summary["duplicates"]
     batch.updated_count = summary["updated"]
     batch.cancelled_count = summary["cancelled"]
-    batch.skipped_count = skipped
+    batch.skipped_count = skipped + summary["not_finished"]
     batch.error_count = len(summary["errors"])
     batch.total_amount = total_amount
     batch.save(update_fields=["order_count", "duplicate_count", "updated_count", "cancelled_count",

@@ -1,234 +1,113 @@
 {% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Impor Pesanan{% endblock %}
+{% block title %}Impor pesanan{% endblock %}
 {% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Marketplace</span><h1>Impor pesanan</h1>
+  <p>{% if not selected %}Pilih asal file pesanan. Hanya pesanan yang sudah <b>selesai</b> di marketplace yang dicatat sebagai penjualan.{% elif not summary %}Unggah file ekspor dari {{ selected.label }}.{% else %}Hasil impor dari {{ selected.label }}.{% endif %}</p></div>
+  <div class="dp-actions">{% if selected %}<a class="btn" href="{% url 'merchant-import' %}">{% icon "undo" %} Ganti marketplace</a>{% endif %}<a class="btn" href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a></div></div>
 
-<div class="bb-hero mb-5 flex flex-wrap items-end justify-between gap-4">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MARKETPLACE</p>
-    <h1 class="text-2xl font-bold text-gray-900">Impor Pesanan</h1>
-  </div>
-  <a class="text-sm text-indigo-600 hover:text-indigo-800 mt-2" href="{% url 'merchant-sales-invoices' %}">Invoice Penjualan →</a>
-</div>
-
-{# ── STEP 1: Choose platform ──────────────────────────────────────────── #}
 {% if not selected %}
-<p class="text-sm text-gray-500 mb-5">Pilih platform marketplace tempat pesanan berasal:</p>
-<div class="grid grid-cols-2 md:grid-cols-3 gap-5">
+{# ── Langkah 1: pilih marketplace. Seluruh kartu bisa diklik. ── #}
+<div class="pick-grid">
   {% for code, p in import_platforms.items %}
-  <a href="?platform={{ code }}" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all duration-200" style="text-decoration:none">
-
-    {# Platform brand header with logo #}
-    <div class="relative flex flex-col items-center justify-center py-8 px-4" style="background:{{ p.color }}">
-      {# Platform icon SVG #}
-      {% if code == "shopee" %}
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect width="52" height="52" rx="12" fill="rgba(255,255,255,0.18)"/>
-        <path d="M26 10c-5.523 0-10 4.477-10 10 0 1.86.508 3.6 1.395 5.09L12 42h28l-5.395-16.91A10 10 0 0 0 36 20c0-5.523-4.477-10-10-10z" fill="white" fill-opacity="0.95"/>
-        <circle cx="26" cy="20" r="4.5" fill="{{ p.color }}"/>
-        <path d="M20 32h12M19 36h14M21 40h10" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-      </svg>
-      {% elif code == "tokopedia" %}
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect width="52" height="52" rx="12" fill="rgba(255,255,255,0.18)"/>
-        <path d="M26 10 L40 18 V32 L26 44 L12 32 V18 Z" fill="white" fill-opacity="0.95"/>
-        <path d="M26 20 L33 24 V31 L26 37 L19 31 V24 Z" fill="{{ p.color }}"/>
-      </svg>
-      {% elif code == "tiktok_shop" %}
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect width="52" height="52" rx="12" fill="rgba(255,255,255,0.12)"/>
-        <path d="M34 13v2.5a9 9 0 0 0 9 9V30a13.5 13.5 0 0 1-9-3.3V40a11 11 0 1 1-11-11v5.5a5.5 5.5 0 1 0 5.5 5.5V13H34z" fill="white" fill-opacity="0.95"/>
-      </svg>
-      {% elif code == "lazada" %}
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect width="52" height="52" rx="12" fill="rgba(255,255,255,0.18)"/>
-        <path d="M26 11 L42 39 H10 Z" fill="white" fill-opacity="0.95"/>
-        <ellipse cx="26" cy="31" rx="6" ry="4" fill="{{ p.color }}"/>
-        <ellipse cx="26" cy="31" rx="3" ry="2" fill="white" fill-opacity="0.7"/>
-      </svg>
-      {% else %}
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect width="52" height="52" rx="12" fill="rgba(255,255,255,0.18)"/>
-        <rect x="12" y="14" width="28" height="6" rx="3" fill="white" fill-opacity="0.95"/>
-        <rect x="12" y="24" width="20" height="4" rx="2" fill="white" fill-opacity="0.75"/>
-        <rect x="12" y="32" width="24" height="4" rx="2" fill="white" fill-opacity="0.75"/>
-        <rect x="12" y="40" width="16" height="4" rx="2" fill="white" fill-opacity="0.55"/>
-      </svg>
-      {% endif %}
-      <span class="absolute top-2.5 right-2.5 text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.3);color:white;letter-spacing:.03em">{{ p.badge }}</span>
-    </div>
-
-    {# Card body #}
-    <div class="flex flex-col flex-1 p-4 pb-5">
-      <h2 class="text-base font-bold text-gray-900 mb-0.5">{{ p.label }}</h2>
-      <p class="text-xs text-gray-400 mb-4 leading-relaxed">{{ p.tagline }}</p>
-      <div class="mt-auto">
-        <span class="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-xs font-semibold text-white" style="background:{{ p.color }}">
-          Hubungkan &amp; Impor →
-        </span>
-      </div>
-    </div>
-
+  <a class="pick" href="?platform={{ code }}" aria-label="Impor pesanan dari {{ p.label }}">
+    <span class="pick-mark" style="background:{{ p.color }}" aria-hidden="true">{{ p.mark }}</span>
+    <span class="pick-text"><strong>{{ p.label }}</strong><small>{{ p.tagline }} · {{ p.badge }}</small></span>
+    <span class="pick-go"><span>Pilih</span> {% icon "chevron" %}</span>
   </a>
   {% endfor %}
 </div>
 
-{# ── STEP 2: Upload form ───────────────────────────────────────────────── #}
 {% elif not summary %}
-<div class="flex items-center gap-3 mb-6">
-  <a class="text-sm text-gray-400 hover:text-indigo-600 transition-colors" href="{% url 'merchant-import' %}">← Pilih platform</a>
-  <span class="text-gray-200">›</span>
-  <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold text-white" style="background:{{ selected.color }}">
-    {{ selected.label }}
-  </span>
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-    <h2 class="text-base font-semibold text-gray-800 mb-4">Upload File {{ selected.label }}</h2>
-
-    <div class="mb-5 bg-gray-50 rounded-xl p-4 border border-gray-100">
-      <p class="text-xs font-semibold text-gray-700 mb-2">Cara ekspor dari {{ selected.label }}:</p>
-      <ol class="text-xs text-gray-600 space-y-1.5 pl-4 list-decimal">
-        {% for step in selected.instructions %}<li>{{ step }}</li>{% endfor %}
-      </ol>
-      {% if selected.file_type == "csv" %}
-      <p class="text-xs text-indigo-600 mt-3">
-        <a class="hover:text-indigo-800" href="{% url 'merchant-channel-template' %}">Unduh template CSV {{ platform_name }} →</a>
-      </p>
-      {% endif %}
-    </div>
-
-    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+{# ── Langkah 2: unggah file ── #}
+<div class="dp-grid">
+  <form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}
+    <header><div><h2><span class="pick-mark" style="display:inline-grid;width:28px;height:28px;font-size:13px;vertical-align:middle;margin-right:8px;background:{{ selected.color }}" aria-hidden="true">{{ selected.mark }}</span>File pesanan {{ selected.label }}</h2><p>Format {{ selected.accept }}, maksimal 10 MB.</p></div></header>
+    <div class="dp-card-body">
       <input type="hidden" name="platform" value="{{ platform }}">
+      {% if form.file.errors %}<div class="notice">{% icon "alert" %}<span>{{ form.file.errors.0 }}</span></div>{% endif %}
+      <div class="drop-wrap"><label class="drop" id="drop" for="id_file">
+        {% icon "upload" %}
+        <strong id="drop-title">Klik untuk memilih file</strong>
+        <span id="drop-help">atau seret file ke kotak ini</span>
+        <input type="file" name="file" id="id_file" accept="{{ selected.accept }}" required>
+      </label></div>
 
-      <label class="block mb-1 text-xs font-medium text-gray-700">File pesanan ({{ selected.accept }})</label>
-      <div class="mb-4">
-        {{ form.file }}
-        {% if form.file.errors %}<p class="text-xs text-red-500 mt-1">{{ form.file.errors.0 }}</p>{% endif %}
-      </div>
-
-      <label class="block mb-1 text-xs font-medium text-gray-700">Kategori Penjualan</label>
-      <div class="mb-4">
-        <select name="category" class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="regular">Penjualan Reguler</option>
-          <option value="flash_sale">Flash Sale</option>
-          <option value="harbolnas">Harbolnas / Hari Belanja</option>
-          <option value="wholesale">Grosir / Wholesale</option>
-          <option value="campaign">Promo / Kampanye</option>
+      <label class="field" style="margin-top:18px"><span>Kategori penjualan</span>
+        <select name="category" id="id_category">
+          <option value="regular">Penjualan reguler</option>
+          <option value="flash_sale">Flash sale</option>
+          <option value="harbolnas">Harbolnas / hari belanja</option>
+          <option value="wholesale">Grosir / wholesale</option>
+          <option value="campaign">Promo / kampanye</option>
           <option value="consignment">Konsinyasi</option>
-        </select>
-        <p class="text-xs text-gray-400 mt-1">Digunakan untuk pengelompokan dan laporan di Invoice Penjualan.</p>
-      </div>
+        </select><small style="color:var(--ds-muted)">Untuk pengelompokan dan laporan di Invoice penjualan.</small></label>
 
-      <div class="mb-5 p-4 border border-amber-200 rounded-xl bg-amber-50">
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" name="soft" value="1" class="mt-0.5 flex-shrink-0 rounded">
-          <span>
-            <span class="text-xs font-semibold text-amber-800 block mb-0.5">Impor data historis (tanpa potong stok)</span>
-            <span class="text-xs text-amber-700">Centang jika produk belum ada di katalog. Pesanan masuk ke sistem tapi stok tidak dikurangi. Cocok untuk data lama.</span>
-          </span>
-        </label>
-      </div>
+      <div class="ds-check-wrap" style="margin-top:14px"><label class="ds-check"><input type="checkbox" name="soft" value="1"> Impor data historis (tanpa potong stok)</label>
+        <small>Centang bila produk belum ada di katalog. Pesanan tetap masuk, stok tidak dikurangi. Cocok untuk data lama.</small></div>
+    </div>
+    <footer><button class="btn-primary btn-block btn-lg">{% icon "upload" %} Impor pesanan {{ selected.label }}</button></footer>
+  </form>
 
-      <button class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style="background:{{ selected.color }}">
-        {% icon "upload" %} Proses &amp; Impor Pesanan {{ selected.label }}
-      </button>
-    </form>
-  </div>
-
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-    <h2 class="text-base font-semibold text-gray-800 mb-3">Panduan SKU</h2>
-    <p class="text-sm text-gray-600 mb-3">Agar pesanan berhasil diimpor dan stok otomatis terpotong:</p>
-    {% if platform == "shopee" %}
-    <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
-      <li>Buka <b>Shopee Seller Center → Produk</b></li>
-      <li>Edit setiap produk → isi kolom <b>Nomor Referensi SKU</b></li>
-      <li>Pastikan SKU sama persis dengan yang ada di katalog {{ platform_name }}</li>
-      <li>Ekspor ulang pesanan, lalu upload di sini</li>
-    </ol>
-    <p class="text-xs text-gray-400 mt-3">Jika SKU belum diisi, centang "Impor data historis" agar pesanan tetap masuk tanpa potong stok.</p>
-    {% elif platform == "tokopedia" %}
-    <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
-      <li>Buka <b>Tokopedia Seller Center → Produk</b></li>
-      <li>Edit setiap produk → isi kolom <b>SKU (Stock Keeping Unit)</b></li>
-      <li>Pastikan SKU sama persis dengan yang ada di katalog {{ platform_name }}</li>
-      <li>Ekspor ulang pesanan dalam format .xlsx, lalu upload di sini</li>
-    </ol>
-    <p class="text-xs text-gray-400 mt-3">Jika SKU kosong, centang "Impor data historis" — produk placeholder akan dibuat otomatis.</p>
-    {% else %}
-    <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
-      <li>Pastikan kolom <b>sku</b> di CSV terisi dengan SKU yang ada di katalog {{ platform_name }}</li>
-      <li>Cek SKU di <a class="text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-entity-list' 'products' %}">Katalog → Semua Produk</a></li>
-      <li>Jika belum ada produk, tambahkan dulu atau gunakan mode historis</li>
-    </ol>
-    {% endif %}
+  <div>
+    <section class="panel"><header><h2>Cara ekspor dari {{ selected.label }}</h2></header>
+      <div class="dp-card-body"><ol style="margin:0;padding-left:20px;display:grid;gap:8px;color:var(--ds-ink)">
+        {% for step in selected.instructions %}<li>{{ step }}</li>{% endfor %}</ol>
+        {% if selected.file_type == "csv" %}<p style="margin:14px 0 0"><a class="btn" href="{% url 'merchant-channel-template' %}" data-no-soft>{% icon "download" %} Unduh template CSV {{ platform_name }}</a></p>{% endif %}
+      </div></section>
+    {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Hanya pesanan selesai yang diimpor.</b> Pesanan yang masih dikemas atau dikirim dilewati dan akan masuk saat Anda mengimpor file berikutnya. Pesanan batal tidak dicatat. Pesanan yang sudah pernah diimpor tetap diperbarui bila kemudian diretur.</span></div>{% endif %}
+    <section class="panel"><header><h2>Agar stok terpotong otomatis</h2></header>
+      <div class="dp-card-body"><ol style="margin:0;padding-left:20px;display:grid;gap:8px;color:var(--ds-ink)">
+        {% if platform == "shopee" %}<li>Di <b>Shopee Seller Center → Produk</b>, isi kolom <b>Nomor Referensi SKU</b> tiap produk.</li>
+        {% elif platform == "tokopedia" %}<li>Di <b>Seller Center → Produk</b>, isi kolom <b>SKU</b> tiap produk.</li>
+        {% else %}<li>Isi kolom <b>sku</b> di file dengan SKU yang ada di katalog.</li>{% endif %}
+        <li>SKU harus sama persis dengan <a href="{% url 'merchant-entity-list' 'products' %}">katalog {{ platform_name }}</a>.</li>
+        <li>Bila SKU belum diisi, centang "Impor data historis".</li></ol></div></section>
   </div>
 </div>
+<script>
+(function () {
+  var drop = document.getElementById("drop"), input = document.getElementById("id_file");
+  if (!drop || !input) return;
+  function show() {
+    var file = input.files && input.files[0];
+    drop.classList.toggle("has-file", !!file);
+    document.getElementById("drop-title").textContent = file ? file.name : "Klik untuk memilih file";
+    document.getElementById("drop-help").textContent = file ? "Klik untuk mengganti file" : "atau seret file ke kotak ini";
+  }
+  input.addEventListener("change", show);
+  ["dragenter", "dragover"].forEach(function (name) {
+    drop.addEventListener(name, function (event) { event.preventDefault(); drop.classList.add("is-over"); });
+  });
+  ["dragleave", "drop"].forEach(function (name) {
+    drop.addEventListener(name, function (event) { event.preventDefault(); drop.classList.remove("is-over"); });
+  });
+  drop.addEventListener("drop", function (event) {
+    if (event.dataTransfer && event.dataTransfer.files.length) { input.files = event.dataTransfer.files; show(); }
+  });
+})();
+</script>
 
-{# ── STEP 3: Results ───────────────────────────────────────────────────── #}
 {% else %}
-<nav class="flex items-center gap-2 text-sm text-gray-400 mb-6">
-  <a class="hover:text-indigo-600" href="{% url 'merchant-import' %}">← Pilih platform</a>
-  <span>›</span>
-  <a class="hover:text-indigo-600" href="?platform={{ platform }}">{{ selected.icon }} {{ selected.label }}</a>
-  <span>›</span>
-  <span class="font-medium text-gray-700">Hasil impor</span>
-</nav>
+{# ── Langkah 3: hasil ── #}
+<div class="tiles">
+  <div class="tile accent"><small>Pesanan baru</small><strong>{{ summary.created }}</strong><span>dicatat sebagai penjualan</span></div>
+  <div class="tile"><small>Sudah pernah diimpor</small><strong>{{ summary.duplicates }}</strong><span>dilewati, tidak dobel</span></div>
+  {% if summary.not_finished %}<div class="tile"><small>Belum selesai</small><strong>{{ summary.not_finished }}</strong><span>dilewati: masih diproses, dikirim, atau batal</span></div>{% endif %}
+  {% if summary.updated %}<div class="tile"><small>Status diperbarui</small><strong>{{ summary.updated }}</strong><span>pesanan lama</span></div>{% endif %}
+  {% if summary.cancelled %}<div class="tile"><small>Batal / retur</small><strong>{{ summary.cancelled }}</strong><span>penjualannya ditarik kembali</span></div>{% endif %}
+  {% if summary.skipped %}<div class="tile"><small>Belum dibayar</small><strong>{{ summary.skipped }}</strong><span>dilewati</span></div>{% endif %}
+  {% if summary.errors %}<div class="tile"><small>Gagal</small><strong style="color:var(--ds-bad)">{{ summary.errors|length }}</strong><span>lihat rincian di bawah</span></div>{% endif %}
+</div>
 
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
-  <h2 class="text-base font-semibold text-gray-800 mb-4">Hasil Impor — {{ selected.label }}</h2>
+{% if summary.soft %}<div class="notice">{% icon "alert" %}<span>Mode historis: stok <b>tidak</b> dikurangi. Periksa produk di <a href="{% url 'merchant-entity-list' 'products' %}">katalog</a> dan cocokkan SKU-nya.</span></div>{% endif %}
 
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-    <div class="bg-green-50 rounded-xl p-4 border border-green-100">
-      <p class="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Pesanan baru</p>
-      <p class="text-3xl font-bold text-green-700">{{ summary.created }}</p>
-    </div>
-    <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
-      <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Duplikat dilewati</p>
-      <p class="text-3xl font-bold text-gray-700">{{ summary.duplicates }}</p>
-    </div>
-    {% if summary.updated %}
-    <div class="bg-amber-50 rounded-xl p-4 border border-amber-100">
-      <p class="text-xs text-amber-600 font-medium uppercase tracking-wide mb-1">Status diperbarui</p>
-      <p class="text-3xl font-bold text-amber-700">{{ summary.updated }}</p>
-    </div>
-    {% endif %}
-    {% if summary.cancelled %}
-    <div class="bg-rose-50 rounded-xl p-4 border border-rose-100">
-      <p class="text-xs text-rose-600 font-medium uppercase tracking-wide mb-1">Batal / retur</p>
-      <p class="text-3xl font-bold text-rose-700">{{ summary.cancelled }}</p>
-    </div>
-    {% endif %}
-    {% if summary.skipped %}
-    <div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
-      <p class="text-xs text-blue-600 font-medium uppercase tracking-wide mb-1">Belum dibayar dilewati</p>
-      <p class="text-3xl font-bold text-blue-700">{{ summary.skipped }}</p>
-    </div>
-    {% endif %}
-    {% if summary.errors %}
-    <div class="bg-red-50 rounded-xl p-4 border border-red-100">
-      <p class="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">Gagal</p>
-      <p class="text-3xl font-bold text-red-600">{{ summary.errors|length }}</p>
-    </div>
-    {% endif %}
-  </div>
+{% if summary.errors %}<section class="panel"><header><h2>Pesanan yang gagal</h2></header><div class="dp-card-body">
+  <ul style="margin:0;padding-left:18px;display:grid;gap:4px;color:var(--ds-bad)">{% for err in summary.errors %}<li>{{ err }}</li>{% endfor %}</ul></div></section>{% endif %}
 
-  {% if summary.soft %}
-  <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 mb-4">
-    ⚠️ Mode historis — stok <b>tidak</b> dikurangi. Review produk di <a class="text-amber-700 font-medium hover:text-amber-900" href="{% url 'merchant-entity-list' 'products' %}">Katalog</a> dan link SKU yang benar.
-  </div>
-  {% endif %}
-
-  {% for err in summary.errors %}
-  <p class="text-xs text-red-500 mb-1">✗ {{ err }}</p>
-  {% endfor %}
-
-  <div class="flex flex-wrap gap-3 mt-4">
-    <a class="inline-flex items-center px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors" href="{% url 'merchant-orders' %}">Lihat Pesanan →</a>
-    <a class="inline-flex items-center px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors" href="{% url 'merchant-sales-invoices' %}">Invoice Penjualan →</a>
-    <a class="text-sm text-indigo-600 hover:text-indigo-800 py-2" href="?platform={{ platform }}">Impor file lain dari {{ selected.label }}</a>
-  </div>
+<div class="dp-actions" style="justify-content:flex-start;flex-wrap:wrap">
+  <a class="btn-primary btn-lg" href="{% url 'merchant-orders' %}">Lihat pesanan {% icon "chevron" %}</a>
+  <a class="btn btn-lg" href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a>
+  <a class="btn btn-lg" href="?platform={{ platform }}">{% icon "upload" %} Impor file lain</a>
 </div>
 {% endif %}
-
 {% endblock %}

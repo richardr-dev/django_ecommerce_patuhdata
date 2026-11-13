@@ -112,7 +112,7 @@ class Order(models.Model):
         # ── Direct / owned channels ───────────────────────────────────────────
         ("web", "Toko Online"),
         ("shopee", "Shopee"),
-        ("tokopedia", "Tokopedia"),
+        ("tokopedia", "Tokopedia / TikTok Shop"),
         ("tiktok_shop", "TikTok Shop"),
         ("lazada", "Lazada"),
         ("pos", "POS Retail"),

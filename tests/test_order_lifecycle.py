@@ -273,3 +273,46 @@ class InvoiceNeverLostTests(MarketplaceDateTests):
         order, _ = import_order(self.channel, cancelled)
         post_everything()
         self.assertFalse(Invoice.objects.filter(order=order).exists())
+
+
+class FinishedOnlyImportTests(TestCase):
+    """A marketplace file lists every stage; only finished (Selesai) orders become sales."""
+
+    def setUp(self):
+        owner = User.objects.create_user("finished")
+        self.store = Store.objects.create(owner=owner, name="Toko", slug="toko-fin")
+        self.kopi = Product.objects.create(store=self.store, name="Kopi", slug="kopi-fin", sku="KOPI",
+            price=15000, cost_price=Decimal(9000))
+        warehouse = Warehouse.objects.create(store=self.store, name="Gudang", code="G1")
+        self.level = InventoryLevel.objects.create(warehouse=warehouse, product=self.kopi, on_hand=50)
+        self.channel = SalesChannel.objects.create(store=self.store, platform="tokopedia", name="Toko")
+
+    def run_import(self, *orders):
+        return import_orders(self.channel, list(orders), finished_only=True)
+
+    def test_only_finished_orders_become_sales(self):
+        summary = self.run_import(_order("Selesai", "A"), _order("Sedang dikirim", "B"),
+            _order("Perlu dikirim", "C"), _order("Dibatalkan", "D"), _order("Selesai", "E"))
+        self.assertEqual((summary["created"], summary["not_finished"], summary["cancelled"]), (2, 3, 0))
+        self.assertEqual(set(Order.objects.filter(store=self.store).values_list("external_order_id", flat=True)),
+            {"A", "E"})
+        self.level.refresh_from_db()
+        self.assertEqual(self.level.on_hand, 46)                       # only the two finished orders took stock
+
+    def test_an_unfinished_order_is_picked_up_by_a_later_file(self):
+        self.run_import(_order("Sedang dikirim", "B"))
+        self.assertFalse(Order.objects.filter(store=self.store).exists())
+        summary = self.run_import(_order("Selesai", "B"))
+        self.assertEqual(summary["created"], 1)
+
+    def test_a_finished_order_that_is_later_returned_is_still_taken_back(self):
+        self.run_import(_order("Selesai", "A"))
+        summary = self.run_import(_order("Pengembalian", "A"))
+        self.assertEqual(summary["not_finished"], 0)                    # known order: always brought up to date
+        self.assertEqual(Order.objects.get(external_order_id="A").status, "returned")
+        self.level.refresh_from_db()
+        self.assertEqual(self.level.on_hand, 50)
+
+    def test_without_the_filter_everything_is_still_imported(self):
+        summary = import_orders(self.channel, [_order("Sedang dikirim", "B")])
+        self.assertEqual((summary["created"], summary["not_finished"]), (1, 0))

@@ -1188,3 +1188,32 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .bb-summary .btn-primary { background: var(--ds-primary) !important; color: #fff !important; box-shadow: 0 8px 18px -8px rgba(0, 102, 255, .65) !important; }
 .bb-summary .btn:not(.btn-primary) { background: var(--ds-nested) !important; color: var(--ds-primary) !important; box-shadow: none !important; }
 .bb-summary input[style] { background: var(--ds-subcard) !important; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .14); }
+
+/* Pick cards and the file drop area (impor pesanan): the whole card is the button, so it is easy to hit
+   with a mouse or a thumb. Marketplace colours appear only as the small round mark. */
+.pick-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.pick { display: flex; align-items: center; gap: 16px; min-height: 92px; padding: 18px 20px; border-radius: 24px;
+  background: var(--ds-surface); border: var(--ds-hairline); box-shadow: var(--ds-shadow); color: var(--ds-ink);
+  text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s; }
+.pick:hover, .pick:focus-visible { transform: translateY(-2px); box-shadow: var(--ds-shadow-lift); background: var(--ds-subcard);
+  outline: 2px solid var(--ds-primary); outline-offset: 2px; }
+.pick-mark { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: #fff;
+  font-weight: 800; font-size: 22px; }
+.pick-text { flex: 1; min-width: 0; }
+.pick-text strong { display: block; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.pick-text small { display: block; margin-top: 2px; color: var(--ds-muted); font-size: 13px; }
+.pick-go { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 999px;
+  background: var(--ds-nested); color: var(--ds-primary); font-weight: 700; font-size: 13.5px; }
+.pick:hover .pick-go { background: var(--ds-primary); color: #fff; }
+.drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 190px;
+  padding: 26px 20px; border-radius: 20px; border: 2px dashed rgba(0, 102, 255, .35); background: var(--ds-subcard);
+  color: var(--ds-muted); text-align: center; cursor: pointer; transition: background .15s, border-color .15s; }
+.drop:hover, .drop.is-over, .drop:focus-within { background: var(--ds-nested); border-color: var(--ds-primary); }
+.drop.has-file { border-style: solid; border-color: var(--ds-ok); background: var(--ds-ok-bg); color: var(--ds-ok); }
+.drop strong { color: var(--ds-ink); font-size: 16px; }
+.drop.has-file strong { color: var(--ds-ok); }
+.drop .ico { width: 34px !important; height: 34px !important; color: var(--ds-primary); }
+.drop input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop-wrap { position: relative; }
+.btn-lg { min-height: 52px; font-size: 15.5px !important; }
+@media (max-width: 480px) { .pick { padding: 16px; gap: 12px; } .pick-go span { display: none; } }

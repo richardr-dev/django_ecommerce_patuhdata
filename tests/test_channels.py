@@ -211,3 +211,23 @@ class ChannelPageTests(ChannelTestCase):
         client.force_login(stranger)
 
         self.assertEqual(client.get(f"/merchant/marketplace/{self.channel.id}/").status_code, 404)
+
+
+class ImportWizardPageTests(ChannelTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.client.force_login(self.owner)
+
+    def test_the_first_step_offers_one_card_for_tokopedia_and_tiktok_shop(self):
+        page = self.client.get("/merchant/marketplace/import/")
+        self.assertContains(page, "Tokopedia / TikTok Shop")
+        self.assertContains(page, "?platform=tokopedia")
+        self.assertNotContains(page, "?platform=tiktok_shop")
+        self.assertContains(page, "sudah <b>selesai</b>")
+
+    def test_an_old_tiktok_link_opens_the_merged_step(self):
+        page = self.client.get("/merchant/marketplace/import/?platform=tiktok_shop")
+        self.assertContains(page, 'name="platform" value="tokopedia"')
+        self.assertContains(page, "Pilih tab Selesai")
+        self.assertContains(page, "Hanya pesanan selesai yang diimpor")

@@ -914,7 +914,7 @@ class SalesExportTests(Base):
     def test_orders_carry_invoice_payment_credit_and_what_is_still_owed(self):
         header, *body = self.rows("orders")
         by_channel = {r[header.index("Channel")]: r for r in body}
-        toko = by_channel["Tokopedia"]
+        toko = by_channel["Tokopedia / TikTok Shop"]
         value = lambda name: toko[header.index(name)]
         self.assertEqual(value("No. invoice"), self.toko.number)
         self.assertEqual(Decimal(value("Total invoice")), Decimal(111_000))

@@ -73,7 +73,7 @@ class ChannelBuyer(models.Model):
     """
     PLATFORMS = [
         ("shopee", "Shopee"),
-        ("tokopedia", "Tokopedia"),
+        ("tokopedia", "Tokopedia / TikTok Shop"),
         ("tiktok", "TikTok Shop"),
         ("lazada", "Lazada"),
         ("manual", "Manual"),

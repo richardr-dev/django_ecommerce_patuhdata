@@ -114,46 +114,33 @@ def merchant_import(request):
     # Step metadata per platform
     IMPORT_PLATFORMS = {
         "shopee": {
-            "label": "Shopee", "icon": "🟠", "file_type": "xlsx",
+            "label": "Shopee", "icon": "🟠", "file_type": "xlsx", "mark": "S",
             "color": "#EE4D2D", "text_color": "#fff",
             "tagline": "Ekspor langsung dari Seller Center",
             "badge": ".xlsx",
             "instructions": [
                 "Buka Shopee Seller Center → Pesanan Saya",
-                "Klik Ekspor Pesanan, pilih rentang tanggal",
+                "Pilih tab Selesai, klik Ekspor Pesanan, pilih rentang tanggal",
                 "Unduh file .xlsx yang dikirim ke email",
                 "Upload file tersebut di sini — tidak perlu reformatting",
             ],
             "accept": ".xlsx",
         },
         "tokopedia": {
-            "label": "Tokopedia", "icon": "🟢", "file_type": "xlsx",
+            "label": "Tokopedia / TikTok Shop", "icon": "🟢", "file_type": "xlsx", "mark": "T",
             "color": "#42B549", "text_color": "#fff",
-            "tagline": "Ekspor langsung dari Seller Center",
+            "tagline": "Satu Seller Center, satu file ekspor untuk keduanya",
             "badge": ".xlsx",
             "instructions": [
-                "Buka Tokopedia Seller Center → Pesanan → Daftar Pesanan",
-                "Klik Ekspor, pilih rentang tanggal dan status pesanan",
+                "Buka Seller Center Tokopedia / TikTok Shop → Pesanan → Kelola pesanan",
+                "Pilih tab Selesai, lalu klik Ekspor dan pilih rentang tanggal",
                 "Unduh file .xlsx yang dihasilkan (bukan template CSV)",
                 "Upload langsung di sini — tidak perlu reformatting",
             ],
             "accept": ".xlsx,.csv",
         },
-        "tiktok_shop": {
-            "label": "TikTok Shop", "icon": "⬛", "file_type": "xlsx",
-            "color": "#010101", "text_color": "#fff",
-            "tagline": "Ekspor langsung dari Seller Center",
-            "badge": ".xlsx",
-            "instructions": [
-                "Buka TikTok Shop Seller Center → Pesanan → Semua pesanan",
-                "Klik Ekspor, pilih rentang tanggal",
-                "Unduh file .xlsx yang dihasilkan",
-                "Upload langsung di sini — tidak perlu reformatting",
-            ],
-            "accept": ".xlsx,.csv",
-        },
         "lazada": {
-            "label": "Lazada", "icon": "🔵", "file_type": "xlsx",
+            "label": "Lazada", "icon": "🔵", "file_type": "xlsx", "mark": "L",
             "color": "#0F146D", "text_color": "#fff",
             "tagline": "Ekspor langsung dari Seller Center",
             "badge": ".xlsx / .csv",
@@ -166,7 +153,7 @@ def merchant_import(request):
             "accept": ".xlsx,.csv",
         },
         "manual": {
-            "label": "Manual / Lainnya", "icon": "📋", "file_type": "csv",
+            "label": "Manual / Lainnya", "icon": "📋", "file_type": "csv", "mark": "M",
             "color": "#6B7280", "text_color": "#fff",
             "tagline": "Channel lain atau input manual",
             "badge": ".csv",
@@ -180,6 +167,8 @@ def merchant_import(request):
     }
 
     platform = request.GET.get("platform") or request.POST.get("platform", "")
+    if platform == "tiktok_shop":
+        platform = "tokopedia"  # one Seller Center and one export file: imported as one channel
     selected = IMPORT_PLATFORMS.get(platform)
     form = OrdersImportForm()
     summary = None
@@ -198,7 +187,7 @@ def merchant_import(request):
                 category = request.POST.get("category", "regular")
                 summary = import_orders(channel, orders, soft=soft,
                     file_name=upload.name, imported_by=request.user, skipped=skipped,
-                    category=category)
+                    category=category, finished_only=platform != "manual")
                 summary["skipped"] = skipped
                 summary["platform_label"] = selected["label"]
 
@@ -209,7 +198,7 @@ def merchant_import(request):
                     details={"platform": platform, "created": summary["created"],
                              "duplicates": summary["duplicates"],
                              "updated": summary["updated"], "cancelled": summary["cancelled"],
-                             "skipped": skipped,
+                             "skipped": skipped, "not_finished": summary["not_finished"],
                              "soft": soft, "errors": len(summary["errors"])})
                 if summary["created"] or summary["updated"]:
                     messages.success(request,

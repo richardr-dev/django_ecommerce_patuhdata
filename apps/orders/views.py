@@ -2190,7 +2190,7 @@ def merchant_entity_edit(request, section, object_id=None):
             )
         PLATFORM_META = [
             ("shopee",     "Shopee",      "#EE4D2D"),
-            ("tokopedia",  "Tokopedia",   "#42B549"),
+            ("tokopedia",  "Tokopedia / TikTok Shop", "#42B549"),
             ("tiktok_shop","TikTok Shop", "#010101"),
             ("lazada",     "Lazada",      "#0F146D"),
         ]

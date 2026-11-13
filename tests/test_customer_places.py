@@ -59,7 +59,7 @@ class CustomerPlacesTests(Base):
     def test_segment_is_described_and_survives_a_broadcast_audience(self):
         segment = segments.parse({"channel": "tokopedia,bogus", "location": "bogor"})
         self.assertEqual(segment, {"location": "bogor", "channel": "tokopedia"})
-        self.assertEqual(segments.describe(segment), 'beli di Tokopedia, lokasi "bogor"')
+        self.assertEqual(segments.describe(segment), 'beli di Tokopedia / TikTok Shop, lokasi "bogor"')
         self.dewi.accepts_marketing, self.dewi.email = True, "d@example.com"
         self.dewi.save()
         self.assertEqual(list(segments.broadcast_audience(self.store, segment)), [self.dewi])
@@ -96,8 +96,8 @@ class CustomerExportTests(CustomerPlacesTests):
             "Beli di"])
         people = [r for r in rows[1:] if r and r[0] and not str(r[0]).startswith("Filter")]
         self.assertEqual([(r[0], r[5], r[6], r[7]) for r in people],
-            [("@dewi", "Kab. Bogor", "Jawa Barat", "Tokopedia")])
-        self.assertTrue(any("beli di Tokopedia" in str(r[0]) for r in rows if r and r[0]))
+            [("@dewi", "Kab. Bogor", "Jawa Barat", "Tokopedia / TikTok Shop")])
+        self.assertTrue(any("beli di Tokopedia / TikTok Shop" in str(r[0]) for r in rows if r and r[0]))
 
     def test_same_filters_as_the_screen_and_csv_option(self):
         names = {r[0] for r in self.rows(location="surabaya")[1:] if r and r[0] and "Filter" not in str(r[0])}

@@ -3,6 +3,13 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
+# WeasyPrint (invoice and report PDFs) draws text with Pango, which the slim image does not have,
+# and needs at least one font installed to draw it with.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+        fonts-liberation fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first so code edits do not reinstall them.
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir .

@@ -128,7 +128,7 @@ class Platform:
 
 
 PLATFORMS = {
-    "tokopedia": Platform("Tokopedia", partner_program="TikTok Shop Partner Center (Tokopedia)"),
+    "tokopedia": Platform("Tokopedia / TikTok Shop", partner_program="TikTok Shop Partner Center (Tokopedia)"),
     "tiktok_shop": Platform("TikTok Shop", partner_program="TikTok Shop Partner Center"),
     "shopee": Platform("Shopee", partner_program="Shopee Open Platform"),
     "lazada": Platform("Lazada", partner_program="Lazada Open Platform"),
