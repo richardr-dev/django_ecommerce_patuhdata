@@ -32,6 +32,8 @@ MATRIX = {
     "settlement.view": ("Mitra", "Melihat settlement mitra", {"admin", "manager", "finance", "viewer"}),
     "stock.fulfil": ("Stok", "Memproses pesanan dan stok keluar", {"admin", "manager", "ops", "warehouse"}),
     "purchase.order": ("Stok", "Membuat dan menutup pesanan pembelian ke supplier", {"admin", "manager", "finance", "ops"}),
+    "stock.count": ("Stok", "Membuat dan mengisi hasil stok opname", {"admin", "manager", "ops", "warehouse"}),
+    "stock.count_approve": ("Stok", "Menyetujui stok opname dan mencatat selisihnya", {"admin", "manager", "finance"}),
     "stock.oversell": ("Stok", "Menjual melebihi stok (stok minus), bila toko mengizinkannya", {"admin", "manager"}),
     "stock.receive": ("Stok", "Menerima barang dari supplier", {"admin", "manager", "finance", "warehouse"}),
     "customers.view": ("Pelanggan", "Melihat pelanggan dan segmen", {"admin", "manager", "ops", "customer_service", "viewer"}),

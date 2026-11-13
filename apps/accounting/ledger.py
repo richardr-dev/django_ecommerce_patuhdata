@@ -36,6 +36,7 @@ YEAR_CLOSE = "year_close"  # source type of the closing entry that moves a year'
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
 COGS, FEES = "5100", "6100"
 DEPRECIATION, OTHER_INCOME, ASSET_GAIN, BANK_CHARGES = "6950", "7100", "7200", "8100"
+STOCK_DIFFERENCE = "6960"  # Selisih persediaan: what a stok opname found missing (debit) or extra (credit)
 # What a marketplace keeps from a sale, one account each so the profit and loss shows where the
 # money goes. Anything the marketplace does not itemise stays in FEES (6100).
 FEE_ACCOUNTS = {"commission": "6110", "service_fee": "6120", "admin_fee": "6120",
@@ -80,6 +81,7 @@ CHART = [
     ("6150", "Komisi afiliasi marketplace", "expense"),
 ] + [(code, name, "expense") for code, name in EXPENSE_CATEGORIES] + [
     (DEPRECIATION, "Beban penyusutan", "expense"),
+    (STOCK_DIFFERENCE, "Selisih persediaan (stok opname)", "expense"),
     (OTHER_INCOME, "Pendapatan lain-lain (bunga, dll.)", "revenue"),
     (ASSET_GAIN, "Laba (rugi) pelepasan aset", "revenue"),
     (BANK_CHARGES, "Biaya administrasi bank", "expense"),

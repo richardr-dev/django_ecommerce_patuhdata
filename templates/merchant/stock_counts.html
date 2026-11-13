@@ -1,0 +1,15 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Stok opname{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Inventori</span><h1>Stok opname</h1>
+  <p>Hitung stok fisik satu gudang, tinjau selisihnya, lalu orang kedua menyetujui. Persetujuan menyesuaikan stok dan membukukan nilai selisih ke Selisih persediaan; tidak ada angka yang ditimpa diam-diam.</p></div></div>
+{% if can_count %}<section class="panel"><header><h2>Mulai menghitung</h2></header><form method="post" class="dp-card-body" data-unsaved>{% csrf_token %}<div class="field-row">
+  <label class="field"><span>Gudang</span><select name="warehouse" required>{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Tanggal hitung</span><input type="date" name="count_date" value="{{ today }}" required></label>
+  <label class="field"><span>Catatan <em>(opsional)</em></span><input name="notes" maxlength="300"></label></div>
+  <button class="btn-primary">{% icon "plus" %} Mulai stok opname</button></form></section>{% endif %}
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Stok opname</th><th>Gudang</th><th>Tanggal</th><th>Dibuat oleh</th><th>Status</th></tr></thead><tbody>
+  {% for c in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-stock-count' c.pk %}"><b>{{ c.number }}</b></a></td><td>{{ c.warehouse.name }}</td><td>{{ c.count_date|date:"d M Y" }}</td><td>{{ c.created_by.username|default:"—" }}</td>
+    <td>{% if c.status == 'approved' %}<span class="pill pill-paid">{{ c.get_status_display }}</span>{% elif c.status == 'draft' %}<span class="pill pill-pending">{{ c.get_status_display }}</span>{% else %}<span class="pill pill-draft">{{ c.get_status_display }}</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada stok opname.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

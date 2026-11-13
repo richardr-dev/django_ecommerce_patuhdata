@@ -1,0 +1,26 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ count.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-stock-counts' %}">Stok opname</a> / {{ count.number }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ count.number }}</h1><p>{{ count.warehouse.name }} · {{ count.count_date|date:"d F Y" }} · dibuat {{ count.created_by.username|default:"—" }} ·
+  <span class="pill pill-{% if count.status == 'approved' %}paid{% elif count.status == 'draft' %}pending{% else %}draft{% endif %}">{{ count.get_status_display }}</span>{% if count.approved_by %} · disetujui {{ count.approved_by.username }}{% endif %}</p></div></div>
+<div class="tiles">
+  <div class="tile"><small>Sudah dihitung</small><strong>{{ summary.counted }} / {{ summary.lines }}</strong><span>barang</span></div>
+  <div class="tile {% if summary.short_units %}warn{% endif %}"><small>Kurang</small><strong>{{ summary.short_units }}</strong><span>unit lebih sedikit dari sistem</span></div>
+  <div class="tile"><small>Lebih</small><strong>{{ summary.extra_units }}</strong><span>unit lebih banyak dari sistem</span></div>
+  <div class="tile accent"><small>Nilai selisih</small><strong>{{ summary.value|signed_rp }}</strong><span>pada harga pokok · minus = kerugian</span></div>
+</div>
+<form method="post" data-unsaved><section class="panel">{% csrf_token %}
+  <header><div><h2>Hasil hitung</h2><p>Stok sistem dibekukan saat hitung dimulai; penjualan setelahnya tidak ditimpa. Kosongkan baris yang belum dihitung.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Stok sistem</th><th class="num" style="width:140px">Hasil hitung</th><th class="num">Selisih</th></tr></thead><tbody>
+  {% for l in lines %}<tr><td><b>{{ l.product.name }}</b><small>{{ l.product.sku }}</small></td><td class="num">{{ l.system_qty }}</td>
+    <td class="num">{% if editable and can_count %}<input type="number" min="0" name="counted_{{ l.pk }}" value="{{ l.counted_qty|default_if_none:'' }}" class="num" aria-label="Hasil hitung {{ l.product.name }}">{% else %}{{ l.counted_qty|default_if_none:"—" }}{% endif %}</td>
+    <td class="num">{% if l.difference %}<span class="pill {% if l.difference < 0 %}pill-overdue{% else %}pill-paid{% endif %}">{% if l.difference > 0 %}+{% endif %}{{ l.difference }}</span>{% elif l.counted_qty is not None %}0{% else %}—{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if editable %}<footer style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap">
+    {% if can_count %}<button class="btn" name="action" value="save">Simpan hasil hitung</button>{% endif %}
+    {% if can_approve %}<button class="btn-primary" name="action" value="approve" data-confirm="Setujui stok opname? Stok disesuaikan dan selisih dibukukan. Ini tidak bisa diubah." data-confirm-ok="Setujui" data-confirm-tone="neutral">{% icon "check" %} Simpan dan setujui</button>{% endif %}
+    {% if can_count %}<button class="btn btn-danger" name="action" value="cancel" data-confirm="Batalkan stok opname ini?" data-confirm-ok="Batalkan">Batalkan</button>{% endif %}</footer>{% endif %}
+</section></form>
+{% include "merchant/_journal_card.html" %}
+{% endblock %}

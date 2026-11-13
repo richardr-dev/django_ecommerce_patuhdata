@@ -823,3 +823,42 @@ class DebitNoteItem(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class StockCount(models.Model):
+    """Stok opname as a document: a warehouse is counted, the differences are reviewed, and a different
+    person approves. Approval moves the stock (``opname`` movements) and books the value of the
+    difference (Selisih persediaan / Persediaan). Lines freeze the system quantity when the count was
+    opened, so sales while counting are not overwritten: the difference is applied on top of today's stock."""
+    DRAFT, APPROVED, CANCELLED = "draft", "approved", "cancelled"
+    STATUS_CHOICES = [(DRAFT, "Sedang dihitung"), (APPROVED, "Disetujui"), (CANCELLED, "Dibatalkan")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="stock_counts")
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, related_name="+")
+    number = models.CharField(max_length=40)
+    count_date = models.DateField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
+    notes = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-count_date", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_stock_count_number")]
+
+
+class StockCountLine(models.Model):
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    system_qty = models.IntegerField()
+    counted_qty = models.IntegerField(null=True, blank=True)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # frozen at approval
+
+    class Meta:
+        ordering = ["product__name", "id"]
+
+    @property
+    def difference(self):
+        return None if self.counted_qty is None else self.counted_qty - self.system_qty
