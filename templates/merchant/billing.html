@@ -2,8 +2,8 @@
 <div class="pg-head"><div><span class="pg-kicker">Akun toko</span><h1>Langganan</h1><p>Paket menentukan batas produk dan fitur seperti domain sendiri.</p></div></div>
 
 {% if plan %}
-<section class="bb-hero" style="display:grid;gap:18px;grid-template-columns:1.2fr 1fr;align-items:center">
-  <div><small style="opacity:.85;letter-spacing:.06em;font-weight:700">PAKET AKTIF</small><h2 style="margin:4px 0 6px;font-size:28px;font-weight:700;color:#fff">{{ plan.name }}</h2>
+<section class="panel"><div class="dp-card-body bl-plan">
+  <div><small style="letter-spacing:.06em;font-weight:700;color:var(--ds-primary)">PAKET AKTIF</small><h2 style="margin:4px 0 6px;font-size:26px;font-weight:700">{{ plan.name }}</h2>
     {% if status.trial and not status.lapsed %}<p>{% icon "gift" %} Masa coba gratis sampai {{ subscription.current_period_end|date:"d M Y" }} ({{ status.days_left }} hari lagi). Bayar sekarang dan sisa masa coba tetap terhitung.</p>
     {% elif subscription.plan.is_paid and subscription.current_period_end and plan.code == subscription.plan.code %}<p>Aktif sampai {{ subscription.current_period_end|date:"d M Y" }}.</p>
     {% elif status.lapsed %}<p>{% if status.trial %}Masa coba gratis{% else %}Paket {{ subscription.plan.name }}{% endif %} berakhir {{ subscription.current_period_end|date:"d M Y" }}. Toko tetap tampil, tetapi produk baru belum bisa ditambahkan sampai Anda memilih paket.</p>
@@ -12,7 +12,7 @@
     <div><dt>Produk aktif</dt><dd>{{ active_products }}{% if plan.max_products is not None %} / {{ plan.max_products }}{% endif %}</dd></div>
     <div><dt>Toko marketplace</dt><dd>{{ channel_count }}{% if plan.max_channels is not None %} / {{ plan.max_channels }}{% endif %}</dd></div>
     <div><dt>Domain sendiri</dt><dd>{% if plan.allow_custom_domain %}Tersedia{% else %}—{% endif %}</dd></div>
-    <div><dt>Alamat toko</dt><dd><a href="{{ merchant_store_url }}" target="_blank" rel="noopener" style="color:#fff">{{ merchant_store_url }}</a></dd></div></dl></section>
+    <div><dt>Alamat toko</dt><dd><a href="{{ merchant_store_url }}" target="_blank" rel="noopener">{{ merchant_store_url }}</a></dd></div></dl></div></section>
 {% else %}<section class="panel"><div class="dp-card-body"><small style="color:var(--ds-primary);font-weight:700;letter-spacing:.06em">PAKET AKTIF</small><h2 style="margin:4px 0">Dikelola platform</h2><p style="margin:0;color:var(--ds-muted)">Toko ini dikelola langsung oleh pengelola platform tanpa batas paket.</p></div></section>{% endif %}
 
 {% if subscription and subscription.plan.is_paid %}{% with renewal=status.renewal %}

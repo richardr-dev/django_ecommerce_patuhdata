@@ -1155,10 +1155,36 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .template-card { border: 0 !important; border-radius: 20px !important; background: var(--ds-subcard) !important; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .1); }
 .template-card.active { box-shadow: 0 0 0 2px var(--ds-primary), 0 10px 24px -12px rgba(0, 102, 255, .5); background: #fff !important; }
 
-/* subscription summary inside the hero */
+/* subscription summary */
+.bl-plan { display: grid; gap: 18px; grid-template-columns: 1.2fr 1fr; align-items: center; }
 .bl-stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.bl-stats > div { min-width: 0; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .14); }
-.bl-stats dt { font-size: 12px; opacity: .85; }
+.bl-stats > div { min-width: 0; padding: 12px 14px; border-radius: 16px; background: var(--ds-subcard); box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .08); }
+.bl-stats dt { font-size: 12px; color: var(--ds-muted); }
 .bl-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 18px; word-break: break-word; }
-.bl-stats dd a { color: #fff; font-size: 13px; font-weight: 600; }
-@media (max-width: 760px) { .bb-hero[style*="grid-template-columns"] { grid-template-columns: 1fr !important; } }
+.bl-stats dd a { color: var(--ds-primary); font-size: 13px; font-weight: 600; }
+@media (max-width: 760px) { .bl-plan { grid-template-columns: 1fr; } }
+
+
+/* One header only: the page's blue header is the single bubble. The top bar is a flat utility strip
+   (search, create, account) on the canvas, not a second floating card. */
+.pd-topbar { top: 0; height: 64px; margin: 0; padding: 0 28px; border: 0; border-radius: 0; box-shadow: none;
+  background: rgba(244, 248, 255, .88); backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3); }
+.pd-topbar .pd-search input { background: #fff; }
+.pd-main { padding-top: 4px; }
+.pd-main .pg-head, .pd-main .bo-heading, .pd-main .bb-hero { padding: 22px 28px; }
+.pd-main .pg-head h1 { font-size: 26px; }
+@media (max-width: 640px) { .pd-topbar { margin: 0; top: 0; padding: 0 12px; height: 58px; } }
+
+/* One blue header per page: the first KPI tile and the form summary rail are light, with the figure in blue,
+   so they read as content under the header instead of a second header. */
+.tile.accent { background: #fff; color: var(--ds-ink); box-shadow: var(--ds-shadow), inset 0 0 0 1.5px rgba(0, 102, 255, .28); }
+.tile.accent::after { background: var(--ds-nested); }
+.tile.accent small, .tile.accent span { color: var(--ds-muted); }
+.tile.accent strong { color: var(--ds-primary); }
+.bb-summary { background: #fff; color: var(--ds-ink); border: var(--ds-hairline); box-shadow: var(--ds-shadow), inset 0 0 0 1.5px rgba(0, 102, 255, .2); }
+.bb-summary small, .bb-summary dt { color: var(--ds-muted); }
+.bb-summary strong { color: var(--ds-primary); }
+.bb-summary p, .bb-summary dd { color: var(--ds-ink); }
+.bb-summary .btn-primary { background: var(--ds-primary) !important; color: #fff !important; box-shadow: 0 8px 18px -8px rgba(0, 102, 255, .65) !important; }
+.bb-summary .btn:not(.btn-primary) { background: var(--ds-nested) !important; color: var(--ds-primary) !important; box-shadow: none !important; }
+.bb-summary input[style] { background: var(--ds-subcard) !important; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .14); }

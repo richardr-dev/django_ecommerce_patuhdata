@@ -372,6 +372,11 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
    right-aligned; statuses as pastel pills.
 5. Charts: smooth curves (tension .4) with a soft blue gradient fill; bars with rounded tops (8px).
 
+**One blue header per page (decided).** The page's blue header (`pg-head` / `bb-hero`) is the only blue bubble. The top bar is a
+flat strip on the canvas (search, Buat baru, account), not a second floating card; the first KPI tile (`tile accent`) and
+the form summary rail (`bb-summary`) are white with a blue figure and blue ring; a page never stacks a second `bb-hero`
+under its `pg-head`. Blue gradient fills stay for the header and primary buttons only.
+
 **Forbidden.** Dark mode, black or muddy grey surfaces (`#CCC`, `#888`), heavy dark shadows
 (`rgba(0,0,0,.25)`), dense outer borders on cards, and any accent outside blue.
 
