@@ -102,6 +102,7 @@ urlpatterns = [
     path("merchant/settings/template/", views.merchant_apply_template, name="merchant-apply-template"),
     path("merchant/store/toggle-open/", segment_views.merchant_store_toggle, name="merchant-store-toggle"),
     path("merchant/customers/", segment_views.merchant_customers, name="merchant-customers"),
+    path("merchant/customers/duplicates/", segment_views.merchant_customer_duplicates, name="merchant-customer-duplicates"),
     path("merchant/customers/search/", segment_views.merchant_customer_search, name="merchant-customer-search"),
     path("merchant/customers/<uuid:customer_id>/tags/", segment_views.merchant_customer_tags,
         name="merchant-customer-tags"),

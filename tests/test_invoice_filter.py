@@ -82,3 +82,47 @@ class InvoiceFilterTests(Base):
     def test_totals_follow_the_filter(self):
         page = self.client.get(self.url, {"channel": "tokopedia"})
         self.assertEqual(page.context["outstanding"], Decimal(3 * 50_000 + 16_500))
+
+
+class FlexibleFilterTests(InvoiceFilterTests):
+    def test_several_channels_at_once(self):
+        page = self.client.get(self.url, {"channel": ["shopee", "tokopedia"]})
+        numbers = {o.invoice.number for o in page.context["orders"] if getattr(o, "invoice", None)}
+        self.assertEqual(numbers, {self.a.number, self.b.number})
+        self.assertEqual(self.numbers(channel="shopee,tokopedia"), numbers)
+        labels = [f["label"] for f in page.context["active_filters"]]
+        self.assertIn("Shopee + Tokopedia", labels[0])
+
+    def test_sort_orders(self):
+        def first(sort):
+            page = self.client.get(self.url, {"sort": sort})
+            return page.context["orders"][0].invoice.number
+        self.assertEqual(first("newest"), self.a.number)
+        self.assertEqual(first("oldest"), self.b.number)
+        self.assertEqual(first("total_desc"), self.a.number)
+        self.assertEqual(first("total_asc"), self.b.number)
+
+    def test_crm_filter(self):
+        self.assertEqual(self.numbers(crm="yes"), {self.a.number})
+        self.assertEqual(self.numbers(crm="no"), {self.b.number})
+
+    def test_export_keeps_every_channel(self):
+        page = self.client.get(self.url, {"channel": ["shopee", "tokopedia"], "q": "a, b"})
+        self.assertIn("channel=shopee", page.context["filter_query"])
+        self.assertIn("channel=tokopedia", page.context["filter_query"])
+        self.assertEqual(page.context["filter_query"].count("q="), 1)
+
+
+class CustomerHistoryTests(InvoiceFilterTests):
+    def test_history_filters_and_shows_what_was_bought(self):
+        url = reverse("merchant-customer-detail", args=[self.customer.pk])
+        full = self.client.get(url)
+        self.assertEqual(full.status_code, 200)
+        self.assertContains(full, "Apa saja yang dibeli")
+        self.assertEqual(full.context["history_count"], 1)
+        self.assertEqual([r["sku"] for r in full.context["purchased"]], ["KBL"])
+        none = self.client.get(url, {"q": "LMP"})
+        self.assertEqual(none.context["history_count"], 0)
+        part = self.client.get(url, {"range": "30d"}, HTTP_HX_REQUEST="true")
+        self.assertNotContains(part, "<html")
+        self.assertContains(part, "Total belanja")

@@ -4,13 +4,16 @@ The list page, its CSV, Excel and PDF exports all read the same query parameters
 ``apply_filters``, so what you see is what you export. Parameters (all optional):
 
   q          invoice no., order ref, buyer name, phone, or product name / SKU
-  channel    one sales channel (shopee, tokopedia, web…)
+  channel    one or more sales channels (shopee, tokopedia, web…; repeat the parameter)
   inv        invoice tab: awaiting, overdue, paid, draft, void, none
   status     order status
   range      today | 7d | 30d | month | lastmonth | year
   date_from, date_to   a custom range (wins over ``range``)
   month      YYYY-MM (older links)
   min_total, max_total  order total in rupiah
+  crm        yes: buyer is in the CRM · no: not yet
+  due        overdue: only invoices past their due date
+  sort       newest (default) | oldest | total_desc | total_asc | due
 
 The date is the invoice date, or the order date while the order has no invoice."""
 import datetime
@@ -38,7 +41,18 @@ TABS = [
 ]
 # Every query parameter this filter owns, so a link or a form can carry or clear them.
 KEYS = ("q", "channel", "inv", "status", "range", "date_from", "date_to", "month", "min_total",
-    "max_total")
+    "max_total", "crm", "sort")
+SORTS = [("newest", "Terbaru"), ("oldest", "Terlama"), ("total_desc", "Total terbesar"),
+    ("total_asc", "Total terkecil"), ("due", "Jatuh tempo terdekat")]
+
+
+def values(params, key):
+    """Every value of a parameter: repeated (?channel=a&channel=b) or comma separated."""
+    raw = params.getlist(key) if hasattr(params, "getlist") else [params.get(key) or ""]
+    found = []
+    for item in raw:
+        found += [part.strip() for part in str(item or "").split(",") if part.strip()]
+    return found
 
 
 def _day(value):
@@ -121,10 +135,15 @@ def apply_filters(qs, params, today=None):
     if text:
         qs = search(qs, text)
         active.append({"label": f"Cari “{text}”", "keys": ["q"]})
-    channel = params.get("channel") or ""
-    if channel:
-        qs = qs.filter(channel=channel)
-        active.append({"label": dict(Order.CHANNELS).get(channel, channel), "keys": ["channel"]})
+    channels = values(params, "channel")
+    if channels:
+        qs = qs.filter(channel__in=channels)
+        names = dict(Order.CHANNELS)
+        active.append({"label": " + ".join(names.get(c, c) for c in channels), "keys": ["channel"]})
+    crm = params.get("crm") or ""
+    if crm in {"yes", "no"}:
+        qs = qs.filter(customer__isnull=(crm == "no"))
+        active.append({"label": "Pelanggan di CRM" if crm == "yes" else "Belum di CRM", "keys": ["crm"]})
     status = params.get("status") or ""
     if status:
         qs = qs.filter(status=status)
@@ -152,6 +171,12 @@ def apply_filters(qs, params, today=None):
         active.append({"label": "Total " + " ".join(parts).replace(",", "."),
             "keys": ["min_total", "max_total"]})
     return qs, active
+
+
+def apply_sort(qs, code):
+    order = {"oldest": ("created_at",), "total_desc": ("-total", "-created_at"),
+        "total_asc": ("total", "-created_at"), "due": ("invoice__due_date", "-created_at")}
+    return qs.order_by(*order.get(code, ("-created_at",)))
 
 
 def apply_tab(qs, code):

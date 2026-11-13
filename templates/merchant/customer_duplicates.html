@@ -1,0 +1,30 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Gabungkan pelanggan ganda{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-customers' %}">Pelanggan</a> › <span>Pelanggan ganda</span></nav>
+<div class="pg-head"><div><h1>Pelanggan ganda</h1><p>Pembeli yang sama sering tercatat dua kali: diketik manual, lalu diimpor dari Shopee atau Tokopedia. Gabungkan jadi satu: pesanan, invoice, piutang, dan kredit ikut pindah.</p></div></div>
+
+{% for group in groups %}
+<form method="post" class="panel" data-confirm="Gabungkan pelanggan terpilih? Duplikatnya dihapus dan datanya dipindahkan; ini tidak bisa dibatalkan." data-confirm-tone="neutral" data-confirm-ok="Gabungkan">
+  {% csrf_token %}
+  <header><div class="flex items-center gap-3"><span class="bb-bubble warn [&>svg]:h-4 [&>svg]:w-4">{% icon "users" %}</span><div><h2>{{ group.customers.0.name }}{% if group.customers|length > 2 %} dan {{ group.customers|length|add:"-1" }} lainnya{% endif %}</h2><p>{{ group.reason }}</p></div></div></header>
+  <div class="scroll-x"><table class="tbl" data-no-rows>
+    <thead><tr><th style="width:90px">Utama</th><th style="width:70px">Gabung</th><th>Pelanggan</th><th>Kontak</th><th class="num">Pesanan</th><th>Sumber</th></tr></thead>
+    <tbody>{% for c in group.customers %}
+      <tr>
+        <td><input type="radio" name="primary" value="{{ c.pk }}" {% if forloop.first %}checked{% endif %} aria-label="Jadikan {{ c.name }} utama"></td>
+        <td><input type="checkbox" name="merge" value="{{ c.pk }}" {% if not forloop.first %}checked{% endif %} aria-label="Gabungkan {{ c.name }}"></td>
+        <td><a class="rowlink" href="{% url 'merchant-customer-detail' c.pk %}" data-no-soft>{{ c.name }}</a>{% if c.company_name %}<small>{{ c.company_name }}</small>{% endif %}</td>
+        <td>{{ c.phone|default:"—" }}<small>{{ c.email|default:"" }}</small></td>
+        <td class="num">{{ c.orders.count }}</td>
+        <td>{% if c.channel_buyer_id %}<span class="pill pill-issued">Marketplace</span>{% else %}<span class="pill pill-draft">Manual</span>{% endif %}</td>
+      </tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <footer><span class="text-sm text-slate-500">Yang dipilih "Utama" dipertahankan; data kontak yang kosong dilengkapi dari yang digabung.</span>
+    <button class="btn-primary">{% icon "swap" %} Gabungkan</button></footer>
+</form>
+{% empty %}
+<div class="panel"><div class="dp-empty" style="padding:48px 18px"><span class="bb-bubble ok mx-auto mb-3 [&>svg]:h-4 [&>svg]:w-4">{% icon "check-circle" %}</span><p class="font-semibold text-slate-800">Tidak ada pelanggan ganda.</p><p>Nomor HP, email, atau nama yang sama akan muncul di sini.</p></div></div>
+{% endfor %}
+{% endblock %}

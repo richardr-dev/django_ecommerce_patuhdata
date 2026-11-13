@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.core.validators import validate_email
 from django.db import models, transaction
-from django.db.models import Count, F, Min, Sum
+from django.db.models import Count, F, Max, Min, Sum
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -2198,10 +2198,33 @@ def merchant_customer_detail(request, customer_id):
     from django.utils import timezone as tz
     days_since = (tz.localdate() - last_order.created_at.date()).days if last_order else None
 
+    from apps.accounting.views import render_partial
+    from apps.channels.invoice_filters import PRESETS, apply_filters, date_range, values
     from apps.tax.receivables import statement
     open_lines, receivable = statement(store, customer.pk, tz.localdate())
     overdue_receivable = sum((line["due"] for line in open_lines if line["late_days"]), 0)
-    return render(request, "merchant/customer_detail.html", _merchant_context(request, store,
+
+    # The purchase history: filter it, and show what was bought in what is left.
+    history, active_filters = apply_filters(orders, request.GET, tz.localdate())
+    history = history.order_by("-created_at")
+    sold = history.exclude(status__in={"cancelled", "payment_failed"})  # bought, paid or not
+    rows = list(OrderItem.objects.filter(order__in=sold).values("name", "sku").annotate(
+        units=Sum("quantity"), orders=Count("order", distinct=True), revenue=Sum("line_total"),
+        last=Max("order__created_at")).order_by("-units", "-revenue"))
+    names = dict(Order.CHANNELS)
+    hist_channels = [(code, names.get(code, code)) for code in
+        orders.order_by().values_list("channel", flat=True).distinct()]
+    start, end, _label = date_range(request.GET, tz.localdate())
+    spend = sold.aggregate(total=Sum("total"))["total"] or 0
+    return render_partial(request, "merchant/customer_detail.html", "merchant/_customer_history.html",
+        _merchant_context(request, store,
+        history=history, history_count=history.count(), history_spend=spend,
+        history_units=sum(row["units"] or 0 for row in rows), purchased=rows,
+        active_filters=active_filters, presets=PRESETS, range_preset=request.GET.get("range", ""),
+        date_from=request.GET.get("date_from") or (start.isoformat() if start and not request.GET.get("range") else ""),
+        date_to=request.GET.get("date_to") or (end.isoformat() if end and not request.GET.get("range") else ""),
+        hist_q=request.GET.get("q", ""), hist_channels=hist_channels,
+        hist_selected=values(request.GET, "channel"),
         customer=customer, orders=orders, lifetime_spend=lifetime_spend,
         order_count=count, average_order=average_order,
         channel_breakdown=channel_breakdown, top_products=top_products,

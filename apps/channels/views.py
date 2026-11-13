@@ -465,17 +465,17 @@ def merchant_sales_invoices(request):
 
     from apps.accounting.views import render_partial
 
-    from .invoice_filters import KEYS, PRESETS, TABS, apply_filters, apply_tab
+    from .invoice_filters import KEYS, PRESETS, SORTS, TABS, apply_filters, apply_sort, apply_tab, values
 
     params = request.GET
     qs = Order.objects.filter(store=store).select_related("invoice", "customer").order_by("-created_at")
     qs, active_filters = apply_filters(qs, params, _dt.date.today())
-    channel_filter, status_filter = params.get("channel", ""), params.get("status", "")
+    channel_filter, status_filter = values(params, "channel"), params.get("status", "")
     inv_filter = params.get("inv", "")
     tab_base = qs
     invoice_tabs = [(code, label, tab_base.filter(cond).count() if cond is not None
         else tab_base.count()) for code, label, cond in TABS]
-    qs = apply_tab(qs, inv_filter)
+    qs = apply_sort(apply_tab(qs, inv_filter), params.get("sort", ""))
     if inv_filter and inv_filter in dict((code, label) for code, label, _ in TABS):
         active_filters.append({"label": dict((code, label) for code, label, _ in TABS)[inv_filter],
             "keys": ["inv"]})
@@ -523,13 +523,14 @@ def merchant_sales_invoices(request):
             and invoice.due_date < today and order.inv_due else 0)
 
     from urllib.parse import urlencode
-    filter_query = urlencode({key: params[key] for key in KEYS if params.get(key)})
+    filter_query = urlencode([(key, value) for key in KEYS
+        for value in (values(params, key) if key == "channel" else [params.get(key, "")]) if value])
 
     chip_rows = (_Inv.objects.filter(store=store).exclude(status__in=(_Inv.STATUS_DRAFT,
         _Inv.STATUS_VOID)).values("order__channel").annotate(n=Count("id")).order_by("-n"))
     channel_chips = [{"code": r["order__channel"], "label": channel_label_map.get(
         r["order__channel"], r["order__channel"]), "count": r["n"],
-        "active": channel_filter == r["order__channel"]} for r in chip_rows]
+        "active": r["order__channel"] in channel_filter} for r in chip_rows]
     channel_total = sum(chip["count"] for chip in channel_chips)
 
     from .invoice_filters import date_range
@@ -538,7 +539,8 @@ def merchant_sales_invoices(request):
         _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         channel_filter=channel_filter, status_filter=status_filter, inv_filter=inv_filter,
-        presets=PRESETS, active_filters=active_filters, range_preset=params.get("range", ""),
+        presets=PRESETS, sorts=SORTS, sort=params.get("sort", "newest"), crm=params.get("crm", ""),
+        active_filters=active_filters, range_preset=params.get("range", ""),
         oob=bool(request.headers.get("HX-Request") and not request.headers.get("HX-History-Restore-Request")),
         date_from=params.get("date_from") or (start.isoformat() if start and not params.get("range") else ""),
         date_to=params.get("date_to") or (end.isoformat() if end and not params.get("range") else ""),

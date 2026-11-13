@@ -195,3 +195,26 @@ def merchant_customer_search(request):
                      (f" · {c.phone}" if c.phone else ""),
         })
     return JsonResponse({"results": results})
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_customer_duplicates(request):
+    """Customers that look like the same person, with one button to merge each group."""
+    from apps.orders.views import _merchant_context, _require_roles, _staff_store
+
+    from .customer_merge import MergeError, duplicate_groups, merge_customers
+
+    store = _staff_store(request)
+    _require_roles(request, store, EDIT_ROLES)
+    if request.method == "POST":
+        try:
+            result = merge_customers(store, request.POST.get("primary"),
+                request.POST.getlist("merge"), actor=request.user)
+        except (MergeError, ValueError) as error:
+            messages.error(request, str(error))
+        else:
+            moved = ", ".join(f"{count} {label.lower()}" for label, count in result["moved"].items())
+            messages.success(request, f"{result['removed']} pelanggan digabung" + (f" ({moved} dipindahkan)." if moved else "."))
+        return redirect("merchant-customer-duplicates")
+    return render(request, "merchant/customer_duplicates.html", _merchant_context(request, store,
+        groups=duplicate_groups(store)))
