@@ -1,3 +1,12 @@
-{% extends "merchant/base.html" %}{% block title %}Pencairan {{ payout.reference }}{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">{{ payout.label|upper }}</span><h1>{{ payout.reference }}</h1><p>Dicairkan {{ payout.paid_on|date:"d M Y" }} · {{ lines|length }} pesanan</p></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'merchant-payouts' %}">← Semua pencairan</a></div></div>
-<section class="kpi-grid"><article><small>Bruto</small><strong>Rp{{ payout.gross|floatformat:'0g' }}</strong><span>Total pembayaran pesanan</span></article><article><small>Fee</small><strong>Rp{{ payout.fees|floatformat:'0g' }}</strong><span>Dicatat sebagai biaya</span></article><article><small>Masuk rekening</small><strong>Rp{{ payout.net|floatformat:'0g' }}</strong><span>Harus sama dengan mutasi bank</span></article></section>
-<section class="bo-card table-card"><div class="data-table"><div class="data-row data-head" style="--cols:5"><span>Referensi</span><span>Pesanan</span><span>Pembeli</span><span>Nominal</span><span>Fee</span></div>{% for line in lines %}<div class="data-row" style="--cols:5"><span>{{ line.payment.order.payment_reference|default:line.payment.external_id }}</span><span>#{{ line.payment.order_id|stringformat:"s"|slice:":8" }}</span><span>{{ line.payment.order.customer_name }}</span><span>Rp{{ line.amount|floatformat:'0g' }}</span><span>Rp{{ line.fee|floatformat:'0g' }}</span></div>{% endfor %}</div></section>{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Pencairan {{ payout.reference }}{% endblock %}{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-payouts' %}">Pencairan dana</a> / {{ payout.reference }}</div>
+<div class="pg-head"><div><span class="pg-kicker">{{ payout.label }}</span><h1 class="dp-title">{{ payout.reference }}</h1><p>Dicairkan {{ payout.paid_on|date:"d F Y" }} · {{ lines|length }} pesanan</p></div></div>
+<div class="tiles">
+  <div class="tile"><small>Bruto</small><strong>{{ payout.gross|rp }}</strong><span>total pembayaran pesanan</span></div>
+  <div class="tile"><small>Fee</small><strong>{{ payout.fees|rp }}</strong><span>dicatat sebagai biaya</span></div>
+  <div class="tile accent"><small>Masuk rekening</small><strong>{{ payout.net|rp }}</strong><span>harus sama dengan mutasi bank</span></div>
+</div>
+<section class="panel"><header><h2>Pesanan dalam pencairan ini</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Referensi</th><th>Pesanan</th><th>Pembeli</th><th class="num">Nominal</th><th class="num">Fee</th></tr></thead><tbody>
+  {% for line in lines %}<tr><td>{{ line.payment.order.payment_reference|default:line.payment.external_id }}</td><td><a href="{% url 'merchant-order-detail' line.payment.order_id %}">#{{ line.payment.order_id|stringformat:"s"|slice:":8" }}</a></td><td>{{ line.payment.order.customer_name }}</td><td class="num">{{ line.amount|rp }}</td><td class="num">{{ line.fee|rp }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

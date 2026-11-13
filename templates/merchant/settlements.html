@@ -1,78 +1,15 @@
-{% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Settlement Mitra{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Settlement mitra{% endblock %}
 {% block content %}
-
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">SETTLEMENT</p>
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">Settlement Mitra</h1>
-    <p class="text-sm text-gray-500">Tagihan penjualan mitra konsinyasi dan lainnya.</p>
-  </div>
-  <div class="flex items-center gap-3 mt-1">
-    <a class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors" href="{% url 'settlement-new' %}">{% icon "plus" %} Buat Settlement</a>
-    <a class="text-sm text-indigo-600 hover:text-indigo-800" href="{% url 'settlement-partners' %}">Kelola Mitra →</a>
-  </div>
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Tagihan Belum Lunas</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ open_receivable|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Ditagih (open)</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ open_total|floatformat:"0g" }}</p>
-  </div>
-</div>
-
-<form method="get" class="flex flex-wrap items-center gap-3 mb-5 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-  <select name="partner" aria-label="Mitra" onchange="this.form.submit()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-    <option value="">Semua mitra</option>
-    {% for p in partners %}<option value="{{ p.pk }}"{% if partner_filter == p.pk|stringformat:"s" %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
-  </select>
-  <select name="status" aria-label="Status" onchange="this.form.submit()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-    <option value="">Semua status</option>
-    {% for code, label in statuses %}<option value="{{ code }}"{% if status_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
-  </select>
-  <button class="px-4 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">Filter</button>
-</form>
-
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="bg-gray-50">
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">No. Invoice</th>
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Mitra</th>
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Periode</th>
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Dibayar</th>
-        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Sisa</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for s in settlements %}
-      <tr class="hover:bg-gray-50">
-        <td class="px-5 py-3">
-          <a class="text-indigo-600 hover:text-indigo-800 font-medium" href="{% url 'settlement-detail' s.pk %}">{{ s.invoice_number|default:"(Draft)" }}</a>
-        </td>
-        <td class="px-5 py-3 text-gray-700">{{ s.partner.name }}</td>
-        <td class="px-5 py-3 text-xs text-gray-500">{{ s.period_start|date:"d M Y" }} – {{ s.period_end|date:"d M Y" }}</td>
-        <td class="px-5 py-3"><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></td>
-        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ s.total_due|floatformat:"0g" }}</td>
-        <td class="px-5 py-3 text-right text-gray-600">Rp{{ s.amount_paid|floatformat:"0g" }}</td>
-        <td class="px-5 py-3 text-right {% if s.balance_due > 0 %}font-semibold text-amber-600{% else %}text-gray-500{% endif %}">Rp{{ s.balance_due|floatformat:"0g" }}</td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="7" class="px-5 py-12 text-center text-sm text-gray-400">
-          Belum ada settlement{% if partner_filter or status_filter %} dengan filter ini{% endif %}.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
+<div class="pg-head"><div><span class="pg-kicker">Mitra konsinyasi</span><h1>Settlement mitra</h1><p>Tagihan penjualan mitra konsinyasi dan lainnya, dari draft sampai lunas.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'settlement-partners' %}">{% icon "users" %} Kelola mitra</a><a class="btn-primary" href="{% url 'settlement-new' %}">{% icon "plus" %} Buat settlement</a></div></div>
+<div class="tiles"><div class="tile accent"><small>Tagihan belum lunas</small><strong>{{ open_receivable|rp }}</strong><span>sisa yang harus dibayar mitra</span></div>
+  <div class="tile"><small>Total ditagih (terbuka)</small><strong>{{ open_total|rp }}</strong><span>settlement yang belum lunas</span></div></div>
+<form method="get" class="toolbar"><label class="field"><span>Mitra</span><select name="partner" onchange="this.form.submit()"><option value="">Semua mitra</option>{% for p in partners %}<option value="{{ p.pk }}"{% if partner_filter == p.pk|stringformat:"s" %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Status</span><select name="status" onchange="this.form.submit()"><option value="">Semua status</option>{% for code, label in statuses %}<option value="{{ code }}"{% if status_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn">Filter</button></noscript></form>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>No. invoice</th><th>Mitra</th><th>Periode</th><th>Status</th><th class="num">Total</th><th class="num">Dibayar</th><th class="num">Sisa</th></tr></thead><tbody>
+  {% for s in settlements %}<tr><td><a class="rowlink" href="{% url 'settlement-detail' s.pk %}"><b>{{ s.invoice_number|default:"(Draft)" }}</b></a></td><td>{{ s.partner.name }}</td><td>{{ s.period_start|date:"d M Y" }} – {{ s.period_end|date:"d M Y" }}</td>
+    <td><span class="pill pill-{{ s.status }}">{{ s.get_status_display }}</span></td><td class="num">{{ s.total_due|rp }}</td><td class="num">{{ s.amount_paid|rp }}</td><td class="num">{% if s.balance_due > 0 %}<b>{{ s.balance_due|rp }}</b>{% else %}{{ s.balance_due|rp }}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada settlement{% if partner_filter or status_filter %} dengan filter ini{% endif %}.</td></tr>{% endfor %}</tbody></table></div></section>
 {% include "storefront/pagination.html" %}
 {% endblock %}
