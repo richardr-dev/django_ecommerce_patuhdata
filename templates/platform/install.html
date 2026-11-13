@@ -11,7 +11,7 @@
     <p class="ln-sub">Satu langkah membuat akun pemilik, organisasi, toko, gudang utama, bagan akun, dan profil pajak. Tidak ada pendaftaran publik.</p>
     {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
     {% if result %}<div class="ln-msg ok" role="status"><b>{{ result.store.name }}</b> terpasang. Pemilik masuk dengan <b>{{ result.owner.username }}</b>.
-      {% if result.invite_link %}<br>Berikan link sekali pakai ini agar pemilik membuat kata sandi:<br><input class="ln-copy" readonly value="{{ result.invite_link }}" onclick="this.select()" aria-label="Link kata sandi">{% else %}<br>Akun itu sudah punya kata sandi.{% endif %}</div>{% endif %}
+      {% if result.emailed %}<br>Link kata sandi sudah dikirim ke <b>{{ result.owner.email }}</b>.{% endif %}{% if result.invite_link %}<br>{% if result.emailed %}Salinan link{% else %}Berikan link sekali pakai ini{% endif %} agar pemilik membuat kata sandi:<br><input class="ln-copy" readonly value="{{ result.invite_link }}" onclick="this.select()" aria-label="Link kata sandi">{% else %}<br>Akun itu sudah punya kata sandi.{% endif %}</div>{% endif %}
     <form method="post">{% csrf_token %}
       <div class="ln-grid">
         <label class="ln-field"><span>Nama toko / brand</span><span class="ln-input"><input name="store_name" value="{{ v.store_name }}" maxlength="120" required></span></label>
