@@ -1,0 +1,69 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Jurnal penyesuaian{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Jurnal penyesuaian</h1>
+  <p>Yang dicatat akuntan di akhir periode agar laporan menunjukkan kejadian sebenarnya, bukan hanya uang yang keluar: biaya dibayar di muka, biaya yang sudah terjadi tetapi belum ditagih, dan piutang yang mungkin tidak tertagih. Semuanya diposting otomatis oleh pekerja pembukuan dan bisa diulang tanpa dobel.</p></div></div>
+<div class="tabs" aria-label="Jenis penyesuaian">{% for key, label in tabs %}<a href="?tab={{ key }}" class="{% if tab == key %}on{% endif %}">{{ label }}</a>{% endfor %}</div>
+
+{% if tab == 'prepaid' %}
+<div class="tiles"><div class="tile accent"><small>Belum dibebankan</small><strong>{{ prepaid_rest|rp }}</strong><span>saldo Biaya dibayar di muka (1550) dari item berjalan</span></div></div>
+<section class="panel"><header><div><h2>Biaya dibayar di muka</h2><p>Asuransi setahun, sewa di muka, lisensi tahunan. Dibayar sekali, dibebankan rata tiap bulan selama masa manfaat; bulan pertama dihitung penuh.</p></div>
+  {% if can_edit %}<button type="button" class="btn-primary" data-open="prepaid-dialog">{% icon "plus" %} Tambah</button>{% endif %}</header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Item</th><th>Mulai</th><th class="num">Total</th><th class="num">Sudah dibebankan</th><th class="num">Sisa</th><th>Kemajuan</th><th></th></tr></thead><tbody>
+  {% for p in prepaids %}<tr><td><b>{{ p.name }}</b><small>{{ p.months }} bulan · {{ p.expense_code }} · dari {{ p.paid_from.name }}</small></td><td>{{ p.start_date|date:"M Y" }}</td><td class="num">{{ p.total|rp }}</td><td class="num">{{ p.done|rp }}</td><td class="num"><b>{{ p.rest|rp }}</b></td>
+    <td style="min-width:120px"><div style="height:8px;border-radius:99px;background:var(--ds-nested)"><div style="height:8px;border-radius:99px;background:var(--ds-primary);width:{{ p.pct|stringformat:'s' }}%"></div></div><small>{% if p.status == 'ended' %}dihentikan{% else %}{{ p.pct }}%{% endif %}</small></td>
+    <td class="num" data-no-row>{% if can_edit and p.status == 'active' and p.rest %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="end_prepaid"><input type="hidden" name="id" value="{{ p.pk }}"><input type="hidden" name="tab" value="prepaid"><button class="btn" data-confirm="Hentikan amortisasi {{ p.name }}? Sisa {{ p.rest|rp }} tetap di Biaya dibayar di muka sampai Anda membuat jurnalnya." data-confirm-ok="Hentikan" data-confirm-tone="neutral">Hentikan</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada biaya dibayar di muka.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if can_edit %}<dialog id="prepaid-dialog" class="pd-dialog" aria-labelledby="pp-title" style="max-width:640px"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="add_prepaid"><input type="hidden" name="tab" value="prepaid"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="pp-title">Tambah biaya dibayar di muka</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <label class="field"><span>Apa yang dibayar</span><input name="name" maxlength="160" required placeholder="mis. Asuransi kendaraan 2027"></label>
+    <div class="field-row"><label class="field"><span>Mulai berlaku</span><input type="date" name="start_date" value="{{ today }}" required></label><label class="field"><span>Lama (bulan)</span><input type="number" name="months" min="2" max="120" value="12" required></label></div>
+    <div class="field-row"><label class="field"><span>Jumlah dibayar</span><input name="total" data-rupiah required></label>
+      <label class="field"><span>Dibayar dari</span><select name="paid_from">{% for a in pay_accounts %}<option value="{{ a.code }}">{{ a.name }}</option>{% endfor %}</select></label></div>
+    <label class="field"><span>Dibebankan ke</span><select name="expense_code">{% for a in expense_accounts %}<option value="{{ a.code }}">{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label>
+    <p class="dp-help">Jurnal: Biaya dibayar di muka (debit) dan akun pembayaran (kredit) hari ini; lalu tiap akhir bulan biaya (debit) dan Biaya dibayar di muka (kredit).</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan</button></footer></form></dialog>{% endif %}
+
+{% elif tab == 'accrual' %}
+<section class="panel"><header><div><h2>Akrual dan jurnal berulang</h2><p><b>Akrual:</b> biaya yang sudah terjadi bulan ini tetapi tagihannya belum datang (listrik, gaji, jasa). Dicatat di akhir periode dan, bila dipilih, dibalik otomatis di hari pertama periode berikutnya agar tagihan aslinya dicatat seperti biasa. <b>Berulang:</b> jurnal yang sama tiap periode.</p></div>
+  {% if can_edit %}<div class="dp-actions"><button type="button" class="btn" data-open="recurring-dialog">{% icon "plus" %} Jurnal berulang</button><button type="button" class="btn-primary" data-open="accrual-dialog">{% icon "plus" %} Akrual</button></div>{% endif %}</header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Keterangan</th><th>Debit → Kredit</th><th class="num">Jumlah</th><th>Frekuensi</th><th>Berikutnya</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for t in templates %}<tr><td><b>{{ t.name }}</b><small>{% if t.kind == 'accrual' %}akrual{% else %}berulang{% endif %}{% if t.auto_reverse %} · dibalik otomatis{% endif %}</small></td><td>{{ t.debit_code }} → {{ t.credit_code }}</td><td class="num"><b>{{ t.amount|rp }}</b></td><td>{{ t.get_frequency_display }}</td>
+    <td>{% if t.is_active %}{{ t.next_run|date:"d M Y" }}{% else %}—{% endif %}{% if t.last_run %}<small>terakhir {{ t.last_run|date:"d M Y" }}</small>{% endif %}</td>
+    <td>{% if t.is_active %}<span class="pill pill-info">Aktif</span>{% else %}<span class="pill pill-draft">Selesai</span>{% endif %}</td>
+    <td class="num" data-no-row>{% if can_edit and t.is_active %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="stop_template"><input type="hidden" name="id" value="{{ t.pk }}"><input type="hidden" name="tab" value="accrual"><button class="btn" data-confirm="Hentikan {{ t.name }}? Jurnal yang sudah dibukukan tidak berubah." data-confirm-ok="Hentikan" data-confirm-tone="neutral">Hentikan</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada akrual atau jurnal berulang.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if can_edit %}
+<dialog id="accrual-dialog" class="pd-dialog" aria-labelledby="ac-title" style="max-width:640px"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="add_accrual"><input type="hidden" name="tab" value="accrual"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="ac-title">Catat akrual</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <label class="field"><span>Biaya apa</span><input name="name" maxlength="160" required placeholder="mis. Listrik Oktober belum ditagih"></label>
+    <div class="field-row"><label class="field"><span>Biaya (debit)</span><select name="debit_code">{% for a in expense_accounts %}<option value="{{ a.code }}">{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Utang (kredit)</span><select name="credit_code">{% for a in accounts %}{% if a.code == '2310' %}<option value="2310" selected>2310 · {{ a.name }}</option>{% endif %}{% endfor %}</select></label></div>
+    <div class="field-row"><label class="field"><span>Jumlah</span><input name="amount" data-rupiah required></label><label class="field"><span>Tanggal (akhir periode)</span><input type="date" name="first_date" value="{{ today }}" required></label></div>
+    <input type="hidden" name="frequency" value="once"><label class="field" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="auto_reverse" value="1" checked style="width:auto"><span style="margin:0">Balik otomatis di hari pertama periode berikutnya (disarankan)</span></label>
+    <p class="dp-help">Jurnal: biaya (debit) dan Utang biaya (kredit) pada tanggal itu. Bila dibalik, tagihan asli bulan depan dicatat penuh tanpa menghitung biaya dua kali.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan akrual</button></footer></form></dialog>
+<dialog id="recurring-dialog" class="pd-dialog" aria-labelledby="rc-title" style="max-width:640px"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="add_recurring"><input type="hidden" name="tab" value="accrual"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="rc-title">Jurnal berulang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <label class="field"><span>Keterangan</span><input name="name" maxlength="160" required placeholder="mis. Alokasi sewa kantor bersama"></label>
+    <div class="field-row"><label class="field"><span>Akun debit</span><select name="debit_code">{% for a in accounts %}<option value="{{ a.code }}">{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Akun kredit</span><select name="credit_code">{% for a in accounts %}<option value="{{ a.code }}">{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label></div>
+    <div class="field-row"><label class="field"><span>Jumlah</span><input name="amount" data-rupiah required></label>
+      <label class="field"><span>Frekuensi</span><select name="frequency"><option value="monthly">Tiap bulan</option><option value="quarterly">Tiap kuartal</option><option value="yearly">Tiap tahun</option></select></label></div>
+    <div class="field-row"><label class="field"><span>Mulai</span><input type="date" name="first_date" value="{{ today }}" required></label><label class="field"><span>Sampai <em>(opsional)</em></span><input type="date" name="end_on"></label></div></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan</button></footer></form></dialog>{% endif %}
+
+{% else %}
+<div class="tiles"><div class="tile accent"><small>Cadangan dibutuhkan</small><strong>{{ plan.required|rp }}</strong><span>per {{ as_of|date:"d M Y" }}, dari umur piutang</span></div>
+  <div class="tile"><small>Cadangan di buku</small><strong>{{ plan.booked|rp }}</strong><span>saldo Cadangan kerugian piutang (1255)</span></div>
+  <div class="tile {% if plan.adjustment %}warn{% endif %}"><small>Perlu dicatat</small><strong>{{ plan.adjustment|signed_rp }}</strong><span>{% if plan.adjustment > 0 %}tambah beban piutang tak tertagih{% elif plan.adjustment < 0 %}kurangi cadangan{% else %}sudah sesuai{% endif %}</span></div></div>
+<form method="{% if can_edit %}post{% else %}get{% endif %}" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="tab" value="provision"><input type="hidden" name="action" value="provision"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><div><h2>Cadangan kerugian piutang</h2><p>Cadangan = piutang tiap kelompok umur × persentasenya. Ubah persentase sesuai pengalaman penagihan Anda. Dicatat per tanggal (biasanya akhir kuartal); selisih dari cadangan sebelumnya yang dibukukan, naik atau turun.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Kelompok umur</th><th class="num">Piutang</th><th class="num" style="width:130px">Persen (%)</th><th class="num">Cadangan</th></tr></thead><tbody>
+  {% for r in plan.rows %}<tr><td>{{ r.label }}</td><td class="num">{{ r.base|rp }}</td><td class="num"><input name="rate_{{ r.key }}" value="{{ r.rate|floatformat:'-2' }}" class="num" inputmode="decimal" aria-label="Persen {{ r.label }}"></td><td class="num"><b>{{ r.amount|rp }}</b></td></tr>{% endfor %}
+  <tr><td colspan="3"><b>Total dibutuhkan</b></td><td class="num"><b>{{ plan.required|rp }}</b></td></tr></tbody></table></div>
+  <div class="dp-card-body"><div class="field-row"><label class="field"><span>Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label></div></div>
+  <footer style="padding:14px 18px;display:flex;gap:10px"><button class="btn" formmethod="get" name="tab" value="provision">Hitung ulang</button>{% if can_edit %}<button class="btn-primary" {% if not plan.adjustment %}disabled{% endif %} data-confirm="Catat penyesuaian cadangan {{ plan.adjustment|signed_rp }}?" data-confirm-ok="Catat" data-confirm-tone="neutral">{% icon "check" %} Catat penyesuaian</button>{% endif %}</footer></form>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

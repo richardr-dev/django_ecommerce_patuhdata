@@ -36,6 +36,8 @@ YEAR_CLOSE = "year_close"  # source type of the closing entry that moves a year'
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
 COGS, FEES = "5100", "6100"
 DEPRECIATION, OTHER_INCOME, ASSET_GAIN, BANK_CHARGES = "6950", "7100", "7200", "8100"
+PREPAID, ALLOWANCE, ACCRUED = "1550", "1255", "2310"  # Biaya dibayar di muka, Cadangan kerugian piutang, Utang biaya
+BAD_DEBT, INTEREST = "6970", "8200"  # Beban piutang tak tertagih, Beban bunga
 STOCK_DIFFERENCE = "6960"  # Selisih persediaan: what a stok opname found missing (debit) or extra (credit)
 # What a marketplace keeps from a sale, one account each so the profit and loss shows where the
 # money goes. Anything the marketplace does not itemise stays in FEES (6100).
@@ -50,6 +52,8 @@ CHART = [
     (RECEIVABLE, "Piutang usaha", "asset"),
     (MARKETPLACE, "Piutang marketplace", "asset"),
     (INTERCO_RECEIVABLE, "Piutang antar perusahaan", "asset"),
+    (ALLOWANCE, "Cadangan kerugian piutang", "asset"),
+    (PREPAID, "Biaya dibayar di muka", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
     (CONSIGNED, "Persediaan di mitra (konsinyasi)", "asset"),
     (INPUT_VAT, "PPN masukan", "asset"),
@@ -60,6 +64,7 @@ CHART = [
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (PAYABLE, "Utang usaha", "liability"),
     (GRNI, "Barang diterima belum ditagih (GRNI)", "liability"),
+    (ACCRUED, "Utang biaya (akrual)", "liability"),
     (INTERCO_PAYABLE, "Utang antar perusahaan", "liability"),
     (CUSTOMER_CREDIT, "Uang muka & kredit pelanggan", "liability"),
     (LOANS, "Utang bank & pinjaman", "liability"),
@@ -82,6 +87,8 @@ CHART = [
 ] + [(code, name, "expense") for code, name in EXPENSE_CATEGORIES] + [
     (DEPRECIATION, "Beban penyusutan", "expense"),
     (STOCK_DIFFERENCE, "Selisih persediaan (stok opname)", "expense"),
+    (BAD_DEBT, "Beban piutang tak tertagih", "expense"),
+    (INTEREST, "Beban bunga", "expense"),
     (OTHER_INCOME, "Pendapatan lain-lain (bunga, dll.)", "revenue"),
     (ASSET_GAIN, "Laba (rugi) pelepasan aset", "revenue"),
     (BANK_CHARGES, "Biaya administrasi bank", "expense"),

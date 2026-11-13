@@ -3,6 +3,7 @@ from django.urls import path
 from . import (
     expenses,
     views,
+    views_adjust,
     views_books,
     views_counts,
     views_intercompany,
@@ -56,6 +57,7 @@ urlpatterns = [
         name="merchant-profit-loss"),
     path("merchant/accounting/cash-flow/", views_books.merchant_cash_flow,
         name="merchant-cash-flow"),
+    path("merchant/accounting/penyesuaian/", views_adjust.merchant_adjustments, name="merchant-adjustments"),
     path("merchant/accounting/kartu-stok/", views_inventory.merchant_stock_card, name="merchant-stock-card"),
     path("merchant/accounting/stok-lambat/", views_inventory.merchant_slow_moving, name="merchant-slow-moving"),
     path("merchant/accounting/penutupan-persediaan/", views_inventory.merchant_inventory_close, name="merchant-inventory-close"),

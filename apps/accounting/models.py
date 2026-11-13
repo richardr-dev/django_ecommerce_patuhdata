@@ -862,3 +862,53 @@ class StockCountLine(models.Model):
     @property
     def difference(self):
         return None if self.counted_qty is None else self.counted_qty - self.system_qty
+
+
+class PrepaidExpense(models.Model):
+    """Biaya dibayar di muka: paid now, an expense over the months it covers (insurance, a year of rent,
+    an annual software licence). Booked once as an asset (Biaya dibayar di muka / the account it was paid
+    from), then one amortisation entry per month (expense / Biaya dibayar di muka) by the daily worker.
+    The first month counts in full; the last month takes the rounding so the asset ends at zero."""
+    ACTIVE, ENDED, CANCELLED = "active", "ended", "cancelled"
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="prepaid_expenses")
+    name = models.CharField(max_length=160)
+    start_date = models.DateField()
+    months = models.PositiveIntegerField()
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    expense_code = models.CharField(max_length=10)
+    paid_from = models.ForeignKey("Account", on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, default=ACTIVE)
+    notes = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date", "-id"]
+
+
+class JournalTemplate(models.Model):
+    """A journal that is posted for you: an accrual at period end (optionally reversed on day one of the
+    next period, so the real bill books normally), or a recurring journal (monthly rent allocation, a
+    standing charge). Two-sided by design: debit one account, credit another, one amount. Each run posts
+    ``("jtemplate", "<id>:<date>")`` once; the reversal posts ``("jtemplate_reversal", ...)``."""
+    ACCRUAL, RECURRING = "accrual", "recurring"
+    ONCE, MONTHLY, QUARTERLY, YEARLY = "once", "monthly", "quarterly", "yearly"
+    FREQUENCIES = [(ONCE, "Sekali"), (MONTHLY, "Tiap bulan"), (QUARTERLY, "Tiap kuartal"), (YEARLY, "Tiap tahun")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="journal_templates")
+    kind = models.CharField(max_length=10, default=ACCRUAL)
+    name = models.CharField(max_length=160)
+    debit_code = models.CharField(max_length=10)
+    credit_code = models.CharField(max_length=10)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    frequency = models.CharField(max_length=10, choices=FREQUENCIES, default=ONCE)
+    next_run = models.DateField()
+    end_on = models.DateField(null=True, blank=True)
+    auto_reverse = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    last_run = models.DateField(null=True, blank=True)
+    cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "id"]
