@@ -73,6 +73,7 @@ NAV = [
         Group("Pembelian", "truck", [
             Link("Supplier", "merchant-suppliers"),
             Link("Transfer antar brand", "merchant-intercompany", match=("/merchant/accounting/antar-brand/",)),
+            Link("Pesanan pembelian", "merchant-purchase-orders", match=("/merchant/accounting/pesanan-pembelian/",)),
             Link("Penerimaan barang", "merchant-goods-receipts", match=("/merchant/accounting/penerimaan/",)),
             Link("Tagihan supplier", "merchant-bills"),
             Link("Buat tagihan", "merchant-bill-new"),

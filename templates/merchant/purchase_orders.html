@@ -1,0 +1,22 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Pesanan pembelian{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Pesanan pembelian</h1>
+    <p>Apa yang sudah dipesan ke supplier dan belum tiba. Pesanan tidak mencatat apa pun di buku besar; barangnya dicatat saat diterima, boleh sebagian demi sebagian, lalu ditagih dari penerimaan itu.</p></div>
+  <div class="dp-actions">{% if can_order %}<a class="btn-primary" href="{% url 'merchant-purchase-order-new' %}">{% icon "plus" %} Pesanan baru</a>{% endif %}</div>
+</div>
+<div class="tiles">
+  <div class="tile accent"><small>Masih dipesan</small><strong>{{ waiting|rp }}</strong><span>sisa yang belum tiba, pada harga pesanan</span></div>
+  <div class="tile {% if late %}warn{% endif %}"><small>Terlambat</small><strong>{{ late }}</strong><span>melewati tanggal perkiraan tiba</span></div>
+</div>
+<div class="tabs"><a href="?show=open" class="{% if show == 'open' %}on{% endif %}">Belum selesai</a><a href="?show=all" class="{% if show == 'all' %}on{% endif %}">Semua</a></div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Supplier</th><th>Tanggal</th><th>Perkiraan tiba</th><th class="num">Nilai</th><th>Status</th></tr></thead><tbody>
+  {% for po in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-purchase-order' po.pk %}"><b>{{ po.number }}</b></a><small>{{ po.lines.all|length }} barang</small></td>
+    <td>{{ po.supplier.name }}</td><td>{{ po.order_date|date:"d M Y" }}</td>
+    <td>{% if po.expected_on %}{{ po.expected_on|date:"d M Y" }}{% if po.expected_on < today and po.is_receivable %} <span class="pill pill-overdue">terlambat</span>{% endif %}{% else %}—{% endif %}</td>
+    <td class="num"><b>{{ po.value|rp }}</b></td>
+    <td>{% if po.status == 'received' %}<span class="pill pill-paid">{{ po.get_status_display }}</span>{% elif po.status == 'partial' %}<span class="pill pill-pending">{{ po.get_status_display }}</span>{% elif po.status == 'open' %}<span class="pill pill-info">{{ po.get_status_display }}</span>{% else %}<span class="pill pill-draft">{{ po.get_status_display }}</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="!py-10 text-center text-slate-400">Belum ada pesanan pembelian.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

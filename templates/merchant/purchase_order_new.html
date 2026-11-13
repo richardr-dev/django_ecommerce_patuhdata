@@ -1,0 +1,34 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Pesanan baru{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-purchase-orders' %}">Pesanan pembelian</a></span><h1>Pesanan baru</h1>
+  <p>Catat apa yang Anda pesan. Nomor pesanan dibuat otomatis. Belum ada stok atau pembukuan yang berubah sampai barangnya diterima.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Ke supplier mana</h2></div></header><div class="dp-card-body">
+      <div class="field-row">
+        <label class="field"><span>Supplier</span><select name="supplier_id"><option value="">— Pilih supplier —</option>{% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Atau supplier baru</span><input name="supplier_name" maxlength="160"></label></div>
+      <div class="field-row">
+        <label class="field"><span>Tanggal pesanan</span><input type="date" name="order_date" value="{{ today }}" required></label>
+        <label class="field"><span>Perkiraan tiba <em>(opsional)</em></span><input type="date" name="expected_on"></label></div></div></section>
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><div><h2>Barang yang dipesan</h2><p>Gunakan SKU produk di katalog. Jumlah dalam unit utuh.</p></div></div></header>
+      <div class="scroll-x"><table class="tbl editor"><thead><tr><th style="width:150px">SKU</th><th class="num" style="width:110px">Jumlah</th><th class="num" style="width:160px">Harga satuan</th><th class="num" style="width:150px">Nilai</th></tr></thead><tbody id="rows">
+        {% for i in "123456" %}<tr><td><input name="sku[]" maxlength="60" aria-label="SKU baris {{ forloop.counter }}"></td><td><input name="qty[]" inputmode="numeric" class="num" aria-label="Jumlah baris {{ forloop.counter }}"></td><td><input name="unit_cost[]" data-rupiah class="num" aria-label="Harga baris {{ forloop.counter }}"></td><td class="num"><b data-line>Rp0</b></td></tr>{% endfor %}
+      </tbody></table></div></section>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300"></textarea></label>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Nilai pesanan</small><strong id="total" style="display:block;font-size:30px">Rp0</strong>
+    <p style="margin:8px 0 14px;opacity:.85">Tidak mengubah stok maupun buku besar sampai barang diterima.</p>
+    <button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Simpan pesanan</button></div></aside>
+</form>
+<script>
+(function () {
+  var rows = document.querySelectorAll("#rows tr"), total = document.getElementById("total");
+  function num(v) { return Number((v || "0").replace(/\./g, "").replace(",", ".")) || 0; }
+  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function recalc() { var sum = 0; rows.forEach(function (tr) { var t = num(tr.querySelector('[name="qty[]"]').value) * num(tr.querySelector('[name="unit_cost[]"]').value); tr.querySelector("[data-line]").textContent = fmt(t); sum += t; }); total.textContent = fmt(sum); }
+  rows.forEach(function (tr) { tr.addEventListener("input", recalc); });
+})();
+</script>
+{% endblock %}

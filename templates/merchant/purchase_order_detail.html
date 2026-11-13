@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ po.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-purchase-orders' %}">Pesanan pembelian</a> / {{ po.number }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ po.number }}</h1>
+  <p>{{ po.supplier.name }} · dipesan {{ po.order_date|date:"d F Y" }}{% if po.expected_on %} · perkiraan tiba {{ po.expected_on|date:"d F Y" }}{% endif %} · <span class="pill pill-{% if po.status == 'received' %}paid{% elif po.status == 'partial' %}pending{% elif po.status == 'open' %}info{% else %}draft{% endif %}">{{ po.get_status_display }}</span></p></div>
+  <div class="dp-actions">{% if po.is_receivable and can_receive %}<button type="button" class="btn-primary" data-open="receive-dialog">{% icon "plus" %} Terima barang</button>{% endif %}
+    {% if po.is_receivable and can_order %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="close"><button class="btn" data-confirm="Tutup pesanan? Sisa yang belum tiba tidak ditunggu lagi.{% if not po.receipts.exists %} Karena belum ada yang diterima, pesanan dibatalkan.{% endif %}" data-confirm-ok="Tutup pesanan" data-confirm-tone="neutral">Tutup sisa pesanan</button></form>{% endif %}</div></div>
+<div class="dp-grid"><div class="space-y-5">
+  <section class="panel"><header><div><h2>Dipesan, diterima, ditagih</h2><p>Setiap baris dicocokkan tiga arah: pesanan, penerimaan, dan tagihan dari penerimaan itu.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Dipesan</th><th class="num">Diterima</th><th class="num">Ditagih</th><th class="num">Sisa</th><th class="num">Harga</th></tr></thead><tbody>
+    {% for l in lines %}<tr><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.received_quantity }}</td><td class="num">{{ l.billed }}</td>
+      <td class="num">{% if l.remaining %}<span class="pill pill-pending">{{ l.remaining }}</span>{% else %}0{% endif %}</td><td class="num">{{ l.unit_cost|rp }}</td></tr>{% endfor %}
+    <tr><td colspan="5"><b>Nilai pesanan</b></td><td class="num"><b>{{ po.value|rp }}</b></td></tr></tbody></table></div></section>
+  <section class="panel"><header><h2>Penerimaan</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Penerimaan</th><th>Tanggal</th><th class="num">Nilai</th><th>Tagihan</th></tr></thead><tbody>
+    {% for r in receipts %}<tr><td><a class="rowlink" href="{% url 'merchant-goods-receipt' r.pk %}"><b>{{ r.number|default:"Tanpa nomor" }}</b></a></td><td>{{ r.received_on|date:"d M Y" }}</td><td class="num"><b>{{ r.value|rp }}</b></td>
+      <td>{% if r.bill_id %}<span class="pill pill-paid">Sudah ditagih</span>{% else %}<span class="pill pill-pending">Belum ditagih</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada barang diterima.</td></tr>{% endfor %}</tbody></table></div></section>
+</div><aside class="dp-rail"><div class="bb-summary"><small>Nilai pesanan</small><strong style="display:block;font-size:30px">{{ po.value|rp }}</strong><p style="margin:8px 0 0;opacity:.85">{{ po.notes|default:"Tidak ada catatan." }}</p></div></aside></div>
+
+{% if po.is_receivable and can_receive %}
+<dialog id="receive-dialog" class="pd-dialog" aria-labelledby="receive-title" style="max-width:640px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="receive"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="receive-title">Terima barang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><p class="dp-help">Isi jumlah yang tiba hari ini. Boleh sebagian; sisanya tetap menunggu. Tidak bisa melebihi sisa pesanan.</p>
+    <div class="field-row"><label class="field"><span>No. surat jalan</span><input name="number" maxlength="40"></label><label class="field"><span>Tanggal diterima</span><input type="date" name="received_on" value="{{ today }}" required></label>{% if warehouses|length > 1 %}<label class="field"><span>Gudang</span><select name="warehouse">{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>{% endif %}</div>
+    {% for l in lines %}{% if l.remaining %}<label class="field"><span>{{ l.description }} · sisa {{ l.remaining }}</span><input type="number" name="qty_{{ l.pk }}" min="0" max="{{ l.remaining }}" value="{{ l.remaining }}"></label>{% endif %}{% endfor %}</div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan penerimaan</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

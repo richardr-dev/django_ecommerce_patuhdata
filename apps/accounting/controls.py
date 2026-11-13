@@ -379,6 +379,18 @@ def negative_stock(store, today, ledger):
         url=reverse("merchant-stock-minus"), action="Buka stok minus")
 
 
+def purchase_orders_late(store, today, ledger):
+    """Orders whose goods were expected by now and are not all in."""
+    from . import purchasing
+    late = list(purchasing.overdue(store, today))
+    if not late:
+        return Check("po_late", "Pesanan pembelian tepat waktu", OK, "Tidak ada pesanan pembelian yang terlambat.")
+    return Check("po_late", "Pesanan pembelian terlambat", INFO,
+        f"{len(late)} pesanan melewati tanggal perkiraan tiba dan belum diterima semua "
+        f"({', '.join(po.number for po in late[:3])}).", url=reverse("merchant-purchase-orders"),
+        action="Buka pesanan pembelian")
+
+
 def grni_tie(store, today, ledger):
     """Barang diterima belum ditagih equals the value of receipts still waiting for their bill."""
     from .models import GoodsReceipt
@@ -526,7 +538,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie, negative_stock]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie, negative_stock, purchase_orders_late]
 
 
 def run_checks(store, today):

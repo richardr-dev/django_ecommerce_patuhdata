@@ -623,6 +623,8 @@ class GoodsReceipt(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
     bill = models.OneToOneField(Bill, on_delete=models.PROTECT, null=True, blank=True,
         related_name="goods_receipt")
+    purchase_order = models.ForeignKey("PurchaseOrder", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="receipts")
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -647,6 +649,8 @@ class GoodsReceiptLine(models.Model):
     description = models.CharField(max_length=200)
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    po_line = models.ForeignKey("PurchaseOrderLine", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="receipt_lines")
 
     class Meta:
         ordering = ["id"]
@@ -715,3 +719,67 @@ class IntercompanyLine(models.Model):
     @property
     def value(self):
         return self.quantity * self.unit_price
+
+
+class PurchaseOrder(models.Model):
+    """Pesanan pembelian: what was ordered from a supplier and not yet received. It books nothing:
+    the ledger moves at the goods receipt (Persediaan / GRNI) and at the bill (GRNI / Utang usaha).
+    Receiving is partial and repeatable until every line is in, or the rest is closed."""
+    OPEN, PARTIAL, RECEIVED, CLOSED, CANCELLED = "open", "partial", "received", "closed", "cancelled"
+    STATUS_CHOICES = [(OPEN, "Dipesan"), (PARTIAL, "Diterima sebagian"), (RECEIVED, "Diterima semua"),
+        (CLOSED, "Ditutup (sisa dibatalkan)"), (CANCELLED, "Dibatalkan")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="purchase_orders")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="purchase_orders")
+    number = models.CharField(max_length=40)
+    order_date = models.DateField()
+    expected_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=OPEN)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-order_date", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_po_number_per_store")]
+
+    def __str__(self):
+        return f"{self.number} — {self.supplier.name}"
+
+    @property
+    def value(self):
+        from decimal import Decimal
+        return sum((line.quantity * line.unit_cost for line in self.lines.all()), Decimal(0))
+
+    @property
+    def is_receivable(self):
+        return self.status in (self.OPEN, self.PARTIAL)
+
+
+class PurchaseOrderLine(models.Model):
+    po = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    description = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    received_quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.CheckConstraint(condition=models.Q(received_quantity__lte=models.F("quantity")),
+            name="po_received_lte_ordered")]
+
+    @property
+    def remaining(self):
+        return self.quantity - self.received_quantity
+
+    @property
+    def line_total(self):
+        return self.quantity * self.unit_cost
+
+    @property
+    def billed_quantity(self):
+        return sum(rl.quantity for rl in self.receipt_lines.select_related("receipt") if rl.receipt.bill_id)

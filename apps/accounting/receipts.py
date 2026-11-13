@@ -27,8 +27,10 @@ def post_receipt(receipt, *, strict=False, actor=None):
 
 
 @transaction.atomic
-def create_receipt(store, *, supplier, lines, received_on, number="", warehouse=None, notes="", actor=None):
-    """``lines`` is a list of dicts: sku, qty (whole units), unit_cost."""
+def create_receipt(store, *, supplier, lines, received_on, number="", warehouse=None, notes="", actor=None,
+        purchase_order=None):
+    """``lines`` is a list of dicts: sku, qty (whole units), unit_cost. For a receipt against a purchase
+    order each line carries ``po_line`` (a PurchaseOrderLine) and may not exceed what is still open on it."""
     from apps.orders.stock import StockError, receive_goods
 
     if not lines:
@@ -43,16 +45,23 @@ def create_receipt(store, *, supplier, lines, received_on, number="", warehouse=
             raise ReceiptError(f"Jumlah {product.name} harus bilangan bulat lebih dari nol.")
         if cost < 0:
             raise ReceiptError("Harga tidak boleh negatif.")
-        resolved.append((product, variant, int(qty), cost))
+        resolved.append((product, variant, int(qty), cost, line.get("po_line")))
+    if purchase_order is not None:
+        from .purchasing import PurchaseError, take_against_po
+        try:
+            take_against_po(purchase_order, supplier, [(r[4], r[2]) for r in resolved])
+        except PurchaseError as error:
+            raise ReceiptError(str(error)) from error
     receipt = GoodsReceipt.objects.create(store=store, supplier=supplier, number=number,
-        received_on=received_on, warehouse=warehouse, notes=notes, created_by=actor)
+        received_on=received_on, warehouse=warehouse, notes=notes, created_by=actor,
+        purchase_order=purchase_order)
     GoodsReceiptLine.objects.bulk_create(GoodsReceiptLine(receipt=receipt, product=product, variant=variant,
         description=f"{product.name} · {variant.name}" if variant else product.name, quantity=qty,
-        unit_cost=cost) for product, variant, qty, cost in resolved)
+        unit_cost=cost, po_line=po_line) for product, variant, qty, cost, po_line in resolved)
     if receipt.value <= 0:
         raise ReceiptError("Nilai penerimaan harus lebih dari nol.")
     try:
-        for product, variant, qty, cost in resolved:
+        for product, variant, qty, cost, _po_line in resolved:
             receive_goods(store=store, product=product, variant=variant, quantity=qty, unit_cost=cost,
                 warehouse=warehouse, actor=actor, source=("goods_receipt", receipt.pk),
                 reason=f"Penerimaan barang dari {supplier.name} {number}".strip())
