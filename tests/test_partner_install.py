@@ -88,20 +88,20 @@ class InstallPageTests(TestCase):
         self.owner = install(**CLIENT)["owner"]
 
     def test_only_a_platform_superuser_sees_it(self):
-        self.assertEqual(self.client.get("/instalasi/").status_code, 302)        # signed out: to the login
+        self.assertEqual(self.client.get("/registration/").status_code, 302)        # signed out: to the login
         self.client.force_login(self.owner)
-        shown = self.client.get("/instalasi/", follow=True)                      # a store owner: sent back, told why
+        shown = self.client.get("/registration/", follow=True)                      # a store owner: sent back, told why
         self.assertRedirects(shown, "/merchant/")
         self.assertContains(shown, "akun partner")
-        self.assertEqual(self.client.post("/instalasi/", {"store_name": "X", "slug": "xx-toko", "owner_name": "A",
+        self.assertEqual(self.client.post("/registration/", {"store_name": "X", "slug": "xx-toko", "owner_name": "A",
             "owner_email": "a@x.co"}).status_code, 302)
         self.assertFalse(Store.objects.filter(slug="xx-toko").exists())
         self.client.force_login(self.partner)
-        self.assertContains(self.client.get("/instalasi/"), "Pasang toko untuk klien")
+        self.assertContains(self.client.get("/registration/"), "Pasang toko untuk klien")
 
     def test_partner_installs_a_store_and_gets_the_link(self):
         self.client.force_login(self.partner)
-        page = self.client.post("/instalasi/", {"store_name": "Kopi Senja", "slug": "kopi-senja", "owner_name": "Sari",
+        page = self.client.post("/registration/", {"store_name": "Kopi Senja", "slug": "kopi-senja", "owner_name": "Sari",
             "owner_phone": "081298765432", "taxpayer_type": "individual"})
         self.assertContains(page, "terpasang")
         self.assertContains(page, "/merchant/invite/")
@@ -111,7 +111,7 @@ class InstallPageTests(TestCase):
 
     def test_an_error_keeps_what_was_typed(self):
         self.client.force_login(self.partner)
-        page = self.client.post("/instalasi/", {"store_name": "Kopi Senja", "slug": "toko-maju", "owner_name": "Sari",
+        page = self.client.post("/registration/", {"store_name": "Kopi Senja", "slug": "toko-maju", "owner_name": "Sari",
             "owner_email": "sari@x.co"})
         self.assertContains(page, "sudah dipakai")
         self.assertContains(page, 'value="Kopi Senja"')
@@ -133,7 +133,7 @@ class PartnerLandingTests(TestCase):
         User.objects.create_superuser("partner", "p@x.co", "pw")
         response = self.client.post("/login/", {"username": "partner", "password": "pw", "next": "/merchant/"})
         self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)
-        self.assertRedirects(self.client.get("/merchant/"), "/instalasi/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/merchant/"), "/registration/", fetch_redirect_response=False)
 
     def test_a_superuser_who_owns_a_store_still_sees_the_dashboard(self):
         owner = install(**CLIENT)["owner"]

@@ -183,7 +183,7 @@ Four test files failed before this work and still do: `test_digital_products`,
   `maker_may_not_check` stops the person who created a bill from paying it when someone else could; a
   one-person store is never locked out. Give a new action a permission key, not a new role set.
 - **Stores are installed by a partner; there is no registration.** `shops/provisioning.py:install` is the
-  only way a store comes to exist, called by `manage.py install_store` and by `/instalasi/` (platform
+  only way a store comes to exist, called by `manage.py install_store` and by `/registration/` (platform
   superusers only; 404 for everyone else). One call creates the owner account (no password: a one-time
   invite link sets it), the Organization, the store, main warehouse and shipping method, chart of
   accounts with Kas utama, and the tax profile; `organization=` adds a brand to an installed client.

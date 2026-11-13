@@ -1,6 +1,6 @@
 """Platform plumbing that is not a page of its own: the favicon and Caddy's TLS check.
 
-Stores are not opened from the web: a partner installs them (``provisioning.py``, ``/instalasi/``)."""
+Stores are not opened from the web: a partner installs them (``provisioning.py``, ``/registration/``)."""
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.templatetags.static import static

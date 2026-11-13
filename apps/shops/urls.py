@@ -3,7 +3,7 @@ from django.urls import path
 from . import activity, campaign_views, install_views, shortlinks, staff_views, tracking, views
 
 urlpatterns = [
-    path("instalasi/", install_views.partner_install, name="partner-install"),
+    path("registration/", install_views.partner_install, name="partner-install"),
     path("favicon.ico", views.favicon, name="favicon"),
     # /s/ is a seller's own campaign short link.
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),

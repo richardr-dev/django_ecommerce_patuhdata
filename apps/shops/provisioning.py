@@ -1,7 +1,7 @@
 """Instalasi toko oleh partner: the only way a store comes to exist.
 
 There is no public registration. A partner installs the system for a client with
-``manage.py install_store`` or the superuser-only page ``/instalasi/``; both call ``install`` here.
+``manage.py install_store`` or the superuser-only page ``/registration/``; both call ``install`` here.
 One call leaves a store that can keep books from its first minute: the owner's account (with a
 one-time link to set a password), the Organization, the store, its main warehouse and shipping
 method, the chart of accounts with Kas utama, and the tax profile. A second brand for the same

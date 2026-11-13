@@ -1,4 +1,4 @@
-"""/instalasi/: the partner's page for installing a client's store. Platform superusers only; a store
+"""/registration/: the partner's page for installing a client's store. Platform superusers only; a store
 account is sent back to its dashboard with a message."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
