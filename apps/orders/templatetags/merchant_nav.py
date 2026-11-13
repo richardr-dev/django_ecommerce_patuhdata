@@ -38,6 +38,7 @@ NAV = [
         Group("Penjualan", "receipt", [
             Link("Ringkasan penjualan", "merchant-sales", match=("=/merchant/sales/",
                 "/merchant/sales/stats/")),
+            Link("Analitik penjualan", "merchant-sales-analytics"),
             Link("Pesanan", "merchant-orders", match=("/merchant/orders/",)),
             # Creating an invoice is one button on this page (and in "Buat baru"), not a menu item.
             Link("Invoice penjualan", "merchant-sales-invoices",

@@ -1,0 +1,112 @@
+{% load icons books %}
+{% if a.active %}<div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">Filter aktif: {% for f in a.active %}<span class="rounded-full bg-blue-50 px-3 py-1 text-blue-700 ring-1 ring-blue-100">{{ f.label }}</span>{% endfor %}</div>{% endif %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Omzet · {{ a.label }}</small><strong>{{ a.revenue|rp }}</strong>
+    <span>{% if a.revenue_delta is None %}Belum ada pembanding{% else %}{% if a.revenue_delta >= 0 %}▲{% else %}▼{% endif %} {{ a.revenue_delta|floatformat:"0"|cut:"-" }}% dari {{ a.previous_revenue|rp }} di {{ a.span }} hari sebelumnya{% endif %}</span></div>
+  <div class="tile"><small>Pesanan</small><strong>{{ a.orders }}</strong><span>{% if a.orders_delta is None %}—{% else %}{% if a.orders_delta >= 0 %}▲{% else %}▼{% endif %} {{ a.orders_delta|floatformat:"0"|cut:"-" }}% dari periode sebelumnya{% endif %}</span></div>
+  <div class="tile"><small>Pembeli</small><strong>{{ a.buyers }}</strong><span>{{ a.new }} baru · {{ a.returning }} kembali membeli</span></div>
+  <div class="tile"><small>Rata-rata per pesanan</small><strong>{{ a.avg|rp }}</strong><span>{{ a.cancel_pct }}% batal · {{ a.returns }} retur ({{ a.return_pct }}%)</span></div>
+</div>
+
+{% if not a.orders %}
+<section class="panel"><div class="dp-empty" style="padding:56px 18px"><span class="bb-bubble mx-auto mb-3 [&>svg]:h-4 [&>svg]:w-4">{% icon "bar-chart" %}</span><p class="font-semibold text-slate-800">Belum ada penjualan pada tampilan ini.</p><p>Ubah periode atau channel, atau <a href="{% url 'merchant-import' %}">impor pesanan marketplace</a>.</p></div></section>
+{% else %}
+
+<section class="panel">
+  <header><div><h2>Omzet {% if a.weekly %}per minggu{% else %}per hari{% endif %}</h2><p>{% if a.peak %}Tertinggi {{ a.peak.label|date:"d M" }}: <b>{{ a.peak.revenue|rp }}</b> ({{ a.peak.orders }} pesanan){% endif %}</p></div></header>
+  <div class="px-5 pb-2 pt-5">
+    <div class="flex items-stretch gap-2">
+      <div class="flex flex-col justify-between pb-6 text-[11px] font-medium text-slate-400"><span>{% if a.peak %}{{ a.peak.revenue|rp }}{% endif %}</span><span>Rp0</span></div>
+      <div class="min-w-0 flex-1">
+        <div class="flex h-48 items-end gap-[2px] border-b border-slate-200" role="list" aria-label="Omzet per periode">
+          {% for s in a.series %}<div tabindex="0" role="listitem" class="group relative flex h-full min-w-[3px] flex-1 items-end focus:outline-none" data-tip="{{ s.label|date:'d M Y' }}{% if a.weekly %} (minggu){% endif %} · {{ s.revenue|rp }} · {{ s.orders }} pesanan" aria-label="{{ s.label|date:'d M' }}: {{ s.revenue|rp }}">
+            <span class="block w-full rounded-t-[4px] bg-blue-600 transition group-hover:bg-blue-800 group-focus-visible:ring-2 group-focus-visible:ring-blue-300" style="height:{{ s.pct|stringformat:"s" }}%;min-height:{% if s.orders %}3px{% else %}0{% endif %}"></span></div>{% endfor %}
+        </div>
+        <div class="mt-1 flex justify-between text-[11px] font-medium text-slate-400"><span>{{ a.start|date:"d M" }}</span><span>{{ a.end|date:"d M" }}</span></div>
+      </div>
+    </div>
+    <details class="mt-3 text-sm"><summary class="cursor-pointer text-xs font-semibold text-blue-700">Lihat sebagai tabel</summary>
+      <div class="scroll-x mt-2 max-h-64 overflow-y-auto"><table class="tbl"><thead><tr><th>{% if a.weekly %}Minggu mulai{% else %}Tanggal{% endif %}</th><th class="num">Pesanan</th><th class="num">Omzet</th></tr></thead><tbody>{% for s in a.series %}<tr><td>{{ s.label|date:"d M Y" }}</td><td class="num">{{ s.orders }}</td><td class="num">{{ s.revenue|rp }}</td></tr>{% endfor %}</tbody></table></div></details>
+  </div>
+</section>
+
+<div class="grid gap-5 lg:grid-cols-2">
+  <section class="panel !mb-0">
+    <header><div><h2>Per channel</h2><p>Klik untuk melihat invoicenya.</p></div></header>
+    <div class="grid gap-1 p-3">
+      {% for c in a.channels %}<a href="{% url 'merchant-sales-invoices' %}?channel={{ c.code }}" class="grid grid-cols-[120px_1fr_auto] items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" data-tip="{{ c.label }} · {{ c.orders }} pesanan · {{ c.buyers }} pembeli · rata-rata {{ c.avg|rp }}">
+        <span class="truncate text-sm font-semibold text-slate-800">{{ c.label }}</span>
+        <span class="h-3 rounded-full bg-slate-100"><span class="block h-3 rounded-full bg-blue-600" style="width:{{ c.pct|stringformat:"s" }}%"></span></span>
+        <span class="text-right text-sm"><b class="text-slate-900">{{ c.revenue|rp }}</b> <span class="text-xs text-slate-400">{{ c.share }}%</span></span></a>{% endfor %}
+    </div>
+  </section>
+
+  <section class="panel !mb-0">
+    <header><div><h2>Pembeli baru dan kembali</h2><p>Kembali = sudah pernah membeli sebelum periode ini.</p></div><b class="text-lg text-blue-700">{{ a.returning_pct }}%</b></header>
+    <div class="p-5">
+      <div class="flex h-7 gap-[2px]" role="img" aria-label="{{ a.new }} pembeli baru, {{ a.returning }} kembali">
+        {% if a.new %}<span class="flex items-center justify-center rounded-l-full bg-blue-600 text-xs font-bold text-white" style="flex:{{ a.new }}" data-tip="Pembeli baru: {{ a.new }}">{{ a.new }}</span>{% endif %}
+        {% if a.returning %}<span class="flex items-center justify-center rounded-r-full bg-sky-300 text-xs font-bold text-slate-800" style="flex:{{ a.returning }}" data-tip="Pembeli kembali: {{ a.returning }}">{{ a.returning }}</span>{% endif %}
+      </div>
+      <div class="mt-3 flex gap-5 text-xs font-semibold text-slate-600"><span class="inline-flex items-center gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-blue-600"></i>Baru</span><span class="inline-flex items-center gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-sky-300"></i>Kembali membeli</span></div>
+      <p class="mt-4 text-sm text-slate-500">Pembeli dihitung dari pelanggan CRM, atau nomor HP, atau namanya bila belum ada. Pembeli Tokopedia yang namanya disamarkan dihitung per username.</p>
+    </div>
+  </section>
+</div>
+
+<div class="mt-5 grid gap-5 lg:grid-cols-2">
+  <section class="panel !mb-0">
+    <header><div><h2>Provinsi pembeli</h2><p>Klik untuk melihat siapa saja pembelinya.</p></div></header>
+    <div class="grid gap-1 p-3">
+      {% for p in a.provinces %}<a href="{% url 'merchant-customers' %}?location={{ p.name|urlencode }}{% if channel_qs %}&{{ channel_qs }}{% endif %}" class="grid grid-cols-[130px_1fr_auto] items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" data-tip="{{ p.name }} · {{ p.orders }} pesanan · {{ p.buyers }} pembeli">
+        <span class="truncate text-sm font-semibold text-slate-800">{{ p.name }}</span>
+        <span class="h-3 rounded-full bg-slate-100"><span class="block h-3 rounded-full bg-blue-600" style="width:{{ p.pct|stringformat:"s" }}%"></span></span>
+        <span class="text-right text-sm"><b class="text-slate-900">{{ p.revenue|rp }}</b> <span class="text-xs text-slate-400">{{ p.buyers }} org</span></span></a>
+      {% empty %}<p class="px-3 py-6 text-center text-sm text-slate-400">Belum ada data lokasi pada periode ini.</p>{% endfor %}
+      {% if a.unknown_province %}<p class="px-3 pt-2 text-xs text-slate-400">{{ a.unknown_province.orders }} pesanan ({{ a.unknown_province.revenue|rp }}) tanpa lokasi: biasanya penjualan di toko atau pembeli yang alamatnya belum diisi.</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="panel !mb-0">
+    <header><div><h2>Kota pembeli</h2><p>Kota atau kabupaten tujuan pesanan.</p></div></header>
+    <div class="grid gap-1 p-3">
+      {% for c in a.cities %}<a href="{% url 'merchant-customers' %}?location={{ c.name|urlencode }}{% if channel_qs %}&{{ channel_qs }}{% endif %}" class="grid grid-cols-[150px_1fr_auto] items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" data-tip="{{ c.name }}{% if c.province %}, {{ c.province }}{% endif %} · {{ c.orders }} pesanan · {{ c.buyers }} pembeli">
+        <span class="truncate text-sm font-semibold text-slate-800">{{ c.name }}{% if c.province %}<small class="block truncate text-[11px] font-normal text-slate-400">{{ c.province }}</small>{% endif %}</span>
+        <span class="h-3 rounded-full bg-slate-100"><span class="block h-3 rounded-full bg-blue-600" style="width:{{ c.pct|stringformat:"s" }}%"></span></span>
+        <span class="text-right text-sm"><b class="text-slate-900">{{ c.revenue|rp }}</b> <span class="text-xs text-slate-400">{{ c.buyers }} org</span></span></a>
+      {% empty %}<p class="px-3 py-6 text-center text-sm text-slate-400">Belum ada data lokasi pada periode ini.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="mt-5 grid gap-5 lg:grid-cols-2">
+  <section class="panel !mb-0">
+    <header><h2>Produk terlaris</h2></header>
+    <div class="grid gap-1 p-3">
+      {% for p in a.products %}<div class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl px-3 py-2" data-tip="{{ p.name }} · {{ p.units }} unit di {{ p.orders }} pesanan">
+        <div class="min-w-0"><span class="line-clamp-2 text-sm font-semibold text-slate-800">{{ p.name }}</span>{% if p.sku %}<small class="block text-[11px] text-slate-400">{{ p.sku }}</small>{% endif %}<span class="mt-1 block h-2 rounded-full bg-slate-100"><span class="block h-2 rounded-full bg-blue-600" style="width:{{ p.pct|stringformat:"s" }}%"></span></span></div>
+        <span class="text-right text-sm"><b class="text-slate-900">{{ p.revenue|rp }}</b><small class="block text-xs text-slate-400">{{ p.units }} unit</small></span></div>
+      {% empty %}<p class="px-3 py-6 text-center text-sm text-slate-400">Belum ada data.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="panel !mb-0">
+    <header><h2>Pelanggan terbesar</h2></header>
+    <div class="grid gap-1 p-3">
+      {% for c in a.customers %}<a href="{% url 'merchant-customers' %}?q={{ c.name|urlencode }}" class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" data-tip="{{ c.name }} · {{ c.orders }} pesanan · {{ c.channels|join:', ' }}">
+        <div class="min-w-0"><span class="block truncate text-sm font-semibold text-slate-800">{{ c.name }}</span><span class="mt-1 block h-2 rounded-full bg-slate-100"><span class="block h-2 rounded-full bg-blue-600" style="width:{{ c.pct|stringformat:"s" }}%"></span></span></div>
+        <span class="text-right text-sm"><b class="text-slate-900">{{ c.revenue|rp }}</b><small class="block text-xs text-slate-400">{{ c.orders }} pesanan · {{ c.channels|join:", " }}</small></span></a>
+      {% empty %}<p class="px-3 py-6 text-center text-sm text-slate-400">Belum ada data.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="panel mt-5">
+  <header><div><h2>Pesanan per hari dalam seminggu</h2><p>Hari tersibuk membantu mengatur stok dan pengiriman.</p></div></header>
+  <div class="flex h-32 items-end gap-3 px-5 pb-1 pt-5" role="list">
+    {% for d in a.weekdays %}<div class="flex h-full flex-1 flex-col justify-end text-center" role="listitem" data-tip="{{ d.label }} · {{ d.orders }} pesanan · {{ d.revenue|rp }}"><span class="mx-auto block w-full max-w-[44px] rounded-t-[4px] bg-blue-600" style="height:{{ d.pct|stringformat:"s" }}%;min-height:{% if d.orders %}3px{% else %}0{% endif %}"></span></div>{% endfor %}
+  </div>
+  <div class="flex gap-3 px-5 pb-4 text-center text-xs font-semibold text-slate-500">{% for d in a.weekdays %}<span class="flex-1">{{ d.label }}<b class="block font-bold text-slate-800">{{ d.orders }}</b></span>{% endfor %}</div>
+</section>
+{% endif %}

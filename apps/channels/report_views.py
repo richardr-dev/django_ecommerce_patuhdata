@@ -11,7 +11,7 @@ from django.utils.dateparse import parse_date
 from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 
-from . import sales_export
+from . import analytics, sales_export
 from .invoice_recap import invoice_recap
 from .reporting import sales_report
 
@@ -167,3 +167,27 @@ def merchant_sales_export(request):
         counts=sales_export.counts(orders), totals=totals, start=start, end=end, label=label,
         preset=preset, presets=period_tools.PRESETS + [("all", "Semua waktu")], channel=channel,
         channels=Order.CHANNELS, only_sold=only_sold, datasets=sales_export.DATASETS))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_sales_analytics(request):
+    """Analitik penjualan: omzet, channel, pelanggan baru dan lama, lokasi, produk, dan tren."""
+    from urllib.parse import urlencode
+
+    from apps.accounting.views import render_partial
+
+    from .invoice_filters import PRESETS, values
+
+    store = _staff_store(request)
+    _require_roles(request, store, REPORT_ROLES)
+    today = timezone.localdate()
+    data = analytics.analyze(store, request.GET, today)
+    used = set(Order.objects.filter(store=store).values_list("channel", flat=True))
+    selected = values(request.GET, "channel")
+    return render_partial(request, "merchant/sales_analytics.html", "merchant/_sales_analytics_body.html",
+        _merchant_context(request, store, a=data, presets=PRESETS,
+        range_preset=request.GET.get("range") or ("" if any(request.GET.get(k) for k in (
+            "date_from", "date_to", "month")) else "30d"),
+        date_from=request.GET.get("date_from", ""), date_to=request.GET.get("date_to", ""),
+        channel_choices=[(c, n) for c, n in Order.CHANNELS if c in used], channel_selected=selected,
+        channel_qs=urlencode([("channel", c) for c in selected])))

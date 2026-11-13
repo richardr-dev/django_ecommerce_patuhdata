@@ -95,6 +95,13 @@ Four test files failed before this work and still do: `test_digital_products`,
   order with `consignment_partner`, type `reseller_sell_in`, billed on this invoice (so a settlement
   never bills it again). A settlement only takes that mitra's unbilled orders. Courier and resi are
   stored on the order and print on every invoice document.
+- **Customer segments filter by where they buy and where they live** (`channel`, `location` in the
+  segment, so broadcasts can use them too). A place is the order's city/province, else the marketplace
+  buyer's (Tokopedia hides addresses but gives city and province), else the address text; every typed
+  word must match. Marketplace buyers waiting for approval are included whenever those filters are on.
+- **Charts are drawn in HTML/CSS with one hue** (blue = magnitude; identity by label, not colour) and
+  a hover tooltip (`data-tip`). Never put a Django float in `style="width:{{ x }}%"`: the Indonesian
+  locale prints a decimal comma and the bar loses its width; use `|stringformat:"s"`.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -121,6 +128,8 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |
 | Receipts, customer credit | `tax/receipts.py` | `tax/sales_views.py` |
 | Quotes, recurring invoices | `tax/quotes.py`, `tax/recurring.py` | `tax/sales_views.py` |
+| Sales analytics dashboard (revenue, channels, buyers new/returning, places, products) | `channels/analytics.py` | `channels/report_views.py:merchant_sales_analytics`, `_sales_analytics_body.html` |
+| Find customers by channel bought on and by place (city, province, address words) | `shops/segments.py` (`by_channel`, `by_location`, `places`) | `shops/segment_views.py:merchant_customers` |
 | Invoice, Pesanan and customer-history filters (one service; exports share it) | `channels/invoice_filters.py` | `channels/views.py:merchant_sales_invoices`, `_sales_invoices_list.html` |
 | Invoice recap per channel (Shopee, Tokopedia…) | `channels/invoice_recap.py` | `channels/report_views.py` |
 | Order-based margin per channel | `channels/reporting.py` | `channels/report_views.py` |

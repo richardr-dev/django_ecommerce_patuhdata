@@ -65,16 +65,37 @@ def merchant_customers(request):
 
     segment = parse(request.GET)
     # Active / blocked customers only in the main list
-    customers = customers_in(store, segment).filter(
-        status__in=[Customer.STATUS_ACTIVE, Customer.STATUS_BLOCKED]
-    ).order_by("-created_at")
+    # Marketplace buyers wait in the approval queue above; looking for people by where they buy or
+    # live must still find them, so those filters (or the switch) include the waiting ones.
+    pending_param = request.GET.get("pending")
+    include_pending = pending_param == "1" or (pending_param is None and bool(
+        segment.get("channel") or segment.get("location")))
+    statuses = [Customer.STATUS_ACTIVE, Customer.STATUS_BLOCKED]
+    if include_pending:
+        statuses.append(Customer.STATUS_PENDING)
+    customers = customers_in(store, segment).filter(status__in=statuses).order_by("-created_at")
     pending = Customer.objects.filter(store=store, status=Customer.STATUS_PENDING).select_related(
         "channel_buyer").order_by("-created_at")
 
-    page, page_range, page_query = paginate(request, customers, 50)
+    from apps.accounting.views import render_partial
+    from apps.orders.models import Order
+
+    from .segments import location_facets, places
+    page, page_range, page_query = paginate(request, customers.select_related("channel_buyer"), 50)
+    where = places(store, list(page.object_list))
+    for customer in page.object_list:
+        customer.place = where.get(customer.pk, {"where": "", "channels": []})
+    used = set(Order.objects.filter(store=store, customer__isnull=False).values_list("channel", flat=True))
+    used |= set(Customer.objects.filter(store=store, channel_buyer__isnull=False).values_list(
+        "channel_buyer__platform", flat=True))
+    names = dict(Order.CHANNELS)
+    channel_choices = [(c, names.get(c, c)) for c, _ in Order.CHANNELS if c in used]
     tags = sorted({tag for value in Customer.objects.filter(store=store).exclude(tags="")
         .values_list("tags", flat=True) for tag in (t.strip() for t in value.split(",")) if tag})
-    return render(request, "merchant/customers.html", _merchant_context(request, store,
+    return render_partial(request, "merchant/customers.html", "merchant/_customers_list.html",
+        _merchant_context(request, store, channel_choices=channel_choices,
+        segment_channels=segment.get("channel", "").split(","), provinces=location_facets(store),
+        include_pending=include_pending,
         customers=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         pending=pending, pending_count=pending.count(),
         segment=segment, segment_label=describe(segment), segment_query=urlencode(segment),
