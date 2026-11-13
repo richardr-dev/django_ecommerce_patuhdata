@@ -28,7 +28,8 @@ CUSTOMER_CREDIT = "2400"
 WITHHELD = "2150"  # PPh 21 / 23 / 4(2) held back from a payment, owed to the tax office
 FIXED_ASSETS, ACCUMULATED_DEPRECIATION = "1600", "1690"
 LOANS = "2500"
-EQUITY, DRAWINGS = "3100", "3200"
+EQUITY, DRAWINGS, RETAINED = "3100", "3200", "3300"
+YEAR_CLOSE = "year_close"  # source type of the closing entry that moves a year's profit to RETAINED
 SALES, SHIPPING, REFUNDS, DISCOUNTS = "4100", "4200", "4800", "4900"
 COGS, FEES = "5100", "6100"
 DEPRECIATION, OTHER_INCOME, ASSET_GAIN, BANK_CHARGES = "6950", "7100", "7200", "8100"
@@ -57,6 +58,7 @@ CHART = [
     (LOANS, "Utang bank & pinjaman", "liability"),
     (EQUITY, "Modal pemilik", "equity"),
     (DRAWINGS, "Prive (pengambilan pemilik)", "equity"),
+    (RETAINED, "Laba ditahan", "equity"),
     (SALES, "Penjualan", "revenue"),
     (SHIPPING, "Pendapatan ongkos kirim", "revenue"),
     (REFUNDS, "Retur & refund penjualan", "revenue"),
@@ -383,9 +385,14 @@ def post_everything():
     return total + post_backlog()
 
 
-def account_balances(store, *, start=None, end=None):
-    """Debit and credit totals per account, with the balance on each account's normal side."""
+def account_balances(store, *, start=None, end=None, exclude_closing=False):
+    """Debit and credit totals per account, with the balance on each account's normal side.
+    ``exclude_closing`` leaves out year-end closing entries (and their reversals), so reports
+    show a closed year's profit instead of the zero the closing entry leaves behind."""
     period = Q()
+    if exclude_closing:
+        period &= ~(Q(lines__entry__source_type=YEAR_CLOSE)
+            | Q(lines__entry__reverses__source_type=YEAR_CLOSE))
     if start:
         period &= Q(lines__entry__date__gte=start)
     if end:

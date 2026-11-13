@@ -1,0 +1,42 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Tutup buku{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Tutup buku</h1><p>Periksa bulan yang akan dikunci, lalu tutup tahun untuk memindahkan laba ke Laba ditahan. Periode yang ditutup tidak bisa berubah lagi.</p></div></div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Dikunci sampai</small><strong>{% if locked_through %}{{ locked_through|date:"d M Y" }}{% else %}Belum ada{% endif %}</strong><span>{% if locked_through %}Jurnal pada atau sebelum tanggal ini tidak bisa diubah{% else %}Semua periode masih terbuka{% endif %}</span></div>
+  <div class="tile {% if steps_done < steps|length %}warn{% endif %}"><small>Checklist {{ month_label|date:"F Y" }}</small><strong>{{ steps_done }} / {{ steps|length }}</strong><span>langkah selesai</span></div>
+</div>
+
+<section class="panel">
+  <header><div><h2>Checklist tutup bulan</h2><p>Dilihat sampai {{ month_end|date:"d F Y" }}. Daftar ini tidak menghalangi; ia memberi tahu apa yang masih terbuka.</p></div>
+    <form method="get" class="toolbar" style="margin:0"><label class="field"><span>Bulan</span><input type="month" name="month" value="{{ year }}-{{ month|stringformat:'02d' }}" onchange="this.form.submit()"></label></form></header>
+  <ul class="close-steps">
+  {% for s in steps %}
+    <li class="{% if s.done %}done{% endif %}">
+      <span class="bb-bubble {% if s.done %}ok{% else %}warn{% endif %}">{% if s.done %}{% icon "check" %}{% else %}{% icon "alert" %}{% endif %}</span>
+      <div><b>{{ s.title }}</b><small>{{ s.detail }}</small></div>
+      {% if not s.done and s.url %}<a class="btn" href="{{ s.url }}">{{ s.action }} →</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <header><div><h2>Tutup tahun</h2><p>Penutupan membuat satu jurnal pada 31 Desember: semua akun pendapatan dan biaya dinolkan ke Laba ditahan (3300), lalu pembukuan dikunci. Laporan tetap menampilkan laba tahun itu. Tahun ditutup berurutan, dari yang terlama.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Tahun</th><th class="num">Laba bersih</th><th>Status</th><th></th></tr></thead><tbody>
+    {% for y in years %}<tr>
+      <td><b>{{ y.year }}</b></td>
+      <td class="num">{{ y.profit|signed_rp }}</td>
+      <td>{% if y.closed %}<span class="pill pill-paid">Ditutup</span>{% elif y.future %}<span class="pill pill-draft">Berjalan</span>{% else %}<span class="pill pill-pending">Terbuka</span>{% endif %}</td>
+      <td class="num" data-no-row>
+        {% if y.can_close and can_close %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="year" value="{{ y.year }}"><button class="btn-primary" data-confirm="Tutup tahun {{ y.year }}? Laba dipindahkan ke Laba ditahan dan pembukuan dikunci sampai 31 Desember {{ y.year }}." data-confirm-ok="Tutup tahun" data-confirm-tone="neutral">Tutup tahun</button></form>{% endif %}
+        {% if y.can_reopen and is_admin %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="reopen"><input type="hidden" name="year" value="{{ y.year }}"><button class="btn" data-confirm="Buka kembali tahun {{ y.year }}? Jurnal penutupan dibatalkan dan periodenya terbuka lagi.">Buka kembali</button></form>{% endif %}
+      </td></tr>
+    {% empty %}<tr><td colspan="4" class="!py-10 text-center text-slate-400">Belum ada jurnal.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+
+<p class="text-sm text-slate-500">Ingin mengunci per tanggal tertentu tanpa menutup tahun? Gunakan kunci periode di <a class="text-blue-700" href="{% url 'merchant-accounting' %}">Ringkasan akuntansi</a>.</p>
+
+{% endblock %}

@@ -965,3 +965,48 @@ def merchant_withholding_slip(request, withholding_id):
     item = get_object_or_404(Withholding, pk=withholding_id, store=store)
     from apps.tax.services import tax_profile
     return render(request, "tax/withholding_slip.html", {"w": item, "store": store, "profile": tax_profile(store)})
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_year_close(request):
+    """Tutup buku: the month-end checklist, the year-end closing to Laba ditahan, and the lock."""
+    from . import closing
+
+    store = _staff_store(request)
+    today = timezone.localdate()
+    if request.method == "POST":
+        _require_roles(request, store, {"admin"} if request.POST.get("action") == "reopen"
+            else {"admin", "finance"})
+        try:
+            year = int(request.POST.get("year", ""))
+        except ValueError:
+            return redirect("merchant-year-close")
+        try:
+            if request.POST.get("action") == "reopen":
+                entry = closing.reopen_year(store, year, actor=request.user)
+                AuditLog.objects.create(store=store, actor=request.user, action="year.reopened",
+                    object_type="JournalEntry", object_id=str(entry.pk), details={"year": str(year)})
+                messages.success(request, f"Tahun {year} dibuka kembali.")
+            else:
+                entry, profit = closing.close_year(store, year, today=today, actor=request.user)
+                AuditLog.objects.create(store=store, actor=request.user, action="year.closed",
+                    object_type="JournalEntry", object_id=str(entry.pk),
+                    details={"year": str(year), "profit": str(profit)})
+                messages.success(request, f"Tahun {year} ditutup. Laba dipindahkan ke Laba ditahan "
+                    "dan pembukuan dikunci sampai 31 Desember.")
+        except closing.ClosingError as error:
+            messages.error(request, str(error))
+        return redirect("merchant-year-close")
+    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    previous = today.replace(day=1) - datetime.timedelta(days=1)
+    try:
+        year, month = (int(x) for x in (request.GET.get("month") or "").split("-"))
+        datetime.date(year, month, 1)
+    except ValueError:
+        year, month = previous.year, previous.month
+    steps, first, last = closing.month_checklist(store, year, month, today)
+    return render(request, "merchant/year_close.html", _merchant_context(request, store,
+        steps=steps, steps_done=sum(1 for s in steps if s["done"]), year=year, month=month,
+        month_label=first, month_end=last, years=closing.years(store, today),
+        locked_through=locked_through(store), can_close=_can_edit(request, store),
+        is_admin=store.owner_id == request.user.id or store.staff_members.filter(user=request.user, role="admin").exists()))

@@ -225,20 +225,49 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
 ### Bubble style (the look every back-office page must share)
 
 Reference pages: `templates/merchant/sales_invoices.html` (list) and `invoice_form.html` (form).
-Blue and white only; copy these patterns instead of inventing new ones.
+**Modern Blue & White Bubble Enterprise Dashboard.** The tokens live once, in the "Design system"
+block at the end of `static/css/merchant-shell.css` (`--ds-*`); change the look there, never per page.
 
-- **Palette:** primary `blue-600` (gradient `from-blue-600 to-sky-500` for hero and summary
-  cards), tints `blue-50` / `ring-blue-100`, text `slate-900` / `slate-500`, borders `slate-200`.
-  Status colours only for meaning: `emerald` paid/ok, `amber` due/warn, `rose` overdue/error.
-  No other accent colours, no black buttons, no gray-900 headers.
-- **Shapes:** cards `rounded-3xl bg-white ring-1 ring-slate-900/5
-  shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)]`; inputs `h-11 rounded-xl bg-slate-50
-  ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500`; buttons and pills are
-  `rounded-full`. Primary button: `bg-gradient-to-b from-blue-500 to-blue-600 text-white
-  shadow-lg shadow-blue-600/30`; secondary: `bg-blue-50 text-blue-700 ring-1 ring-blue-100`.
-- **Bubbles:** icons sit in a round tinted chip (`grid h-8 w-8 place-items-center rounded-full
-  bg-blue-50 text-blue-600 [&>svg]:h-4 [&>svg]:w-4`); steps are numbered blue circles; hero and
-  summary cards carry two decorative translucent circles (`bg-white/10`).
+**Philosophy.** Structured enterprise data (KPIs, tables, filters) in friendly, tactile, rounded
+geometry: generous radii, pill controls, soft elevation. A bright, high-trust canvas: pure-white
+surfaces on an ice-blue canvas, sapphire and sky accents. Depth comes from tonal contrast
+(`#FFFFFF` on `#F4F8FF`) and soft blue-tinted shadows, not from heavy grey borders.
+
+**Tokens**
+- Canvas `#F4F8FF`; card/bubble `#FFFFFF`; nested surface `#EBF3FF` (sub-cards `#F7FAFF`); hover/active pill `#DCEAFF`.
+- Primary `#0066FF` (sapphire; `#1A73E8` allowed), hover `#0052CC`. Hero gradient (hero KPI card and
+  insight cards only): `linear-gradient(135deg,#0066FF,#3898FF)`.
+- Text: ink `#0F1E36` (never `#000`), muted `#526685`, placeholder `#8A9BB5`.
+- Hairline `1px solid rgba(0,102,255,.08)`; shadow `0 8px 24px -4px rgba(15,30,54,.05), 0 2px 6px -1px rgba(0,102,255,.04)`.
+- Status pills (soft pastel): positive `#0D7A3E` on `#E6F7EE`; warning `#B85D00` on `#FFF4E5`;
+  critical `#C92A2A` on `#FFEBEB`; info `#0066FF` on `#EBF3FF`. Status colours only for meaning.
+- Chart palette: `#0066FF`, `#4DA1FF`, `#8CC4FF`, `#0F1E36`.
+
+**Shape and spacing**
+- Main cards (bento containers) `rounded-3xl` (24px), padding 20-24px. Nested widgets `rounded-2xl`
+  (16px) on `#F7FAFF`. Buttons, filter chips, search, tabs, badges and deltas are `rounded-full`
+  (badges padding `4px 10px`). Grid gutter 20px (`gap-5`) so each card floats on the canvas.
+- Inputs `h-11 rounded-xl`, soft fill, blue focus ring. Never a 0-4px corner on a card, button or input.
+
+**Typography.** `'Plus Jakarta Sans','Inter',-apple-system,sans-serif`. `font-variant-numeric:
+tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0.02em`), card header
+16px semibold, KPI hero number 32px bold, body/table 14px, micro labels and pills 12px medium.
+
+**Layout**
+1. Top bar: floating white pill (56px) or translucent header (`blur(12px)`, `rgba(255,255,255,.85)`);
+   active navigation tab is a solid `#0066FF` pill with white text.
+2. Filter and action strip: pill dropdowns (white, subtle blue border) + pill search + one solid
+   `#0066FF` pill primary action.
+3. KPI row: 3-4 `rounded-3xl` cards, at most one hero card in the gradient, each with a 40px circular
+   `#EBF3FF` icon badge in the corner.
+4. Tables inside a `rounded-3xl` white card: no vertical lines; header is a floating `#F4F8FF`
+   `rounded-2xl` strip (12px semibold, `#526685`); rows 48-52px with a soft rounded hover; numbers
+   right-aligned; statuses as pastel pills.
+5. Charts: smooth curves (tension .4) with a soft blue gradient fill; bars with rounded tops (8px).
+
+**Forbidden.** Dark mode, black or muddy grey surfaces (`#CCC`, `#888`), heavy dark shadows
+(`rgba(0,0,0,.25)`), dense outer borders on cards, and any accent outside blue.
+
 - **Page skeleton:** breadcrumb (`text-xs text-blue-700`) → `h1 text-2xl font-bold` + one-line
   help → content. Lists: hero with the single create button, KPI cards with icon bubbles, pill
   tabs, pill filters, avatar rows, status pills. Forms: left column of numbered sections, right
@@ -385,5 +414,5 @@ Quality:
       card, tiles go two per row. Headless Chrome cannot go below 500px, so test 390px inside
       an iframe. [ ] Turn long tables into cards on phones.
 - [x] Focus rings on all controls. [ ] Labels on every input, contrast AA, dialog focus trap.
-- [ ] Dark mode from the existing `--pd-*` tokens.
+- [x] Dark mode: ruled out by the design system (light blue and white only).
 - [ ] Page-size and query checks on the long lists (N+1 on invoice and bill lists).

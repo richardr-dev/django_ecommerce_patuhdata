@@ -335,7 +335,7 @@ def period_lock(store, today, ledger):
             f"Pembukuan sampai {locked:%d/%m/%Y} sudah ditutup dan tidak bisa berubah.")
     return Check("lock", "Belum ada periode yang ditutup", INFO,
         "Tutup buku setelah laporan pajak sebulan selesai, agar angkanya tidak berubah lagi.",
-        url=reverse("merchant-accounting"), action="Tutup buku")
+        url=reverse("merchant-year-close"), action="Tutup buku")
 
 
 def withholding_tie(store, today, ledger):
@@ -351,6 +351,30 @@ def withholding_tie(store, today, ledger):
     if old and check.status == OK:
         check.status, check.summary = INFO, f"{old} pemotongan dari bulan sebelumnya belum disetor (batas setor tanggal 10 bulan berikutnya)."
     return check
+
+
+def year_close_tie(store, today, ledger):
+    """A closed year's profit still equals what was moved to Laba ditahan (nothing slipped in
+    after the closing)."""
+    from . import closing
+    from .ledger import RETAINED, YEAR_CLOSE
+    from .models import JournalLine
+    off = []
+    for year in closing.closed_years(store):
+        moved = sum((line.credit - line.debit for line in JournalLine.objects.filter(
+            entry__store=store, entry__source_type=YEAR_CLOSE, entry__source_id=str(year),
+            entry__superseded=False, account__code=RETAINED)), ZERO)
+        profit = closing.profit_of(store, year)
+        if abs(moved - profit) > TOLERANCE:
+            off.append((year, moved, profit))
+    if off:
+        year, moved, profit = off[0]
+        return Check("year_close", "Laba tahun yang ditutup berubah", FAIL,
+            f"Tahun {year}: laba ke Laba ditahan Rp{moved:,.0f}, laba laporan Rp{profit:,.0f}. "
+            "Ada jurnal bertanggal di tahun itu setelah penutupan.".replace(",", "."),
+            moved, profit, "Laba laporan", reverse("merchant-year-close"), "Buka Tutup buku")
+    return Check("year_close", "Penutupan tahun cocok dengan laba", OK,
+        "Laba setiap tahun yang ditutup sama dengan yang dipindahkan ke Laba ditahan.")
 
 
 def budget_control(store, today, ledger):
@@ -458,7 +482,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie]
 
 
 def run_checks(store, today):

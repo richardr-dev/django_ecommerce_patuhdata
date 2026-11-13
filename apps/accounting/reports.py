@@ -84,9 +84,9 @@ def _pl_sections(accounts):
 def profit_and_loss(store, start, end, *, compare=True):
     """Rows of the statement with this period and the one before, and the key totals."""
     chart_of_accounts(store)
-    now = {a.code: a for a in account_balances(store, start=start, end=end)}
+    now = {a.code: a for a in account_balances(store, start=start, end=end, exclude_closing=True)}
     prev_start, prev_end = previous(start, end)
-    before = {a.code: a for a in account_balances(store, start=prev_start, end=prev_end)} \
+    before = {a.code: a for a in account_balances(store, start=prev_start, end=prev_end, exclude_closing=True)} \
         if compare else {}
     revenue, cogs, operating, other_income, other_expense = _pl_sections(list(now.values()))
 
@@ -129,7 +129,7 @@ def monthly_profit(store, months=6, *, today):
     for back in range(months - 1, -1, -1):
         start = _shift_months(first, -back)
         end = _shift_months(start, 1) - timedelta(days=1)
-        accounts = account_balances(store, start=start, end=end)
+        accounts = account_balances(store, start=start, end=end, exclude_closing=True)
         revenue = sum((a.balance for a in accounts if a.type == "revenue"), ZERO)
         expense = sum((a.balance for a in accounts if a.type == "expense"), ZERO)
         rows.append({"month": start, "revenue": revenue, "expense": expense,
@@ -316,8 +316,8 @@ def balance_sheet(store, as_of, *, compare_to=None):
             - sum((a.balance for a in accounts if a.type == "expense"), ZERO))
 
     def snapshot(day):
-        end = account_balances(store, end=day)
-        current = earnings(account_balances(store, start=Date(day.year, 1, 1), end=day))
+        end = account_balances(store, end=day, exclude_closing=True)
+        current = earnings(account_balances(store, start=Date(day.year, 1, 1), end=day, exclude_closing=True))
         return {a.code: a for a in end}, current, earnings(end) - current
 
     now, current_profit, retained = snapshot(as_of)

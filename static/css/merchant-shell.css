@@ -961,3 +961,144 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .pd-keys p:last-child { border-bottom: 0; }
 .pd-keys p span { margin-left: auto; color: var(--pd-muted); }
 .pd-user .menu-panel button { display: flex; width: 100%; align-items: center; gap: 10px; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design system — Modern Blue & White Bubble Enterprise Dashboard.
+   The one place the tokens live (see CLAUDE.md "Bubble style"). It is last on
+   purpose: it re-points the older --pd-* / --bb-* variables, so every page and
+   component follows without being touched.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ds-canvas: #f4f8ff;
+  --ds-surface: #ffffff;
+  --ds-nested: #ebf3ff;
+  --ds-subcard: #f7faff;
+  --ds-hover: #dceaff;
+  --ds-primary: #0066ff;
+  --ds-primary-hover: #0052cc;
+  --ds-grad: linear-gradient(135deg, #0066ff 0%, #3898ff 100%);
+  --ds-ink: #0f1e36;
+  --ds-muted: #526685;
+  --ds-faint: #8a9bb5;
+  --ds-hairline: 1px solid rgba(0, 102, 255, .08);
+  --ds-shadow: 0 8px 24px -4px rgba(15, 30, 54, .05), 0 2px 6px -1px rgba(0, 102, 255, .04);
+  --ds-shadow-lift: 0 14px 32px -8px rgba(15, 30, 54, .09), 0 4px 10px -2px rgba(0, 102, 255, .08);
+  --ds-ok: #0d7a3e;   --ds-ok-bg: #e6f7ee;
+  --ds-warn: #b85d00; --ds-warn-bg: #fff4e5;
+  --ds-bad: #c92a2a;  --ds-bad-bg: #ffebeb;
+  --ds-info: #0066ff; --ds-info-bg: #ebf3ff;
+
+  --pd-primary: var(--ds-primary);
+  --pd-primary-hover: var(--ds-primary-hover);
+  --pd-primary-50: var(--ds-nested);
+  --pd-primary-100: var(--ds-hover);
+  --pd-bg: var(--ds-canvas);
+  --pd-line: rgba(0, 102, 255, .09);
+  --pd-line-strong: rgba(0, 102, 255, .16);
+  --pd-ink: var(--ds-ink);
+  --pd-text: #26395a;
+  --pd-muted: var(--ds-muted);
+  --pd-faint: var(--ds-faint);
+  --pd-shadow: var(--ds-shadow);
+  --pd-shadow-lg: 0 18px 40px -12px rgba(15, 30, 54, .16), 0 4px 10px rgba(0, 102, 255, .06);
+  --bb-radius: 24px;
+  --bb-shadow: var(--ds-shadow);
+  --bb-shadow-lift: var(--ds-shadow-lift);
+  --bb-ring: 0 0 0 1px rgba(0, 102, 255, .08);
+  --bb-grad: var(--ds-grad);
+  --bb-grad-btn: linear-gradient(180deg, #1a7aff 0%, #0066ff 100%);
+}
+
+.pd-body, .pd-body input, .pd-body select, .pd-body textarea, .pd-body button {
+  font-family: "Plus Jakarta Sans", Inter, -apple-system, "Segoe UI", sans-serif; }
+.pd-body { background: var(--ds-canvas); color: var(--ds-ink); font-size: 14px; }
+.pd-body .tile strong, .pd-body .tbl td, .pd-body .tbl th, .pd-body .stmt td, .pd-body .dp-items td,
+.pd-body .dp-totals, .pd-body .editor td, .pd-body time, .pd-body .num, .pd-body [data-rupiah],
+.pd-body .bb-summary, .pd-body .kpi-grid article {
+  font-variant-numeric: tabular-nums; }
+
+/* page title, card header, KPI number */
+.pg-head h1, .dp-title, .bb-hero h1 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.panel > header h2, .dp-card > header h2, .dp-card > header h3 { font-size: 16px; font-weight: 600; }
+.tile strong { font-size: 32px; font-weight: 700; }
+.pill, .bb-pill { font-size: 12px; font-weight: 500; }
+
+/* cards: white on the ice canvas, hairline instead of a heavy border */
+.panel, .dp-card, .dp-paper, .tile, .bb-card, .pd-main .bo-card, .pd-main .kpi-grid article {
+  background: var(--ds-surface); border: var(--ds-hairline); border-radius: 24px; box-shadow: var(--ds-shadow); }
+.panel > header, .dp-card > header { border-bottom-color: rgba(0, 102, 255, .06); }
+.panel > footer, .pd-dialog footer { background: var(--ds-subcard); }
+.tile::after { background: var(--ds-nested); }
+.tile.accent { background: var(--ds-grad); border: 0; box-shadow: 0 16px 30px -14px rgba(0, 102, 255, .55); }
+.tile.accent::after { background: rgba(255, 255, 255, .16); }
+.tile:hover { box-shadow: var(--ds-shadow-lift); }
+.bb-bubble { width: 40px; height: 40px; background: var(--ds-nested); color: var(--ds-primary); }
+.bb-bubble.step { background: var(--ds-primary); }
+.bb-bubble.ok { background: var(--ds-ok-bg); color: var(--ds-ok); }
+.bb-bubble.warn { background: var(--ds-warn-bg); color: var(--ds-warn); }
+.bb-bubble.bad { background: var(--ds-bad-bg); color: var(--ds-bad); }
+.bb-pill { background: var(--ds-info-bg); color: var(--ds-info); padding: 4px 10px; height: auto; }
+.bb-hero, .bb-summary, .dp-paper-head { background: var(--ds-grad); }
+.bb-hero { box-shadow: 0 20px 40px -22px rgba(0, 102, 255, .6); }
+.bb-hero .btn-primary { color: var(--ds-primary) !important; }
+.dp-meta, .nested, .bb-nested { border-radius: 16px; background: var(--ds-subcard); }
+
+/* status pills: soft pastel */
+.pill { padding: 4px 10px; height: auto; min-height: 24px; }
+.pill-paid, .pill-completed, .pill-delivered, .pill-approved, .pill-posted, .pill-ok { background: var(--ds-ok-bg); color: var(--ds-ok); }
+.pill-partial, .pill-pending, .pill-refund_requested, .pill-partially_refunded, .pill-requested, .pill-warn { background: var(--ds-warn-bg); color: var(--ds-warn); }
+.pill-overdue, .pill-cancelled, .pill-payment_failed, .pill-returned, .pill-refunded, .pill-rejected, .pill-fail { background: var(--ds-bad-bg); color: var(--ds-bad); }
+.pill-issued, .pill-open, .pill-confirmed, .pill-allocated, .pill-picking, .pill-packed, .pill-shipped, .pill-info { background: var(--ds-info-bg); color: var(--ds-info); }
+.pill-void, .pill-draft { background: #eef2f9; color: var(--ds-muted); }
+
+/* buttons, chips, tabs: pills; the primary action is solid sapphire */
+.btn, .btn-primary, .bb-btn { border-radius: 9999px; }
+.btn { background: #fff; color: var(--ds-primary); box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .18); }
+.btn:hover { background: var(--ds-nested); color: var(--ds-primary-hover) !important; }
+.btn-primary, .bb-btn { background: var(--ds-primary); color: #fff; box-shadow: 0 8px 18px -8px rgba(0, 102, 255, .65); }
+.btn-primary:hover, .bb-btn:hover { background: var(--ds-primary-hover); }
+.bb-btn-soft { background: var(--ds-nested); color: var(--ds-primary); box-shadow: none; }
+.tabs { background: var(--ds-nested); }
+.tabs a { color: var(--ds-muted); }
+.tabs a.on { background: var(--ds-primary); color: #fff; box-shadow: 0 6px 14px -6px rgba(0, 102, 255, .6); }
+.tabs a.on .count { background: rgba(255, 255, 255, .22); color: #fff; }
+.toolbar input, .toolbar select, .pd-search input { border-radius: 9999px; background: #fff; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .14); border: 0; }
+.pd-search input:focus, .toolbar input:focus, .toolbar select:focus { box-shadow: 0 0 0 2px var(--ds-primary), 0 0 0 5px var(--ds-hover); }
+.field input, .field select, .field textarea, .bb-input { background: var(--ds-subcard); box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .12); border-radius: 14px; }
+.field > span, .tbl th { color: var(--ds-muted); }
+
+/* tables: a floating header strip, airy rows, rounded hover, no vertical lines */
+.tbl { border-collapse: separate; border-spacing: 0 2px; }
+.tbl th, .stmt th, .dp-items th, .editor th { background: var(--ds-canvas); color: var(--ds-muted); font-size: 12px; font-weight: 600;
+  letter-spacing: 0; text-transform: none; border: 0; }
+.tbl th:first-child { border-radius: 16px 0 0 16px; padding-left: 18px; }
+.tbl th:last-child { border-radius: 0 16px 16px 0; padding-right: 18px; }
+.tbl td { height: 50px; padding-top: 10px; padding-bottom: 10px; border: 0; border-bottom: 1px solid rgba(0, 102, 255, .05); }
+.tbl td:first-child { padding-left: 18px; border-radius: 16px 0 0 16px; }
+.tbl td:last-child { padding-right: 18px; border-radius: 0 16px 16px 0; }
+.tbl tbody tr:hover td { background: rgba(244, 248, 255, .85); }
+.tbl td.num, .tbl th.num, .tbl td.r, .tbl th.r { text-align: right; }
+
+/* floating pill top bar */
+.pd-topbar { top: 12px; height: 56px; margin: 12px 20px 0; padding: 0 12px 0 20px; border: var(--ds-hairline);
+  border-radius: 9999px; background: rgba(255, 255, 255, .85); backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); box-shadow: var(--ds-shadow); }
+.pd-menu-toggle { border-radius: 9999px; }
+.pd-main { padding-top: 20px; }
+.pd-sidebar { background: var(--ds-surface); border-right: var(--ds-hairline); }
+.pd-dialog { border-radius: 24px; }
+.notice { border-radius: 16px; }
+@media (max-width: 640px) {
+  .pd-topbar { margin: 8px 8px 0; top: 8px; padding: 0 8px 0 12px; }
+  .tile strong { font-size: 24px; }
+}
+
+/* checklist rows (Tutup buku) */
+.close-steps{list-style:none;margin:0;padding:6px 8px 12px}
+.close-steps li{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:16px}
+.close-steps li:hover{background:var(--ds-canvas)}
+.close-steps li div{flex:1;min-width:0}
+.close-steps li b{display:block;font-weight:600}
+.close-steps li small{display:block;color:var(--ds-muted)}
+.close-steps li.done b{color:var(--ds-muted);font-weight:500}

@@ -46,6 +46,7 @@ urlpatterns = [
         name="merchant-profit-loss"),
     path("merchant/accounting/cash-flow/", views_books.merchant_cash_flow,
         name="merchant-cash-flow"),
+    path("merchant/accounting/tutup-buku/", views_books.merchant_year_close, name="merchant-year-close"),
     path("merchant/accounting/", views.merchant_accounting, name="merchant-accounting"),
     path("merchant/accounting/lock/", views.merchant_ledger_lock, name="merchant-ledger-lock"),
     path("merchant/accounting/journal/new/", views.merchant_journal_new,
