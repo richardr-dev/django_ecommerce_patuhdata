@@ -406,9 +406,9 @@ sidebar page and sub page the blue hero (`.pg-head`, `.bo-heading`, `.bb-hero` a
 bubble cards, KPI tiles, pill buttons and pill tabs; checked by screenshot on all 66 sidebar pages
 and 16 detail/form pages. Rebuilt in full: `dashboard`, `sales_overview`, `sales_invoices`,
 `invoice_form`, `quote_form` (quote + recurring: same two-column layout with summary rail).
-Rebuilt since: `bill_new` (numbered sections + summary rail, keeps typed values after an error), `expenses`
+Rebuilt since: `tax` (PPN & PPh), `payouts`, `bill_new` (numbered sections + summary rail, keeps typed values after an error), `expenses`
 (month pills, tiles, table, entry in a dialog), `stock` (one form per row). Remaining: rebuild the layout (not just the look) of
-legacy-markup pages such as `settings`, `whatsapp`, `tax`, `payouts`, `orders`, `customers`; check `payout_detail`,
+legacy-markup pages such as `settings`, `whatsapp`, `finance`, `orders`, `customers`; check `payout_detail`,
 `settlement_detail`, `return_detail`, `channel_detail` (no demo data yet); move `bill_new` and
 `credit_note_new` onto the two-column form layout.
 
