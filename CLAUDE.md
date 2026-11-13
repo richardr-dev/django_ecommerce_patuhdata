@@ -481,14 +481,10 @@ foreign currency; no fiscal loss carry-forward ledger (it is a manual negative c
 (orang pribadi) annual computation; adjusting journals are not subject to maker-checker approval above a
 threshold (only the one-off manual journal is).
 
-Legacy pages still on the old markup (found by scanning `templates/merchant` for `bo-card`, `kpi-grid`,
-`data-table`, `bo-heading`, Tailwind `bg-gray-*`): settings, sales (sales overview), delivery, channel_detail,
-channels, channel_stock, channel_buyers, order_new, order_detail, orders list partial, entity_form (product
-form, large), billing, whatsapp, staff, settlement_new, production_recap,
-product_import, payments, mitra_invoice_new/list, feeds_qr, customers, campaign_links, broadcasts, abshop,
-tracking, gift_cards, engagement, activity, settlement_partners, import, customer_detail,
-_customer_history. Rebuilt in this pass: finance (Buku besar), payout_detail, settlements,
-settlement_detail, settlement_partner_detail, income_import, platform_balance, sales_report.
+Legacy pages still on the old markup (scan of `templates/merchant` for `bo-card`, `kpi-grid`, `data-table`,
+`bo-heading`, `bo-button`, `entity-form`, Tailwind `bg-gray-*`, updated after the last rebuild pass): _customer_history, _customers_list, _orders_list, abshop, billing, billing_demo_pay, customer_detail, customers, entity_form, entity_list, import, integrations, mitra_invoice_list, mitra_invoice_new, order_detail, order_new, order_payment_link, orders, partner_stock, product_partner_prices_partial, sales, sales_stats_partial, settings, sku_map.
+They work and take the blue palette; they are not yet laid out with the shell components. Large ones need care: `settings`
+(storefront theme, own CSS), `entity_form` (product form), `sales` (htmx replaces the whole page), `billing` (own CSS).
 
 ## Backlog
 
