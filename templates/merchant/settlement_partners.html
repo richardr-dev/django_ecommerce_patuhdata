@@ -1,85 +1,13 @@
-{% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Mitra Konsinyasi{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Mitra konsinyasi{% endblock %}
 {% block content %}
-
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">SETTLEMENT</p>
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">Mitra Konsinyasi</h1>
-    <p class="text-sm text-gray-500">Kelola mitra konsinyasi dan rekanan penjualan.</p>
-  </div>
-  <a class="text-sm text-indigo-600 hover:text-indigo-800 mt-2" href="{% url 'settlement-list' %}">← Semua Settlement</a>
-</div>
-
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-  <h2 class="text-base font-semibold text-gray-800 mb-4">Tambah Mitra Baru</h2>
-  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="add_partner">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <label class="block">
-        <span class="text-xs font-medium text-gray-600 block mb-1">Nama Mitra</span>
-        <input name="name" placeholder="AB Shop Jakarta" required
-               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </label>
-      <label class="block">
-        <span class="text-xs font-medium text-gray-600 block mb-1">Nama Kontak</span>
-        <input name="contact_name" placeholder="Budi Santoso"
-               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </label>
-      <label class="block">
-        <span class="text-xs font-medium text-gray-600 block mb-1">No. HP Kontak</span>
-        <input name="contact_phone" placeholder="08xxx"
-               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </label>
-      <label class="block">
-        <span class="text-xs font-medium text-gray-600 block mb-1">Jatuh Tempo (hari)</span>
-        <input type="number" name="payment_term_days" value="30" min="1"
-               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </label>
-    </div>
-    <button class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">{% icon "plus" %} Tambah Mitra</button>
-  </form>
-</div>
-
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  <div class="px-5 py-4 border-b border-gray-50">
-    <h2 class="text-sm font-semibold text-gray-700">Daftar Mitra</h2>
-  </div>
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="bg-gray-50">
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nama</th>
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Kontak</th>
-        <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Jatuh Tempo</th>
-        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total Settlement</th>
-        <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Sisa Tagihan</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for p in partners %}
-      <tr class="hover:bg-gray-50">
-        <td class="px-5 py-3">
-          <a class="font-semibold text-gray-800 hover:text-indigo-600" href="{% url 'settlement-partner-detail' p.pk %}">{{ p.name }}</a>
-          {% if not p.is_active %}<span class="ml-1 badge text-xs">nonaktif</span>{% endif %}
-        </td>
-        <td class="px-5 py-3">
-          <div class="text-gray-700">{{ p.contact_name }}</div>
-          <div class="text-xs text-gray-400">{{ p.contact_phone }}</div>
-        </td>
-        <td class="px-5 py-3 text-gray-600">{{ p.payment_term_days }} hari</td>
-        <td class="px-5 py-3 text-right text-gray-600">{{ p.total_settlements }}</td>
-        <td class="px-5 py-3 text-right {% if p.open_total_due %}font-semibold text-amber-600{% else %}text-gray-400{% endif %}">
-          {% if p.open_total_due %}Rp{{ p.open_total_due|floatformat:"0g" }}{% else %}—{% endif %}
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="5" class="px-5 py-12 text-center text-sm text-gray-400">
-          Belum ada mitra konsinyasi. Tambah mitra pertama di atas.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
+<div class="pg-head"><div><span class="pg-kicker">Mitra konsinyasi</span><h1>Mitra konsinyasi</h1><p>Kelola mitra konsinyasi dan rekanan penjualan.</p></div><div class="dp-actions"><a class="btn" href="{% url 'settlement-list' %}">Semua settlement</a></div></div>
+<form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="add_partner"><header><h2>Tambah mitra baru</h2></header>
+  <div class="dp-card-body"><div class="field-row"><label class="field"><span>Nama mitra</span><input name="name" placeholder="AB Shop Jakarta" required></label><label class="field"><span>Nama kontak</span><input name="contact_name" placeholder="Budi Santoso"></label></div>
+    <div class="field-row"><label class="field"><span>No. HP kontak</span><input name="contact_phone" placeholder="08xxx"></label><label class="field"><span>Jatuh tempo (hari)</span><input type="number" name="payment_term_days" value="30" min="1"></label></div></div>
+  <footer><button class="btn-primary">{% icon "plus" %} Tambah mitra</button></footer></form>
+<section class="panel"><header><h2>Daftar mitra</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Nama</th><th>Kontak</th><th>Jatuh tempo</th><th class="num">Total settlement</th><th class="num">Sisa tagihan</th></tr></thead><tbody>
+  {% for p in partners %}<tr><td><a class="rowlink" href="{% url 'settlement-partner-detail' p.pk %}"><b>{{ p.name }}</b></a>{% if not p.is_active %} <span class="pill pill-draft">nonaktif</span>{% endif %}</td><td>{{ p.contact_name }}<small>{{ p.contact_phone }}</small></td><td>{{ p.payment_term_days }} hari</td><td class="num">{{ p.total_settlements }}</td>
+    <td class="num">{% if p.open_total_due %}<b>{{ p.open_total_due|rp }}</b>{% else %}–{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada mitra konsinyasi. Tambah mitra pertama di atas.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}
