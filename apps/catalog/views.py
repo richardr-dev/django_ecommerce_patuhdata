@@ -65,8 +65,7 @@ def home(request):
         return redirect("merchant-dashboard" if request.user.is_authenticated else "merchant-login")
     if not request.store:
         if getattr(request, "is_platform", False):
-            from apps.shops.views import platform_home
-            return platform_home(request)
+            return redirect("merchant-dashboard" if request.user.is_authenticated else "merchant-login")
         return render(request, "storefront/no_store.html", status=503)
     products = _storefront_products(request.store)
     query = request.GET.get("q", "").strip()

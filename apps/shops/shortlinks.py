@@ -13,7 +13,7 @@ from django.http import Http404
 from django.shortcuts import redirect
 from django.utils import timezone
 
-from .models import CampaignLink, Store
+from .models import CampaignLink
 from .tenancy import platform_url, store_url
 
 CAMPAIGN_PARAM = "lk"
@@ -42,21 +42,6 @@ def campaign_target(link):
     query = urlencode({CAMPAIGN_PARAM: link.code, "utm_source": "lakuin",
         "utm_medium": "shortlink", "utm_campaign": link.code})
     return store_url(link.store, f"{path}{joiner}{query}")
-
-
-def referral_redirect(request, code):
-    from apps.billing.models import ReferralLink
-    from apps.billing.referrals import clean_code
-
-    store = Store.objects.filter(slug=clean_code(code), is_active=True).first()
-    if store is None:
-        return redirect(platform_url("/"))
-    from apps.billing.referrals import SESSION_KEY
-    request.session[SESSION_KEY] = store.slug  # kept even if the redirect is lost
-    link, _ = ReferralLink.objects.get_or_create(store=store)
-    ReferralLink.objects.filter(pk=link.pk).update(clicks=F("clicks") + 1,
-        last_clicked_at=timezone.now())
-    return redirect(platform_url(f"/start/?ref={store.slug}"))
 
 
 def campaign_redirect(request, code):

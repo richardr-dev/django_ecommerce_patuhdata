@@ -1,5 +1,4 @@
 """A new store is live on its own subdomain at once, and its address leads to its dashboard."""
-import test_platform
 from django.test import TestCase, override_settings
 from test_platform import PLATFORM, _host, _store
 
@@ -9,16 +8,6 @@ from apps.shops.models import Store
 @override_settings(PLATFORM_DOMAIN=PLATFORM, ALLOWED_HOSTS=[PLATFORM, f".{PLATFORM}"],
     PUBLIC_BASE_URL=f"https://{PLATFORM}")
 class StoreAddressTests(TestCase):
-    def test_signup_makes_the_subdomain_eligible_for_https_immediately(self):
-        tls = _host("web:8000")
-        self.assertEqual(tls.get("/internal/tls-ask/",
-            {"domain": f"batik-sari.{PLATFORM}"}).status_code, 404)
-
-        _host(PLATFORM).post("/start/", test_platform.SignupTests.form)
-
-        self.assertEqual(tls.get("/internal/tls-ask/",
-            {"domain": f"batik-sari.{PLATFORM}"}).status_code, 200)
-        self.assertEqual(_host(f"batik-sari.{PLATFORM}").get("/").status_code, 200)
 
     def test_back_office_paths_on_a_store_address_open_that_stores_dashboard(self):
         store = _store("kopi")

@@ -182,6 +182,15 @@ Four test files failed before this work and still do: `test_digital_products`,
   "Hak akses" page prints the same table. The accountant reads and never writes. **Segregation of duties:**
   `maker_may_not_check` stops the person who created a bill from paying it when someone else could; a
   one-person store is never locked out. Give a new action a permission key, not a new role set.
+- **Stores are installed by a partner; there is no registration.** `shops/provisioning.py:install` is the
+  only way a store comes to exist, called by `manage.py install_store` and by `/instalasi/` (platform
+  superusers only; 404 for everyone else). One call creates the owner account (no password: a one-time
+  invite link sets it), the Organization, the store, main warehouse and shipping method, chart of
+  accounts with Kas utama, and the tax profile; `organization=` adds a brand to an installed client.
+  Removed and not to be brought back: `/start/` sign-up, "Tambah brand", the marketing home page, the
+  store directory `/stores/`, and the Ajak teman pages and `/r/` links (the referral models and bill
+  discounts in `billing/referrals.py` remain only so existing bills still compute). Buyer accounts on a
+  storefront (`/account/register/`) are part of the online shop and stay.
 - **The system's name is one setting**: `PLATFORM_NAME` (default `Patuhdata`). Templates print `{{ platform_name }}`;
   never type the name into a template. The sign-in page (`registration/merchant_login.html`, `static/css/login.css`)
   is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.
@@ -203,7 +212,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Reconciliation checks (does everything tie?) | `accounting/controls.py` | `accounting/views_books.py` |
 | Full sales data export (lines, orders, payments) | `channels/sales_export.py` | `channels/report_views.py` |
 | Stock value vs Persediaan | `accounting/inventory.py` | `accounting/views_books.py` |
-| Add a brand (store in same Organization) | `shops/views.py:_create_store` | `shops/views.py` |
+| Install a client's store or add a brand (partner only) | `shops/provisioning.py`, `manage.py install_store` | `shops/install_views.py`, `templates/platform/install.html` |
 | Reports (P&L, cash flow, neraca, account ledger) | `accounting/reports.py` | both |
 | Excel for each report, auditor yearly pack (`/merchant/accounting/paket-audit/`) | `accounting/exports.py` | `accounting/views_books.py` |
 | SAK EMKM statements (screen, print, PDF) | `accounting/emkm.py` | `views_books.py:merchant_emkm_pack`, `templates/merchant/emkm_pack.html` |

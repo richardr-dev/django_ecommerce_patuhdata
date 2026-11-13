@@ -101,11 +101,3 @@ class StoreGateTests(TestCase):
         self._finish_setup()
         self.assertContains(seller.get("/merchant/"), "Toko sudah tampil untuk pembeli")
 
-    def test_the_directory_lists_open_stores_only(self):
-        self._finish_setup()
-        unfinished = Store.objects.create(owner=User.objects.create_user("b"), name="Belum",
-            slug="belum")
-        Product.objects.create(store=unfinished, name="X", slug="x", sku="X", price=1)
-        page = Client(HTTP_HOST="testserver").get("/stores/")
-        self.assertContains(page, "Ruuma")
-        self.assertNotContains(page, "Belum")

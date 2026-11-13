@@ -39,3 +39,20 @@ body.ln { margin: 0; min-height: 100vh; display: grid; place-items: center; padd
 .ln-foot { margin: 22px 0 0; text-align: center; color: var(--ln-faint); font-size: 12px; }
 .ln-alt { margin: 20px 0 0; padding-top: 18px; border-top: 1px solid rgba(0, 102, 255, .08); text-align: center; color: var(--ln-muted); font-size: 13px; }
 @media (max-width: 480px) { .ln-card { padding: 28px 20px 24px; border-radius: 20px; } }
+
+/* partner install page: the same card, wider, with a two-column form */
+body.ln-wide { place-items: start center; }
+.ln-wide .ln-wrap { max-width: 760px; }
+.ln-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.ln-span { grid-column: 1 / -1; }
+.ln-input select { width: 100%; height: 46px; padding: 0 12px; border: 0; border-radius: 14px; background: var(--ln-field); color: var(--ln-ink);
+  font: inherit; box-shadow: inset 0 0 0 1px rgba(0, 102, 255, .14); }
+.ln-check { display: flex; align-items: center; gap: 8px; align-self: center; font-weight: 600; color: var(--ln-ink); }
+.ln-copy { width: 100%; margin-top: 8px; height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: #fff; font: 12px ui-monospace, monospace; }
+.ln-h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.ln-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ln-table th { text-align: left; padding: 8px 10px; background: var(--ln-canvas); color: var(--ln-muted); font-size: 12px; font-weight: 600; }
+.ln-table th:first-child { border-radius: 12px 0 0 12px; } .ln-table th:last-child { border-radius: 0 12px 12px 0; }
+.ln-table td { padding: 10px; border-bottom: 1px solid rgba(0, 102, 255, .06); }
+.ln-table small { display: block; color: var(--ln-faint); }
+@media (max-width: 640px) { .ln-grid { grid-template-columns: 1fr; } }

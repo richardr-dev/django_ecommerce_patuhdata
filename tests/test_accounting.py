@@ -1,12 +1,10 @@
-import json
-import re
 from decimal import Decimal
 from io import StringIO
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db.models import Sum
-from django.test import Client, TestCase, override_settings
+from django.test import Client, TestCase
 
 from apps.accounting.ledger import (
     CASH,
@@ -149,13 +147,3 @@ class FinancePageTests(TestCase):
         self.assertEqual(page.context["summary"]["net_revenue"], 0)
 
 
-@override_settings(PLATFORM_DOMAIN="lakuin.test", ALLOWED_HOSTS=["lakuin.test"],
-    PLATFORM_COMPANY_NAME="PT Patuhdata Solusi Nusantara")
-class PlatformCompanyTests(TestCase):
-    def test_platform_home_declares_operating_company(self):
-        page = Client(HTTP_HOST="lakuin.test").get("/")
-
-        block = re.search(r'<script type="application/ld\+json">(.*?)</script>', page.content.decode())
-        data = json.loads(block.group(1))
-        self.assertEqual(data["name"], "PT Patuhdata Solusi Nusantara")
-        self.assertEqual(data["brand"]["name"], "Patuhdata")

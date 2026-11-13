@@ -10,7 +10,6 @@ from django.utils import timezone
 from apps.billing.models import (
     Plan,
     Referral,
-    ReferralLink,
     ReferralReward,
     Subscription,
     SubscriptionInvoice,
@@ -38,16 +37,6 @@ class ShortLinkTests(TestCase):
         self.seller.force_login(self.owner)
 
     # Ajak teman (Lakuin referral)
-    def test_referral_short_link_counts_and_opens_signup_with_the_invite(self):
-        visitor = Client()
-        reply = visitor.get("/r/ruuma")
-        self.assertTrue(reply["Location"].endswith("/start/?ref=ruuma"))
-        self.assertEqual(ReferralLink.objects.get(store=self.store).clicks, 1)
-        self.assertContains(visitor.get("/start/"), "Diundang oleh <b>Ruuma</b>")  # remembered
-        self.assertTrue(Client().get("/r/tidak-ada")["Location"].endswith("/"))
-        page = self.seller.get("/merchant/billing/")
-        self.assertContains(page, "/r/ruuma")
-        self.assertContains(page, "Link kampanye")  # points sellers to the other tool
 
     def test_inviter_is_emailed_and_an_open_renewal_takes_the_reward(self):
         plan = Plan.objects.get(is_default=True)
@@ -76,8 +65,6 @@ class ShortLinkTests(TestCase):
         self.assertIn("Teman", mail.outbox[0].body)
         self.assertIn("seller@toko.id", mail.outbox[0].to)
 
-    def test_rules_page_and_home_section(self):
-        self.assertContains(Client().get("/ajak-teman/"), "Syarat program")
 
     # Link kampanye (the seller's own store marketing)
     def _create(self, **data):

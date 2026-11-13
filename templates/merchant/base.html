@@ -77,8 +77,7 @@
         <div class="menu-panel">
           <div class="pd-user-head"><strong>{{ request.user.username }}</strong><small>{{ merchant_role_label|default:merchant_role|title }} · {{ merchant_store.name }}</small></div>
           <a href="{% url 'merchant-billing' %}">{% icon "wallet" %}<span>Paket langganan</span></a>
-          <a href="{% url 'merchant-billing' %}#ajak-teman">{% icon "gift" %}<span>Ajak teman</span></a>
-          {% if merchant_is_owner %}<a href="{% url 'merchant-brand-new' %}">{% icon "store" %}<span>Tambah brand</span></a>{% endif %}
+          {% if request.user.is_superuser %}<a href="{% url 'partner-install' %}" data-no-soft>{% icon "store" %}<span>Instalasi toko (partner)</span></a>{% endif %}
           <button type="button" data-density-toggle>{% icon "layers" %}<span>Tampilan rapat / nyaman</span></button>
           <button type="button" data-open-keys>{% icon "command" %}<span>Pintasan keyboard <kbd>?</kbd></span></button>
           <form method="post" action="{% url 'merchant-logout' %}">{% csrf_token %}

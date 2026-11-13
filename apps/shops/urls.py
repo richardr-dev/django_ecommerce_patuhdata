@@ -1,19 +1,11 @@
 from django.urls import path
 
-from config.ratelimit import rate_limit
-
-from . import activity, campaign_views, shortlinks, staff_views, tracking, views
+from . import activity, campaign_views, install_views, shortlinks, staff_views, tracking, views
 
 urlpatterns = [
-    path("merchant/brands/new/", rate_limit("brand-new", limit=10, window=3600)(views.merchant_brand_new),
-        name="merchant-brand-new"),
-    path("start/", rate_limit("store-signup", limit=10, window=3600)(views.store_signup),
-        name="store-signup"),
-    path("stores/", views.store_directory, name="store-directory"),
+    path("instalasi/", install_views.partner_install, name="partner-install"),
     path("favicon.ico", views.favicon, name="favicon"),
-    # Short links: /r/ invites a seller to Lakuin (Ajak teman); /s/ is a seller's own campaign.
-    path("r/<slug:code>", shortlinks.referral_redirect, name="referral-short"),
-    path("r/<slug:code>/", shortlinks.referral_redirect, name="referral-short-slash"),
+    # /s/ is a seller's own campaign short link.
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),
     path("s/<slug:code>/", shortlinks.campaign_redirect, name="campaign-short-slash"),
     path("merchant/staff/", staff_views.merchant_staff, name="merchant-staff"),
@@ -24,7 +16,6 @@ urlpatterns = [
         name="merchant-staff-update"),
     path("merchant/invite/<str:uidb64>/<str:token>/", staff_views.staff_invite_accept,
         name="staff-invite-accept"),
-    path("ajak-teman/", views.referral_program, name="referral-program"),
     path("merchant/campaign-links/", campaign_views.campaign_links, name="merchant-campaign-links"),
     path("merchant/feeds/", campaign_views.feeds_and_qr, name="merchant-feeds"),
     path("merchant/campaign-links/<int:link_id>/toggle/", campaign_views.toggle_campaign_link,

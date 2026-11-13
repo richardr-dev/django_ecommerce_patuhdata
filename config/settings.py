@@ -59,7 +59,6 @@ MIDDLEWARE = [
     "apps.shops.middleware.StorefrontGateMiddleware",
     "apps.shops.middleware.SellerShortcutMiddleware",
     "apps.shops.middleware.PrivatePagesMiddleware",
-    "apps.shops.middleware.ReferralCaptureMiddleware",
     "apps.shops.middleware.CampaignAttributionMiddleware",
 ]
 # Sellers sign in with their email or WhatsApp number (apps/shops/auth.py).

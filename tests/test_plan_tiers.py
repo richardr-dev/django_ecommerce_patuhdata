@@ -86,38 +86,11 @@ class TierLimitTests(TestCase):
         self.assertContains(response, "Masa coba gratis")
 
 
-@override_settings(PLATFORM_DOMAIN=PLATFORM, ALLOWED_HOSTS=[PLATFORM, f".{PLATFORM}"],
-    PLATFORM_SALES_URL="https://wa.me/6281200000000")
-class PricingPageTests(TestCase):
-    def test_platform_home_lists_every_tier_with_a_sales_contact_for_custom(self):
-        response = Client(HTTP_HOST=PLATFORM).get("/")
-
-        for name in ("Starter", "Pro", "Custom"):
-            self.assertContains(response, f"<h3>{name}</h3>")
-        for hidden in ("Growth", "Business"):
-            self.assertNotContains(response, f"<h3>{hidden}</h3>")
-        self.assertContains(response, "Rp99.000")
-        self.assertContains(response, "Rp399.000")
-        self.assertContains(response, "https://wa.me/6281200000000")
-        self.assertContains(response, "Paling populer", count=1)
 
 
 @override_settings(PLATFORM_DOMAIN=PLATFORM, ALLOWED_HOSTS=[PLATFORM, f".{PLATFORM}"],
     PUBLIC_BASE_URL=f"https://{PLATFORM}", TRIAL_DAYS=14)
 class TrialTests(TestCase):
-    def test_signup_starts_a_14_day_starter_trial(self):
-        from datetime import timedelta
-
-        import test_platform
-        from django.utils import timezone
-
-        from apps.shops.models import Store
-
-        Client(HTTP_HOST=PLATFORM).post("/start/", test_platform.SignupTests.form)
-        subscription = Store.objects.get(slug="batik-sari").subscription
-        self.assertEqual(subscription.plan.name, "Starter")
-        self.assertAlmostEqual(subscription.current_period_end,
-            timezone.now() + timedelta(days=14), delta=timedelta(minutes=1))
 
     def test_after_the_trial_the_store_stays_but_cannot_add_products(self):
         from datetime import timedelta

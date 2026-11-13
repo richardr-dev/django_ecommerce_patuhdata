@@ -25,21 +25,7 @@ class SellerLoginTests(TestCase):
         Store.objects.create(owner=user, name="Toko", slug=slug, support_phone=phone)
         return user
 
-    def test_signup_without_email_uses_the_whatsapp_number_to_sign_in(self):
-        reply = Client().post("/start/", SIGNUP)
-        self.assertEqual(reply.status_code, 302)
-        user = Store.objects.get(slug="bu-sri").owner
-        self.assertEqual((user.username, user.email), ("081234567890", ""))
-        for typed in ("081234567890", "+62 812-3456-7890", "6281234567890"):
-            _, login = self._login(typed)
-            self.assertEqual(login.status_code, 302, typed)
-            self.assertEqual(login["Location"], "/merchant/")
 
-    def test_a_used_number_cannot_open_a_second_email_less_account(self):
-        self._seller(username="081234567890")
-        reply = Client().post("/start/", {**SIGNUP, "slug": "bu-sri-2"})
-        self.assertEqual(reply.status_code, 200)
-        self.assertContains(reply, "Nomor ini sudah dipakai")
 
     def test_older_accounts_sign_in_with_their_store_number(self):
         self._seller(phone="0812 3456 7890")

@@ -766,50 +766,6 @@ class OpeningBalanceTests(Base):
             {"date": self.today.isoformat(), "receivable": "1000"}).status_code, 404)
 
 
-class AddBrandTests(Base):
-    def setUp(self):
-        super().setUp()
-        from apps.billing.models import Plan
-        from apps.shops.models import Organization
-        self.org = Organization.objects.create(name="Grup", slug="grup", owner=self.owner)
-        self.store.organization = self.org
-        self.store.save()
-        Plan.objects.get_or_create(code="free", defaults={"name": "Gratis", "is_default": True})
-        self.client.force_login(self.owner)
-
-    def test_owner_adds_a_brand_in_the_same_organization_and_switches_to_it(self):
-        page = self.client.get(reverse("merchant-brand-new"))
-        self.assertContains(page, "Tambah brand")
-        response = self.client.post(reverse("merchant-brand-new"), {"store_name": "Brand Dua",
-            "slug": "brand-dua", "phone": "081234567890", "instagram": "", "accept_terms": "on"})
-        self.assertEqual(response.status_code, 302)
-        brand = Store.objects.get(slug="brand-dua")
-        self.assertEqual((brand.owner, brand.organization), (self.owner, self.org))
-        self.assertEqual(self.client.session["merchant_store_id"], brand.id)
-        self.assertEqual(self.client.get(reverse("merchant-dashboard")).status_code, 200)
-        # the switcher now offers both, and each has its own books
-        switcher = self.client.get(reverse("merchant-dashboard")).content.decode()
-        self.assertIn("Toko Sales", switcher)
-        self.assertIn("Brand Dua", switcher)
-        main = bank.bank_accounts(brand)[0]
-        bank.record_cash_transaction(brand, kind="receive", bank_account=main, date=self.today,
-            lines=[("3100", "Modal", 500_000)])
-        self.assertEqual(balance(brand, CASH), Decimal(500_000))
-        self.assertEqual(balance(self.store, CASH), Decimal(0))  # each brand keeps its own books
-
-    def test_taken_or_reserved_address_and_staff_are_refused(self):
-        taken = self.client.post(reverse("merchant-brand-new"), {"store_name": "X", "slug": "toko-sales",
-            "phone": "081234567890", "accept_terms": "on"})
-        self.assertEqual(taken.status_code, 200)
-        self.assertContains(taken, "sudah dipakai")
-        staff = User.objects.create_user("brand-staff", password="x")
-        from apps.shops.models import StoreStaff
-        StoreStaff.objects.create(store=self.store, user=staff, role="admin")
-        self.client.force_login(staff)
-        self.assertEqual(self.client.get(reverse("merchant-brand-new")).status_code, 404)
-
-    def test_menu_shows_the_link_to_owners_only(self):
-        self.assertContains(self.client.get(reverse("merchant-dashboard")), "Tambah brand")
 
 
 class BooksChecksTests(Base):

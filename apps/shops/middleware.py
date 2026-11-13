@@ -11,7 +11,14 @@ from .availability import (
     store_state,
 )
 from .models import Store
-from .tenancy import custom_domain_allowed, opens_on_login, platform_host, platform_url, store_url, subdomain_slug
+from .tenancy import (
+    custom_domain_allowed,
+    opens_on_login,
+    platform_host,
+    platform_url,
+    store_url,
+    subdomain_slug,
+)
 
 
 class StoreResolverMiddleware:
@@ -168,20 +175,6 @@ class PrivatePagesMiddleware:
             from django.utils.cache import add_never_cache_headers
             add_never_cache_headers(response)
         return response
-
-
-class ReferralCaptureMiddleware:
-    """Remember ?ref=<store slug> from any platform page, so a visitor who lands on the home
-    page through an invite link and signs up later still gets the invite discount."""
-    def __init__(self, get_response): self.get_response = get_response
-
-    def __call__(self, request):
-        code = request.GET.get("ref")
-        if code and (getattr(request, "is_platform", False) or not settings.PLATFORM_DOMAIN):
-            from apps.billing.referrals import SESSION_KEY, clean_code
-            if clean_code(code):
-                request.session[SESSION_KEY] = clean_code(code)
-        return self.get_response(request)
 
 
 class CampaignAttributionMiddleware:

@@ -10,10 +10,10 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.billing.models import Plan, Subscription, SubscriptionInvoice
-from apps.catalog.models import Product, Warehouse
+from apps.catalog.models import Product
 from apps.integrations.payments import doku_signature
-from apps.orders.models import Order, ShippingMethod
-from apps.shops.models import Organization, Store, StoreStaff
+from apps.orders.models import Order
+from apps.shops.models import Store, StoreStaff
 from apps.shops.tenancy import store_origin
 
 PLATFORM = "niaga.test"
@@ -42,14 +42,6 @@ class HostRoutingTests(TestCase):
         cls.teh = _store("teh", plan=cls.free)
         Product.objects.create(store=cls.kopi, name="Gayo", slug="gayo", sku="GAYO", price=50000)
 
-    def test_platform_host_shows_platform_home_not_a_store(self):
-        response = _host(PLATFORM).get("/")
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "platform/home.html")
-        self.assertContains(response, "Coba gratis 14 hari")
-        self.assertContains(response, "https://kopi.example/")
-        self.assertContains(response, "img/brand/lakuin-logo.svg")
-        self.assertContains(response, "img/brand/og-image.png")
 
     def test_favicon_on_platform_and_store_hosts(self):
         for host in (PLATFORM, f"teh.{PLATFORM}", "kopi.example"):
@@ -111,68 +103,8 @@ class HostRoutingTests(TestCase):
             current_period_end=timezone.now() - timedelta(days=1))
         self.assertEqual(ask("teh.example"), 404)  # lapsed: no custom domain
 
-    def test_directory_lists_shoppable_opted_in_stores(self):
-        response = _host(PLATFORM).get("/stores/")
-        names = [item["store"].name for item in response.context["stores"]]
-        self.assertEqual(names, ["Kopi"])  # Teh has no active product
-        Store.objects.filter(id=self.kopi.id).update(listed_in_directory=False)
-        self.assertEqual(list(_host(PLATFORM).get("/stores/").context["stores"]), [])
 
 
-@override_settings(PLATFORM_DOMAIN=PLATFORM, ALLOWED_HOSTS=[PLATFORM, f".{PLATFORM}"],
-    PUBLIC_BASE_URL=f"https://{PLATFORM}")
-class SignupTests(TestCase):
-    form = {"store_name": "Batik Sari", "slug": "batik-sari", "phone": "+62 812-3456-7890",
-        "full_name": "Sari Wulandari", "email": "Sari@Example.com",
-        "password1": "Batik-Sari-2026!", "password2": "Batik-Sari-2026!", "accept_terms": "on"}
-
-    def test_signup_creates_a_ready_store_on_the_free_plan(self):
-        client = _host(PLATFORM)
-        response = client.post("/start/", self.form)
-        self.assertRedirects(response, "/merchant/settings/", fetch_redirect_response=False)
-        store = Store.objects.get(slug="batik-sari")
-        user = User.objects.get(username="sari@example.com")
-        self.assertEqual((store.owner, store.organization.owner), (user, user))
-        self.assertEqual(store.support_phone, "081234567890")
-        self.assertEqual(store.subscription.plan.code, "free")
-        self.assertTrue(Warehouse.objects.filter(store=store, code="MAIN").exists())
-        self.assertTrue(ShippingMethod.objects.filter(store=store, code="reguler").exists())
-        dashboard = client.get("/merchant/billing/")
-        self.assertContains(dashboard, f"https://batik-sari.{PLATFORM}/")
-        self.assertEqual(_host(f"batik-sari.{PLATFORM}").get("/").context["store"], store)
-
-    def test_reserved_and_taken_addresses_are_rejected(self):
-        _store("kopi")
-        for slug in ("www", "admin", "kopi", "-bad", "a", "Has Space"):
-            response = _host(PLATFORM).post("/start/", {**self.form, "slug": slug})
-            self.assertEqual(response.status_code, 200, slug)
-            self.assertIn("slug", response.context["form"].errors, slug)
-        self.assertFalse(User.objects.filter(username="sari@example.com").exists())
-
-    def test_signed_in_owner_opens_another_brand_without_a_new_account(self):
-        owner = User.objects.create_user("owner@example.com", email="owner@example.com")
-        _store("pertama", owner=owner, plan=Plan.objects.get(code="free"))
-        Organization.objects.create(name="Taken", slug="kedua", owner=owner)
-        client = _host(PLATFORM)
-        client.force_login(owner)
-        response = client.post("/start/", {"store_name": "Kedua", "slug": "kedua",
-            "phone": "081200000001", "accept_terms": "on"})
-        self.assertRedirects(response, "/merchant/settings/", fetch_redirect_response=False)
-        store = Store.objects.get(slug="kedua")
-        self.assertEqual(store.owner, owner)
-        self.assertEqual(store.organization.slug, "kedua-2")
-        self.assertEqual(client.session["merchant_store_id"], store.id)
-
-    def test_signup_on_a_store_host_moves_to_the_platform(self):
-        _store("kopi")
-        response = _host(f"kopi.{PLATFORM}").get("/start/")
-        self.assertRedirects(response, f"https://{PLATFORM}/start/", fetch_redirect_response=False)
-
-    def test_signup_closed_without_a_default_plan(self):
-        Plan.objects.update(is_default=False)
-        response = _host(PLATFORM).post("/start/", self.form)
-        self.assertContains(response, "belum dibuka")
-        self.assertFalse(Store.objects.filter(slug="batik-sari").exists())
 
 
 class PlanLimitTests(TestCase):
@@ -312,16 +244,6 @@ class LocalPlatformTests(TestCase):
         cls.store = _store("kopi-kita")
         Product.objects.create(store=cls.store, name="Gayo", slug="gayo", sku="GAYO", price=50000)
 
-    def test_localhost_is_the_landing_page_and_the_store_lives_on_its_subdomain(self):
-        home = _host("localhost:8000").get("/")
-        self.assertTemplateUsed(home, "platform/home.html")
-        self.assertIsNone(home.context["store"])
-        self.assertContains(home, "http://kopi-kita.localhost:8000/")
-        self.assertContains(home, "© ")
-        self.assertContains(home, "PT Patuhdata Solusi Nusantara. Hak cipta dilindungi")
-        store = _host("kopi-kita.localhost:8000").get("/")
-        self.assertEqual(store.context["store"], self.store)
-        self.assertContains(store, "PT Patuhdata Solusi Nusantara")
 
     @override_settings(DOKU_CLIENT_ID="MCH-TEST", DOKU_SECRET_KEY="doku-secret")
     def test_webhook_tunnel_host_counts_as_the_platform(self):
@@ -329,12 +251,6 @@ class LocalPlatformTests(TestCase):
             content_type="application/json")
         self.assertEqual(response.status_code, 401)  # reached the webhook, which rejects unsigned calls
 
-    def test_platform_legal_pages_name_the_operator(self):
-        for path in ("/terms/", "/privacy/"):
-            response = _host("localhost:8000").get(path)
-            self.assertEqual(response.status_code, 200, path)
-            self.assertContains(response, "PT Patuhdata Solusi Nusantara")
-        self.assertContains(_host("localhost:8000").get("/start/"), 'href="/terms/"')
 
 
 @override_settings(PLATFORM_DOMAIN="lakuin.store", PUBLIC_BASE_URL="https://lakuin.store",
@@ -345,12 +261,6 @@ class ProductionDomainTests(TestCase):
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response["Location"], "https://lakuin.store/stores/?q=kopi")
 
-    def test_brand_names_cannot_be_claimed_as_store_addresses(self):
-        form = {"store_name": "Palsu", "slug": "lakuin", "phone": "081200000000",
-            "full_name": "X", "email": "x@example.com", "password1": "Lakuin-Palsu-2026!",
-            "password2": "Lakuin-Palsu-2026!", "accept_terms": "on"}
-        response = _host("lakuin.store").post("/start/", form)
-        self.assertIn("slug", response.context["form"].errors)
 
 
 @override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=False)
@@ -394,23 +304,5 @@ class StoreSocialLinksTests(TestCase):
         with self.assertRaises(forms.ValidationError):
             clean_instagram_handle("not a handle!")
 
-    @override_settings(PLATFORM_DOMAIN=PLATFORM, ALLOWED_HOSTS=[f".{PLATFORM}", PLATFORM])
-    def test_signup_instagram_shows_as_icons_on_the_storefront(self):
-        _host(PLATFORM).post("/start/", {**SignupTests.form, "instagram": "@batik.sari"})
-        store = Store.objects.get(slug="batik-sari")
-        self.assertEqual(store.instagram, "batik.sari")
-        page = _host(f"batik-sari.{PLATFORM}").get("/")
-        self.assertContains(page, 'href="https://wa.me/6281234567890"', count=3)  # profile, footer, chat button
-        self.assertContains(page, 'href="https://www.instagram.com/batik.sari/"')
-        self.assertContains(page, "@batik.sari")
 
 
-@override_settings(PLATFORM_DOMAIN="localhost", PLATFORM_DISPLAY_DOMAIN="lakuin.store",
-    ALLOWED_HOSTS=["*"])
-class SignupAddressDisplayTests(TestCase):
-    def test_signup_shows_the_public_store_address(self):
-        page = _host("localhost:8000").get("/start/")
-        self.assertContains(page, "<span>.lakuin.store</span>", html=False)
-        self.assertContains(page, "https://<span data-slug-preview>nama-toko</span>.lakuin.store")
-        self.assertNotContains(page, "&lt;alamat&gt;")
-        self.assertNotContains(page, ".localhost</span>")
