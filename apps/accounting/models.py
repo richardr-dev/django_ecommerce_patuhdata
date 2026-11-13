@@ -560,11 +560,11 @@ class ApprovalRequest(models.Model):
 
 
 WITHHOLDING_KINDS = [
-    ("pph23_jasa", "PPh 23 · jasa (2%)", "PPh 23", Decimal(2)),
-    ("pph23_royalti", "PPh 23 · royalti, bunga, hadiah (15%)", "PPh 23", Decimal(15)),
-    ("pph4_2_sewa", "PPh 4(2) · sewa tanah/bangunan (10%)", "PPh 4(2)", Decimal(10)),
+    ("pph23_jasa", "PPh 23 · jasa (2%)", "PPh 23", Decimal("2")),
+    ("pph23_royalti", "PPh 23 · royalti, bunga, hadiah (15%)", "PPh 23", Decimal("15")),
+    ("pph4_2_sewa", "PPh 4(2) · sewa tanah/bangunan (10%)", "PPh 4(2)", Decimal("10")),
     ("pph4_2_konstruksi", "PPh 4(2) · jasa konstruksi kecil (1,75%)", "PPh 4(2)", Decimal("1.75")),
-    ("pph21", "PPh 21 · gaji, honorarium, jasa perorangan", "PPh 21", Decimal(5)),
+    ("pph21", "PPh 21 · gaji, honorarium, jasa perorangan", "PPh 21", Decimal("5")),
 ]
 
 
