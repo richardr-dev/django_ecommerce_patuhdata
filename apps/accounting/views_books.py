@@ -1005,9 +1005,20 @@ def merchant_year_close(request):
         datetime.date(year, month, 1)
     except ValueError:
         year, month = previous.year, previous.month
-    steps, first, last = closing.month_checklist(store, year, month, today)
+    scope = "quarter" if request.GET.get("scope") == "quarter" else "month"
+    quarter = ((month - 1) // 3 + 1)
+    if scope == "quarter":
+        try:
+            year, quarter = int(request.GET.get("year", year)), int(request.GET.get("q", quarter))
+            quarter = quarter if quarter in (1, 2, 3, 4) else 1
+        except ValueError:
+            pass
+        steps, first, last = closing.quarter_checklist(store, year, quarter, today)
+    else:
+        steps, first, last = closing.month_checklist(store, year, month, today)
     return render(request, "merchant/year_close.html", _merchant_context(request, store,
-        steps=steps, steps_done=sum(1 for s in steps if s["done"]), year=year, month=month,
+        steps=steps, steps_done=sum(1 for s in steps if s["done"]), year=year, month=month, scope=scope, quarter=quarter,
+        quarter_label=f"Kuartal {quarter} {year}",
         month_label=first, month_end=last, years=closing.years(store, today),
         locked_through=locked_through(store), can_close=_can_edit(request, store),
         is_admin=store.owner_id == request.user.id or store.staff_members.filter(user=request.user, role="admin").exists()))

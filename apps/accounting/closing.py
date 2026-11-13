@@ -177,3 +177,51 @@ def month_checklist(store, year, month, today):
         "Cocokkan PPN keluaran dan masukan sebelum periode dikunci.",
         reverse("merchant-spt-ppn") + f"?month={year}-{month:02d}", "Buka SPT")
     return steps, first, last - timedelta(days=1)
+
+
+def quarter_checklist(store, year, quarter, today):
+    """The month checklist for the quarter's last month (it looks at everything up to then) plus what only
+    a quarter close asks: adjusting entries run, the receivable provision, and the quarter's statements
+    reviewed. Returns ``(steps, first_day, last_day)`` like ``month_checklist``."""
+    from django.urls import reverse
+
+    from . import adjustments, reports
+    from .models import JournalEntry, JournalTemplate, PrepaidExpense
+    first, last = reports.quarter_bounds(year, quarter)
+    steps, _f, _l = month_checklist(store, last.year, last.month, today)
+    steps = [s for s in steps if not s["title"].startswith("SPT Masa PPN bulan ini")]  # the quarter lists all three months
+
+    def step(title, done, detail, url="", action=""):
+        steps.append({"title": title, "done": done, "detail": detail, "url": url, "action": action})
+
+    missing = 0
+    for item in PrepaidExpense.objects.filter(store=store, status=PrepaidExpense.ACTIVE, start_date__lte=last):
+        for start, _amount in adjustments.prepaid_schedule(item):
+            end = adjustments.month_end(start.year, start.month)
+            if end <= min(last, today) and not JournalEntry.objects.filter(store=store, source_type="prepaid",
+                    source_id=f"{item.pk}:{start:%Y-%m}", superseded=False).exists():
+                missing += 1
+    step("Biaya dibayar di muka sudah dibebankan", not missing, "Semua bulan sudah diamortisasi." if not missing
+        else f"{missing} bulan amortisasi belum dicatat (pekerja pembukuan mencatatnya otomatis; boleh dijalankan sekarang).",
+        reverse("merchant-adjustments") + "?tab=prepaid", "Buka penyesuaian")
+    due = JournalTemplate.objects.filter(store=store, is_active=True, next_run__lte=min(last, today)).count()
+    step("Akrual dan jurnal berulang sudah dijalankan", not due, "Tidak ada yang jatuh tempo." if not due
+        else f"{due} jurnal jatuh tempo belum dijalankan.", reverse("merchant-adjustments") + "?tab=accrual", "Buka penyesuaian")
+    plan = adjustments.provision_needed(store, min(last, today))
+    booked_in_quarter = JournalEntry.objects.filter(store=store, source_type="provision", date__gte=first, date__lte=last,
+        superseded=False).exists()
+    needs = plan["required"] or plan["booked"]
+    step("Cadangan kerugian piutang ditinjau", not needs or booked_in_quarter or not plan["adjustment"],
+        "Cadangan sesuai umur piutang." if not plan["adjustment"] or booked_in_quarter or not needs
+        else f"Cadangan perlu disesuaikan Rp{plan['adjustment']:,.0f} menurut umur piutang.".replace(",", "."),
+        reverse("merchant-adjustments") + "?tab=provision", "Tinjau cadangan")
+    flow = reports.cash_flow_indirect(store, first, last)
+    sheet = reports.balance_sheet(store, last)
+    tied = sheet["balanced"] and abs(flow["difference"]) < 1
+    step("Laporan kuartal cocok (neraca seimbang, arus kas sama dengan kas)", tied,
+        "Neraca seimbang dan arus kas cocok dengan saldo kas." if tied else "Ada selisih pada neraca atau arus kas.",
+        reverse("merchant-quarter-report") + f"?year={year}&q={quarter}", "Buka laporan kuartal")
+    for month in range(first.month, last.month + 1):
+        step(f"SPT Masa PPN {date(year, month, 1):%B} diperiksa", False, "Cocokkan PPN keluaran dan masukan sebelum dikunci.",
+            reverse("merchant-spt-ppn") + f"?month={year}-{month:02d}", "Buka SPT")
+    return steps, first, last

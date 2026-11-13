@@ -125,3 +125,27 @@ class AdjustmentPageTests(Base):
             "credit_code": ACCRUED, "amount": "250000", "first_date": self.today.isoformat(), "frequency": "once", "auto_reverse": "1", "idem": "ac1"})
         self.assertEqual(JournalTemplate.objects.count(), 1)
         self.assertContains(self.client.get(reverse("merchant-adjustments"), {"tab": "accrual"}), "Listrik")
+
+
+class QuarterChecklistTests(Base):
+    def test_quarter_checklist_adds_the_adjusting_steps_and_the_page_toggles(self):
+        from apps.accounting import closing
+        steps, first, last = closing.quarter_checklist(self.store, 2026, 1, date(2026, 4, 10))
+        self.assertEqual((first, last), (date(2026, 1, 1), date(2026, 3, 31)))
+        titles = [s["title"] for s in steps]
+        for expected in ("Biaya dibayar di muka sudah dibebankan", "Akrual dan jurnal berulang sudah dijalankan",
+                "Cadangan kerugian piutang ditinjau", "Laporan kuartal cocok (neraca seimbang, arus kas sama dengan kas)"):
+            self.assertIn(expected, titles)
+        self.assertEqual(sum(1 for t in titles if t.startswith("SPT Masa PPN")), 3)
+        adjustments.add_prepaid(self.store, name="A", start_date=date(2026, 1, 1), months=6, total=Decimal(600_000),
+            expense_code="6900", paid_from_code=CASH)
+        steps, _f, _l = closing.quarter_checklist(self.store, 2026, 1, date(2026, 4, 10))
+        step = next(s for s in steps if s["title"] == "Biaya dibayar di muka sudah dibebankan")
+        self.assertFalse(step["done"])                                                         # three months not amortised yet
+        adjustments.amortize(self.store, through=date(2026, 3, 31))
+        steps, _f, _l = closing.quarter_checklist(self.store, 2026, 1, date(2026, 4, 10))
+        self.assertTrue(next(s for s in steps if s["title"] == "Biaya dibayar di muka sudah dibebankan")["done"])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("merchant-year-close"), {"scope": "quarter", "year": 2026, "q": 1})
+        self.assertContains(page, "Tutup kuartal")
+        self.assertContains(page, "Kunci sampai 31 Mar 2026")

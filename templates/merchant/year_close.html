@@ -8,9 +8,12 @@
   <div class="tile {% if steps_done < steps|length %}warn{% endif %}"><small>Checklist {{ month_label|date:"F Y" }}</small><strong>{{ steps_done }} / {{ steps|length }}</strong><span>langkah selesai</span></div>
 </div>
 
+<div class="tabs" aria-label="Periode"><a href="?scope=month" class="{% if scope == 'month' %}on{% endif %}">Tutup bulan</a><a href="?scope=quarter" class="{% if scope == 'quarter' %}on{% endif %}">Tutup kuartal</a></div>
 <section class="panel">
-  <header><div><h2>Checklist tutup bulan</h2><p>Dilihat sampai {{ month_end|date:"d F Y" }}. Daftar ini tidak menghalangi; ia memberi tahu apa yang masih terbuka.</p></div>
-    <form method="get" class="toolbar" style="margin:0"><label class="field"><span>Bulan</span><input type="month" name="month" value="{{ year }}-{{ month|stringformat:'02d' }}" onchange="this.form.submit()"></label></form></header>
+  <header><div><h2>Checklist {% if scope == 'quarter' %}tutup {{ quarter_label|lower }}{% else %}tutup bulan{% endif %}</h2><p>Dilihat sampai {{ month_end|date:"d F Y" }}. Daftar ini tidak menghalangi; ia memberi tahu apa yang masih terbuka.{% if scope == 'quarter' %} Kuartal menambahkan penyesuaian akhir periode dan peninjauan laporan.{% endif %}</p></div>
+    {% if scope == 'quarter' %}<form method="get" class="toolbar" style="margin:0"><input type="hidden" name="scope" value="quarter"><label class="field"><span>Tahun</span><input type="number" name="year" value="{{ year }}" min="2000" max="2100" style="width:90px" onchange="this.form.submit()"></label>
+      <label class="field"><span>Kuartal</span><select name="q" onchange="this.form.submit()">{% for q in "1234" %}<option value="{{ q }}"{% if q|add:0 == quarter %} selected{% endif %}>Kuartal {{ q }}</option>{% endfor %}</select></label></form>
+    {% else %}<form method="get" class="toolbar" style="margin:0"><label class="field"><span>Bulan</span><input type="month" name="month" value="{{ year }}-{{ month|stringformat:'02d' }}" onchange="this.form.submit()"></label></form>{% endif %}</header>
   <ul class="close-steps">
   {% for s in steps %}
     <li class="{% if s.done %}done{% endif %}">
@@ -20,6 +23,9 @@
     </li>
   {% endfor %}
   </ul>
+  {% if can_close %}<footer style="padding:14px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><form method="post" action="{% url 'merchant-ledger-lock' %}">{% csrf_token %}<input type="hidden" name="locked_through" value="{{ month_end|date:'Y-m-d' }}">
+    <button class="btn-primary" data-confirm="Kunci pembukuan sampai {{ month_end|date:'d F Y' }}? Jurnal pada atau sebelum tanggal itu tidak bisa diubah lagi." data-confirm-ok="Kunci periode" data-confirm-tone="neutral">{% icon "check" %} Kunci sampai {{ month_end|date:"d M Y" }}</button></form>
+    <small style="color:var(--ds-muted)">{% if locked_through %}Terkunci sampai {{ locked_through|date:"d M Y" }}.{% else %}Belum ada periode terkunci.{% endif %} Buka kembali lewat Ringkasan akuntansi (admin).</small></footer>{% endif %}
 </section>
 
 <section class="panel">
