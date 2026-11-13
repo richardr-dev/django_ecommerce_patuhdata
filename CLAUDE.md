@@ -352,7 +352,7 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
 - [ ] Product variants per warehouse; variants keep a single stock number today.
 - [x] One scheduled worker: `manage.py run_books` (ledger backlog, recurring invoices,
       monthly depreciation). It still has to be scheduled (cron) in deployment.
-- [~] Tests run on SQLite; the suite also runs on PostgreSQL locally (`DATABASE_URL=postgres://... pytest`). Add a CI job.
+- [x] The suite passes on SQLite and PostgreSQL (CI has a `postgres` job). Local dev now runs on PostgreSQL too (`.env` `DATABASE_URL`); `db.sqlite3` is kept untouched as the fallback.
 - [ ] Fix the four failing test files listed above.
 
 ### 2. Features still missing
