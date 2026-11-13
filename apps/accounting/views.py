@@ -21,6 +21,7 @@ from .models import (
     BankStatementLine,
     Bill,
     BillPayment,
+    CostCenter,
     Expense,
     JournalEntry,
     LedgerLock,
@@ -414,7 +415,9 @@ def merchant_bill_new(request):
                 tax = Decimal(0)
             bill = create_bill(store, supplier=supplier, lines=lines, bill_date=bill_date,
                 due_date=due_date, number=number, tax=tax, notes=notes, actor=request.user,
-                category=request.POST.get("category") or "1400")
+                category=request.POST.get("category") or "1400",
+                cost_center=CostCenter.objects.filter(store=store, is_active=True,
+                    pk=request.POST.get("cost_center") or 0).first())
 
             messages.success(request, f"Bill {number or str(bill.id)[:8]} berhasil dibuat.")
             return redirect("merchant-bill-detail", bill_id=bill.id)
@@ -423,7 +426,8 @@ def merchant_bill_new(request):
 
     today = timezone.localdate().isoformat()
     return render(request, "merchant/bill_new.html", _merchant_context(request, store,
-        suppliers=suppliers, today=today, bill_categories=BILL_CATEGORIES))
+        suppliers=suppliers, today=today, bill_categories=BILL_CATEGORIES,
+        cost_centers=CostCenter.objects.filter(store=store, is_active=True)))
 
 
 @login_required(login_url="/merchant/login/")
@@ -612,7 +616,9 @@ def merchant_journal_new(request):
             if total_debit != total_credit:
                 raise LedgerError(f"Jurnal tidak seimbang: debit Rp{total_debit:,.0f}, "
                     f"kredit Rp{total_credit:,.0f}.")
-            entry = post_journal(store, date=date, memo=memo, lines=lines, actor=request.user)
+            entry = post_journal(store, date=date, memo=memo, lines=lines, actor=request.user,
+                cost_center=CostCenter.objects.filter(store=store, is_active=True,
+                    pk=request.POST.get("cost_center") or 0).first())
             AuditLog.objects.create(store=store, actor=request.user, action="journal.created",
                 object_type="JournalEntry", object_id=str(entry.id),
                 details={"memo": memo, "debit": str(total_debit)})
@@ -622,4 +628,5 @@ def merchant_journal_new(request):
             messages.error(request, f"Gagal: {error}")
     return render(request, "merchant/journal_new.html", _merchant_context(request, store,
         accounts=accounts, today=timezone.localdate().isoformat(),
-        opening=request.GET.get("opening") == "1", locked_through=locked_through(store)))
+        opening=request.GET.get("opening") == "1", locked_through=locked_through(store),
+        cost_centers=CostCenter.objects.filter(store=store, is_active=True)))

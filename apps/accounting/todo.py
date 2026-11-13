@@ -33,6 +33,12 @@ def todo_items(store, today):
             items.append({"count": count, "label": label, "url": url, "action": action,
                 "icon": icon, "tone": tone})
 
+    from . import budgets
+    budget_alerts = budgets.alerts(store, today)
+    add(len(budget_alerts["over"]), "pos biaya melebihi anggaran bulan ini", reverse("merchant-budget"),
+        "Periksa →", "alert", "danger")
+    add(len(budget_alerts["warn"]), "pos biaya hampir habis (≥ 80% anggaran)", reverse("merchant-budget"),
+        "Lihat →", "trend-down", "warn")
     overdue = Invoice.objects.filter(store=store, due_date__lt=today,
         status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_OVERDUE]).count()
     add(overdue, "invoice lewat jatuh tempo", reverse("merchant-receivables"), "Tagih →", "clock", "danger")

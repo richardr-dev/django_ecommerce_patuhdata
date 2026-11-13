@@ -35,7 +35,7 @@ def post_bill(bill, *, strict=False, actor=None):
     """Only a PKP may credit PPN masukan; for everyone else the PPN is part of the cost."""
     vat = bill.tax if _can_credit_input_vat(bill.store) else Decimal(0)
     return post_entry(bill.store, date=bill.bill_date, strict=strict, actor=actor,
-        source=("bill", bill.pk),
+        source=("bill", bill.pk), cost_center=bill.cost_center,
         memo=f"Tagihan {bill.supplier.name} {bill.number}".strip(),
         amounts={bill.category: bill.total - vat, INPUT_VAT: vat, PAYABLE: -bill.total})
 
@@ -104,7 +104,7 @@ def receive_bill(bill, *, warehouse=None, actor=None):
 
 @transaction.atomic
 def create_bill(store, *, supplier, lines, bill_date, due_date=None, number="", tax=Decimal(0),
-        category="1400", notes="", actor=None):
+        category="1400", notes="", actor=None, cost_center=None):
     """``lines`` is a list of dicts with description, qty, unit_price."""
     if category not in dict(Bill._meta.get_field("category").choices):
         raise PayableError("Kategori tagihan tidak dikenal.")
@@ -121,7 +121,7 @@ def create_bill(store, *, supplier, lines, bill_date, due_date=None, number="", 
         raise PayableError("Total tagihan harus lebih dari nol.")
     bill = Bill.objects.create(store=store, supplier=supplier, number=number, category=category,
         bill_date=bill_date, due_date=due_date, subtotal=subtotal, tax=tax, total=subtotal + tax,
-        notes=notes, created_by=actor)
+        notes=notes, created_by=actor, cost_center=cost_center)
     BillItem.objects.bulk_create(BillItem(bill=bill, description=line["description"],
         quantity=line["qty"], unit_price=line["unit_price"], product=line["product"],
         variant=line["variant"], line_total=line["qty"] * line["unit_price"]) for line in lines)

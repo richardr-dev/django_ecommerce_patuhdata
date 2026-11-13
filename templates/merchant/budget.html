@@ -1,0 +1,41 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Anggaran vs realisasi{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Anggaran vs realisasi</h1><p>Rencana biaya dan penjualan dibandingkan dengan yang tercatat di buku besar. Biaya yang diposting hari ini langsung memakai anggaran bulan ini.</p></div>
+  <div class="dp-actions">{% if merchant_role == 'admin' or merchant_role == 'finance' %}<a class="btn-primary" href="{% url 'merchant-budget-edit' %}?year={{ year }}{% if center %}&center={{ center.pk }}{% endif %}">{% icon "sliders" %} Atur anggaran</a>{% endif %}<a class="btn" href="{% url 'merchant-cost-centers' %}">Pusat biaya</a></div></div>
+
+<form method="get" class="toolbar">
+  <label class="field"><span>Tahun</span><select name="year" onchange="this.form.submit()">{% for y in years %}<option value="{{ y }}"{% if y == year %} selected{% endif %}>{{ y }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Dari</span><select name="from" onchange="this.form.submit()">{% for m in months %}<option value="{{ forloop.counter }}"{% if forloop.counter == first %} selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Sampai</span><select name="to" onchange="this.form.submit()">{% for m in months %}<option value="{{ forloop.counter }}"{% if forloop.counter == last %} selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Pusat biaya</span><select name="center" onchange="this.form.submit()"><option value="">Seluruh usaha</option>{% for c in centers %}<option value="{{ c.pk }}"{% if center and center.pk == c.pk %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+</form>
+
+{% if not has_budget %}<div class="notice info">{% icon "alert" %}<span><b>Belum ada anggaran untuk {{ year }}{% if center %} di {{ center.name }}{% endif %}.</b> Kolom realisasi tetap terisi dari buku besar. {% if merchant_role == 'admin' or merchant_role == 'finance' %}<a href="{% url 'merchant-budget-edit' %}?year={{ year }}{% if center %}&center={{ center.pk }}{% endif %}" style="text-decoration:underline">Atur anggaran sekarang</a>.{% endif %}</span></div>{% endif %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Anggaran biaya</small><strong>{{ r.total.expense.budget|rp }}</strong><span>{{ r.start|date:"d M" }} – {{ r.end|date:"d M Y" }}</span></div>
+  <div class="tile {% if r.total.expense.status == 'over' %}warn{% endif %}"><small>Biaya terpakai</small><strong>{{ r.total.expense.actual|rp }}</strong><span>{% if r.total.expense.pct is not None %}{{ r.total.expense.pct }}% dari anggaran{% else %}tanpa anggaran{% endif %}</span></div>
+  <div class="tile"><small>Target penjualan</small><strong>{{ r.total.revenue.budget|rp }}</strong><span>{% if r.total.revenue.pct is not None %}tercapai {{ r.total.revenue.pct }}%{% else %}belum ada target{% endif %}</span></div>
+  <div class="tile {% if r.over %}warn{% endif %}"><small>Pos melebihi anggaran</small><strong>{{ r.over|length }}</strong><span>{{ r.warn|length }} hampir habis (≥ 80%)</span></div>
+</div>
+
+<section class="panel">
+  <header><div><h2>Biaya</h2><p>Batas pengeluaran per akun. Garis merah berarti sudah melewati anggaran.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Akun</th><th class="num">Anggaran</th><th class="num">Realisasi</th><th class="num">Sisa</th><th style="width:220px">Terpakai</th></tr></thead><tbody>
+  {% for row in r.expense %}<tr>
+    <td><b class="rowlink">{{ row.name }}</b><small>{{ row.code }}{% if row.unbudgeted %} · tanpa anggaran{% endif %}</small></td>
+    <td class="num">{{ row.budget|rp }}</td><td class="num"><b>{{ row.actual|rp }}</b></td>
+    <td class="num {% if row.variance < 0 %}neg{% endif %}">{{ row.variance|signed_rp }}</td>
+    <td>{% if row.pct is not None %}<span class="flex items-center gap-2"><span class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-2.5 rounded-full {% if row.status == 'over' %}bg-rose-500{% elif row.status == 'warn' %}bg-amber-500{% else %}bg-blue-600{% endif %}" style="width:{{ row.bar|stringformat:'s' }}%"></span></span><b class="w-12 text-right text-xs {% if row.status == 'over' %}text-rose-600{% elif row.status == 'warn' %}text-amber-600{% else %}text-slate-600{% endif %}">{{ row.pct }}%</b></span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Belum ada anggaran atau biaya pada periode ini.</td></tr>{% endfor %}
+  </tbody>{% if r.expense %}<tfoot><tr><td>Total biaya</td><td class="num">{{ r.total.expense.budget|rp }}</td><td class="num">{{ r.total.expense.actual|rp }}</td><td class="num">{{ r.total.expense.variance|signed_rp }}</td><td></td></tr></tfoot>{% endif %}</table></div>
+</section>
+{% if r.revenue %}<section class="panel">
+  <header><div><h2>Penjualan dan pendapatan</h2><p>Target dibandingkan dengan yang sudah masuk.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Akun</th><th class="num">Target</th><th class="num">Tercapai</th><th class="num">Kurang / lebih</th><th style="width:220px">Pencapaian</th></tr></thead><tbody>
+  {% for row in r.revenue %}<tr><td><b class="rowlink">{{ row.name }}</b><small>{{ row.code }}</small></td><td class="num">{{ row.budget|rp }}</td><td class="num"><b>{{ row.actual|rp }}</b></td><td class="num {% if row.variance < 0 %}neg{% else %}pos{% endif %}">{{ row.variance|signed_rp }}</td>
+    <td>{% if row.pct is not None %}<span class="flex items-center gap-2"><span class="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-2.5 rounded-full {% if row.status == 'behind' %}bg-amber-500{% else %}bg-emerald-500{% endif %}" style="width:{{ row.bar|stringformat:'s' }}%"></span></span><b class="w-12 text-right text-xs text-slate-600">{{ row.pct }}%</b></span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>{% endif %}
+{% endblock %}

@@ -10,6 +10,7 @@
   <div class="form-grid">
     <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label>
     <label class="field" style="grid-column:span 3"><span>Keterangan</span><input name="memo" maxlength="300" required value="{% if opening %}Saldo awal{% endif %}" placeholder="mis. Setoran modal pemilik"></label>
+    {% if cost_centers %}<label class="field"><span>Pusat biaya</span><select name="cost_center"><option value="">Seluruh usaha</option>{% for c in cost_centers %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}</select></label>{% endif %}
   </div>
   <div class="scroll-x"><table class="editor">
     <thead><tr><th>Akun</th><th class="num" style="width:180px">Debit</th><th class="num" style="width:180px">Kredit</th><th class="x"></th></tr></thead>

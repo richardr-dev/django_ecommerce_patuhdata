@@ -95,6 +95,8 @@ NAV = [
             Link("Kas & bank", "merchant-bank-accounts", match=("/merchant/accounting/cash/",)),
             Link("Jurnal", "merchant-journal-list"),
             Link("Pemeriksaan pembukuan", "merchant-books-checks"),
+            Link("Anggaran", "merchant-budget", match=("/merchant/accounting/budget/",)),
+            Link("Pusat biaya", "merchant-cost-centers"),
             Link("Saldo awal", "merchant-opening-balances"),
             Link("Jurnal umum", "merchant-journal-new"),
             Link("Bagan akun", "merchant-chart-of-accounts"),

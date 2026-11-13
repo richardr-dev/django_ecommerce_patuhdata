@@ -124,7 +124,8 @@ def live_entry(store, source_type, source_id):
         source_id=str(source_id), superseded=False).first()
 
 
-def post_entry(store, *, date, memo, amounts, source, strict=False, actor=None, **links):
+def post_entry(store, *, date, memo, amounts, source, strict=False, actor=None, cost_center=None,
+        **links):
     """Post a balanced entry for a business document, once.
 
     ``amounts`` maps account code to a signed amount: positive is a debit, negative a credit.
@@ -148,7 +149,8 @@ def post_entry(store, *, date, memo, amounts, source, strict=False, actor=None, 
     try:
         with transaction.atomic():
             entry = JournalEntry.objects.create(store=store, date=date, memo=memo[:300],
-                source_type=source_type, source_id=source_id, created_by=actor, **links)
+                source_type=source_type, source_id=source_id, created_by=actor,
+                cost_center=cost_center, **links)
             JournalLine.objects.bulk_create(JournalLine(entry=entry, account=accounts[code],
                 debit=max(value, 0), credit=max(-value, 0)) for code, value in amounts.items())
     except IntegrityError:
@@ -183,7 +185,7 @@ def reverse_source(store, source_type, source_id, **kwargs):
     return reverse_entry(entry, **kwargs) if entry else None
 
 
-def post_journal(store, *, date, memo, lines, actor=None):
+def post_journal(store, *, date, memo, lines, actor=None, cost_center=None):
     """A manual journal (jurnal umum): opening balances, owner capital, depreciation,
     corrections. ``lines`` is a list of (account code, debit, credit)."""
     amounts = {}
@@ -193,16 +195,16 @@ def post_journal(store, *, date, memo, lines, actor=None):
         raise LedgerError("Jurnal kosong.")
     import uuid
     return post_entry(store, date=date, memo=memo, amounts=amounts, strict=True, actor=actor,
-        source=("journal", uuid.uuid4().hex))
+        source=("journal", uuid.uuid4().hex), cost_center=cost_center)
 
 
-def _post(store, *, date, memo, amounts, strict=False, link=True, **source):
+def _post(store, *, date, memo, amounts, strict=False, link=True, cost_center=None, **source):
     """Post for one of the documents the ledger links to directly (payment, refund, payout,
     expense). ``link=False`` leaves the document's direct link alone: used to book it again on
     another date, when the first entry (and its link) stays on the books, reversed."""
     (kind, document), = source.items()
     entry = post_entry(store, date=date, memo=memo, amounts=amounts, strict=strict,
-        source=(kind, document.pk), **(source if link else {}))
+        source=(kind, document.pk), cost_center=cost_center, **(source if link else {}))
     if entry is None:  # nothing to book: keep an empty entry so the worker does not retry
         entry = JournalEntry.objects.create(store=store, date=date, memo=memo[:300],
             source_type=kind, source_id=str(document.pk), **source)
@@ -309,6 +311,7 @@ def post_expense(expense):
     """Money spent from the bank on running the business. PPN masukan a PKP seller may credit
     against PPN keluaran is kept apart from the cost."""
     return _post(expense.store, date=expense.date, expense=expense, strict=True,
+        cost_center=expense.cost_center,
         memo=f"Biaya: {expense.get_category_display()} · {expense.description}",
         amounts={expense.category: expense.amount - expense.input_vat,
             INPUT_VAT: expense.input_vat,

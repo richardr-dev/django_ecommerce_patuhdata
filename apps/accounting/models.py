@@ -98,6 +98,8 @@ class Expense(models.Model):
     receipt = models.FileField(upload_to=ExpenseReceiptPath(), storage=private_storage_callable,
         blank=True)
     # The money account it was paid from (the main cash account when empty).
+    cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="expenses", verbose_name="Pusat biaya")
     bank_account = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True,
         blank=True, related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
@@ -142,6 +144,8 @@ class JournalEntry(models.Model):
         related_name="journal_entry")
     expense = models.OneToOneField(Expense, on_delete=models.PROTECT, null=True, blank=True,
         related_name="journal_entry")
+    cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="entries")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -234,6 +238,8 @@ class Bill(models.Model):
     tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
+    cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="bills", verbose_name="Pusat biaya")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -443,3 +449,39 @@ class FixedAsset(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CostCenter(models.Model):
+    """A branch, outlet or department that costs are tracked and budgeted for."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="cost_centers")
+    code = models.CharField(max_length=12)
+    name = models.CharField(max_length=80)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_cost_center_code")]
+
+    def __str__(self):
+        return f"{self.code} · {self.name}"
+
+
+class BudgetLine(models.Model):
+    """What the store planned to spend (or earn) on one account in one month, optionally for one
+    cost centre. Compared with the ledger in Anggaran vs realisasi."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="budget_lines")
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="budget_lines")
+    cost_center = models.ForeignKey(CostCenter, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="budget_lines")
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["store", "year", "month", "account", "cost_center"],
+                name="unique_budget_line"),
+            models.UniqueConstraint(fields=["store", "year", "month", "account"],
+                condition=models.Q(cost_center__isnull=True), name="unique_budget_line_no_center"),
+            models.CheckConstraint(condition=models.Q(month__gte=1, month__lte=12), name="budget_month_valid"),
+        ]

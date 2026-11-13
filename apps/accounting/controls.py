@@ -336,10 +336,23 @@ def period_lock(store, today, ledger):
         url=reverse("merchant-accounting"), action="Tutup buku")
 
 
+def budget_control(store, today, ledger):
+    from . import budgets
+    alerts = budgets.alerts(store, today)
+    if not alerts["over"] and not alerts["warn"]:
+        return Check("budget", "Biaya dalam anggaran", OK, "Tidak ada pos biaya yang melewati anggaran bulan ini.")
+    worst = alerts["over"] or alerts["warn"]
+    check = Check("budget", "Biaya melewati anggaran", WARN if alerts["over"] else INFO,
+        f"{len(alerts['over'])} pos melebihi anggaran dan {len(alerts['warn'])} hampir habis bulan ini.",
+        url=reverse("merchant-budget"), action="Buka anggaran")
+    check.items = [f"{r['name']}: {r['pct']}% dari anggaran" for r in worst][:10]
+    return check
+
+
 CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_status, receivable, payable,
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
-    marketplace_income, period_lock]
+    marketplace_income, period_lock, budget_control]
 
 
 def run_checks(store, today):

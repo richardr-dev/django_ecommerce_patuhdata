@@ -32,7 +32,7 @@ class ExpenseForm(forms.ModelForm):
     class Meta:
         model = Expense
         fields = ["date", "category", "description", "vendor", "amount", "input_vat", "bank_account",
-            "receipt"]
+            "cost_center", "receipt"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
         labels = {"date": "Tanggal bayar", "category": "Kategori", "description": "Keterangan",
             "vendor": "Dibayar ke", "amount": "Jumlah dibayar (Rp)",
@@ -52,6 +52,11 @@ class ExpenseForm(forms.ModelForm):
             pk__in=[a.pk for a in accounts])
         self.fields["bank_account"].empty_label = "Kas utama"
         self.fields["bank_account"].required = False
+        from .models import CostCenter
+        self.fields["cost_center"].queryset = CostCenter.objects.filter(store=store, is_active=True) \
+            if store else CostCenter.objects.none()
+        self.fields["cost_center"].empty_label = "Seluruh usaha"
+        self.fields["cost_center"].required = False
         self.is_pkp = is_pkp
 
     def clean_date(self):

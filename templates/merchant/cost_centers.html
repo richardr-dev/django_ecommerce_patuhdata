@@ -1,0 +1,12 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Pusat biaya{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Pusat biaya</h1><p>Cabang, outlet, atau departemen. Pilih pusat biaya saat mencatat biaya, tagihan supplier, atau jurnal, lalu pantau anggarannya sendiri-sendiri.</p></div><div class="dp-actions"><a class="btn" href="{% url 'merchant-budget' %}">Anggaran vs realisasi</a></div></div>
+{% if merchant_role == 'admin' or merchant_role == 'finance' %}<form method="post" class="panel" style="padding:16px 18px">{% csrf_token %}<input type="hidden" name="action" value="add">
+  <div class="toolbar" style="margin:0"><label class="field"><span>Kode</span><input name="code" maxlength="12" required placeholder="mis. BDG" style="width:110px"></label><label class="field" style="flex:1"><span>Nama</span><input name="name" maxlength="80" required placeholder="mis. Cabang Bandung" style="width:100%"></label><button class="btn-primary self-end">{% icon "plus" %} Tambah</button></div></form>{% endif %}
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Kode</th><th>Nama</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for c in centers %}<tr><td><b>{{ c.code }}</b></td><td>{{ c.name }}</td><td><span class="pill {% if c.is_active %}pill-paid{% else %}pill-draft{% endif %}">{% if c.is_active %}Aktif{% else %}Nonaktif{% endif %}</span></td>
+    <td class="num">{% if merchant_role == 'admin' or merchant_role == 'finance' %}<a class="rowlink" href="{% url 'merchant-budget' %}?center={{ c.pk }}">Anggaran →</a> <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="center" value="{{ c.pk }}"><button class="btn" name="action" value="{% if c.is_active %}deactivate{% else %}activate{% endif %}">{% if c.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %}</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="4" class="!py-10 text-center text-slate-400">Belum ada pusat biaya. Tanpa pusat biaya, semua biaya dihitung untuk seluruh usaha.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

@@ -666,3 +666,113 @@ def merchant_books_checks(request):
     results.sort(key=lambda c: controls.ORDER[c.status])  # stable: the listed order within a status
     return render(request, "merchant/books_checks.html", _merchant_context(request, store,
         results=results, summary=controls.summarize(results), can_edit=_can_edit(request, store)))
+
+
+# ── Anggaran (budget) and cost centres ───────────────────────────────────────
+
+BUDGET_VIEW = {"admin", "manager", "finance", "viewer"}
+BUDGET_EDIT = {"admin", "finance"}
+
+
+def _center(store, value):
+    from .models import CostCenter
+    try:
+        return CostCenter.objects.filter(store=store, pk=int(value)).first() if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_budget(request):
+    """Anggaran vs realisasi: what was planned against what the books say, per account."""
+    from . import budgets
+    from .models import CostCenter
+
+    store = _staff_store(request)
+    _require_roles(request, store, BUDGET_VIEW)
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get("year") or today.year)
+        first = int(request.GET.get("from") or today.month)
+        last = int(request.GET.get("to") or first)
+    except ValueError:
+        year, first, last = today.year, today.month, today.month
+    center = _center(store, request.GET.get("center"))
+    data = budgets.report(store, year, first, last, center)
+    return render(request, "merchant/budget.html", _merchant_context(request, store,
+        r=data, year=year, first=data["start"].month, last=data["end"].month, center=center,
+        centers=CostCenter.objects.filter(store=store, is_active=True), months=budgets.MONTHS,
+        years=range(today.year - 2, today.year + 2), has_budget=bool(budgets.get_budget(store, year, center))))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_budget_edit(request):
+    """The budget grid: every cost account, twelve months."""
+    from . import budgets
+    from .models import CostCenter
+
+    store = _staff_store(request)
+    _require_roles(request, store, BUDGET_EDIT)
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get("year") or request.POST.get("year") or today.year)
+    except ValueError:
+        year = today.year
+    center = _center(store, request.GET.get("center") or request.POST.get("center"))
+    accounts = budgets.budget_accounts(store)
+    if request.method == "POST":
+        rows = {}
+        for account in accounts["expense"] + accounts["revenue"]:
+            values = []
+            for month in range(1, 13):
+                raw = (request.POST.get(f"b_{account.code}_{month}") or "").strip().replace(".", "").replace(",", ".")
+                try:
+                    values.append(Decimal(raw) if raw else Decimal(0))
+                except InvalidOperation:
+                    messages.error(request, f"Angka tidak valid di {account.name}, bulan {month}.")
+                    return redirect(request.get_full_path())
+            rows[account.code] = values
+        try:
+            saved = budgets.save_budget(store, year, rows, center)
+        except budgets.BudgetError as error:
+            messages.error(request, str(error))
+        else:
+            AuditLog.objects.create(store=store, actor=request.user, action="budget.saved", object_type="Budget",
+                object_id=f"{year}", details={"year": year, "center": center.code if center else "", "lines": saved})
+            messages.success(request, f"Anggaran {year} disimpan ({saved} baris).")
+            return redirect(f"{request.path}?year={year}" + (f"&center={center.pk}" if center else ""))
+    table = budgets.get_budget(store, year, center)
+    grid = [{"account": a, "values": table.get(a.code, [Decimal(0)] * 12)} for a in accounts["expense"]]
+    targets = [{"account": a, "values": table.get(a.code, [Decimal(0)] * 12)} for a in accounts["revenue"]]
+    return render(request, "merchant/budget_edit.html", _merchant_context(request, store, year=year, center=center,
+        centers=CostCenter.objects.filter(store=store, is_active=True), grid=grid, targets=targets,
+        months=budgets.MONTHS, years=range(today.year - 1, today.year + 3)))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_cost_centers(request):
+    """Pusat biaya: the branches, outlets or departments costs are tracked for."""
+    from .models import CostCenter
+
+    store = _staff_store(request)
+    _require_roles(request, store, BUDGET_VIEW)
+    if request.method == "POST":
+        _require_roles(request, store, BUDGET_EDIT)
+        action = request.POST.get("action")
+        if action == "add":
+            code, name = request.POST.get("code", "").strip().upper()[:12], request.POST.get("name", "").strip()[:80]
+            if not code or not name:
+                messages.error(request, "Isi kode dan nama pusat biaya.")
+            elif CostCenter.objects.filter(store=store, code=code).exists():
+                messages.error(request, f"Kode {code} sudah dipakai.")
+            else:
+                CostCenter.objects.create(store=store, code=code, name=name)
+                messages.success(request, f"Pusat biaya {name} ditambahkan.")
+        elif action in {"deactivate", "activate"}:
+            center = _center(store, request.POST.get("center"))
+            if center:
+                center.is_active = action == "activate"
+                center.save(update_fields=["is_active"])
+        return redirect("merchant-cost-centers")
+    return render(request, "merchant/cost_centers.html", _merchant_context(request, store,
+        centers=CostCenter.objects.filter(store=store)))
