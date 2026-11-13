@@ -353,14 +353,19 @@ class OrderItem(models.Model):
 
     @property
     def effective_ab_shop_price(self):
-        """The price used when billing AB Shop for this item."""
+        """The price used when billing the mitra of this order for this item: a price set on the
+        line, else the mitra's own price list, else the general mitra price, else the line price."""
         if self.ab_shop_price is not None:
             return self.ab_shop_price
-        if self.variant and self.variant.ab_shop_price is not None:
-            return self.variant.ab_shop_price
-        if self.product and self.product.ab_shop_price is not None:
-            return self.product.ab_shop_price
-        return self.unit_price
+        from apps.settlements.pricing import partner_price
+        price = partner_price(self.order.consignment_partner, self.product, self.variant)
+        if price is None and self.order.consignment_partner_id is None:
+            # An order with no mitra recorded keeps the older general mitra price.
+            if self.variant and self.variant.ab_shop_price is not None:
+                return self.variant.ab_shop_price
+            if self.product and self.product.ab_shop_price is not None:
+                return self.product.ab_shop_price
+        return price if price is not None else self.unit_price
 
     @property
     def ab_shop_line_total(self):

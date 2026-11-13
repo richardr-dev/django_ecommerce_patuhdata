@@ -87,10 +87,14 @@ Four test files failed before this work and still do: `test_digital_products`,
 - **A return needs a photo before it is approved** (buyer uploads it with the request; a seller can add
   it on the return page). An exchange can only ask for a size that is in stock now. Photos are
   verified with Pillow (PNG/JPG/WebP, max 5 MB). Seller-recorded returns start as `requested`.
-- **AB Shop invoices** (channel `abshop` on the one invoice form) take the product's AB Shop price
-  when no price is typed, record which platform AB Shop resells on (`ab_shop_source`), and are
-  marked billed (`abshop_billing_status`). Courier and resi are stored on the order and print on
-  every invoice document.
+- **AB Shop is a mitra** (a `ConsignmentPartner`), not a sales channel. Its prices live in
+  `PartnerProductPrice` ("Harga mitra" on a product) and are read through
+  `settlements/pricing.py:partner_price` (own list, then the general `ab_shop_price`, then retail);
+  `OrderItem.effective_ab_shop_price`, settlements and the invoice form all use it. On the one invoice
+  form, "Jual ke mitra" prices the lines from that list, fills the mitra's contact, and records an
+  order with `consignment_partner`, type `reseller_sell_in`, billed on this invoice (so a settlement
+  never bills it again). A settlement only takes that mitra's unbilled orders. Courier and resi are
+  stored on the order and print on every invoice document.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live

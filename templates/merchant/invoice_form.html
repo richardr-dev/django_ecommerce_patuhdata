@@ -133,6 +133,13 @@
 
     <section class="rounded-3xl bg-white p-5 shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
       <div class="grid gap-4">
+        {% if partners %}
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Jual ke mitra <span class="font-normal text-slate-400">(opsional)</span></span>
+          {% if mode == 'edit' %}<input type="hidden" name="partner_id" value="{{ initial.partner_id }}">
+          <span class="flex h-11 items-center rounded-xl bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200">{% for p in partners %}{% if p.id == initial.partner_id %}{{ p.name }}{% endif %}{% empty %}—{% endfor %}{% if not initial.partner_id %}Bukan penjualan ke mitra{% endif %}</span>
+          {% else %}<select name="partner_id" id="f-partner" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Bukan penjualan ke mitra</option>{% for p in partners %}<option value="{{ p.id }}" data-name="{{ p.name }}" data-phone="{{ p.contact_phone }}" data-term="{{ p.payment_term_days }}"{% if initial.partner_id == p.id|stringformat:'s' or initial.partner_id == p.id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+          <small class="font-normal text-slate-400">Harga khusus mitra terisi otomatis (atur di Produk &rsaquo; Harga mitra).</small>{% endif %}</label>
+        {% endif %}
         {% if mode != 'edit' %}
         <div>
           <p class="mb-1.5 text-xs font-semibold text-slate-600">Pembayaran</p>
@@ -148,7 +155,6 @@
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Tanggal invoice<input type="date" name="issued_on" id="f-date" value="{{ initial.issued_on|date:'Y-m-d' }}" required class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
         {% if mode != 'edit' %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Channel penjualan<select name="channel" id="f-channel" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for code, label in channels %}<option value="{{ code }}" {% if initial.channel == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-        <label id="ab-source-wrap" class="grid gap-1.5 text-xs font-semibold text-slate-600" {% if initial.channel != 'abshop' %}hidden{% endif %}>AB Shop menjual lewat<select name="ab_shop_source" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">— pilih —</option>{% for code, label in ab_sources %}<option value="{{ code }}"{% if initial.ab_shop_source == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><small class="font-normal text-slate-400">Harga khusus AB Shop dipakai otomatis untuk produk yang punya harga itu.</small></label>
         {% endif %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>No. referensi <span class="font-normal text-slate-400">(PO pelanggan / pesanan marketplace)</span></span><input name="reference" maxlength="100" value="{{ initial.reference }}" placeholder="mis. PO-2026-118" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
         <div class="grid grid-cols-2 gap-2">
@@ -273,9 +279,13 @@
     h.textContent = p ? (p.stock === null ? "Produk · stok tidak dilacak" : "Produk · stok tersedia " + p.stock) :
       (tr.querySelector(".item").value.trim() ? "Jasa / biaya lain (tanpa stok)" : "");
   }
-  var channelEl = document.getElementById("f-channel");
-  function isAb() { return !!channelEl && channelEl.value === "abshop"; }
-  function priceFor(p) { return isAb() && p.ab_price !== "" ? parseFloat(p.ab_price) : p.price; }
+  var partnerEl = document.getElementById("f-partner");
+  var activePartner = function () { return partnerEl ? partnerEl.value : ""; };
+  function priceFor(p) {     // the mitra's own price, else the general mitra price, else retail
+    var id = activePartner(); if (!id) return p.price;
+    if (p.mitra && p.mitra[id] !== undefined) return parseFloat(p.mitra[id]);
+    return p.ab_price !== "" ? parseFloat(p.ab_price) : p.price;
+  }
   function setAuto(price, p) {          // a price the system filled in: it follows the channel
     price.value = Math.round(priceFor(p)).toLocaleString("id-ID"); price.dataset.auto = "1";
   }
@@ -338,16 +348,20 @@
     applyCols(loadCols());
   }
 
-  /* ── AB Shop: its own price and the platform it resells on ─────────────── */
-  var abWrap = document.getElementById("ab-source-wrap");
-  if (channelEl && !locked) channelEl.addEventListener("change", function () {
-    abWrap.hidden = !isAb();
+  /* ── Mitra: choosing one prices the lines from its price list ─────────── */
+  if (partnerEl && !locked) partnerEl.addEventListener("change", function () {
+    var opt = partnerEl.selectedOptions[0];
     rows.querySelectorAll("tr").forEach(function (tr) {
       var price = tr.querySelector("[data-price]"), p = byId[tr.querySelector("[name='product[]']").value];
       if (p && price.dataset.auto === "1") setAuto(price, p);   // only prices the system chose
     });
+    if (partnerEl.value) {
+      var name = document.getElementById("f-name"), phone = document.getElementById("f-phone");
+      if (!name.value.trim()) name.value = opt.dataset.name || "";
+      if (!phone.value.trim()) phone.value = opt.dataset.phone || "";
+      if (window.pdToast) window.pdToast("Harga khusus " + opt.dataset.name + " dipakai untuk produk yang punya harga mitra.", "success");
+    }
     calc();
-    if (isAb() && window.pdToast) window.pdToast("Harga khusus AB Shop dipakai untuk produk yang punya harga itu.", "success");
   });
 
   /* ── payment terms ─────────────────────────────────────────────────────── */

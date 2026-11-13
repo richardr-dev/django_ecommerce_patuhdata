@@ -84,13 +84,14 @@ def _check_stock(store, lines):
 
 def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phone, address, notes,
         external_order_id, discount, shipping, status, subtotal, tax, total, order_type="direct",
-        courier="", tracking_number="", ab_shop_source=""):
+        courier="", tracking_number="", partner=None):
     extra = {"courier_code": (courier or "").strip().lower()[:40],
         "tracking_number": (tracking_number or "").strip()[:100]}
-    if channel == "abshop":
-        # Billed to AB Shop on this invoice, and noted for which platform they resell on.
-        extra["ab_shop_source"] = ab_shop_source if ab_shop_source in dict(Order.AB_SHOP_SOURCES) else ""
-        extra["abshop_billing_status"] = "billed"
+    if partner is not None:
+        # A sale to a mitra (e.g. AB Shop): billed on this invoice at the mitra's prices, so it is
+        # not offered again when the next settlement is made.
+        extra.update(consignment_partner=partner, abshop_billing_status="billed")
+        channel, order_type = "abshop", "reseller_sell_in"
     order = Order.objects.create(store=store, channel=channel, order_type=order_type, **extra,
         customer_name=buyer_name[:120], phone=(phone or "-")[:30],
         shipping_address=(address or "-")[:300], subtotal=subtotal, discount=discount, tax=tax,
@@ -143,7 +144,7 @@ def _write_items(invoice, lines):
 def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="manual",
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
         external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
-        courier="", tracking_number="", ab_shop_source=""):
+        courier="", tracking_number="", partner=None):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``)."""
@@ -156,7 +157,7 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         channel=channel, customer=customer, phone=phone, address=address, notes=notes,
         external_order_id=external_order_id, discount=discount, shipping=shipping,
         status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total,
-        courier=courier, tracking_number=tracking_number, ab_shop_source=ab_shop_source)
+        courier=courier, tracking_number=tracking_number, partner=partner)
     _deduct(order)
     invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods
@@ -252,7 +253,7 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
             phone=phone, address=buyer_address, notes=notes,
             external_order_id=external_order_id or order.external_order_id, discount=discount,
             shipping=shipping, status=order.status if order.status in {"pending", "paid"} else "paid",
-            subtotal=subtotal, tax=tax, total=total)
+            subtotal=subtotal, tax=tax, total=total, partner=order.consignment_partner)
         _deduct(new_order)
         Order.objects.filter(pk=order.pk).update(status="cancelled")  # no signals for a swap
         OrderStatusEvent.objects.create(order=order, status="cancelled",

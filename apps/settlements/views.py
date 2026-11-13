@@ -136,12 +136,14 @@ def settlement_new(request):
                                            created_by=request.user, notes=notes)
 
             # Auto-add sell-through orders in that period
+            # Only this mitra's orders (or ones with no mitra recorded) that were not billed yet.
             order_ids = list(Order.objects.filter(
                 store=store,
                 order_type__in=["reseller_sell_in", "reseller_sell_through"],
                 created_at__date__gte=period_start,
                 created_at__date__lte=period_end,
-            ).values_list("id", flat=True))
+            ).filter(models.Q(consignment_partner=partner) | models.Q(consignment_partner__isnull=True),
+                abshop_billing_status="unbilled").values_list("id", flat=True))
             added = add_sell_through_orders(settlement, order_ids)
             messages.success(request, f"Settlement dibuat dengan {added} pesanan.")
             return redirect("settlement-detail", pk=settlement.pk)

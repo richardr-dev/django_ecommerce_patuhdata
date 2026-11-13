@@ -54,9 +54,24 @@ def _customer(store, value):
         return None
 
 
+def _partners(store):
+    from apps.settlements.models import ConsignmentPartner
+    return list(ConsignmentPartner.objects.filter(store=store, is_active=True).order_by("name"))
+
+
+def _partner(store, value):
+    from apps.settlements.models import ConsignmentPartner
+    try:
+        return ConsignmentPartner.objects.filter(store=store, pk=value, is_active=True).first() if value else None
+    except (ValueError, ValidationError):
+        return None
+
+
 def _post_lines(request, store):
     """The submitted rows. A row with a product id is stock; one without is a service or fee."""
+    from apps.settlements.pricing import partner_price
     post = request.POST
+    partner = _partner(store, post.get("partner_id"))
     count = len(post.getlist("product[]"))
 
     def column(name):
@@ -71,9 +86,8 @@ def _post_lines(request, store):
         if not product and not text.strip():
             continue
         unit_price = _number(price)
-        if (not unit_price and product and product.ab_shop_price is not None
-                and post.get("channel") == "abshop"):
-            unit_price = product.ab_shop_price  # AB Shop pays its own price when none was typed
+        if not unit_price and product and partner is not None:
+            unit_price = partner_price(partner, product) or unit_price  # the mitra's own price
         lines.append({"product": product, "description": text.strip(),
             "qty": _number(qty, Decimal(1)), "unit_price": unit_price,
             "discount": _number(discount), "unit": unit, "note": note, "code": code})
@@ -92,10 +106,16 @@ def _rows(lines):
 
 
 def _catalog(store):
+    from apps.settlements.models import PartnerProductPrice
     products = annotate_available_stock(Product.objects.filter(store=store, is_active=True)
         ).order_by("name")[:3000]
+    mitra = {}
+    for product_id, partner_id, price in PartnerProductPrice.objects.filter(
+            partner__store=store).values_list("product_id", "partner_id", "price"):
+        mitra.setdefault(product_id, {})[str(partner_id)] = f"{price:.0f}"
     return [{"id": str(p.pk), "sku": p.sku, "name": p.name, "price": f"{p.price:.0f}",
         "ab_price": f"{p.ab_shop_price:.0f}" if p.ab_shop_price is not None else "",
+        "mitra": mitra.get(p.pk, {}),
         "stock": getattr(p, "stock_available", None)} for p in products]
 
 
@@ -117,7 +137,7 @@ def _initial(store, source, mode, prefill):
             "reference": order.external_order_id, "notes": source.notes,
             "courier": order.courier_code if mode == "edit" else "",
             "tracking_number": order.tracking_number if mode == "edit" else "",
-            "ab_shop_source": order.ab_shop_source,
+            "partner_id": order.consignment_partner_id or "",
             "issued_on": source.issued_on if mode == "edit" else timezone.localdate(),
             "due_date": source.due_date if mode == "edit" else None,
             "discount": f"{source.discount:.0f}" if source.discount else "",
@@ -128,7 +148,7 @@ def _initial(store, source, mode, prefill):
         "company_name": prefill.company_name if prefill else "", "npwp": prefill.npwp if prefill else "",
         "phone": prefill.phone if prefill else "", "address": prefill.address if prefill else "",
         "channel": "manual", "reference": "", "notes": "", "issued_on": timezone.localdate(),
-        "courier": "", "tracking_number": "", "ab_shop_source": "", "due_date": None, "discount": "", "shipping": "", "on_credit": False, "lines": []}
+        "courier": "", "tracking_number": "", "partner_id": "", "due_date": None, "discount": "", "shipping": "", "on_credit": False, "lines": []}
 
 
 @login_required(login_url=LOGIN)
@@ -175,7 +195,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                     actor=request.user, **{k: v for k, v in common.items() if k != "notes"},
                     notes=common["notes"], courier=post.get("courier", ""),
                     tracking_number=post.get("tracking_number", ""),
-                    ab_shop_source=post.get("ab_shop_source", ""))
+                    partner=_partner(store, post.get("partner_id")))
         except (InvoiceError, LedgerError, InvalidOperation, ValueError) as error:
             messages.error(request, f"Gagal: {error}" if str(error) else "Isian tidak valid.")
             initial.update({"customer": customer, "buyer_name": post.get("buyer_name", ""),
@@ -183,7 +203,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                 "phone": post.get("phone", ""), "address": post.get("address", ""),
                 "channel": post.get("channel", "manual"), "reference": post.get("reference", ""),
                 "courier": post.get("courier", ""), "tracking_number": post.get("tracking_number", ""),
-                "ab_shop_source": post.get("ab_shop_source", ""),
+                "partner_id": post.get("partner_id", ""),
                 "notes": post.get("notes", ""), "discount": post.get("discount", ""),
                 "shipping": post.get("shipping", ""), "on_credit": post.get("payment_status") == "credit",
                 "issued_on": parse_date(post.get("issued_on", "")) or timezone.localdate(),
@@ -204,8 +224,8 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
     vat_rate, _ = vat_for(store, Decimal(100), is_pkp=source.seller_is_pkp if editing else None)
     return render(request, "merchant/invoice_form.html", _merchant_context(request, store,
         mode=mode, source=source, locks=locks, initial=initial, terms=TERMS, vat_rate=vat_rate,
-        channels=[c for c in Order.CHANNELS if c[0] != "pos"],
-        catalog=_catalog(store), ab_sources=Order.AB_SHOP_SOURCES,
+        channels=[c for c in Order.CHANNELS if c[0] not in {"pos", "abshop"}],
+        catalog=_catalog(store), partners=_partners(store),
         today=timezone.localdate().isoformat(), post=request.POST))
 
 
