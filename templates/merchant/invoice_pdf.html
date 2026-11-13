@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load branding %}<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -78,20 +78,24 @@
 </head>
 <body>
 {% for invoice in invoices %}
+{% brand invoice.store invoice as b %}
 <div{% if not forloop.first %} class="page-break"{% endif %}>
 
   <div class="inv-header">
-    <div>
-      <div class="store-name">{{ invoice.store.name }}</div>
+    <div style="display:flex;align-items:flex-start;gap:10pt">
+      {% with logo=b.data_uri %}{% if logo %}<img src="{{ logo }}" alt="" style="max-height:44pt;max-width:110pt;object-fit:contain">{% endif %}{% endwith %}
+      <div>
+      {% if b.show_name or not b.logo %}<div class="store-name" style="color:{{ b.accent }}">{{ b.name }}</div>{% endif %}
       {% if invoice.seller_address %}
       <div class="store-meta">{{ invoice.seller_address }}</div>
       {% endif %}
       {% if invoice.seller_npwp %}
       <div class="npwp-row">NPWP: {{ invoice.seller_npwp }}</div>
       {% endif %}
+      </div>
     </div>
     <div class="inv-title-block">
-      <div class="inv-title">INVOICE</div>
+      <div class="inv-title" style="color:{{ b.accent }}">INVOICE</div>
       <div class="inv-number">{{ invoice.number }}</div>
       <div>
         <span class="status-badge status-{{ invoice.status }}">{{ invoice.get_status_display }}</span>
@@ -99,7 +103,7 @@
     </div>
   </div>
 
-  <hr class="divider">
+  <hr class="divider" style="border-top-color:{{ b.accent }}">
 
   <div class="addr-row">
     <div class="addr-block">
@@ -131,7 +135,7 @@
 
   <table class="items">
     <thead>
-      <tr>
+      <tr style="background:{{ b.accent }}">
         <th style="width:40%">Produk / Deskripsi</th>
         <th class="r" style="width:8%">Qty</th>
         <th class="r" style="width:18%">Harga Satuan</th>
@@ -195,8 +199,10 @@
   </div>
   {% endif %}
 
+  {% if b.footer %}<div style="margin-top:14pt;padding-top:8pt;border-top:0.5pt dashed #9ca3af;font-size:8.5pt;color:#374151;white-space:pre-line">{{ b.footer }}</div>{% endif %}
+
   <div class="footer">
-    <div class="footer-left">{{ invoice.store.name }}<br>Diterbitkan: {{ invoice.issued_on|date:"d M Y" }}</div>
+    <div class="footer-left">{{ b.name }}<br>Diterbitkan: {{ invoice.issued_on|date:"d M Y" }}</div>
     <div class="footer-right">{{ invoice.number }}<br>Dokumen ini diterbitkan secara digital.</div>
   </div>
 

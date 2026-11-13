@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}
+{% extends "merchant/base.html" %}{% load icons branding %}
 {% block title %}Invoice {{ invoice.number }}{% endblock %}
 {% block content %}
 
@@ -61,11 +61,12 @@
 <div class="dp-grid">
   {# ── The invoice as the customer sees it ─────────────────────────────── #}
   <article class="dp-paper" id="invoice-printable">
-    <div class="dp-paper-head">
+    {% brand merchant_store invoice as b %}
+    <div class="dp-paper-head" style="background:{{ b.gradient }}">
       <div class="dp-seller">
-        {% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="">{% else %}<span class="mark">{{ invoice.seller_name|slice:':1' }}</span>{% endif %}
+        {% if b.logo_url %}<span style="background:#fff;border-radius:12px;padding:6px 8px;display:grid;place-items:center"><img src="{{ b.logo_url }}" alt="" style="max-height:44px;width:auto;border-radius:0"></span>{% else %}<span class="mark">{{ b.initial }}</span>{% endif %}
         <div>
-          <strong>{{ invoice.seller_name }}</strong>
+          {% if b.show_name or not b.logo_url %}<strong>{{ invoice.seller_name }}</strong>{% endif %}
           {% if invoice.seller_address %}<p>{{ invoice.seller_address }}</p>{% endif %}
           {% if invoice.seller_npwp %}<p>NPWP {{ invoice.seller_npwp }}{% if invoice.seller_is_pkp %} · PKP{% endif %}</p>{% endif %}
         </div>
@@ -141,6 +142,7 @@
         {% endif %}
       </div>
     </div>
+    {% if b.footer %}<div class="dp-notes" style="padding:0 32px 22px"><h4>Info pembayaran &amp; syarat</h4><p>{{ b.footer }}</p></div>{% endif %}
     {% if invoice.status == 'paid' %}<span class="dp-stamp paid">LUNAS</span>{% elif invoice.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
   </article>
 

@@ -1,10 +1,10 @@
-{% load books %}<!doctype html>
+{% load books branding %}<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
-<title>Invoice {{ invoice.number }} · {{ invoice.seller_name }}</title>
+{% brand invoice.store invoice as b %}<title>Invoice {{ invoice.number }} · {{ invoice.seller_name }}</title>
 <style>
-  :root { --blue:#1a66d9; --ink:#0f1f38; --muted:#6a7a92; --line:#e3e9f3; }
+  :root { --accent:{{ b.accent }}; --blue:{{ b.accent }}; --ink:#0f1f38; --muted:#6a7a92; --line:#e3e9f3; }
   * { box-sizing: border-box; }
   body { margin:0; background:#f5f8fd; color:var(--ink); font:14px/1.55 Inter,system-ui,sans-serif; }
   .wrap { max-width:760px; margin:0 auto; padding:20px 16px 48px; }
@@ -18,10 +18,12 @@
   .meta div { background:#f9fbfe; padding:10px 14px; } .meta dt { color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
   .meta dd { margin:3px 0 0; font-weight:650; }
   .pad { padding:20px 28px; } h2 { margin:0 0 6px; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
-  table { width:100%; border-collapse:collapse; } th { background:#eef4fe; color:var(--blue); font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 10px; text-align:left; }
+  table { width:100%; border-collapse:collapse; } th { background:#eef4fe; color:var(--accent,#1a66d9); font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 10px; text-align:left; }
   td { padding:11px 10px; border-bottom:1px solid #eef2f8; vertical-align:top; } .n { text-align:right; white-space:nowrap; } small { display:block; color:var(--muted); font-size:12px; }
   .tot { margin-left:auto; width:min(100%,320px); } .tot div { display:flex; justify-content:space-between; padding:4px 0; color:var(--muted); }
   .tot .grand { border-top:1px solid var(--line); margin-top:6px; padding-top:10px; color:var(--ink); font-weight:750; font-size:16px; }
+  .tot .due { color:var(--accent); }
+  .tot .due.ok { color:#067647; }
   .due { margin-top:10px; padding:12px 18px; border-radius:99px; background:#eef4fe; color:var(--blue); font-weight:750; }
   .due.ok { background:#ecfdf3; color:#067647; }
   .bank { display:flex; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:14px; background:#f4f8ff; margin-top:8px; }
@@ -32,10 +34,10 @@
 </style>
 </head>
 <body><div class="wrap">
-  <div class="top"><b>{{ invoice.seller_name }}</b><button class="btn" onclick="window.print()">Cetak / simpan PDF</button></div>
+  <div class="top"><b>{{ b.name }}</b><button class="btn" onclick="window.print()">Cetak / simpan PDF</button></div>
   <article class="card">
-    <div class="head"><div><h1>{% if invoice.seller_is_pkp and invoice.tax %}INVOICE PAJAK{% else %}INVOICE{% endif %}</h1><p>{{ invoice.number }}</p></div>
-      <div style="text-align:right"><b>{{ invoice.seller_name }}</b><p>{{ invoice.seller_address }}{% if invoice.seller_npwp %}
+    <div class="head" style="background:{{ b.gradient }}"><div style="display:flex;align-items:center;gap:14px">{% if b.logo_url %}<span style="background:#fff;border-radius:14px;padding:6px 8px;display:grid;place-items:center"><img src="{{ b.logo_url }}" alt="" style="max-height:48px;max-width:120px;object-fit:contain"></span>{% endif %}<div><h1>{% if invoice.seller_is_pkp and invoice.tax %}INVOICE PAJAK{% else %}INVOICE{% endif %}</h1><p>{{ invoice.number }}</p></div></div>
+      <div style="text-align:right">{% if b.show_name or not b.logo_url %}<b>{{ invoice.seller_name }}</b>{% endif %}<p>{{ invoice.seller_address }}{% if invoice.seller_npwp %}
 NPWP {{ invoice.seller_npwp }}{% endif %}</p></div></div>
     <dl class="meta"><div><dt>Tanggal</dt><dd>{{ invoice.issued_on|date:"d M Y" }}</dd></div><div><dt>Jatuh tempo</dt><dd>{{ invoice.due_date|date:"d M Y"|default:"Saat diterima" }}</dd></div><div><dt>Status</dt><dd>{% if settled %}Lunas{% elif invoice.status == 'void' %}Dibatalkan{% else %}Belum lunas{% endif %}</dd></div></dl>
     <div class="pad"><h2>Ditagihkan kepada</h2><b>{{ invoice.buyer_name }}</b>{% if invoice.buyer_address and invoice.buyer_address != '-' %}<small>{{ invoice.buyer_address }}</small>{% endif %}{% if invoice.buyer_npwp %}<small>NPWP {{ invoice.buyer_npwp }}</small>{% endif %}</div>
@@ -55,6 +57,7 @@ NPWP {{ invoice.seller_npwp }}{% endif %}</p></div></div>
     {% if not settled and invoice.status != 'void' and banks %}
     <div class="pad" style="padding-top:0"><h2>Cara membayar</h2><p class="note" style="margin:0 0 4px">Transfer ke salah satu rekening berikut, lalu kirim bukti transfer ke penjual dengan menyebut nomor invoice.</p>
       {% for b in banks %}<div class="bank"><div>{{ b.bank_name|default:b.name }}<br><b>{{ b.account_number }}</b><small>a.n. {{ b.name }}</small></div><button type="button" class="copy" data-copy="{{ b.account_number }}">Salin</button></div>{% endfor %}</div>{% endif %}
+    {% if b.footer %}<div class="pad" style="padding-top:0"><h2>Info pembayaran &amp; syarat</h2><p class="note" style="margin:0">{{ b.footer }}</p></div>{% endif %}
     {% if invoice.notes %}<div class="pad" style="padding-top:0"><h2>Catatan</h2><p class="note" style="margin:0">{{ invoice.notes }}</p></div>{% endif %}
     {% if invoice.status == 'void' %}<div class="pad" style="padding-top:0"><span class="stamp" style="color:#f04438">DIBATALKAN</span></div>{% elif settled %}<div class="pad" style="padding-top:0"><span class="stamp" style="color:#12b76a">LUNAS</span></div>{% endif %}
   </article>

@@ -78,6 +78,12 @@ Four test files failed before this work and still do: `test_digital_products`,
   books; a switch shows them. New lists of "orders to fulfil" must use `website_orders(store)`.
   `manage.py clean_orders` reports empty import batches, duplicate imports and look-alike orders
   (`--apply` removes only the empty batches, never orders).
+- **Every document a buyer sees takes its logo, accent colour and footer from `tax/branding.py`**
+  (invoice logo from Tampilan invoice, else the shop logo, else the initial): invoice screen, print,
+  PDF, buyer link, surat tagihan, surat jalan, quote, credit note. A new buyer-facing document must
+  load `branding` and use `{% brand store obj as b %}`, never `merchant_store.logo` directly. PDFs
+  embed the logo (`b.data_uri`); web pages use `b.logo_url`. Logos are PNG/JPG/WebP, verified with
+  Pillow, max 2 MB and 4000 px (no SVG).
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -97,6 +103,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
 | Credit notes | `tax/credit_notes.py` | `tax/sales_views.py` |
+| Store logo, accent colour and footer on every buyer document (Tampilan invoice) | `tax/branding.py` (`{% brand store invoice as b %}`) | `tax/sales_views.py:merchant_invoice_style`, `templates/merchant/invoice_style.html` |
 | Send an invoice (link, WhatsApp, email, reminder) and the buyer's page | `tax/sharing.py`, `tax/public_views.py` | `channels/views.py:merchant_invoice_detail/_email/_sent`, `templates/tax/public_invoice.html` |
 | Duplicate customers: find and merge | `shops/customer_merge.py` | `shops/segment_views.py:merchant_customer_duplicates` |
 | Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |

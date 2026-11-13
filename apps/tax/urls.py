@@ -5,6 +5,8 @@ from . import public_views, receivable_views, sales_views, views
 urlpatterns = [
     path("i/<str:token>/", public_views.public_invoice, name="invoice-public"),
     path("merchant/tax/", views.merchant_tax, name="merchant-tax"),
+    path("merchant/tax/tampilan-invoice/", sales_views.merchant_invoice_style,
+        name="merchant-invoice-style"),
     path("merchant/tax/invoices.csv", views.merchant_invoice_register,
         name="merchant-invoice-register"),
     path("merchant/sales/piutang/", receivable_views.merchant_receivables,

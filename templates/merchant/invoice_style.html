@@ -1,0 +1,109 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Tampilan invoice{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pajak &amp; invoice</span><h1>Tampilan invoice</h1><p>Logo, warna, dan catatan kaki yang dipakai di invoice, surat tagihan, surat jalan, penawaran, dan nota kredit untuk pelanggan Anda.</p></div></div>
+
+<form method="post" enctype="multipart/form-data" data-unsaved class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+  {% csrf_token %}
+  <div class="grid gap-5">
+    <section class="panel !mb-0">
+      <header><div class="flex items-center gap-3"><span class="bb-bubble step">1</span><div><h2>Logo</h2><p>PNG, JPG, atau WebP, maksimal 2 MB. Logo persegi atau memanjang sama-sama bagus.</p></div></div></header>
+      <div class="grid gap-4 p-5">
+        <div class="flex items-center gap-4">
+          <span class="grid h-20 w-32 shrink-0 place-items-center overflow-hidden rounded-2xl bg-slate-50 ring-1 ring-slate-200">
+            <img id="logo-preview" src="{{ brand.logo_url }}" alt="Logo" class="max-h-16 max-w-28 object-contain" {% if not brand.logo_url %}hidden{% endif %}>
+            <span id="logo-initial" class="bb-avatar !h-12 !w-12 !text-lg" {% if brand.logo_url %}hidden{% endif %}>{{ brand.initial }}</span>
+          </span>
+          <div class="min-w-0 flex-1">
+            <label class="btn cursor-pointer" for="id_invoice_logo">{% icon "upload" %} {% if form.instance.invoice_logo %}Ganti logo{% else %}Unggah logo{% endif %}</label>
+            <input id="id_invoice_logo" type="file" name="invoice_logo" accept="image/png,image/jpeg,image/webp" class="sr-only">
+            <p class="dp-help mt-2" id="logo-source">{% if form.instance.invoice_logo %}Logo khusus invoice.{% elif store_logo %}Memakai logo toko. Unggah di sini bila ingin logo yang berbeda di invoice.{% else %}Belum ada logo: invoice memakai huruf pertama nama usaha.{% endif %}</p>
+            {% if form.instance.invoice_logo %}<label class="mt-1 inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" name="invoice_logo-clear" id="logo-clear"> Hapus logo ini{% if store_logo %} (kembali ke logo toko){% endif %}</label>{% endif %}
+          </div>
+        </div>
+        {% if form.invoice_logo.errors %}<p class="text-sm font-medium text-rose-600">{{ form.invoice_logo.errors.0 }}</p>{% endif %}
+        <label class="flex cursor-pointer items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm"><input type="checkbox" name="invoice_show_name" id="show-name" class="h-4 w-4 rounded border-slate-300 text-blue-600" {% if form.invoice_show_name.value %}checked{% endif %}><span><b class="font-semibold text-slate-800">Tampilkan nama usaha di samping logo</b><small class="block text-xs text-slate-500">Matikan jika logo Anda sudah memuat nama usaha.</small></span></label>
+      </div>
+    </section>
+
+    <section class="panel !mb-0">
+      <header><div class="flex items-center gap-3"><span class="bb-bubble step">2</span><div><h2>Warna</h2><p>Dipakai di judul dan tabel dokumen.</p></div></div></header>
+      <div class="flex flex-wrap items-center gap-3 p-5">
+        <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Pilihan warna">
+          <button type="button" data-swatch="#1a66d9" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#1a66d9" aria-label="Biru"></button>
+          <button type="button" data-swatch="#0f766e" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#0f766e" aria-label="Hijau"></button>
+          <button type="button" data-swatch="#b45309" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#b45309" aria-label="Oranye"></button>
+          <button type="button" data-swatch="#be123c" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#be123c" aria-label="Merah"></button>
+          <button type="button" data-swatch="#6d28d9" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#6d28d9" aria-label="Ungu"></button>
+          <button type="button" data-swatch="#0f1f38" class="h-9 w-9 rounded-full ring-2 ring-offset-2 ring-transparent" style="background:#0f1f38" aria-label="Biru tua"></button>
+        </div>
+        <label class="ml-auto flex items-center gap-2 text-xs font-semibold text-slate-600">Atau pilih sendiri <input type="color" id="accent-picker" value="{{ form.invoice_accent.value|default:'#1a66d9' }}" class="h-9 w-12 cursor-pointer rounded-lg border-0 bg-transparent p-0"></label>
+        <input type="hidden" name="invoice_accent" id="accent" value="{{ form.invoice_accent.value|default:'#1a66d9' }}">
+      </div>
+      {% if form.invoice_accent.errors %}<p class="px-5 pb-4 text-sm font-medium text-rose-600">{{ form.invoice_accent.errors.0 }}</p>{% endif %}
+    </section>
+
+    <section class="panel !mb-0">
+      <header><div class="flex items-center gap-3"><span class="bb-bubble step">3</span><div><h2>Catatan kaki</h2><p>Rekening, syarat pembayaran, atau ucapan terima kasih. Dicetak di bawah setiap invoice.</p></div></div></header>
+      <div class="p-5"><textarea name="invoice_footer" id="footer" rows="4" maxlength="600" class="w-full" placeholder="mis. Transfer ke BCA 123-456-7890 a.n. PT Contoh. Pembayaran paling lambat 14 hari. Terima kasih!">{{ form.invoice_footer.value|default:"" }}</textarea>
+        <p class="dp-help mt-1">Maksimal 600 karakter.</p></div>
+    </section>
+
+    <div class="flex gap-2"><button class="btn-primary">{% icon "check" %} Simpan tampilan</button></div>
+  </div>
+
+  <aside class="lg:sticky lg:top-20">
+    <p class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Pratinjau</p>
+    <article class="overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+      <div id="pv-head" class="flex flex-wrap items-center justify-between gap-3 px-6 py-5 text-white" style="background:{{ brand.accent }}">
+        <div class="flex items-center gap-3">
+          <span class="grid h-12 min-w-12 place-items-center overflow-hidden rounded-xl bg-white/95 px-1.5"><img id="pv-logo" src="{{ brand.logo_url }}" alt="" class="max-h-10 max-w-24 object-contain" {% if not brand.logo_url %}hidden{% endif %}><b id="pv-initial" class="text-lg" style="color:{{ brand.accent }}" {% if brand.logo_url %}hidden{% endif %}>{{ brand.initial }}</b></span>
+          <div id="pv-name"{% if not brand.show_name %} hidden{% endif %}><b class="block">{{ brand.name }}</b><small class="text-white/80">Alamat usaha Anda</small></div>
+        </div>
+        <div class="text-right"><b class="block text-lg tracking-widest">INVOICE</b><small class="text-white/80">INV/2026/000123</small></div>
+      </div>
+      <div class="p-6 text-sm">
+        <div class="mb-4 grid grid-cols-3 gap-2 text-xs"><div><small class="text-slate-400">Tanggal</small><b class="block">12 Nov 2026</b></div><div><small class="text-slate-400">Jatuh tempo</small><b class="block">26 Nov 2026</b></div><div><small class="text-slate-400">Status</small><b class="block">Belum lunas</b></div></div>
+        <table class="w-full text-xs"><thead><tr id="pv-th" style="background:{{ brand.accent }}1a;color:{{ brand.accent }}"><th class="px-2 py-1.5 text-left">Barang</th><th class="px-2 py-1.5 text-right">Qty</th><th class="px-2 py-1.5 text-right">Jumlah</th></tr></thead>
+          <tbody><tr class="border-b border-slate-100"><td class="px-2 py-2">Produk contoh</td><td class="px-2 py-2 text-right">2</td><td class="px-2 py-2 text-right">Rp200.000</td></tr></tbody></table>
+        <div class="mt-3 flex justify-between border-t border-slate-100 pt-2 font-bold"><span>Total</span><span id="pv-total" style="color:{{ brand.accent }}">Rp200.000</span></div>
+        <p id="pv-footer" class="mt-4 whitespace-pre-line border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500">{{ brand.footer|default:"Catatan kaki Anda tampil di sini." }}</p>
+      </div>
+    </article>
+    <p class="dp-help mt-2">Pratinjau memakai data contoh. Dokumen asli memakai data invoice sebenarnya.</p>
+  </aside>
+</form>
+
+<script>
+(function () {
+  var accent = document.getElementById("accent"), picker = document.getElementById("accent-picker");
+  var file = document.getElementById("id_invoice_logo"), clear = document.getElementById("logo-clear");
+  var preview = document.getElementById("logo-preview"), initial = document.getElementById("logo-initial");
+  var pvLogo = document.getElementById("pv-logo"), pvInitial = document.getElementById("pv-initial");
+  function paint(color) {
+    accent.value = color; picker.value = color;
+    document.getElementById("pv-head").style.background = color;
+    document.getElementById("pv-th").style.background = color + "1a"; document.getElementById("pv-th").style.color = color;
+    document.getElementById("pv-total").style.color = color; pvInitial.style.color = color;
+    document.querySelectorAll("[data-swatch]").forEach(function (b) { b.style.boxShadow = b.dataset.swatch.toLowerCase() === color.toLowerCase() ? "0 0 0 3px #fff, 0 0 0 5px " + color : "none"; });
+  }
+  document.querySelectorAll("[data-swatch]").forEach(function (b) { b.addEventListener("click", function () { paint(b.dataset.swatch); }); });
+  picker.addEventListener("input", function () { paint(picker.value); });
+  function show(src) {
+    var has = !!src;
+    [preview, pvLogo].forEach(function (img) { if (has) img.src = src; img.hidden = !has; });
+    [initial, pvInitial].forEach(function (el) { el.hidden = has; });
+  }
+  file.addEventListener("change", function () {
+    var f = file.files[0]; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { window.pdToast("Ukuran logo maksimal 2 MB.", "error"); file.value = ""; return; }
+    var reader = new FileReader(); reader.onload = function () { show(reader.result); }; reader.readAsDataURL(f);
+    if (clear) clear.checked = false;
+  });
+  if (clear) clear.addEventListener("change", function () { if (clear.checked) { file.value = ""; show(""); } });
+  document.getElementById("show-name").addEventListener("change", function (e) { document.getElementById("pv-name").hidden = !e.target.checked; });
+  document.getElementById("footer").addEventListener("input", function (e) { document.getElementById("pv-footer").textContent = e.target.value || "Catatan kaki Anda tampil di sini."; });
+  paint(accent.value);
+})();
+</script>
+{% endblock %}

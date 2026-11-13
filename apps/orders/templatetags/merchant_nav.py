@@ -116,6 +116,7 @@ NAV = [
         ]),
         Group("Pajak", "percent", [
             Link("PPN & PPh", "merchant-tax"),
+            Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
         ]),
     ]),
     ("Pelanggan & pemasaran", [

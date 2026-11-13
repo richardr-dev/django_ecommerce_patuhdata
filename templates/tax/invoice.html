@@ -1,4 +1,4 @@
-<!doctype html>
+{% load branding %}<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -30,6 +30,8 @@
   @media (max-width: 600px) { .sheet { padding: 20px; margin: 16px; } .parties { grid-template-columns: 1fr; } }
   @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; max-width: none; padding: 0; } .actions { display: none; } }
 </style>
+{% brand invoice.store invoice as b %}
+<style>h1 { color: {{ b.accent }}; } header { border-bottom-color: {{ b.accent }}; } th { color: {{ b.accent }}; background: {{ b.accent }}1a; } .totals .grand td { border-top-color: {{ b.accent }}; color: {{ b.accent }}; }</style>
 </head>
 <body>
 <div class="actions" style="margin-top:24px">
@@ -43,7 +45,8 @@
       <p>{{ invoice.number }}<br>Tanggal {{ invoice.issued_on|date:"d F Y" }}<br><span class="muted">Pesanan #{{ invoice.order_id|stringformat:"s"|slice:":8" }}</span></p>
     </div>
     <div style="text-align:right">
-      <strong>{{ invoice.seller_name }}</strong>
+      {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:48px;max-width:150px;object-fit:contain;margin-bottom:6px">{% endif %}
+      {% if b.show_name or not b.logo_url %}<strong style="display:block">{{ invoice.seller_name }}</strong>{% endif %}
       {% if invoice.seller_address %}<p>{{ invoice.seller_address }}</p>{% endif %}
       {% if invoice.seller_npwp %}<p>NPWP {{ invoice.seller_npwp }}</p>{% endif %}
     </div>
@@ -65,6 +68,7 @@
     <tr class="grand"><td>Total</td><td class="num">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
   </table>
   <p class="muted" style="margin-top:32px">{% if invoice.seller_is_pkp %}Invoice ini bukan Faktur Pajak. Faktur Pajak diterbitkan penjual melalui Coretax DJP atas permintaan pembeli yang memiliki NPWP.{% elif not invoice.tax %}Penjual bukan Pengusaha Kena Pajak; invoice ini tidak memuat PPN.{% endif %}</p>
+  {% if b.footer %}<p class="muted" style="margin-top:18px;white-space:pre-line;border-top:1px dashed #d3dcea;padding-top:10px">{{ b.footer }}</p>{% endif %}
 </main>
 </body>
 </html>

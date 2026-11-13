@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons books %}
+{% extends "merchant/base.html" %}{% load icons books branding %}
 {% block title %}Piutang Pelanggan{% endblock %}
 {% block content %}
 <div class="pg-head">
@@ -16,7 +16,12 @@
   <div class="tile {% if totals.over %}warn{% endif %}"><small>Lebih dari 90 hari</small><strong>{{ totals.over|rp }}</strong></div>
 </div>
 {% if customer %}
-<section class="panel">
+{% brand merchant_store as b %}
+<section class="panel" id="surat-tagihan">
+  <div class="flex flex-wrap items-center justify-between gap-4 px-5 pt-5" style="border-bottom:3px solid {{ b.accent }};padding-bottom:14px">
+    <div class="flex items-center gap-3">{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:52px;max-width:150px;object-fit:contain">{% endif %}<div>{% if b.show_name or not b.logo_url %}<b class="block text-base" style="color:{{ b.accent }}">{{ b.name }}</b>{% endif %}{% if b.address %}<small class="block whitespace-pre-line text-slate-500">{{ b.address }}</small>{% endif %}</div></div>
+    <div class="text-right"><b class="block text-lg tracking-widest" style="color:{{ b.accent }}">SURAT TAGIHAN</b><small class="text-slate-500">{{ as_of|date:"d F Y" }} · kepada {{ customer.name }}</small></div>
+  </div>
   <header><div><h2>Tagihan {{ customer.name }}</h2><p>Surat tagihan: invoice yang belum dibayar per {{ as_of|date:"d M Y" }}.</p></div>
     <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak surat tagihan</button><a class="link-btn" href="?as_of={{ as_of|date:'Y-m-d' }}">← Semua pelanggan</a></div></header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Invoice</th><th>Tanggal</th><th>Jatuh tempo</th><th class="num">Total</th><th class="num">Dibayar</th><th class="num">Sisa</th><th class="num">Terlambat</th></tr></thead>
@@ -24,6 +29,7 @@
     <td class="num">{{ line.invoice.total|rp }}</td><td class="num">{{ line.paid|rp }}</td><td class="num"><strong>{{ line.due|rp }}</strong></td><td class="num {% if line.late_days %}neg{% endif %}">{% if line.late_days %}{{ line.late_days }} hari{% else %}–{% endif %}</td></tr>
   {% empty %}<tr><td colspan="7"><div class="empty-box">Tidak ada tagihan terbuka.</div></td></tr>{% endfor %}</tbody>
   {% if lines %}<tfoot><tr><td colspan="5">Total yang harus dibayar</td><td class="num">{{ owed|rp }}</td><td></td></tr></tfoot>{% endif %}</table></div>
+  {% if b.footer %}<p class="whitespace-pre-line px-5 pb-5 pt-3 text-sm text-slate-600" style="border-top:1px dashed #d3dcea;margin:12px 18px 0;padding-left:0;padding-right:0">{{ b.footer }}</p>{% endif %}
 </section>
 {% endif %}
 <section class="panel">

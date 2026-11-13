@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons books %}
+{% extends "merchant/base.html" %}{% load icons books branding %}
 {% block title %}{{ note.number }}{% endblock %}
 {% block content %}
 <nav class="dp-crumb"><a href="{% url 'merchant-credit-notes' %}">Nota kredit</a> › <span>{{ note.number }}</span></nav>
@@ -12,8 +12,9 @@
 </div>
 <div class="dp-grid">
   <article class="dp-paper">
-    <div class="dp-paper-head">
-      <div class="dp-seller"><span class="mark">{{ note.store.name|slice:':1' }}</span><div><strong>{{ note.invoice.seller_name }}</strong>{% if note.invoice.seller_address %}<p>{{ note.invoice.seller_address }}</p>{% endif %}{% if note.invoice.seller_npwp %}<p>NPWP {{ note.invoice.seller_npwp }}</p>{% endif %}</div></div>
+    {% brand note.store note.invoice as b %}
+    <div class="dp-paper-head" style="background:{{ b.gradient }}">
+      <div class="dp-seller">{% if b.logo_url %}<span style="background:#fff;border-radius:12px;padding:6px 8px;display:grid;place-items:center"><img src="{{ b.logo_url }}" alt="" style="max-height:44px;width:auto;border-radius:0"></span>{% else %}<span class="mark">{{ b.initial }}</span>{% endif %}<div>{% if b.show_name or not b.logo_url %}<strong>{{ note.invoice.seller_name }}</strong>{% endif %}{% if note.invoice.seller_address %}<p>{{ note.invoice.seller_address }}</p>{% endif %}{% if note.invoice.seller_npwp %}<p>NPWP {{ note.invoice.seller_npwp }}</p>{% endif %}</div></div>
       <div class="dp-doc-type"><span>{% if note.tax %}NOTA RETUR / KREDIT{% else %}NOTA KREDIT{% endif %}</span><small>{{ note.number }}</small></div></div>
     <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ note.issued_on|date:"d M Y" }}</dd></div><div><dt>Invoice asal</dt><dd>{{ note.invoice.number }}</dd></div><div><dt>Alasan</dt><dd>{{ note.get_reason_display }}</dd></div><div><dt>Diterbitkan oleh</dt><dd>{{ note.created_by.username|default:"—" }}</dd></div></dl>
     <div class="dp-parties"><div><h4>Pelanggan</h4><strong>{{ note.buyer_name }}</strong>{% if note.buyer_npwp %}<p>NPWP {{ note.buyer_npwp }}</p>{% endif %}</div>

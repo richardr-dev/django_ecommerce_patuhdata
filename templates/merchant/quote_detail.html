@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons books %}
+{% extends "merchant/base.html" %}{% load icons books branding %}
 {% block title %}{{ quote.number }}{% endblock %}
 {% block content %}
 <nav class="dp-crumb"><a href="{% url 'merchant-quotes' %}">Penawaran</a> › <span>{{ quote.number }}</span></nav>
@@ -17,7 +17,7 @@
     </div></details>{% endif %}
   </div></div>
 <article class="dp-paper" style="max-width:900px">
-  <div class="dp-paper-head"><div class="dp-seller"><span class="mark">{{ quote.store.name|slice:':1' }}</span><div><strong>{{ quote.store.name }}</strong></div></div><div class="dp-doc-type"><span>PENAWARAN</span><small>{{ quote.number }}</small></div></div>
+  {% brand quote.store as b %}<div class="dp-paper-head" style="background:{{ b.gradient }}"><div class="dp-seller">{% if b.logo_url %}<span style="background:#fff;border-radius:12px;padding:6px 8px;display:grid;place-items:center"><img src="{{ b.logo_url }}" alt="" style="max-height:44px;width:auto;border-radius:0"></span>{% else %}<span class="mark">{{ b.initial }}</span>{% endif %}<div>{% if b.show_name or not b.logo_url %}<strong>{{ b.name }}</strong>{% endif %}</div></div><div class="dp-doc-type"><span>PENAWARAN</span><small>{{ quote.number }}</small></div></div>
   <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ quote.issued_on|date:"d M Y" }}</dd></div><div><dt>Berlaku sampai</dt><dd>{{ quote.valid_until|date:"d M Y"|default:"—" }}</dd></div><div><dt>Telepon</dt><dd>{{ quote.phone|default:"—" }}</dd></div><div><dt>Dibuat oleh</dt><dd>{{ quote.created_by.username|default:"—" }}</dd></div></dl>
   <div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Ditujukan kepada</h4><strong>{% if quote.company_name and quote.company_name != quote.buyer_name %}{{ quote.company_name }} ({{ quote.buyer_name }}){% elif quote.company_name %}{{ quote.company_name }}{% else %}{{ quote.buyer_name }}{% endif %}</strong>{% if quote.address %}<p>{{ quote.address }}</p>{% endif %}{% if quote.buyer_npwp %}<p>NPWP {{ quote.buyer_npwp }}</p>{% endif %}</div></div>
   <div class="scroll-x"><table class="dp-items"><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Harga satuan</th><th class="num">Jumlah</th></tr></thead><tbody>

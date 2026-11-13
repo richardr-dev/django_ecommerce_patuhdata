@@ -461,3 +461,41 @@ def merchant_delivery_note(request, invoice_id):
         "items": invoice.items.all(), "store": store, "today": timezone.localdate(),
         "address": (order.full_address if order.shipping_address not in {"", "-"} else
             invoice.buyer_address)})
+
+
+@login_required(login_url=LOGIN)
+def merchant_invoice_style(request):
+    """Tampilan invoice: the logo, colour and footer on every document sent to a buyer."""
+    from django import forms
+    from django.core.files.uploadedfile import UploadedFile
+
+    from . import branding
+    from .models import TaxProfile
+
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "finance"})
+    profile, _created = TaxProfile.objects.get_or_create(store=store)
+
+    class StyleForm(forms.ModelForm):
+        class Meta:
+            model = TaxProfile
+            fields = ["invoice_logo", "invoice_show_name", "invoice_accent", "invoice_footer"]
+            widgets = {"invoice_footer": forms.Textarea(attrs={"rows": 4, "maxlength": 600})}
+
+        def clean_invoice_logo(self):
+            upload = self.cleaned_data.get("invoice_logo")
+            if isinstance(upload, UploadedFile):  # a new file; a kept one was checked when saved
+                branding.validate_logo(upload)
+            return upload
+
+    form = StyleForm(request.POST or None, request.FILES or None, instance=profile)
+    if request.method == "POST":
+        if form.is_valid():
+            form.save()
+            _audit(request, store, "invoice_style.updated", profile)
+            messages.success(request, "Tampilan invoice disimpan. Semua invoice, surat tagihan, dan "
+                "surat jalan memakai tampilan ini.")
+            return redirect("merchant-invoice-style")
+        messages.error(request, "Tampilan belum disimpan: periksa isian yang bertanda merah.")
+    return render(request, "merchant/invoice_style.html", _merchant_context(request, store,
+        form=form, brand=branding.brand(store), store_logo=bool(store.logo)))

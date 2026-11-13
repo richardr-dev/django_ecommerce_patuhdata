@@ -1,10 +1,12 @@
 import uuid
 from decimal import Decimal
 
+from django.core.validators import FileExtensionValidator
 from django.db import models
 
 from apps.orders.models import Order
-from apps.shops.models import Store
+from apps.shops.models import Store, hex_color
+from apps.shops.uploads import StoreUploadPath
 
 
 class TaxProfile(models.Model):
@@ -24,6 +26,16 @@ class TaxProfile(models.Model):
         help_text="Hanya PKP yang boleh memungut PPN dan menerbitkan Faktur Pajak.")
     invoice_prefix = models.SlugField(max_length=12, default="INV",
         help_text="Awalan nomor invoice, misalnya INV menjadi INV/2026/000001.")
+    # How the seller's documents look: invoice, surat tagihan, surat jalan, quote, credit note.
+    invoice_logo = models.FileField(upload_to=StoreUploadPath("invoice"), blank=True,
+        validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
+        help_text="Logo di invoice dan surat tagihan. Kosongkan untuk memakai logo toko.")
+    invoice_accent = models.CharField(max_length=7, default="#1a66d9", validators=[hex_color],
+        help_text="Warna judul dan tabel di invoice.")
+    invoice_show_name = models.BooleanField(default=True,
+        help_text="Matikan jika logo sudah memuat nama usaha.")
+    invoice_footer = models.TextField(blank=True, max_length=600,
+        help_text="Dicetak di bawah invoice: rekening, syarat pembayaran, ucapan terima kasih.")
 
     def __str__(self):
         return f"Profil pajak {self.store}"
