@@ -12,7 +12,9 @@
   <link rel="stylesheet" href="{% static 'css/admin.css' %}">
   <script src="https://cdn.tailwindcss.com"></script>
   {# Page accents (indigo/brand in the page templates) follow the Lakuin blue. #}
-  <script>tailwind.config={theme:{extend:{colors:{
+  <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Plus Jakarta Sans','Inter','ui-sans-serif','system-ui','sans-serif']},colors:{
+    blue:{'50':'#ebf3ff','100':'#dceaff','200':'#bcd6ff','500':'#1a7aff','600':'#0066ff','700':'#0052cc','800':'#0a44a8'},
+    sky:{'400':'#6ab2ff','500':'#3898ff','600':'#1a7aff'},
     brand:{'50':'#eef4fe','100':'#dbe7fd','500':'#2f7cf0','600':'#1a66d9','700':'#1557bd','900':'#0b2d63'},
     indigo:{'50':'#eef4fe','100':'#dbe7fd','200':'#bcd3fb','300':'#8fb5f7','400':'#5b93f2','500':'#2f7cf0','600':'#1a66d9','700':'#1557bd','800':'#134a9a','900':'#0b2d63'}}}}}</script>
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>

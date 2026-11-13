@@ -118,6 +118,18 @@ Four test files failed before this work and still do: `test_digital_products`,
   paid invoices) live in `accounting/controls.py`.
 - **Budgets and cost centres** (`accounting/budgets.py`): actuals are read from the ledger, cost-centre
   actuals from `JournalEntry.cost_center`, so a posting that should count for a centre must pass it.
+- **Year-end closing** (`accounting/closing.py`): `close_year` posts one `("year_close", year)` entry on
+  31 Dec that zeroes revenue and expense into Laba ditahan 3300 and locks the books through that day;
+  years close in order, never the current year, and only an admin reopens the newest one (the entry is
+  reversed, not deleted). Reports pass `exclude_closing=True` to `account_balances`, so a closed year
+  still shows its profit; only the trial balance shows 3300. Any new report that sums revenue or expense
+  over a range must do the same. `controls.year_close_tie` fails when a closed year's profit changes.
+- **Excel exports** (`accounting/exports.py`): a workbook uses the same service as its screen (never a
+  second query) and writes real numbers with a rupiah format. A new report gets an entry in `REPORTS`.
+- **Coretax**: the official import is a DJP Excel template converted to XML by DJP's converter, and its
+  field layout is not confirmed in this repo. `tax/faktur.py` therefore produces a checked worksheet (per
+  line, buyer NPWP/NIK flagged) and says so; do not claim it is an importable XML until the current DJP
+  template (pajak.go.id, Coretax, Template XML dan Converter) has been read and the format tested.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -133,6 +145,12 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Stock value vs Persediaan | `accounting/inventory.py` | `accounting/views_books.py` |
 | Add a brand (store in same Organization) | `shops/views.py:_create_store` | `shops/views.py` |
 | Reports (P&L, cash flow, neraca, account ledger) | `accounting/reports.py` | both |
+| Excel for each report, auditor yearly pack (`/merchant/accounting/paket-audit/`) | `accounting/exports.py` | `accounting/views_books.py` |
+| SAK EMKM statements (screen, print, PDF) | `accounting/emkm.py` | `views_books.py:merchant_emkm_pack`, `templates/merchant/emkm_pack.html` |
+| Year-end closing, reopen, monthly close checklist | `accounting/closing.py` | `views_books.py:merchant_year_close`, `templates/merchant/year_close.html` |
+| PPh 21/23/4(2) withholding, bukti potong, deposit | `accounting/withholding.py` | `views_books.py:merchant_withholdings` |
+| SPT Masa PPN worksheet with kompensasi | `tax/spt.py` | `tax/views.py:merchant_spt_ppn` |
+| Faktur Pajak Keluaran worksheet for the Coretax template | `tax/faktur.py` | `tax/views.py:merchant_faktur_export` |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
@@ -307,8 +325,7 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
       `tax/receipts.py` and `tax/credit_notes.py` in `accounting/`.
 - [ ] Voiding a receipt reverses the cash. Offer "keep as customer credit" instead.
 - [x] Marketplace payouts land in a chosen bank account and are matched to the statement line.
-- [ ] Year-end closing: profit is computed on the fly. Add a closing entry to Laba ditahan
-      (3300) and lock the year in one step.
+- [x] Year-end closing to Laba ditahan (3300) with lock, reopen and a monthly checklist (`accounting/closing.py`).
 - [ ] Product variants per warehouse; variants keep a single stock number today.
 - [x] One scheduled worker: `manage.py run_books` (ledger backlog, recurring invoices,
       monthly depreciation). It still has to be scheduled (cron) in deployment.
@@ -318,11 +335,11 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
 ### 2. Features still missing
 
 Tax (first thing Indonesian clients ask for):
-- [ ] e-Faktur / Coretax export for Faktur Pajak keluaran and nota retur (only a CSV register
+- [~] e-Faktur / Coretax export (partial: checked worksheet only, `tax/faktur.py`; XML needs the DJP template confirmed) for Faktur Pajak keluaran and nota retur (only a CSV register
       exists). Confirm the current Coretax import format before building.
-- [ ] PPh 21 (gaji), PPh 23 (jasa), PPh 4(2) (sewa): withholding on bills and expenses, bukti
+- [x] PPh 21 (gaji), PPh 23 (jasa), PPh 4(2) (sewa): withholding on bills and expenses, bukti
       potong, and a utang PPh account.
-- [ ] SPT Masa PPN worksheet: masukan vs keluaran, kompensasi lebih bayar carried forward.
+- [x] SPT Masa PPN worksheet: masukan vs keluaran, kompensasi lebih bayar carried forward.
 
 Sales and purchasing:
 - [ ] Surat jalan (delivery order) and proforma from a quote or invoice.
@@ -335,15 +352,15 @@ Inventory:
 - [ ] Push bundle stock to marketplaces; live marketplace APIs (import is file-based).
 
 Accounting:
-- [ ] Budgets vs actuals; cost centres or tags per brand/outlet.
-- [ ] Attachments on bills, cash transactions and journals; maker-checker approval.
+- [x] Budgets vs actuals; cost centres or tags per brand/outlet.
+- [x] Attachments on bills, cash transactions and journals; maker-checker approval.
 - [ ] Simple payroll posting to gaji and PPh 21.
 - [ ] Multi-currency for sellers who buy in USD/CNY.
-- [ ] PDF and Excel export for every report (CSV and print only today).
+- [x] Excel export for every financial report, auditor pack and SAK EMKM PDF. (Other lists still CSV only.)
 - [ ] POS module (planned; `channel="pos"` is reserved).
 
 Access:
-- [ ] Accountant role (read-only plus export), an audit-log viewer per document.
+- [x] Accountant role (read-only plus export), an audit-log viewer per document.
 
 ### 3. UI/UX: towards a premium, professional product
 
