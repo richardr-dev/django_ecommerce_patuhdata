@@ -87,7 +87,9 @@ def merchant_tax_calendar(request):
     rows = tax_calendar.obligations(store, year, month, today)
     prev = (year - 1, 12) if month == 1 else (year, month - 1)
     nxt = (year + 1, 1) if month == 12 else (year, month + 1)
+    from .services import tax_profile
     return render(request, "merchant/tax_calendar.html", _merchant_context(request, store, rows=rows, year=year, month=month,
+        profile=tax_profile(store),
         month_date=datetime.date(year, month, 1), prev=f"{prev[0]}-{prev[1]:02d}", next=f"{nxt[0]}-{nxt[1]:02d}",
         today=today.isoformat(), can_edit=permissions.can(request.user, store, "tax.edit"),
         counts={s: sum(1 for r in rows if r["status"] == s) for s in ("overdue", "soon", "upcoming", "done")}))

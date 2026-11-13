@@ -237,6 +237,8 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Purchase orders, debit notes, multi-bill payment | `accounting/purchasing.py`, `supplier_notes.py` | `views_purchasing.py`, `views_supplier.py` |
 | Stok opname document, outlet stock requests | `accounting/stock_counts.py`, `orders/stock_requests.py` | `views_counts.py`, `orders/stock_request_views.py` |
 | Stock card, slow-moving stock, inventory close picture | `accounting/inventory_reports.py` | `views_inventory.py` |
+| Adjusting entries, quarter report, quarter close, loans | `accounting/adjustments.py`, `reports.py`, `closing.py`, `loans.py` | `views_adjust.py`, `views_quarter.py`, `views_loans.py` |
+| Annual badan worksheet, tax calendar | `tax/fiscal.py`, `tax/tax_calendar.py` | `tax/views_annual.py` |
 | Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
@@ -452,25 +454,41 @@ interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layo
 **Suggested order**: 1 and 2 (sales side) → 4 → 3 only when a client needs it → 5 before hosting unrelated
 clients in one database → 6.
 
-## Accountant's quarter: what exists and what is missing (checked 2026-11-13)
+## Accountant's quarter (built 2026-11-13)
 
-Exists: buku besar per account with running balance (`merchant-account-ledger`, Excel for every account),
-neraca saldo, neraca with comparison, laba rugi with prior-period comparison and a "Kuartal ini" preset, arus
-kas, SAK EMKM pack (annual), audit pack, budget vs actual (monthly), bank reconciliation, AR/AP aging, fixed
-assets with monthly depreciation, SPT Masa PPN with kompensasi, PPh 21/23/4(2) with bukti potong and
-deposit, month-end checklist, inventory close, year-end closing, reconciliation checks.
+What an accountant does at a quarter, and where it lives:
+- **Adjusting entries** (`accounting/adjustments.py`, page "Jurnal penyesuaian"): prepaid expenses (1550)
+  amortised monthly, accruals (2310) with automatic reversal on day one of the next period, recurring
+  journals, and the receivable provision (1255 contra-asset, 6970 expense) trued up from the aging buckets with
+  editable rates. All idempotent, run by `run_books`.
+- **Quarter statements** (`reports.quarterly_profit / equity_statement / cash_flow_indirect`, page "Laporan
+  kuartal", `exports.quarter_workbook`): Q1..Q4 side by side, laba rugi vs previous quarter, neraca, indirect
+  cash flow (must equal the movement of the cash accounts: `difference` is shown and tested), changes in equity
+  (closing taken from the neraca), Excel and print. Closing entries are excluded as everywhere else.
+- **Quarter close** (`closing.quarter_checklist`, "Tutup kuartal" tab): the month checklist for the last month
+  plus adjusting entries run, provision reviewed, statements tie out, three SPT Masa PPN checks, and a button
+  that locks the books to the quarter end.
+- **Loans** (`accounting/loans.py`, page "Pinjaman"): annuity or flat schedule, drawdown entry, installments
+  paid in order and split into principal (2500) and interest (8200). Interest is booked when paid; accrue to
+  period end with a recurring accrual journal.
+- **Tax** (`tax/fiscal.py`, `tax/tax_calendar.py`): SPT Tahunan badan worksheet (commercial profit → manual
+  koreksi fiskal and credits → PKP rounded down to thousands → PPh at 22% or the Pasal 31E reduction → PPh 29,
+  PPh 25 estimate) for companies not on PPh Final; a tax calendar per month with amounts from the books and a
+  filing tracker (NTPN/BPE); due and overdue duties appear on Beranda.
 
-Missing for a real quarterly close:
-1. **Adjusting entries**: accruals (utang biaya), prepaid expenses with monthly amortisation, recurring and
-   auto-reversing journals, doubtful-receivable provision. Today only one-off manual journals.
-2. **Quarterly statements**: the SAK EMKM pack is annual only; no quarter pack, no Q1..Q4 side-by-side P&L,
-   no management summary (KPIs, margin, budget variance for the quarter).
-3. **Statement of changes in equity** (needed outside SAK EMKM) and a cash flow by the indirect method.
-4. **Tax**: PPh 25 instalment and PPh 29, annual badan computation with fiscal reconciliation (koreksi
-   fiskal) and an SPT Tahunan worksheet, tax calendar with due dates (PPN end of next month; PPh 21/23 pay by
-   the 10th and report by the 20th; PPh 25 by the 15th; SPT Tahunan badan 30 April, OP 31 March).
-5. **Loans**: schedule and interest accrual for Utang bank & pinjaman (account 2500 is a plain balance).
-6. **Period lock by quarter**: `LedgerLock` takes any date, but the close checklist is monthly only.
+Still not built: statement of cash flows indirect is in; **bank loan interest accrual is manual**; no
+foreign currency; no fiscal loss carry-forward ledger (it is a manual negative correction); no individual
+(orang pribadi) annual computation; adjusting journals are not subject to maker-checker approval above a
+threshold (only the one-off manual journal is).
+
+Legacy pages still on the old markup (found by scanning `templates/merchant` for `bo-card`, `kpi-grid`,
+`data-table`, `bo-heading`, Tailwind `bg-gray-*`): settings, sales (sales overview), delivery, channel_detail,
+channels, channel_stock, channel_buyers, order_new, order_detail, orders list partial, entity_form (product
+form, large), billing, whatsapp, staff, settlement_new, sales_report, platform_balance, production_recap,
+product_import, payments, mitra_invoice_new/list, feeds_qr, customers, campaign_links, broadcasts, abshop,
+tracking, income_import, gift_cards, engagement, activity, settlement_partners, import, customer_detail,
+_customer_history. Rebuilt in this pass: finance (Buku besar), payout_detail, settlements,
+settlement_detail, settlement_partner_detail.
 
 ## Backlog
 

@@ -1,85 +1,23 @@
-{% extends "merchant/base.html" %}{% load icons %}{% block title %}{{ partner.name }}{% endblock %}{% block content %}
-<div class="bo-heading">
-  <div><span class="eyebrow">MITRA KONSINYASI</span><h1>{{ partner.name }}</h1>
-  <p>{% if partner.contact_name %}{{ partner.contact_name }} · {% endif %}{{ partner.contact_phone }}{% if not partner.is_active %} · <span class="badge">Nonaktif</span>{% endif %}</p></div>
-  <div class="bo-heading-actions">
-    <a class="bo-button" href="{% url 'mitra-invoice-new' partner.pk %}">{% icon "plus" %} Tambah Invoice</a>
-    <a class="bo-button" href="{% url 'settlement-new' %}?partner={{ partner.pk }}">Buat Settlement</a>
-    <a class="bo-link" href="{% url 'settlement-partners' %}">← Semua Mitra</a>
-  </div>
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}{{ partner.name }}{% endblock %}{% block content %}
+<div class="dp-crumb"><a href="{% url 'settlement-partners' %}">Mitra konsinyasi</a> / {{ partner.name }}</div>
+<div class="pg-head"><div><span class="pg-kicker">Mitra konsinyasi</span><h1 class="dp-title">{{ partner.name }}{% if not partner.is_active %} <span class="pill pill-draft">Nonaktif</span>{% endif %}</h1>
+  <p>{% if partner.contact_name %}{{ partner.contact_name }} · {% endif %}{{ partner.contact_phone }}</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'mitra-invoice-new' partner.pk %}">{% icon "plus" %} Tambah invoice</a><a class="btn-primary" href="{% url 'settlement-new' %}?partner={{ partner.pk }}">{% icon "plus" %} Buat settlement</a></div></div>
+<div class="tiles"><div class="tile"><small>Total ditagih</small><strong>{{ total_invoiced|rp }}</strong><span>seluruh settlement</span></div><div class="tile"><small>Sudah dibayar</small><strong>{{ total_paid|rp }}</strong><span>diterima dari mitra</span></div>
+  <div class="tile {% if balance_due %}accent{% endif %}"><small>Sisa tagihan</small><strong>{{ balance_due|rp }}</strong><span>belum dibayar mitra</span></div></div>
+<div class="dp-grid"><div class="space-y-5">
+  <section class="panel"><header><h2>Settlement ({{ settlements|length }})</h2><a class="btn" href="{% url 'settlement-list' %}?partner={{ partner.pk }}">Semua</a></header><div class="scroll-x"><table class="tbl"><thead><tr><th>No. invoice</th><th>Periode</th><th>Status</th><th class="num">Total</th><th class="num">Dibayar</th><th class="num">Sisa</th></tr></thead><tbody>
+    {% for s in settlements %}<tr><td><a class="rowlink" href="{% url 'settlement-detail' s.pk %}"><b>{{ s.invoice_number|default:"(Draft)" }}</b></a></td><td>{{ s.period_start|date:"d M Y" }} – {{ s.period_end|date:"d M Y" }}</td><td><span class="pill pill-{{ s.status }}">{{ s.get_status_display }}</span></td><td class="num">{{ s.total_due|rp }}</td><td class="num">{{ s.amount_paid|rp }}</td><td class="num"><b>{{ s.balance_due|rp }}</b></td></tr>
+    {% empty %}<tr><td colspan="6" class="!py-8 text-center text-slate-400">Belum ada settlement untuk mitra ini. <a href="{% url 'settlement-new' %}?partner={{ partner.pk }}">Buat sekarang →</a></td></tr>{% endfor %}</tbody></table></div></section>
+  {% if recent_orders %}<section class="panel"><header><h2>Pesanan terbaru</h2><a class="btn" href="{% url 'merchant-abshop' %}?q={{ partner.name }}">Pesanan AB Shop</a></header><div class="scroll-x"><table class="tbl"><thead><tr><th>No. pesanan</th><th>Pembeli</th><th>Channel</th><th>Tanggal</th><th>Status tagihan</th></tr></thead><tbody>
+    {% for o in recent_orders %}<tr><td><a href="{% url 'merchant-orders' %}?q={{ o.invoice_number }}">{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</a></td><td>{{ o.customer_name }}</td><td>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</td><td>{{ o.created_at|date:"d M Y" }}</td><td><span class="pill pill-{{ o.abshop_billing_status }}">{{ o.get_abshop_billing_status_display }}</span></td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 </div>
-
-<div class="dashboard-stats">
-  <div class="stat-card"><small>Total Ditagih</small><b>Rp{{ total_invoiced|floatformat:"0g" }}</b></div>
-  <div class="stat-card"><small>Sudah Dibayar</small><b>Rp{{ total_paid|floatformat:"0g" }}</b></div>
-  <div class="stat-card"><small>Sisa Tagihan</small><b>Rp{{ balance_due|floatformat:"0g" }}</b></div>
-</div>
-
-<div class="dashboard-grid">
-
-{# ── Edit partner card ─────────────────────────────────────────────────── #}
-{% if merchant_role != "viewer" %}
-<section class="bo-card">
-<h2>Info Mitra</h2>
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="edit_partner">
-<div class="form-row">
-  <label>Nama Kontak<input name="contact_name" value="{{ partner.contact_name }}"></label>
-  <label>No. HP<input name="contact_phone" value="{{ partner.contact_phone }}"></label>
-</div>
-<div class="form-row">
-  <label>Email<input name="contact_email" type="email" value="{{ partner.contact_email }}"></label>
-  <label>Jatuh Tempo (hari)<input type="number" name="payment_term_days" value="{{ partner.payment_term_days }}" min="1"></label>
-</div>
-<label>Catatan<textarea name="notes" rows="2">{{ partner.notes }}</textarea></label>
-<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="is_active" value="1" {% if partner.is_active %}checked{% endif %}> Mitra aktif</label>
-<button class="bo-button" style="margin-top:8px">Simpan</button>
-</form>
-</section>
-{% endif %}
-
-{# ── Quick links ───────────────────────────────────────────────────────── #}
-<section class="bo-card">
-<h2>Akses Cepat</h2>
-<p><a class="bo-button" href="{% url 'merchant-abshop' %}?q={{ partner.name }}">{% icon "receipt" %} Pesanan AB Shop</a></p>
-<p><a class="bo-button" href="{% url 'settlement-new' %}?partner={{ partner.pk }}">{% icon "plus" %} Buat Settlement Baru</a></p>
-<p><a class="bo-link" href="{% url 'settlement-list' %}?partner={{ partner.pk }}">Lihat semua settlement mitra ini →</a></p>
-</section>
-
-</div>
-
-{# ── Settlements ───────────────────────────────────────────────────────── #}
-<section class="bo-card table-card">
-<h2>Settlement ({{ settlements|length }})</h2>
-<div class="data-table"><div class="data-row data-head" style="--cols:6"><span>No. Invoice</span><span>Periode</span><span>Status</span><span>Total</span><span>Dibayar</span><span>Sisa</span></div>
-{% for s in settlements %}
-<div class="data-row" style="--cols:6">
-  <span><a href="{% url 'settlement-detail' s.pk %}">{{ s.invoice_number|default:"(Draft)" }}</a></span>
-  <span>{{ s.period_start|date:"d M Y" }} – {{ s.period_end|date:"d M Y" }}</span>
-  <span><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></span>
-  <span>Rp{{ s.total_due|floatformat:"0g" }}</span>
-  <span>Rp{{ s.amount_paid|floatformat:"0g" }}</span>
-  <span>Rp{{ s.balance_due|floatformat:"0g" }}</span>
-</div>
-{% empty %}<div class="empty-state">Belum ada settlement untuk mitra ini. <a href="{% url 'settlement-new' %}">Buat sekarang →</a></div>{% endfor %}
-</div>
-</section>
-
-{# ── Recent orders ─────────────────────────────────────────────────────── #}
-{% if recent_orders %}
-<section class="bo-card table-card">
-<h2>Pesanan Terbaru</h2>
-<div class="data-table"><div class="data-row data-head" style="--cols:5"><span>No. Pesanan</span><span>Pembeli</span><span>Channel</span><span>Tanggal</span><span>Status Tagihan</span></div>
-{% for o in recent_orders %}
-<div class="data-row" style="--cols:5">
-  <span><a href="{% url 'merchant-orders' %}?q={{ o.invoice_number }}">{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</a></span>
-  <span>{{ o.customer_name }}</span>
-  <span>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</span>
-  <span>{{ o.created_at|date:"d M Y" }}</span>
-  <span><span class="badge {{ o.abshop_billing_status }}">{{ o.get_abshop_billing_status_display }}</span></span>
-</div>
-{% endfor %}
-</div>
-<p><a class="bo-link" href="{% url 'merchant-abshop' %}">Lihat semua pesanan AB Shop →</a></p>
-</section>
-{% endif %}
+{% if merchant_role != "viewer" %}<aside class="dp-rail"><section class="panel"><header><h2>Info mitra</h2></header><div class="dp-card-body"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="edit_partner">
+  <label class="field"><span>Nama kontak</span><input name="contact_name" value="{{ partner.contact_name }}"></label>
+  <label class="field"><span>No. HP</span><input name="contact_phone" value="{{ partner.contact_phone }}"></label>
+  <label class="field"><span>Email</span><input name="contact_email" type="email" value="{{ partner.contact_email }}"></label>
+  <label class="field"><span>Jatuh tempo (hari)</span><input type="number" name="payment_term_days" value="{{ partner.payment_term_days }}" min="1"></label>
+  <label class="field"><span>Catatan</span><textarea name="notes" rows="2">{{ partner.notes }}</textarea></label>
+  <label class="field" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="is_active" value="1" style="width:auto" {% if partner.is_active %}checked{% endif %}><span style="margin:0">Mitra aktif</span></label>
+  <button class="btn-primary btn-block">Simpan</button></form></div></section></aside>{% endif %}</div>
 {% endblock %}
