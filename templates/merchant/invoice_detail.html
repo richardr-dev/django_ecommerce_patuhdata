@@ -14,10 +14,26 @@
       {% if invoice.status != 'void' %} · Sisa tagihan <b>Rp{{ amount_due|floatformat:"0g" }}</b>{% endif %}
       {% if invoice.due_date %} · Jatuh tempo <b>{{ invoice.due_date|date:"d M Y" }}</b>{% endif %}
     </p>
+    {% if invoice.sent_at or invoice.viewed_at %}<p class="dp-sub">{% if invoice.sent_at %}{% icon "check" %} Terkirim {{ invoice.sent_at|date:"d M H:i" }}{% endif %}{% if invoice.viewed_at %} · {% icon "eye" %} Dibuka pembeli {{ invoice.viewed_at|date:"d M H:i" }}{% endif %}</p>{% endif %}
   </div>
   <div class="dp-actions">
     {% if invoice.status != 'void' and amount_due > 0 %}
     <button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Catat pembayaran</button>
+    {% endif %}
+    {% if invoice.status != 'void' and invoice.status != 'draft' %}
+    <details class="dp-more">
+      <summary class="btn" aria-label="Kirim ke pembeli">{% icon "arrow-out" %} Kirim ▾</summary>
+      <div class="menu-panel" style="min-width:300px">
+        <a href="{{ wa_link }}" target="_blank" rel="noopener" data-no-soft data-mark-sent="{% url 'merchant-invoice-sent' invoice.id %}">{% icon "megaphone" %}<span>{% if reminder %}Kirim pengingat lewat WhatsApp{% else %}Kirim lewat WhatsApp{% endif %}</span></a>
+        <button type="button" data-copy-link="{{ share_url }}">{% icon "link" %}<span>Salin tautan invoice</span></button>
+        <a href="{{ share_url }}" target="_blank" rel="noopener" data-no-soft>{% icon "eye" %}<span>Lihat seperti pembeli</span></a>
+        <hr>
+        <form method="post" action="{% url 'merchant-invoice-email' invoice.id %}" style="padding:6px 8px;display:grid;gap:6px">{% csrf_token %}
+          <label class="field"><span>Kirim lewat email</span><input type="email" name="to" placeholder="email@pembeli.com" value="{{ buyer_email }}" required></label>
+          <button class="btn-primary justify-center" data-no-loading>{% icon "check" %} Kirim email</button>
+        </form>
+      </div>
+    </details>
     {% endif %}
     <a class="btn" href="{% url 'merchant-invoice-pdf' invoice.id %}">{% icon "download" %} PDF</a>
     {% if invoice.status != 'void' %}<a class="btn" href="{% url 'merchant-invoice-edit' invoice.id %}">Edit</a>{% endif %}
@@ -26,6 +42,7 @@
       <div class="menu-panel">
         {% if invoice.status != 'void' and invoice.status != 'draft' %}<a href="{% url 'merchant-credit-note-new' %}?invoice={{ invoice.id }}">{% icon "undo" %}<span>Buat nota kredit</span></a>{% endif %}
         <a href="{% url 'merchant-invoice-duplicate' invoice.id %}">{% icon "copy" %}<span>Duplikat</span></a>
+        {% if invoice.status != 'void' and invoice.status != 'draft' %}<a href="{% url 'merchant-delivery-note' invoice.id %}" target="_blank" rel="noopener" data-no-soft>{% icon "truck" %}<span>Cetak surat jalan</span></a>{% endif %}
         <a href="{% url 'merchant-invoices-xlsx' %}?ids={{ invoice.id }}">{% icon "file" %}<span>Unduh Excel</span></a>
         <button type="button" onclick="window.print()">{% icon "printer" %}<span>Cetak</span></button>
         {% if invoice.status != 'void' %}
@@ -246,5 +263,21 @@ document.querySelectorAll("[data-open]").forEach(function (el) {
 document.querySelectorAll("dialog [data-close]").forEach(function (el) {
   el.addEventListener("click", function () { el.closest("dialog").close(); });
 });
+</script>
+<script>
+(function () {
+  document.querySelectorAll("[data-copy-link]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copyLink);
+      window.pdToast("Tautan invoice disalin.", "success");
+    });
+  });
+  document.querySelectorAll("[data-mark-sent]").forEach(function (a) {
+    a.addEventListener("click", function () {   // the seller is about to send it: remember that
+      var token = (document.querySelector("input[name=csrfmiddlewaretoken]") || {}).value;
+      fetch(a.dataset.markSent, {method: "POST", headers: {"X-CSRFToken": token}, credentials: "same-origin"});
+    });
+  });
+})();
 </script>
 {% endblock %}

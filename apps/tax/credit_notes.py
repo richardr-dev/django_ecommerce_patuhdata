@@ -16,6 +16,7 @@ from apps.accounting.ledger import (
     COGS,
     CUSTOMER_CREDIT,
     INVENTORY,
+    MARKETPLACE,
     RECEIVABLE,
     REFUNDS,
     VAT,
@@ -71,8 +72,12 @@ def _post(note, *, strict=False, actor=None):
     invoice = note.invoice
     booked = booked_by_invoice(invoice)
     direct = note.paid_out if booked else note.total
-    target = (CUSTOMER_CREDIT if note.excess_action == CreditNote.EXCESS_CREDIT
-        else (note.bank_account.account.code if note.bank_account_id else CASH))
+    if note.excess_action == CreditNote.EXCESS_CREDIT:
+        target = CUSTOMER_CREDIT
+    elif note.excess_action == CreditNote.EXCESS_PLATFORM:
+        target = MARKETPLACE  # the marketplace pays the buyer and takes it off the next payout
+    else:
+        target = note.bank_account.account.code if note.bank_account_id else CASH
     amounts = {REFUNDS: note.subtotal, VAT: note.tax, RECEIVABLE: -(note.total - direct)}
     amounts[target] = amounts.get(target, Decimal(0)) - direct
     cost = sum((item.restocked_cost * item.quantity for item in note.items.all() if item.restock),
@@ -95,6 +100,9 @@ def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
         raise CreditNoteError("Invoice ini tidak bisa dibuatkan nota kredit.")
     if bank_account and bank_account.store_id != invoice.store_id:
         raise CreditNoteError("Rekening tidak ditemukan.")
+    if excess_action == CreditNote.EXCESS_PLATFORM and \
+            invoice.order.channel not in CreditNote.MARKETPLACE_CHANNELS:
+        raise CreditNoteError("Potongan pencairan hanya untuk pesanan marketplace.")
     rows, subtotal = [], Decimal(0)
     for line in lines:
         quantity, price = Decimal(line["quantity"]), money(line["unit_price"])

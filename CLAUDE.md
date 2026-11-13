@@ -66,6 +66,12 @@ Four test files failed before this work and still do: `test_digital_products`,
   on the shelf and to Persediaan at their cost; damaged goods stay out and their cost stays in HPP.
   An exchange takes the replacement variant off the shelf, returns the original if good, and books
   HPP against Persediaan when the original is damaged. Never flip a return to `refunded` by hand.
+- **Refunds on marketplace orders** are `CreditNote.EXCESS_PLATFORM` ("dipotong dari pencairan"): the
+  note credits Piutang marketplace (1300), not a bank, because the marketplace pays the buyer and
+  takes it off the next payout. Only offered for shopee/tokopedia/tiktok_shop/lazada orders.
+- **Buyer links** (`/i/<token>/`) are public and must stay in `ALWAYS_OPEN` (`shops/availability.py`):
+  they work while the shop is in setup or closed. The token is the only key; never put a store
+  admin action behind that URL.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -85,6 +91,8 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
 | Credit notes | `tax/credit_notes.py` | `tax/sales_views.py` |
+| Send an invoice (link, WhatsApp, email, reminder) and the buyer's page | `tax/sharing.py`, `tax/public_views.py` | `channels/views.py:merchant_invoice_detail/_email/_sent`, `templates/tax/public_invoice.html` |
+| Duplicate customers: find and merge | `shops/customer_merge.py` | `shops/segment_views.py:merchant_customer_duplicates` |
 | Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |
 | Receipts, customer credit | `tax/receipts.py` | `tax/sales_views.py` |
 | Quotes, recurring invoices | `tax/quotes.py`, `tax/recurring.py` | `tax/sales_views.py` |

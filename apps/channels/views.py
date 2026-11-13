@@ -717,8 +717,19 @@ def merchant_invoice_detail(request, invoice_id):
         + [("payment", tx.pk) for tx in order.payment_transactions.all()]
         + [("refund", refund.pk) for refund in order.refunds.all()])
     paid_pct = min(100, int((amount_paid + credited) * 100 / invoice.total)) if invoice.total else 0
+    from datetime import date as _date
+
+    from apps.tax import sharing
+
     from .invoice_recap import marketplace_summary
+    share_url, text = "", ""
+    if invoice.status not in (Invoice.STATUS_VOID, Invoice.STATUS_DRAFT):
+        share_url = sharing.public_url(request, invoice)
+        text = sharing.message_text(invoice, share_url, amount_due)
     return render(request, "merchant/invoice_detail.html", _merchant_context(request, store,
+        share_url=share_url, wa_link=sharing.whatsapp_link(order.phone, text) if text else "",
+        reminder=bool(invoice.due_date and invoice.due_date < _date.today() and amount_due > 0),
+        buyer_email=(order.customer.email if order.customer_id else ""),
         marketplace=marketplace_summary(store, order),
         invoice=invoice, items=items, payments=payments, order=order, credited=credited,
         credit_notes=credit_notes, banks=bank_accounts(store),
@@ -727,6 +738,45 @@ def merchant_invoice_detail(request, invoice_id):
         today=today, journal=journal,
         payment_methods=InvoicePayment.METHOD_CHOICES,
     ))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_invoice_email(request, invoice_id):
+    """Email the invoice link (or a payment reminder when it is late) to the buyer."""
+    import uuid as _uuid
+
+    from apps.tax import sharing
+    from apps.tax.models import Invoice
+
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, CHANNEL_ROLES)
+    invoice = get_object_or_404(Invoice, id=_uuid.UUID(str(invoice_id)), store=store)
+    try:
+        sharing.send_email(invoice, sharing.public_url(request, invoice), request.POST.get("to", ""),
+            invoice.amount_due)
+    except (sharing.ShareError, OSError) as error:
+        messages.error(request, str(error) or "Email gagal dikirim.")
+    else:
+        messages.success(request, f"Invoice {invoice.number} dikirim ke {request.POST['to'].strip()}.")
+    return redirect("merchant-invoice-detail", invoice_id=invoice.id)
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_invoice_sent(request, invoice_id):
+    """Remember that the seller sent the invoice (the WhatsApp link was opened)."""
+    import uuid as _uuid
+
+    from apps.tax import sharing
+    from apps.tax.models import Invoice
+
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, CHANNEL_ROLES)
+    sharing.mark_sent(get_object_or_404(Invoice, id=_uuid.UUID(str(invoice_id)), store=store))
+    return HttpResponse(status=204)
 
 
 @login_required(login_url="/merchant/login/")

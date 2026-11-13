@@ -164,6 +164,7 @@ def merchant_credit_note_new(request):
     return render(request, "merchant/credit_note_new.html", _merchant_context(request, store,
         invoice=invoice, rows=rows, banks=banks, reasons=CreditNote.REASONS,
         today=timezone.localdate().isoformat(), post=request.POST,
+        marketplace_channels=CreditNote.MARKETPLACE_CHANNELS,
         due=invoice.amount_due, taxed=bool(invoice.tax_rate)))
 
 
@@ -444,3 +445,19 @@ def merchant_recurring_edit(request, recurring_id=None):
         quote=template, prefill=prefill or defaultdict(str), kind="recurring", intervals=RecurringInvoice.INTERVALS,
         items=template.items.all() if template else []))
 
+
+
+@login_required(login_url=LOGIN)
+def merchant_delivery_note(request, invoice_id):
+    """Surat jalan: what is in the parcel, to whom, with signature boxes. No prices."""
+    store = _staff_store(request)
+    _require_roles(request, store, {"admin", "manager", "ops", "finance", "warehouse", "viewer"})
+    invoice = get_object_or_404(Invoice.objects.select_related("order", "store"), pk=invoice_id,
+        store=store)
+    if invoice.status in {Invoice.STATUS_DRAFT, Invoice.STATUS_VOID}:
+        raise Http404
+    order = invoice.order
+    return render(request, "tax/delivery_note.html", {"invoice": invoice, "order": order,
+        "items": invoice.items.all(), "store": store, "today": timezone.localdate(),
+        "address": (order.full_address if order.shipping_address not in {"", "-"} else
+            invoice.buyer_address)})

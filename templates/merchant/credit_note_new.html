@@ -26,7 +26,7 @@
   </div>
   <div class="editor-foot"><div style="max-width:560px;flex:1">
       <p class="dp-help" style="margin:0 0 8px"><b>Jika pelanggan sudah membayar</b> lebih dari sisa tagihan setelah nota kredit, kelebihannya:</p>
-      <div class="field-row" style="grid-template-columns:1fr 1fr"><label class="field"><span>Perlakuan</span><select name="excess_action" id="excess"><option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang</option></select></label>
+      <div class="field-row" style="grid-template-columns:1fr 1fr"><label class="field"><span>Perlakuan</span><select name="excess_action" id="excess"><option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang</option>{% if invoice.order.channel in marketplace_channels %}<option value="platform">Dipotong dari pencairan {{ invoice.order.get_channel_display }}</option>{% endif %}</select></label>
         <label class="field" id="bank-wrap" hidden><span>Dari rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label></div></div>
     <div class="sum"><div><span>Subtotal kredit</span><span id="sub">Rp0</span></div>{% if taxed %}<div><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span id="vat">Rp0</span></div>{% endif %}<div class="grand"><span>Total nota kredit</span><span id="grand">Rp0</span></div></div></div>
   <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-invoice-detail' invoice.id %}">Batal</a><button class="btn-primary">{% icon "check" %} Terbitkan nota kredit</button></div>

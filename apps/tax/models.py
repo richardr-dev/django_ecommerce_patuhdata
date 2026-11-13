@@ -81,6 +81,10 @@ class Invoice(models.Model):
     other_charges = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2)
     notes = models.TextField(blank=True)
+    # Sharing: a secret link the buyer opens without logging in, and when it was sent / opened.
+    public_token = models.CharField(max_length=40, blank=True, db_index=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    viewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -204,9 +208,11 @@ class CreditNote(models.Model):
     REASONS = [("return", "Barang diretur"), ("price", "Koreksi harga"),
         ("discount", "Diskon susulan"), ("damaged", "Barang rusak / tidak sesuai"),
         ("other", "Lainnya")]
-    EXCESS_CREDIT, EXCESS_REFUND = "credit", "refund"
+    EXCESS_CREDIT, EXCESS_REFUND, EXCESS_PLATFORM = "credit", "refund", "platform"
     EXCESS_CHOICES = [(EXCESS_CREDIT, "Simpan sebagai kredit pelanggan"),
-        (EXCESS_REFUND, "Kembalikan uang")]
+        (EXCESS_REFUND, "Kembalikan uang"),
+        (EXCESS_PLATFORM, "Dipotong dari pencairan marketplace")]
+    MARKETPLACE_CHANNELS = {"shopee", "tokopedia", "tiktok_shop", "lazada"}
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="credit_notes")

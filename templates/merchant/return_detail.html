@@ -50,15 +50,16 @@
         <div class="notice {% if ret.condition == 'good' %}ok{% else %}info{% endif %}">{% icon "box" %}<span>{% if ret.condition == "good" %}<b>Layak jual:</b> barang kembali ke stok gudang dan ke Persediaan sebesar harga pokoknya.{% else %}<b>Rusak:</b> barang tidak masuk stok. Harga pokoknya tetap di HPP sebagai kerugian.{% endif %}</span></div>
         <div class="form-grid" style="padding:0;grid-template-columns:repeat(2,minmax(0,1fr))">
           <label class="field"><span>Uang pembeli</span>
-            <select name="refund_method" id="refund-method"><option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang (transfer)</option></select></label>
+            <select name="refund_method" id="refund-method">{% if ret.order.channel in marketplace_channels %}<option value="platform">Dipotong dari pencairan {{ ret.order.get_channel_display }}</option>{% endif %}<option value="credit">Simpan sebagai kredit pelanggan</option><option value="refund">Kembalikan uang (transfer)</option></select></label>
           <label class="field" id="bank-wrap" hidden><span>Dari rekening</span>
             <select name="bank_account">{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>
           <label class="field"><span>Tanggal</span><input type="date" name="issued_on" value="{{ today|date:'Y-m-d' }}"></label>
         </div>
+        <p class="dp-help" id="platform-help" hidden>Marketplace yang mengembalikan uang ke pembeli lalu memotongnya dari pencairan berikutnya: Piutang marketplace berkurang, tidak ada uang keluar dari rekening Anda.</p>
         <p class="dp-help">Bila invoice belum dibayar, nilai retur lebih dulu mengurangi piutang; hanya kelebihan yang dikembalikan atau jadi kredit. Pesanan tanpa invoice akan diterbitkan invoicenya dulu.</p>
         <div><button class="btn-primary" data-confirm="Selesaikan retur? Nota kredit dibuat dan stok diperbarui." data-confirm-tone="neutral" data-confirm-ok="Selesaikan">{% icon "check" %} Selesaikan retur</button></div>
       </form>
-      <script>(function(){var m=document.getElementById("refund-method"),w=document.getElementById("bank-wrap");m.addEventListener("change",function(){w.hidden=m.value!=="refund";});})();</script>
+      <script>(function(){var m=document.getElementById("refund-method"),w=document.getElementById("bank-wrap"),h=document.getElementById("platform-help");function sync(){w.hidden=m.value!=="refund";if(h)h.hidden=m.value!=="platform";}m.addEventListener("change",sync);sync();})();</script>
     </section>
     {% endif %}
 

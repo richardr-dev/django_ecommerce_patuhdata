@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Surat jalan {{ invoice.number }}</title>
+<style>
+  body { margin:0; background:#f5f8fd; color:#0f1f38; font:14px/1.5 Inter,system-ui,sans-serif; }
+  .bar { max-width:800px; margin:16px auto 0; padding:0 16px; display:flex; justify-content:flex-end; }
+  button { height:38px; padding:0 18px; border:0; border-radius:99px; background:linear-gradient(180deg,#3b82f6,#2563eb); color:#fff; font:650 13px Inter,system-ui,sans-serif; cursor:pointer; }
+  .sheet { max-width:800px; margin:12px auto 32px; background:#fff; padding:36px; border-radius:20px; box-shadow:0 10px 30px -18px rgba(26,102,217,.35),0 0 0 1px rgba(15,23,42,.05); }
+  header { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; border-bottom:3px solid #2563eb; padding-bottom:14px; }
+  h1 { margin:0; font-size:24px; letter-spacing:.08em; color:#1a66d9; } header p { margin:2px 0 0; color:#6a7a92; white-space:pre-line; font-size:13px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:20px 0; } h2 { margin:0 0 4px; color:#6a7a92; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .grid p { margin:0; white-space:pre-line; } table { width:100%; border-collapse:collapse; margin-top:6px; }
+  th { background:#eef4fe; color:#1a66d9; font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 8px; text-align:left; }
+  td { padding:10px 8px; border-bottom:1px solid #e3e9f3; vertical-align:top; } .n { text-align:right; white-space:nowrap; } small { display:block; color:#6a7a92; font-size:12px; }
+  .sign { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:44px; text-align:center; } .sign div { padding-top:64px; border-top:1px solid #0f1f38; font-size:13px; }
+  .note { margin-top:20px; color:#6a7a92; font-size:12px; }
+  @media print { body { background:#fff; } .bar { display:none; } .sheet { box-shadow:none; margin:0; max-width:none; padding:0; border-radius:0; } }
+</style></head>
+<body>
+<div class="bar"><button onclick="window.print()">Cetak surat jalan</button></div>
+<main class="sheet">
+  <header><div><h1>SURAT JALAN</h1><p>No. {{ invoice.number }} · {{ today|date:"d F Y" }}</p></div>
+    <div style="text-align:right"><b>{{ invoice.seller_name }}</b><p>{{ invoice.seller_address }}</p></div></header>
+  <section class="grid">
+    <div><h2>Dikirim kepada</h2><p><b>{{ invoice.buyer_name }}</b>
+{{ address }}{% if order.phone and order.phone != '-' %}
+Telp. {{ order.phone }}{% endif %}</p></div>
+    <div><h2>Pengiriman</h2><p>Tanggal invoice: {{ invoice.issued_on|date:"d M Y" }}
+Kurir: {{ order.courier_code|default:"—"|upper }}
+No. resi: {{ order.tracking_number|default:"—" }}{% if order.external_order_id %}
+Ref. pesanan: {{ order.external_order_id }}{% endif %}</p></div>
+  </section>
+  <table><thead><tr><th style="width:36px">No</th><th>Nama barang</th><th>Kode</th><th class="n">Jumlah</th></tr></thead><tbody>
+    {% for item in items %}<tr><td>{{ forloop.counter }}</td><td><b>{{ item.description }}</b>{% if item.note %}<small>{{ item.note }}</small>{% endif %}</td><td>{{ item.sku|default:"—" }}</td><td class="n"><b>{{ item.quantity|floatformat:"-2" }}</b> {{ item.unit|default:"pcs" }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="note">Mohon periksa barang saat diterima. Kerusakan atau kekurangan dilaporkan dalam 1×24 jam.</p>
+  <div class="sign"><div>Dibuat oleh</div><div>Pengirim / kurir</div><div>Penerima</div></div>
+</main></body></html>

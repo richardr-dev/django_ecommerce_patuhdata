@@ -22,7 +22,7 @@ from apps.accounting.ledger import COGS, INVENTORY, LedgerError, money, post_ent
 from apps.orders.stock import StockError, stock_in, stock_out
 
 from .credit_notes import CreditNoteError, create_credit_note, credited_quantity
-from .models import Invoice
+from .models import CreditNote, Invoice
 
 logger = logging.getLogger(__name__)
 

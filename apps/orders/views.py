@@ -1343,8 +1343,8 @@ def merchant_return_detail(request, return_id):
                         issued_on = timezone.localdate()
                     note = return_service.settle_refund(ret, quantities=quantities,
                         issued_on=issued_on, bank_account=bank, actor=request.user,
-                        excess_action="refund" if request.POST.get("refund_method") == "refund"
-                        else "credit")
+                        excess_action=request.POST.get("refund_method")
+                        if request.POST.get("refund_method") in {"refund", "platform"} else "credit")
                     messages.success(request, f"Retur diselesaikan: nota kredit {note.number}"
                         f"{' dan stok kembali ke gudang' if ret.condition == 'good' else ''}.")
                 else:
@@ -1382,6 +1382,7 @@ def merchant_return_detail(request, return_id):
         done=done,
         lines=return_service.returnable_lines(ret) if ret.request_type == "return_refund" else [],
         banks=list(bank_accounts(store)), today=timezone.localdate(),
+        marketplace_channels=return_service.CreditNote.MARKETPLACE_CHANNELS,
         movements=return_service.movements(ret)))
 
 

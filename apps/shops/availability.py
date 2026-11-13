@@ -17,7 +17,8 @@ PREVIEW_SESSION_KEY = "storefront_preview"
 # callbacks, buyers' existing orders and accounts, and files.
 ALWAYS_OPEN = ("/merchant/", "/platform-admin/", "/integrations/", "/internal/", "/static/",
     "/media/", "/healthz/", "/orders/", "/account/", "/api/", "/robots.txt", "/favicon.ico",
-    "/pages/", "/privacy/", "/terms/", "/newsletter/unsubscribe/", "/cart/recover/")
+    "/pages/", "/privacy/", "/terms/", "/newsletter/unsubscribe/", "/cart/recover/",
+    "/i/")  # a buyer paying an invoice must reach it even while the shop is in setup or closed
 # What a closed store cannot do: take new orders.
 ORDERING = ("/cart/add/", "/cart/update/", "/checkout/")
 

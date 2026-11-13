@@ -154,3 +154,47 @@ class ExchangeTests(Base):
         with self.assertRaises(returns.ReturnError):
             returns.settle_exchange(self.ret, replacement_variant=self.m)
         self.assertEqual(self.stock(self.m), 5)
+
+
+class MarketplaceReturnTests(Base):
+    def make(self, channel):
+        order = Order.objects.create(store=self.store, customer_name="Rina", phone="0813",
+            shipping_address="-", subtotal=200_000, total=200_000, channel=channel, status="completed",
+            idempotency_key=f"mk-{channel}")
+        line = OrderItem.objects.create(order=order, product=self.kabel, name="Kabel", sku="KBL",
+            unit_price=100_000, quantity=2, line_total=200_000, unit_cost=60_000)
+        ret = ReturnRequest.objects.create(order=order, order_item=line, status="inspected",
+            condition="good")
+        return order, line, ret
+
+    def test_marketplace_return_is_taken_off_the_marketplace_receivable(self):
+        from apps.accounting.ledger import post_everything
+        from apps.orders.models import PaymentTransaction
+        order, line, ret = self.make("shopee")
+        PaymentTransaction.objects.create(order=order, provider="shopee", external_id="SHP-1",
+            kind="payment", status="succeeded", amount=200_000)
+        returns.return_invoice(ret)  # issue the invoice first so only the return is measured
+        post_everything()
+        before = balances(self.store)
+        note = returns.settle_refund(ret, quantities={line.pk: 1}, issued_on=self.today,
+            excess_action="platform")
+        after = balances(self.store)
+        self.assertEqual(note.excess_action, "platform")
+        self.assertEqual(after.get("1300", 0) - before.get("1300", 0), -note.total)
+        self.assertEqual(after.get("1100", 0), before.get("1100", 0))  # no money left the bank
+        self.assertEqual(self.on_hand(self.kabel), 101)
+
+    def test_only_marketplace_orders_can_use_it(self):
+        order, line, ret = self.make("manual")
+        with self.assertRaises(returns.ReturnError):
+            returns.settle_refund(ret, quantities={line.pk: 1}, issued_on=self.today,
+                excess_action="platform")
+
+    def test_return_page_offers_it_for_shopee_only(self):
+        order, line, ret = self.make("shopee")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("merchant-return-detail", args=[ret.pk]))
+        self.assertContains(page, "Dipotong dari pencairan Shopee")
+        order2, line2, ret2 = self.make("manual")
+        self.assertNotContains(self.client.get(reverse("merchant-return-detail", args=[ret2.pk])),
+            "Dipotong dari pencairan")
