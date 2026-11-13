@@ -83,8 +83,15 @@ def _check_stock(store, lines):
 
 
 def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phone, address, notes,
-        external_order_id, discount, shipping, status, subtotal, tax, total, order_type="direct"):
-    order = Order.objects.create(store=store, channel=channel, order_type=order_type,
+        external_order_id, discount, shipping, status, subtotal, tax, total, order_type="direct",
+        courier="", tracking_number="", ab_shop_source=""):
+    extra = {"courier_code": (courier or "").strip().lower()[:40],
+        "tracking_number": (tracking_number or "").strip()[:100]}
+    if channel == "abshop":
+        # Billed to AB Shop on this invoice, and noted for which platform they resell on.
+        extra["ab_shop_source"] = ab_shop_source if ab_shop_source in dict(Order.AB_SHOP_SOURCES) else ""
+        extra["abshop_billing_status"] = "billed"
+    order = Order.objects.create(store=store, channel=channel, order_type=order_type, **extra,
         customer_name=buyer_name[:120], phone=(phone or "-")[:30],
         shipping_address=(address or "-")[:300], subtotal=subtotal, discount=discount, tax=tax,
         shipping_cost=shipping, total=total, payment_method="manual", delivery_notes=notes[:300],
@@ -135,7 +142,8 @@ def _write_items(invoice, lines):
 @transaction.atomic
 def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="manual",
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
-        external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None):
+        external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
+        courier="", tracking_number="", ab_shop_source=""):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``)."""
@@ -147,7 +155,8 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     order = _build_order(store, lines=lines, buyer_name=buyer_name, issued_on=issued_on,
         channel=channel, customer=customer, phone=phone, address=address, notes=notes,
         external_order_id=external_order_id, discount=discount, shipping=shipping,
-        status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total)
+        status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total,
+        courier=courier, tracking_number=tracking_number, ab_shop_source=ab_shop_source)
     _deduct(order)
     invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods

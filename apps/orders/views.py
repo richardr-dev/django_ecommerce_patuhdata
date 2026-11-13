@@ -915,7 +915,16 @@ def order_detail(request, order_id):
         remember_customer_order(request, order)  # a payment link: keep it on this device
     from .manual_views import DOWNLOADABLE
     downloads = [item for item in order.items.all() if item.product.is_digital]
+    from . import return_requests
+    returnable = order.status in return_requests.RETURNABLE_STATUSES
+    return_items = [{"item": item, "sizes": return_requests.available_sizes(item),
+        "open": return_requests.open_request(item)} for item in order.items.all()] if returnable else []
     return render(request, "storefront/order.html", {"order": order,
+        "returnable": returnable, "return_items": return_items,
+        "return_sizes": {str(row["item"].id): [{"id": v.id, "name": v.name, "left": v.stock - v.reserved}
+            for v in row["sizes"]] for row in return_items},
+        "return_requests": order.return_requests.select_related("order_item", "replacement_variant"),
+        "return_types": ReturnRequest.TYPES, "return_reasons": ReturnRequest.REASONS,
         "downloads": downloads, "can_download": order.status in DOWNLOADABLE,
         "eta": estimated_arrival(order), "steps": tracker_steps(order),
         "order_code": order_code(order), "parcel": courier_tracking(order),
@@ -965,14 +974,22 @@ def order_review(request, order_id):
 
 
 def request_return(request, order_id):
+    """The buyer's return or exchange request: item, type, reason, photo, and a size for exchanges."""
+    from . import return_requests
     if request.method != "POST" or not request.store: raise Http404
     order = get_customer_order_or_404(request, order_id)
-    reason = request.POST.get("reason", "").strip()
-    if reason and order.status in {"paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered", "completed"}:
-        ReturnRequest.objects.create(order=order, reason="other", reason_detail=reason[:1000])
-        messages.success(request, "Permintaan pengembalian telah dikirim.")
-    else: messages.error(request, "Permintaan pengembalian belum dapat diproses.")
-    return redirect("order-detail", order_id=order.id)
+    try:
+        ret = return_requests.create_request(order, order_item_id=request.POST.get("order_item"),
+            request_type=request.POST.get("request_type", "return_refund"),
+            reason=request.POST.get("reason", ""), reason_detail=request.POST.get("reason_detail", ""),
+            quantity=request.POST.get("quantity", 1), photo=request.FILES.get("photo"),
+            replacement_variant_id=request.POST.get("replacement_variant"))
+    except return_requests.ReturnRequestError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Pengajuan " + ("tukar ukuran" if ret.request_type == "exchange"
+            else "retur") + " terkirim. Penjual akan memeriksa foto Anda dan memberi kabar.")
+    return redirect(reverse("order-detail", args=[order.id]) + "#pengembalian")
 
 def _staff_store(request):
     stores = Store.objects.filter(owner=request.user) | Store.objects.filter(staff_members__user=request.user)
@@ -1286,9 +1303,11 @@ def merchant_returns(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "viewer"})
 
-    returns = ReturnRequest.objects.filter(
-        order__store=store
-    ).select_related("order", "order_item__product", "replacement_variant").order_by("-created_at")
+    from apps.accounting.views import render_partial
+    from apps.channels.invoice_filters import PRESETS, date_range, values
+
+    base = ReturnRequest.objects.filter(order__store=store)
+    returns = base.select_related("order", "order_item__product", "replacement_variant").order_by("-created_at")
 
     status_filter = request.GET.get("status", "")
     if status_filter:
@@ -1296,18 +1315,36 @@ def merchant_returns(request):
     type_filter = request.GET.get("type", "")
     if type_filter:
         returns = returns.filter(request_type=type_filter)
+    channels = values(request.GET, "channel")
+    if channels:
+        returns = returns.filter(order__channel__in=channels)
+    start, end, _label = date_range(request.GET, date.today())
+    if start:
+        returns = returns.filter(created_at__date__gte=start)
+    if end:
+        returns = returns.filter(created_at__date__lte=end)
     query = request.GET.get("q", "").strip()
     if query:
         returns = returns.filter(
             models.Q(order__customer_name__icontains=query) | models.Q(order__phone__icontains=query)
+            | models.Q(order__invoice_number__icontains=query)
+            | models.Q(order__external_order_id__icontains=query)
+            | models.Q(order_item__name__icontains=query) | models.Q(order_item__sku__icontains=query)
         )
+    names = dict(Order.CHANNELS)
+    channel_counts = [{"code": row["order__channel"], "label": names.get(row["order__channel"], row["order__channel"]),
+        "count": row["n"]} for row in base.values("order__channel").annotate(n=Count("id")).order_by("-n")]
 
     counts = {}
     for status_key, _ in ReturnRequest.STATUS:
         counts[status_key] = ReturnRequest.objects.filter(order__store=store, status=status_key).count()
 
     page, page_range, page_query = paginate(request, returns, MERCHANT_PAGE_SIZE)
-    return render(request, "merchant/returns.html", _merchant_context(request, store,
+    return render_partial(request, "merchant/returns.html", "merchant/_returns_list.html", _merchant_context(request, store,
+        channel_counts=channel_counts, channel_selected=channels, presets=PRESETS,
+        range_preset=request.GET.get("range", ""),
+        date_from=request.GET.get("date_from") or (start.isoformat() if start and not request.GET.get("range") else ""),
+        date_to=request.GET.get("date_to") or (end.isoformat() if end and not request.GET.get("range") else ""),
         returns=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         query=query, status_filter=status_filter, type_filter=type_filter,
         statuses=[(key, label, counts[key]) for key, label in ReturnRequest.STATUS],
@@ -1333,6 +1370,21 @@ def merchant_return_detail(request, return_id):
             "mark_inspected": ("item_received", "inspected"),
             "complete": ("replacement_sent", "completed"),
         }
+        if action == "upload_photo":
+            from . import return_requests
+            try:
+                return_requests.validate_photo(request.FILES.get("photo"))
+            except return_requests.ReturnRequestError as error:
+                messages.error(request, str(error))
+            else:
+                ret.photo = request.FILES["photo"]
+                ret.save(update_fields=["photo", "updated_at"])
+                messages.success(request, "Foto bukti disimpan.")
+            return redirect("merchant-return-detail", return_id=return_id)
+        if action == "approve" and not ret.photo:
+            messages.error(request, "Foto barang belum ada. Minta pembeli mengirim foto, atau unggah "
+                "foto yang Anda terima, lalu setujui.")
+            return redirect("merchant-return-detail", return_id=return_id)
         if action in STATUS_TRANSITIONS:
             from_status, to_status = STATUS_TRANSITIONS[action]
             if ret.status == from_status:
@@ -1384,7 +1436,8 @@ def merchant_return_detail(request, return_id):
                     ret.replacement_tracking_number = request.POST.get("replacement_tracking_number", "")[:100]
                     ret.save(update_fields=["replacement_courier", "replacement_tracking_number"])
                     return_service.settle_exchange(ret, replacement_variant=variant,
-                        quantity=request.POST.get("quantity") or None, actor=request.user)
+                        quantity=request.POST.get("quantity") or ret.quantity or None,
+                        actor=request.user)
                     messages.success(request, "Barang pengganti dicatat keluar dari stok.")
                 AuditLog.objects.create(store=store, actor=request.user, action=f"return.{action}",
                     object_type="ReturnRequest", object_id=str(ret.pk), details={})
@@ -1428,13 +1481,27 @@ def merchant_return_create(request, order_id):
     if kind not in dict(ReturnRequest.TYPES):
         kind = "return_refund"
     reason = request.POST.get("reason", "other")
+    from . import return_requests
+    photo = request.FILES.get("photo")
+    if photo:
+        try:
+            return_requests.validate_photo(photo)
+        except return_requests.ReturnRequestError as error:
+            messages.error(request, str(error))
+            return redirect("merchant-order-detail", order_id=order.id)
+    try:
+        quantity = max(int(request.POST.get("quantity") or 0), 0)
+    except ValueError:
+        quantity = 0
     ret = ReturnRequest.objects.create(order=order, order_item=line, request_type=kind,
+        quantity=min(quantity, line.quantity) if line else 0,
         reason=reason if reason in dict(ReturnRequest.REASONS) else "other",
-        reason_detail=request.POST.get("reason_detail", "")[:1000], status="approved",
-        original_variant=line.variant if line else None)
+        reason_detail=request.POST.get("reason_detail", "")[:1000], status="requested",
+        photo=photo, original_variant=line.variant if line else None)
     AuditLog.objects.create(store=store, actor=request.user, action="return.created",
         object_type="ReturnRequest", object_id=str(ret.pk), details={"order": str(order.id)})
-    messages.success(request, "Retur dicatat. Catat resi atau terima barangnya untuk lanjut.")
+    messages.success(request, "Retur dicatat. Setujui setelah ada foto barang, lalu catat resi atau "
+        "terima barangnya.")
     return redirect("merchant-return-detail", return_id=ret.pk)
 
 

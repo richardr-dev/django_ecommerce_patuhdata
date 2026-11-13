@@ -105,7 +105,7 @@ class RefundReturnTests(Base):
             {"order_item": line.pk, "request_type": "return_refund", "reason": "defective"})
         ret = ReturnRequest.objects.get(order=invoice.order)
         self.assertRedirects(response, reverse("merchant-return-detail", args=[ret.pk]))
-        self.assertEqual((ret.status, ret.reason), ("approved", "defective"))
+        self.assertEqual((ret.status, ret.reason), ("requested", "defective"))
 
 
 class ExchangeTests(Base):

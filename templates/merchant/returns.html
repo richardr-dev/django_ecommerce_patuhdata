@@ -1,5 +1,45 @@
-{% extends "merchant/base.html" %}{% load icons %}{% block title %}Retur & Penukaran{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">RETUR</span><h1>Retur & Penukaran</h1><p>Kelola permintaan retur dan tukar ukuran dari pembeli.</p></div></div>
-<nav class="tabs" aria-label="Status retur"><a class="{% if not status_filter %}on{% endif %}" href="?">Semua<span class="count">{{ returns|length }}</span></a>{% for key, label, count in statuses %}<a class="{% if status_filter == key %}on{% endif %}" href="?status={{ key }}">{{ label }}<span class="count">{{ count }}</span></a>{% endfor %}</nav>
-<form class="bo-search" method="get">{% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}<select name="type" aria-label="Tipe retur" onchange="this.form.submit()"><option value="">Semua tipe</option>{% for code, label in types %}<option value="{{ code }}"{% if type_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><input name="q" value="{{ query }}" placeholder="Cari nama atau no. HP pembeli"><button>Cari</button></form>
-<section class="bo-card table-card"><div class="data-table"><div class="data-row data-head" style="--cols:7"><span>ID</span><span>Pesanan</span><span>Pembeli</span><span>Tipe</span><span>Alasan</span><span>Status</span><span>Tanggal</span></div>{% for ret in returns %}<div class="data-row" style="--cols:7"><span><a href="{% url 'merchant-return-detail' ret.pk %}">{{ ret.pk }}</a></span><span><a href="{% url 'merchant-orders' %}?q={{ ret.order.invoice_number }}">{{ ret.order.invoice_number|default:ret.order.id|stringformat:"s"|slice:":8" }}</a></span><span><b>{{ ret.order.customer_name }}</b><small>{{ ret.order.phone }}</small></span><span><span class="badge">{{ ret.get_request_type_display }}</span></span><span>{{ ret.get_reason_display }}</span><span><span class="badge {{ ret.status }}">{{ ret.get_status_display }}</span></span><span>{{ ret.created_at|date:"d M Y" }}</span></div>{% empty %}<div class="empty-state">Belum ada permintaan retur{% if query %} yang cocok dengan "{{ query }}"{% endif %}.</div>{% endfor %}</div></section>
-{% include "storefront/pagination.html" %}{% endblock %}
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Retur & Penukaran{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Retur</span><h1>Retur &amp; penukaran</h1><p>Permintaan retur dan tukar ukuran dari pembeli website maupun marketplace: periksa foto, terima barang, lalu selesaikan.</p></div></div>
+
+<nav class="tabs" aria-label="Status retur">
+  <a class="{% if not status_filter %}on{% endif %}" href="?">Semua<span class="count">{{ page_obj.paginator.count }}</span></a>
+  {% for key, label, count in statuses %}<a class="{% if status_filter == key %}on{% endif %}" href="?status={{ key }}">{{ label }}<span class="count">{{ count }}</span></a>{% endfor %}
+</nav>
+
+<form id="ret-filter" method="get" class="mb-4 mt-4 grid gap-3"
+  hx-get="{% url 'merchant-returns' %}" hx-target="#ret-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
+  hx-trigger="input changed delay:350ms from:#ret-q, change">
+  <input type="hidden" name="status" value="{{ status_filter }}">
+  <div class="flex flex-wrap items-center gap-2">
+    <div class="relative min-w-[240px] flex-1">
+      <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "search" %}</span>
+      <input id="ret-q" type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Cari nama, no. HP, no. pesanan, produk / SKU…" aria-label="Cari retur"
+        class="w-full rounded-full border-0 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500"></div>
+    <label class="relative inline-flex items-center"><span class="pointer-events-none absolute left-3.5 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "swap" %}</span>
+      <select name="type" aria-label="Tipe" class="rounded-full border-0 bg-white py-2.5 pl-10 pr-9 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Semua tipe</option>{% for code, label in types %}<option value="{{ code }}"{% if type_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+    <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Channel">
+      <span class="mr-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><span class="[&>svg]:h-3.5 [&>svg]:w-3.5">{% icon "store" %}</span>Channel</span>
+      {% for ch in channel_counts %}<label class="cursor-pointer"><input type="checkbox" name="channel" value="{{ ch.code }}" class="peer sr-only"{% if ch.code in channel_selected %} checked{% endif %}><span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300"><span class="h-2 w-2 rounded-full {% if ch.code == 'shopee' %}bg-orange-500{% elif ch.code == 'tokopedia' %}bg-emerald-500{% elif ch.code == 'tiktok_shop' %}bg-slate-800{% elif ch.code == 'lazada' %}bg-indigo-500{% elif ch.code == 'web' %}bg-blue-500{% else %}bg-slate-400{% endif %}"></span>{{ ch.label }} <b class="font-bold text-slate-400">{{ ch.count }}</b></span></label>{% empty %}<span class="text-xs text-slate-400">Belum ada retur.</span>{% endfor %}
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Periode">
+      <span class="mr-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><span class="[&>svg]:h-3.5 [&>svg]:w-3.5">{% icon "calendar" %}</span>Periode</span>
+      <label class="cursor-pointer"><input type="radio" name="range" value="" class="peer sr-only"{% if not range_preset %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">Semua</span></label>
+      {% for code, label in presets %}<label class="cursor-pointer"><input type="radio" name="range" value="{{ code }}" class="peer sr-only"{% if range_preset == code %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">{{ label }}</span></label>{% endfor %}
+      <input type="date" name="date_from" value="{{ date_from }}" aria-label="Dari tanggal" class="rounded-full border-0 px-2.5 py-1 text-xs ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">–<input type="date" name="date_to" value="{{ date_to }}" aria-label="Sampai tanggal" class="rounded-full border-0 px-2.5 py-1 text-xs ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">
+    </div>
+  </div>
+</form>
+<div id="ret-list" aria-live="polite">{% include "merchant/_returns_list.html" %}</div>
+<script>
+(function () {
+  var form = document.getElementById("ret-filter");
+  form.addEventListener("change", function (e) {
+    var n = e.target.name, clear = function (name) { form.querySelectorAll('[name="' + name + '"]').forEach(function (el) { if (el.type === "radio") el.checked = el.value === ""; else el.value = ""; }); };
+    if (n === "range" && e.target.value) { form.querySelector('[name=date_from]').value = ""; form.querySelector('[name=date_to]').value = ""; }
+    if ((n === "date_from" || n === "date_to") && e.target.value) clear("range");
+  }, true);
+})();
+</script>
+{% endblock %}

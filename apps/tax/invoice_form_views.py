@@ -70,8 +70,12 @@ def _post_lines(request, store):
         product = Product.objects.filter(store=store, pk=product_id).first() if product_id else None
         if not product and not text.strip():
             continue
+        unit_price = _number(price)
+        if (not unit_price and product and product.ab_shop_price is not None
+                and post.get("channel") == "abshop"):
+            unit_price = product.ab_shop_price  # AB Shop pays its own price when none was typed
         lines.append({"product": product, "description": text.strip(),
-            "qty": _number(qty, Decimal(1)), "unit_price": _number(price),
+            "qty": _number(qty, Decimal(1)), "unit_price": unit_price,
             "discount": _number(discount), "unit": unit, "note": note, "code": code})
     return lines
 
@@ -91,6 +95,7 @@ def _catalog(store):
     products = annotate_available_stock(Product.objects.filter(store=store, is_active=True)
         ).order_by("name")[:3000]
     return [{"id": str(p.pk), "sku": p.sku, "name": p.name, "price": f"{p.price:.0f}",
+        "ab_price": f"{p.ab_shop_price:.0f}" if p.ab_shop_price is not None else "",
         "stock": getattr(p, "stock_available", None)} for p in products]
 
 
@@ -110,6 +115,9 @@ def _initial(store, source, mode, prefill):
             "phone": order.phone if order.phone != "-" else "", "address": source.buyer_address
             if source.buyer_address != "-" else "", "channel": order.channel,
             "reference": order.external_order_id, "notes": source.notes,
+            "courier": order.courier_code if mode == "edit" else "",
+            "tracking_number": order.tracking_number if mode == "edit" else "",
+            "ab_shop_source": order.ab_shop_source,
             "issued_on": source.issued_on if mode == "edit" else timezone.localdate(),
             "due_date": source.due_date if mode == "edit" else None,
             "discount": f"{source.discount:.0f}" if source.discount else "",
@@ -120,7 +128,7 @@ def _initial(store, source, mode, prefill):
         "company_name": prefill.company_name if prefill else "", "npwp": prefill.npwp if prefill else "",
         "phone": prefill.phone if prefill else "", "address": prefill.address if prefill else "",
         "channel": "manual", "reference": "", "notes": "", "issued_on": timezone.localdate(),
-        "due_date": None, "discount": "", "shipping": "", "on_credit": False, "lines": []}
+        "courier": "", "tracking_number": "", "ab_shop_source": "", "due_date": None, "discount": "", "shipping": "", "on_credit": False, "lines": []}
 
 
 @login_required(login_url=LOGIN)
@@ -156,19 +164,26 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                     discount=_number(post.get("discount")) if lines is not None else None,
                     shipping=_number(post.get("shipping")) if lines is not None else None,
                     actor=request.user)
+                Order.objects.filter(pk=invoice.order_id).update(
+                    courier_code=post.get("courier", "").strip().lower()[:40],
+                    tracking_number=post.get("tracking_number", "").strip()[:100])
             else:
                 invoice = create_sales_invoice(store, lines=lines, address=post.get("address", "-"),
                     channel=post.get("channel", "manual"), external_order_id=reference,
                     discount=_number(post.get("discount")), shipping=_number(post.get("shipping")),
                     on_credit=post.get("payment_status") == "credit", due_date=due,
                     actor=request.user, **{k: v for k, v in common.items() if k != "notes"},
-                    notes=common["notes"])
+                    notes=common["notes"], courier=post.get("courier", ""),
+                    tracking_number=post.get("tracking_number", ""),
+                    ab_shop_source=post.get("ab_shop_source", ""))
         except (InvoiceError, LedgerError, InvalidOperation, ValueError) as error:
             messages.error(request, f"Gagal: {error}" if str(error) else "Isian tidak valid.")
             initial.update({"customer": customer, "buyer_name": post.get("buyer_name", ""),
                 "company_name": post.get("company_name", ""), "npwp": post.get("buyer_npwp", ""),
                 "phone": post.get("phone", ""), "address": post.get("address", ""),
                 "channel": post.get("channel", "manual"), "reference": post.get("reference", ""),
+                "courier": post.get("courier", ""), "tracking_number": post.get("tracking_number", ""),
+                "ab_shop_source": post.get("ab_shop_source", ""),
                 "notes": post.get("notes", ""), "discount": post.get("discount", ""),
                 "shipping": post.get("shipping", ""), "on_credit": post.get("payment_status") == "credit",
                 "issued_on": parse_date(post.get("issued_on", "")) or timezone.localdate(),
@@ -190,7 +205,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
     return render(request, "merchant/invoice_form.html", _merchant_context(request, store,
         mode=mode, source=source, locks=locks, initial=initial, terms=TERMS, vat_rate=vat_rate,
         channels=[c for c in Order.CHANNELS if c[0] != "pos"],
-        catalog=_catalog(store),
+        catalog=_catalog(store), ab_sources=Order.AB_SHOP_SOURCES,
         today=timezone.localdate().isoformat(), post=request.POST))
 
 

@@ -81,7 +81,8 @@
       <div><dt>Tanggal invoice</dt><dd>{{ invoice.issued_on|date:"d M Y" }}</dd></div>
       <div><dt>Jatuh tempo</dt><dd>{{ invoice.due_date|date:"d M Y"|default:"Saat diterima" }}</dd></div>
       <div><dt>Referensi</dt><dd>{{ order.external_order_id|default:"—" }}</dd></div>
-      <div><dt>Channel</dt><dd>{{ order.get_channel_display }}</dd></div>
+      <div><dt>Channel</dt><dd>{{ order.get_channel_display }}{% if order.ab_shop_source %} · {{ order.get_ab_shop_source_display }}{% endif %}</dd></div>
+      {% if order.courier_code or order.tracking_number %}<div><dt>Kurir</dt><dd>{{ order.courier_code|upper|default:"—" }}</dd></div><div><dt>No. resi</dt><dd>{{ order.tracking_number|default:"—" }}</dd></div>{% endif %}
     </dl>
 
     <div class="dp-parties">

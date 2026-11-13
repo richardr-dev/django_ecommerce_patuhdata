@@ -121,3 +121,64 @@ class ClosedStoreTests(SharingTests):
         self.client.logout()
         with override_settings(STOREFRONT_GATE=True):
             self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class AbShopInvoiceTests(SharingTests):
+    def setUp(self):
+        super().setUp()
+        self.kabel.ab_shop_price = Decimal(70_000)
+        self.kabel.save()
+
+    def post_invoice(self, **extra):
+        data = {"buyer_name": "AB Shop", "issued_on": self.today.isoformat(), "payment_status": "credit",
+            "channel": "abshop", "product[]": [str(self.kabel.pk)], "description[]": [""], "qty[]": ["3"],
+            "unit_price[]": [""], "line_discount[]": [""], "unit[]": [""], "note[]": [""], "code[]": [""],
+            "shipping": "25000", "courier": "JNE", "tracking_number": "JNE0001", "ab_shop_source": "shopee",
+            **extra}
+        return self.client.post(reverse("merchant-invoice-new"), data)
+
+    def test_a_blank_price_becomes_the_ab_shop_price_with_shipping_and_courier(self):
+        self.assertEqual(self.post_invoice().status_code, 302)
+        invoice = Invoice.objects.latest("issued_on", "created_at")
+        order = invoice.order
+        self.assertEqual(invoice.items.get().unit_price, Decimal(70_000))
+        self.assertEqual((order.channel, order.ab_shop_source, order.abshop_billing_status),
+            ("abshop", "shopee", "billed"))
+        self.assertEqual((order.courier_code, order.tracking_number), ("jne", "JNE0001"))
+        self.assertEqual(invoice.subtotal, Decimal(210_000))
+        self.assertEqual(invoice.shipping, Decimal(25_000))
+        self.assertEqual(invoice.total, Decimal(210_000) * Decimal("1.11") + Decimal(25_000))
+
+    def test_a_typed_price_is_kept_and_other_channels_use_the_normal_price(self):
+        self.post_invoice(**{"unit_price[]": ["65000"]})
+        self.assertEqual(Invoice.objects.latest("created_at").items.get().unit_price, Decimal(65_000))
+        self.post_invoice(channel="manual")
+        self.assertEqual(Invoice.objects.latest("created_at").items.get().unit_price, Decimal(0))
+
+    def test_courier_and_resi_show_on_every_document(self):
+        self.post_invoice()
+        invoice = Invoice.objects.latest("created_at")
+        detail = self.client.get(reverse("merchant-invoice-detail", args=[invoice.pk])).content.decode()
+        public = self.client.get(reverse("invoice-public", args=[sharing.ensure_token(invoice)])).content.decode()
+        for html in (detail, public):
+            self.assertIn("JNE", html)
+            self.assertIn("JNE0001", html)
+        self.assertIn("Shopee AB Shop", detail)
+        from django.template.loader import render_to_string
+        self.assertIn("Resi JNE0001", render_to_string("merchant/invoice_pdf.html", {"invoices": [invoice]}))
+        self.assertIn("Resi JNE0001", render_to_string("tax/invoice.html", {"invoice": invoice}))
+
+    def test_form_offers_the_ab_shop_price_and_source(self):
+        page = self.client.get(reverse("merchant-invoice-new"))
+        self.assertContains(page, "AB Shop menjual lewat")
+        self.assertContains(page, 'name="courier"')
+        catalog = {c["sku"]: c for c in page.context["catalog"]}
+        self.assertEqual(catalog["KBL"]["ab_price"], "70000")
+        self.assertEqual(catalog["LMP"]["ab_price"], "")
+
+    def test_ab_shop_orders_reach_the_partner_page_and_billing_queue(self):
+        self.post_invoice()
+        page = self.client.get(reverse("merchant-abshop"))
+        self.assertContains(page, "AB Shop")
+        self.assertEqual(page.context["summary"]["total"], 1)
+        self.assertEqual(page.context["summary"]["unbilled"], 0)

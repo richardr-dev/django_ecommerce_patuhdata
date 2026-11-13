@@ -24,7 +24,7 @@
       <header><h2>Barang & alasan</h2></header>
       <div class="dp-card-body">
         <dl class="kv">
-          {% if ret.order_item %}<div><span>Produk</span><span>{{ ret.order_item.name }}{% if ret.order_item.variant_name %} · {{ ret.order_item.variant_name }}{% endif %} ({{ ret.order_item.quantity }}×)</span></div>{% endif %}
+          {% if ret.order_item %}<div><span>Produk</span><span>{{ ret.order_item.name }}{% if ret.order_item.variant_name %} · {{ ret.order_item.variant_name }}{% endif %} ({{ ret.order_item.quantity }}× dibeli)</span></div><div><span>Diajukan</span><span><b>{% if ret.quantity %}{{ ret.quantity }}{% else %}{{ ret.order_item.quantity }}{% endif %} unit</b></span></div>{% endif %}
           <div><span>Alasan</span><span>{{ ret.get_reason_display }}</span></div>
           {% if ret.reason_detail %}<div><span>Keterangan</span><span>{{ ret.reason_detail }}</span></div>{% endif %}
           {% if ret.condition %}<div><span>Kondisi saat diperiksa</span><span><b>{{ ret.get_condition_display }}</b></span></div>{% endif %}
@@ -33,7 +33,9 @@
           {% if ret.replacement_tracking_number %}<div><span>Resi pengganti</span><span>{{ ret.replacement_courier }} · {{ ret.replacement_tracking_number }}</span></div>{% endif %}
           {% if ret.admin_notes %}<div><span>Catatan</span><span>{{ ret.admin_notes }}</span></div>{% endif %}
         </dl>
-        {% if ret.photo %}<p class="mt-3"><a class="btn" href="{{ ret.photo.url }}" target="_blank" rel="noopener">Lihat foto bukti</a></p>{% else %}<p class="dp-help">Belum ada foto bukti dari pembeli.</p>{% endif %}
+        {% if ret.photo %}<a class="mt-3 block" href="{{ ret.photo.url }}" target="_blank" rel="noopener" data-no-soft><img src="{{ ret.photo.url }}" alt="Foto bukti" style="max-height:220px;max-width:100%;border-radius:16px;box-shadow:0 0 0 1px #e3e9f3"></a>
+        {% else %}<div class="notice info mt-3">{% icon "alert" %}<span><b>Belum ada foto barang.</b> Retur baru bisa disetujui setelah ada foto.</span></div>{% endif %}
+        {% if editable != "viewer" and ret.status in "requested approved" %}<form method="post" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-center gap-2">{% csrf_token %}<input type="hidden" name="action" value="upload_photo"><input type="file" name="photo" accept="image/png,image/jpeg,image/webp" required><button class="btn">{% icon "upload" %} {% if ret.photo %}Ganti foto{% else %}Unggah foto{% endif %}</button></form>{% endif %}
       </div>
     </section>
 
@@ -88,7 +90,7 @@
       <div class="dp-card-body">
       {% if editable == "viewer" %}<p class="dp-help">Anda hanya bisa melihat.</p>
       {% elif ret.status == "requested" %}
-        <form method="post" style="display:grid;gap:8px">{% csrf_token %}<input type="hidden" name="action" value="approve"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2"></textarea><button class="btn-primary justify-center">{% icon "check" %} Setujui retur</button></form>
+        <form method="post" style="display:grid;gap:8px">{% csrf_token %}<input type="hidden" name="action" value="approve"><textarea name="admin_notes" placeholder="Catatan (opsional)" rows="2"></textarea><button class="btn-primary justify-center" {% if not ret.photo %}disabled title="Perlu foto barang dulu"{% endif %}>{% icon "check" %} Setujui retur</button>{% if not ret.photo %}<small class="dp-help">Perlu foto barang dulu.</small>{% endif %}</form>
         <form method="post" style="display:grid;gap:8px;margin-top:12px">{% csrf_token %}<input type="hidden" name="action" value="reject"><textarea name="admin_notes" placeholder="Alasan penolakan" rows="2"></textarea><button class="btn btn-danger justify-center">Tolak</button></form>
       {% elif ret.status == "approved" %}
         <form method="post" style="display:grid;gap:10px">{% csrf_token %}<input type="hidden" name="action" value="mark_received">

@@ -84,6 +84,13 @@ Four test files failed before this work and still do: `test_digital_products`,
   load `branding` and use `{% brand store obj as b %}`, never `merchant_store.logo` directly. PDFs
   embed the logo (`b.data_uri`); web pages use `b.logo_url`. Logos are PNG/JPG/WebP, verified with
   Pillow, max 2 MB and 4000 px (no SVG).
+- **A return needs a photo before it is approved** (buyer uploads it with the request; a seller can add
+  it on the return page). An exchange can only ask for a size that is in stock now. Photos are
+  verified with Pillow (PNG/JPG/WebP, max 5 MB). Seller-recorded returns start as `requested`.
+- **AB Shop invoices** (channel `abshop` on the one invoice form) take the product's AB Shop price
+  when no price is typed, record which platform AB Shop resells on (`ab_shop_source`), and are
+  marked billed (`abshop_billing_status`). Courier and resi are stored on the order and print on
+  every invoice document.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -106,6 +113,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Store logo, accent colour and footer on every buyer document (Tampilan invoice) | `tax/branding.py` (`{% brand store invoice as b %}`) | `tax/sales_views.py:merchant_invoice_style`, `templates/merchant/invoice_style.html` |
 | Send an invoice (link, WhatsApp, email, reminder) and the buyer's page | `tax/sharing.py`, `tax/public_views.py` | `channels/views.py:merchant_invoice_detail/_email/_sent`, `templates/tax/public_invoice.html` |
 | Duplicate customers: find and merge | `shops/customer_merge.py` | `shops/segment_views.py:merchant_customer_duplicates` |
+| Buyer's return / exchange request (item, type, reason, photo, size in stock) | `orders/return_requests.py` | `orders/views.py:request_return`, `templates/storefront/order.html` |
 | Customer returns (inspect → settle: credit note + stock, or exchange) | `tax/returns.py` | `orders/views.py:merchant_return_detail`, `templates/merchant/return_detail.html` |
 | Receipts, customer credit | `tax/receipts.py` | `tax/sales_views.py` |
 | Quotes, recurring invoices | `tax/quotes.py`, `tax/recurring.py` | `tax/sales_views.py` |

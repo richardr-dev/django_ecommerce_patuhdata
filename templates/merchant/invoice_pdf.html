@@ -128,7 +128,10 @@
       <div class="meta-row">Ref. Eksternal: <strong>{{ invoice.order.external_order_id }}</strong></div>
       {% endif %}
       {% if invoice.order.channel %}
-      <div class="meta-row">Channel: <strong>{{ invoice.order.get_channel_display }}</strong></div>
+      <div class="meta-row">Channel: <strong>{{ invoice.order.get_channel_display }}{% if invoice.order.ab_shop_source %} · {{ invoice.order.get_ab_shop_source_display }}{% endif %}</strong></div>
+      {% endif %}
+      {% if invoice.order.courier_code or invoice.order.tracking_number %}
+      <div class="meta-row">Pengiriman: <strong>{{ invoice.order.courier_code|upper }}{% if invoice.order.tracking_number %} · Resi {{ invoice.order.tracking_number }}{% endif %}</strong></div>
       {% endif %}
     </div>
   </div>

@@ -42,7 +42,7 @@
   <header>
     <div>
       <h1>INVOICE</h1>
-      <p>{{ invoice.number }}<br>Tanggal {{ invoice.issued_on|date:"d F Y" }}<br><span class="muted">Pesanan #{{ invoice.order_id|stringformat:"s"|slice:":8" }}</span></p>
+      <p>{{ invoice.number }}<br>Tanggal {{ invoice.issued_on|date:"d F Y" }}{% if invoice.order.courier_code or invoice.order.tracking_number %}<br>Pengiriman {{ invoice.order.courier_code|upper }}{% if invoice.order.tracking_number %} · Resi {{ invoice.order.tracking_number }}{% endif %}{% endif %}<br><span class="muted">Pesanan #{{ invoice.order_id|stringformat:"s"|slice:":8" }}</span></p>
     </div>
     <div style="text-align:right">
       {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:48px;max-width:150px;object-fit:contain;margin-bottom:6px">{% endif %}

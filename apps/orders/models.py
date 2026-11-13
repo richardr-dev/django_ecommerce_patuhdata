@@ -568,6 +568,8 @@ class ReturnRequest(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="return_requests")
     order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT,
         related_name="return_requests", null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=0,
+        help_text="Jumlah yang dikembalikan atau ditukar. 0 berarti semua unit di baris itu.")
     request_type = models.CharField(max_length=20, choices=TYPES, default="return_refund")
     reason = models.CharField(max_length=30, choices=REASONS, default="other")
     reason_detail = models.TextField(blank=True)

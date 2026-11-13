@@ -57,7 +57,7 @@ def returnable_lines(ret):
             for item in invoice.items.filter(product_id=line.product_id):
                 credited += credited_quantity(item)
         left = max(line.quantity - int(credited), 0)
-        suggested = left if (ret.order_item_id == line.pk) else 0
+        suggested = min(left, ret.quantity or left) if (ret.order_item_id == line.pk) else 0
         rows.append({"line": line, "left": left, "suggested": suggested})
     return rows
 

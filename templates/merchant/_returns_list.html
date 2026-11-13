@@ -1,0 +1,20 @@
+{% load icons %}
+<section class="panel">
+  <div class="scroll-x"><table class="tbl" data-rows-link>
+    <thead><tr><th>Retur</th><th>Channel</th><th>Pesanan</th><th>Pembeli</th><th>Barang</th><th>Tipe &amp; alasan</th><th>Foto</th><th>Status</th><th>Tanggal</th></tr></thead>
+    <tbody>
+    {% for ret in returns %}<tr>
+      <td><a class="rowlink" href="{% url 'merchant-return-detail' ret.pk %}">#{{ ret.pk }}</a></td>
+      <td><span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"><span class="h-1.5 w-1.5 rounded-full {% if ret.order.channel == 'shopee' %}bg-orange-500{% elif ret.order.channel == 'tokopedia' %}bg-emerald-500{% elif ret.order.channel == 'tiktok_shop' %}bg-slate-800{% elif ret.order.channel == 'lazada' %}bg-indigo-500{% elif ret.order.channel == 'web' %}bg-blue-500{% else %}bg-slate-400{% endif %}"></span>{{ ret.order.get_channel_display }}</span></td>
+      <td>{{ ret.order.invoice_number|default:ret.order.id|stringformat:"s"|slice:":12" }}{% if ret.order.external_order_id %}<small>{{ ret.order.external_order_id }}</small>{% endif %}</td>
+      <td><b>{{ ret.order.customer_name }}</b><small>{{ ret.order.phone }}</small></td>
+      <td>{% if ret.order_item %}{{ ret.order_item.name }}{% if ret.order_item.variant_name %}<small>{{ ret.order_item.variant_name }}{% if ret.replacement_variant %} → {{ ret.replacement_variant.name }}{% endif %} · {% if ret.quantity %}{{ ret.quantity }}{% else %}{{ ret.order_item.quantity }}{% endif %} unit</small>{% endif %}{% else %}—{% endif %}</td>
+      <td>{{ ret.get_request_type_display }}<small>{{ ret.get_reason_display }}</small></td>
+      <td>{% if ret.photo %}<span class="text-emerald-600 [&>svg]:h-4 [&>svg]:w-4" title="Ada foto">{% icon "check-circle" %}</span>{% else %}<span class="text-amber-500 [&>svg]:h-4 [&>svg]:w-4" title="Belum ada foto">{% icon "alert" %}</span>{% endif %}</td>
+      <td><span class="pill pill-{{ ret.status }}">{{ ret.get_status_display }}</span></td>
+      <td>{{ ret.created_at|date:"d M Y" }}</td></tr>
+    {% empty %}<tr><td colspan="9" class="!py-12 text-center text-slate-400">Tidak ada retur yang cocok.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% include "storefront/pagination.html" %}
