@@ -11,7 +11,7 @@ from .availability import (
     store_state,
 )
 from .models import Store
-from .tenancy import custom_domain_allowed, platform_host, platform_url, store_url, subdomain_slug
+from .tenancy import custom_domain_allowed, opens_on_login, platform_host, platform_url, store_url, subdomain_slug
 
 
 class StoreResolverMiddleware:
@@ -90,7 +90,7 @@ class StorefrontGateMiddleware:
         store = getattr(request, "store", None)
         request.store_state, request.store_preview = "open", False
         if (not settings.STOREFRONT_GATE or store is None or getattr(request, "is_platform", False)
-                or request.path.startswith(ALWAYS_OPEN)):
+                or request.path.startswith(ALWAYS_OPEN) or opens_on_login(request)):
             return self.get_response(request)
         token = request.GET.get("preview")
         if token and read_preview_token(token) == store.id:

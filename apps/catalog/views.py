@@ -5,6 +5,7 @@ from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, models, transaction
+from django.conf import settings
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,6 +19,7 @@ from apps.orders.engagement import record_event
 from apps.orders.forms import NewsletterForm, ProductReviewForm
 from apps.orders.sales import active_sale_offers, decorate_products_with_sales
 from apps.orders.scheduling import orderable_quantity
+from apps.shops.tenancy import opens_on_login
 from apps.shops.models import NewsletterSubscriber
 from apps.shops.trust import decorate_with_sales_count, store_trust
 
@@ -59,6 +61,8 @@ def _category_icons(store):
 
 
 def home(request):
+    if opens_on_login(request):
+        return redirect("merchant-dashboard" if request.user.is_authenticated else "merchant-login")
     if not request.store:
         if getattr(request, "is_platform", False):
             from apps.shops.views import platform_home

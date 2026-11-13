@@ -198,6 +198,10 @@ if SENTRY_DSN:
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
         send_default_pii=False, max_request_body_size="never")
 
+# 1 = the system's own address ("/") opens on the back-office login; a store's own subdomain or
+# custom domain (and ?store=slug) still shows the storefront. 0 = "/" is the storefront / platform page.
+HOME_IS_LOGIN = os.getenv("HOME_IS_LOGIN", "1") == "1"
+
 # Self-serve platform: sellers sign up at PLATFORM_DOMAIN and get <slug>.PLATFORM_DOMAIN.
 # Empty keeps single-host mode (store chosen by custom domain or ?store=slug).
 PLATFORM_DOMAIN = os.getenv("PLATFORM_DOMAIN", "").strip().lower()

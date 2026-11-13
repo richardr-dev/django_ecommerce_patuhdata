@@ -14,3 +14,9 @@ def _fresh_cache():
 def _storefront_open(settings):
     """Most tests build a bare store; the go-live gate has its own tests (test_store_gate.py)."""
     settings.STOREFRONT_GATE = False
+
+
+@pytest.fixture(autouse=True)
+def _home_is_storefront(settings):
+    """Storefront tests open "/"; the login-first home has its own tests (test_login_first.py)."""
+    settings.HOME_IS_LOGIN = False

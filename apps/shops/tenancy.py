@@ -66,3 +66,14 @@ def custom_domain_allowed(store):
     from apps.billing.plans import effective_plan
     plan = effective_plan(store)
     return plan is None or plan.allow_custom_domain
+
+
+def opens_on_login(request):
+    """The system's own address ("/") opens on the back-office login. A store's own subdomain or custom
+    domain, or an explicit ``?store=`` / ``X-Store-Slug``, still shows the storefront. Off with
+    ``HOME_IS_LOGIN=0``."""
+    if request.path != "/" or not settings.HOME_IS_LOGIN or "store" in request.GET \
+            or request.headers.get("X-Store-Slug"):
+        return False
+    store, host = getattr(request, "store", None), request.get_host().split(":")[0].lower()
+    return not (store and (store.domain == host or subdomain_slug(host) == store.slug))

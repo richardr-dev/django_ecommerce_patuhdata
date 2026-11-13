@@ -155,6 +155,10 @@ Four test files failed before this work and still do: `test_digital_products`,
   "Hak akses" page prints the same table. The accountant reads and never writes. **Segregation of duties:**
   `maker_may_not_check` stops the person who created a bill from paying it when someone else could; a
   one-person store is never locked out. Give a new action a permission key, not a new role set.
+- **The first page is the login** (`HOME_IS_LOGIN`, default 1; `tenancy.opens_on_login`): `/` on the system's
+  own address redirects to `/merchant/login/` (or the dashboard when signed in), and the storefront gate lets
+  it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
+  storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
