@@ -1,5 +1,5 @@
 """Back office: customer segments, tags and email broadcasts; storefront: unsubscribe."""
-import json
+import datetime
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -239,3 +239,69 @@ def merchant_customer_duplicates(request):
         return redirect("merchant-customer-duplicates")
     return render(request, "merchant/customer_duplicates.html", _merchant_context(request, store,
         groups=duplicate_groups(store)))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_customers_export(request):
+    """The customers on screen (same filters), as Excel or CSV, with where they live and buy."""
+    import csv
+    import io
+
+    from django.http import HttpResponse
+
+    from apps.orders.views import _require_roles, _staff_store
+
+    from .segments import places
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    segment = parse(request.GET)
+    pending_param = request.GET.get("pending")
+    include_pending = pending_param == "1" or (pending_param is None and bool(
+        segment.get("channel") or segment.get("location")))
+    statuses = [Customer.STATUS_ACTIVE, Customer.STATUS_BLOCKED] + (
+        [Customer.STATUS_PENDING] if include_pending else [])
+    customers = list(customers_in(store, segment).filter(status__in=statuses)
+        .select_related("channel_buyer").order_by("-created_at")[:20000])
+    where = places(store, customers)
+    header = ["Nama", "Perusahaan", "Telepon", "Email", "Alamat", "Kota", "Provinsi", "Beli di", "Pesanan",
+        "Total belanja", "Terakhir belanja", "Tag", "Setuju promo", "Status"]
+    rows = []
+    for c in customers:
+        w = where.get(c.pk, {"city": "", "province": "", "channels": []})
+        rows.append([c.name, c.company_name, c.phone, c.email, c.address.replace("\n", " "), w["city"],
+            w["province"], ", ".join(label for _, label in w["channels"]), c.order_count,
+            float(c.total_spent), c.last_order_at.date().isoformat() if c.last_order_at else "", c.tags,
+            "Ya" if c.accepts_marketing else "Tidak", c.get_status_display()])
+    name = f"pelanggan-{store.slug}-{datetime.date.today():%Y%m%d}"
+    if request.GET.get("format") == "csv":
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(header)
+        writer.writerows(rows)
+        response = HttpResponse("\ufeff" + out.getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{name}.csv"'
+        return response
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "Pelanggan"
+    sheet.append(header)
+    for cell in sheet[1]:
+        cell.font, cell.fill = Font(bold=True, color="FFFFFF"), PatternFill("solid", fgColor="1A66D9")
+    for row in rows:
+        sheet.append(row)
+    sheet.freeze_panes = "A2"
+    for letter, width in zip("ABCDEFGHIJKLMN", (26, 22, 16, 26, 40, 24, 22, 24, 9, 16, 16, 20, 12, 14), strict=False):
+        sheet.column_dimensions[letter].width = width
+    for cell in sheet["J"][1:]:
+        cell.number_format = '"Rp"#,##0'
+    sheet.append([])
+    sheet.append([f"Filter: {describe(segment)}"])
+    out = io.BytesIO()
+    book.save(out)
+    response = HttpResponse(out.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{name}.xlsx"'
+    return response

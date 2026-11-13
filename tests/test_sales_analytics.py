@@ -126,3 +126,40 @@ class AnalyticsTests(Base):
         self.assertIn('style="width:33.3%"', html)
         self.assertNotRegex(html, r'width:\d+,\d+%')
         self.assertNotRegex(html, r'height:\d+,\d+%')
+
+    def test_margin_follows_the_selected_channels_and_flags_missing_marketplace_fees(self):
+        self.order("A", 200_000, channel="tokopedia")
+        self.order("B", 100_000, channel="web")
+        a = self.data()
+        rows = {r["channel"]: r for r in a["margin"]["rows"]}
+        self.assertEqual(set(rows), {"tokopedia", "web"})
+        self.assertTrue(rows["tokopedia"]["fees_missing"])      # no income report imported
+        self.assertFalse(rows["web"]["fees_missing"])
+        self.assertTrue(a["margin"]["total"]["fees_missing"])
+        only = self.data(channel="web")
+        self.assertEqual([r["channel"] for r in only["margin"]["rows"]], ["web"])
+        self.assertFalse(only["margin"]["total"]["fees_missing"])
+        self.assertContains(self.client.get(self.url), "Biaya marketplace belum lengkap")
+
+    def test_excel_export_has_every_table(self):
+        import io
+
+        import openpyxl
+        self.order("A", 200_000, channel="tokopedia", province="Jawa Barat", city="Bogor")
+        response = self.client.get(reverse("merchant-sales-analytics-xlsx"), {"range": "30d"})
+        book = openpyxl.load_workbook(io.BytesIO(response.content))
+        self.assertEqual(book.sheetnames, ["Ringkasan", "Tren", "Channel", "Margin", "Provinsi", "Kota",
+            "Produk", "Pelanggan"])
+        self.assertEqual(book["Provinsi"]["A2"].value, "Jawa Barat")
+        self.assertEqual(book["Channel"]["D2"].value, 200_000)
+        self.assertEqual(book["Ringkasan"]["B3"].value, 200_000)
+
+    def test_products_sold_without_a_cost_price_are_flagged_so_margin_is_not_trusted(self):
+        from apps.catalog.models import Product
+        free = Product.objects.create(store=self.store, sku="NOC", name="Tanpa modal", slug="noc", price=50_000)
+        order = self.order("A", 50_000)
+        OrderItem.objects.create(order=order, product=free, name="Tanpa modal", sku="NOC", unit_price=50_000,
+            quantity=1, line_total=50_000)
+        a = self.data()
+        self.assertEqual(a["margin"]["missing_cost"], 1)
+        self.assertContains(self.client.get(self.url), "Harga pokok belum diisi untuk 1 produk")

@@ -2,7 +2,7 @@
 {% block title %}Analitik penjualan{% endblock %}
 {% block content %}
 <div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Analitik penjualan</h1><p>Berapa omzetnya, dari channel mana, siapa pembelinya, dan dari kota mana mereka. Klik kota atau channel untuk melihat pelanggannya.</p></div>
-  <div class="dp-actions"><a class="btn" href="{% url 'merchant-sales-overview' %}">Laporan margin per channel</a><a class="btn-primary" href="{% url 'merchant-customers' %}">{% icon "users" %} Cari pelanggan</a></div></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-sales-overview' %}">Laporan margin per channel</a><a class="btn" id="an-export" href="{% url 'merchant-sales-analytics-xlsx' %}" data-no-soft>{% icon "download" %} Excel</a><a class="btn-primary" href="{% url 'merchant-customers' %}">{% icon "users" %} Cari pelanggan</a></div></div>
 
 <form id="an-filter" method="get" class="mb-4 grid gap-3"
   hx-get="{% url 'merchant-sales-analytics' %}" hx-target="#an-body" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" hx-trigger="change">
@@ -32,6 +32,12 @@
     if (e.target.name === "range" && e.target.value) { clear("date_from"); clear("date_to"); }
     if ((e.target.name === "date_from" || e.target.name === "date_to") && e.target.value) clear("range");
   }, true);
+  var exp = document.getElementById("an-export"), expBase = exp.getAttribute("href");
+  exp.addEventListener("click", function () {      // export what the filters say right now
+    var params = new URLSearchParams(new FormData(form));
+    Array.from(params.keys()).forEach(function (k) { if (params.get(k) === "") params.delete(k); });
+    exp.setAttribute("href", expBase + "?" + params.toString());
+  });
   /* one tooltip for every mark: hover or keyboard focus */
   function show(el, x, y) {
     tip.textContent = el.dataset.tip; tip.hidden = false;

@@ -191,3 +191,65 @@ def merchant_sales_analytics(request):
         date_from=request.GET.get("date_from", ""), date_to=request.GET.get("date_to", ""),
         channel_choices=[(c, n) for c, n in Order.CHANNELS if c in used], channel_selected=selected,
         channel_qs=urlencode([("channel", c) for c in selected])))
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_sales_analytics_xlsx(request):
+    """The analytics dashboard as an Excel workbook: one sheet for each table, same filters."""
+    import io
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+
+    store = _staff_store(request)
+    _require_roles(request, store, REPORT_ROLES)
+    a = analytics.analyze(store, request.GET, timezone.localdate())
+    book = openpyxl.Workbook()
+
+    def sheet(title, header, rows, money=()):
+        ws = book.create_sheet(title)
+        ws.append(header)
+        for cell in ws[1]:
+            cell.font, cell.fill = Font(bold=True, color="FFFFFF"), PatternFill("solid", fgColor="1A66D9")
+        for row in rows:
+            ws.append([float(v) if hasattr(v, "quantize") else v for v in row])
+        for index in money:
+            for cell in ws.iter_rows(min_row=2, min_col=index + 1, max_col=index + 1):
+                cell[0].number_format = '"Rp"#,##0'
+        for column in ws.columns:
+            ws.column_dimensions[column[0].column_letter].width = max(12, min(40, max(
+                len(str(c.value or "")) for c in column) + 2))
+        ws.freeze_panes = "A2"
+
+    book.remove(book.active)
+    sheet("Ringkasan", ["Ukuran", "Nilai"], [
+        ["Periode", f"{a['start']:%d %b %Y} - {a['end']:%d %b %Y}"], ["Omzet", a["revenue"]],
+        ["Omzet periode sebelumnya", a["previous_revenue"]], ["Pesanan", a["orders"]],
+        ["Pembeli", a["buyers"]], ["Pembeli baru", a["new"]], ["Pembeli kembali", a["returning"]],
+        ["Rata-rata per pesanan", a["avg"]], ["Batal (%)", a["cancel_pct"]], ["Retur (%)", a["return_pct"]],
+        ["Margin", a["margin"]["total"]["margin"]], ["Margin (%)", a["margin"]["total"]["margin_pct"]]])
+    sheet("Tren", ["Mulai" if a["weekly"] else "Tanggal", "Pesanan", "Omzet"],
+        [[s["label"].isoformat(), s["orders"], s["revenue"]] for s in a["series"]], money=(2,))
+    sheet("Channel", ["Channel", "Pesanan", "Pembeli", "Omzet", "Porsi (%)", "Rata-rata"],
+        [[c["label"], c["orders"], c["buyers"], c["revenue"], c["share"], c["avg"]] for c in a["channels"]],
+        money=(3, 5))
+    sheet("Margin", ["Channel", "Penjualan bersih", "Harga pokok", "Biaya marketplace", "Margin", "Margin (%)"],
+        [[r["label"], r["net_sales"], r["cogs"], r["fees"], r["margin"], r["margin_pct"]]
+            for r in a["margin"]["rows"]], money=(1, 2, 3, 4))
+    sheet("Provinsi", ["Provinsi", "Pesanan", "Pembeli", "Omzet"],
+        [[p["name"], p["orders"], p["buyers"], p["revenue"]] for p in a["provinces"]]
+        + ([["Tidak diketahui", a["unknown_province"]["orders"], a["unknown_province"]["buyers"],
+            a["unknown_province"]["revenue"]]] if a["unknown_province"] else []), money=(3,))
+    sheet("Kota", ["Kota", "Provinsi", "Pesanan", "Pembeli", "Omzet"],
+        [[c["name"], c["province"], c["orders"], c["buyers"], c["revenue"]] for c in a["cities"]], money=(4,))
+    sheet("Produk", ["Produk", "SKU", "Unit", "Pesanan", "Omzet"],
+        [[p["name"], p["sku"], p["units"], p["orders"], p["revenue"]] for p in a["products"]], money=(4,))
+    sheet("Pelanggan", ["Pelanggan", "Pesanan", "Omzet", "Channel"],
+        [[c["name"], c["orders"], c["revenue"], ", ".join(c["channels"])] for c in a["customers"]], money=(2,))
+    out = io.BytesIO()
+    book.save(out)
+    response = HttpResponse(out.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = (f'attachment; filename="analitik-penjualan-{store.slug}-'
+        f'{a["start"]:%Y%m%d}-{a["end"]:%Y%m%d}.xlsx"')
+    return response

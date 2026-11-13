@@ -179,14 +179,16 @@ def by_location(word):
 
 
 def places(store, customers):
-    """For a page of customers: where they are and where they bought, keyed by customer id."""
+    """For a page of customers: where they are and where they bought, keyed by customer id.
+    ``where`` is the readable place; ``city`` and ``province`` are kept apart for exports."""
     from apps.orders.models import Order
     ids = [c.pk for c in customers]
-    where, channels = {}, defaultdict(list)
+    found = {}
+    channels = defaultdict(list)
     for customer in customers:
         buyer = customer.channel_buyer
         if buyer and (buyer.city or buyer.province):
-            where[customer.pk] = ", ".join(x for x in (buyer.city, buyer.province) if x)
+            found[customer.pk] = (buyer.city, buyer.province)
     names = dict(Order.CHANNELS)
     rows = Order.objects.filter(store=store, customer_id__in=ids).exclude(
         status__in=["cancelled", "payment_failed"]).order_by("-created_at").values(
@@ -194,15 +196,19 @@ def places(store, customers):
     for row in rows:
         if row["channel"] not in channels[row["customer_id"]]:
             channels[row["customer_id"]].append(row["channel"])
-        if row["customer_id"] not in where and (row["city"] or row["province"]):
-            where[row["customer_id"]] = ", ".join(x for x in (row["city"], row["province"]) if x)
+        if row["customer_id"] not in found and (row["city"] or row["province"]):
+            found[row["customer_id"]] = (row["city"], row["province"])
+    out = {}
     for customer in customers:
-        if customer.pk not in where and customer.address.strip():
-            where[customer.pk] = customer.address.strip().replace("\n", " ")[:60]
+        city, province = found.get(customer.pk, ("", ""))
+        where = ", ".join(x for x in (city, province) if x)
+        if not where and customer.address.strip():
+            where = customer.address.strip().replace("\n", " ")[:60]
         if customer.channel_buyer_id and customer.channel_buyer.platform not in channels[customer.pk]:
             channels[customer.pk].append(customer.channel_buyer.platform)
-    return {pk: {"where": where.get(pk, ""), "channels": [(c, names.get(c, c)) for c in channels[pk]]}
-        for pk in ids}
+        out[customer.pk] = {"where": where, "city": city, "province": province,
+            "channels": [(c, names.get(c, c)) for c in channels[customer.pk]]}
+    return out
 
 
 def location_facets(store, limit=10):

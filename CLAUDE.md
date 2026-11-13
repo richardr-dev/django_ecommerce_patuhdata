@@ -102,6 +102,10 @@ Four test files failed before this work and still do: `test_digital_products`,
 - **Charts are drawn in HTML/CSS with one hue** (blue = magnitude; identity by label, not colour) and
   a hover tooltip (`data-tip`). Never put a Django float in `style="width:{{ x }}%"`: the Indonesian
   locale prints a decimal comma and the bar loses its width; use `|stringformat:"s"`.
+- **Analytics margin comes from `channels/reporting.py:sales_report`** (the one margin source). It warns
+  when marketplace fees were not imported and when sold products have no cost price: never show a
+  margin without those warnings. Exports (`merchant-customers-export`, `merchant-sales-analytics-xlsx`)
+  take the same query string as the screen they come from; their buttons read the live form.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live

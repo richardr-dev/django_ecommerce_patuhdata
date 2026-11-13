@@ -31,6 +31,18 @@
   </div>
 </section>
 
+<section class="panel">
+  <header><div><h2>Margin</h2><p>Penjualan bersih dikurangi harga pokok dan biaya yang ditahan marketplace.</p></div>
+    <div class="text-right"><b class="text-lg {% if a.margin.total.margin < 0 %}text-rose-600{% else %}text-blue-700{% endif %}">{{ a.margin.total.margin|rp }}</b><small class="block text-xs text-slate-500">{{ a.margin.total.margin_pct }}% dari penjualan bersih</small></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Channel</th><th class="num">Penjualan bersih</th><th class="num">Harga pokok</th><th class="num">Biaya marketplace</th><th class="num">Margin</th><th class="num">%</th></tr></thead><tbody>
+    {% for r in a.margin.rows %}<tr><td><b class="rowlink">{{ r.label }}</b></td><td class="num">{{ r.net_sales|rp }}</td><td class="num">{{ r.cogs|rp }}</td>
+      <td class="num">{{ r.fees|rp }}{% if r.fees_missing %}<small class="!text-amber-600" title="Impor laporan penghasilan marketplace agar biaya akurat">{{ r.fee_orders }}/{{ r.orders }} pesanan</small>{% endif %}</td>
+      <td class="num"><b class="{% if r.margin < 0 %}neg{% else %}text-slate-900{% endif %}">{{ r.margin|rp }}</b></td><td class="num">{{ r.margin_pct }}%</td></tr>
+    {% empty %}<tr><td colspan="6" class="!py-8 text-center text-slate-400">Belum ada penjualan.</td></tr>{% endfor %}</tbody></table></div>
+  {% if a.margin.missing_cost %}<p class="px-5 pb-1 pt-3 text-xs text-rose-700"><b>Harga pokok belum diisi untuk {{ a.margin.missing_cost }} produk yang terjual</b>, jadi barang itu dihitung tanpa modal dan marginnya terlihat terlalu besar. Isi harga pokok di <a href="{% url 'merchant-entity-list' 'products' %}">Produk</a>.</p>{% endif %}
+  {% if a.margin.total.fees_missing %}<p class="px-5 pb-4 pt-2 text-xs text-amber-700">Biaya marketplace belum lengkap: impor laporan penghasilan Shopee, Tokopedia, atau Lazada di <a href="{% url 'merchant-income-import' %}">Penghasilan &amp; biaya</a> agar margin akurat. Sampai itu, margin terlihat lebih besar dari yang sebenarnya.</p>{% endif %}
+</section>
+
 <div class="grid gap-5 lg:grid-cols-2">
   <section class="panel !mb-0">
     <header><div><h2>Per channel</h2><p>Klik untuk melihat invoicenya.</p></div></header>

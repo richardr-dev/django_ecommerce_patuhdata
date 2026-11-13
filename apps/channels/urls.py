@@ -49,6 +49,8 @@ urlpatterns = [
         name="merchant-invoice-pdf"),
     path("merchant/sales/analitik/", report_views.merchant_sales_analytics,
         name="merchant-sales-analytics"),
+    path("merchant/sales/analitik/excel/", report_views.merchant_sales_analytics_xlsx,
+        name="merchant-sales-analytics-xlsx"),
     path("merchant/sales/laporan/", report_views.merchant_sales_overview,
         name="merchant-sales-overview"),
     path("merchant/sales/report/", views.merchant_sales_report, name="merchant-sales-report"),

@@ -108,7 +108,7 @@
   <details class="text-sm"><summary class="cursor-pointer text-xs font-semibold text-blue-700">Filter lain: pesanan, belanja, aktivitas</summary>
     <div class="segment-grid mt-3"><label>Min. pesanan<input class="control" type="number" min="0" name="min_orders" value="{{ segment.min_orders|default:'' }}"></label><label>Min. belanja (Rp)<input class="control" type="number" min="0" name="min_spend" value="{{ segment.min_spend|default:'' }}"></label><label>Belanja dalam (hari)<input class="control" type="number" min="0" name="active_days" value="{{ segment.active_days|default:'' }}" placeholder="mis. 30"></label><label>Tidak belanja ≥ (hari)<input class="control" type="number" min="0" name="inactive_days" value="{{ segment.inactive_days|default:'' }}" placeholder="mis. 60"></label></div>
     <div class="segment-checks mt-3"><label class="check"><input type="checkbox" name="marketing" value="1" {% if segment.marketing %}checked{% endif %}> Setuju promo</label><label class="check"><input type="checkbox" name="has_email" value="1" {% if segment.has_email %}checked{% endif %}> Punya email</label></div></details>
-  <div class="flex flex-wrap items-center gap-4"><label class="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600"><input type="hidden" name="pending" value="0"><input type="checkbox" name="pending" value="1" class="h-4 w-4 rounded border-slate-300 text-blue-600"{% if include_pending %} checked{% endif %}> Termasuk pembeli marketplace yang menunggu persetujuan</label><a class="bo-link" href="{% url 'merchant-customers' %}">Reset semua filter</a></div>
+  <div class="flex flex-wrap items-center gap-4"><label class="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600"><input type="hidden" name="pending" value="0"><input type="checkbox" name="pending" value="1" class="h-4 w-4 rounded border-slate-300 text-blue-600"{% if include_pending %} checked{% endif %}> Termasuk pembeli marketplace yang menunggu persetujuan</label><a class="bo-link" href="{% url 'merchant-customers' %}">Reset semua filter</a><span class="ml-auto inline-flex gap-2"><a class="btn" id="cust-export-xlsx" href="{% url 'merchant-customers-export' %}?{{ segment_query }}" data-no-soft>{% icon "download" %} Excel</a><a class="btn" id="cust-export-csv" href="{% url 'merchant-customers-export' %}?format=csv&{{ segment_query }}" data-no-soft>CSV</a></span></div>
   <datalist id="customer-tags">{% for tag in tags %}<option value="{{ tag }}">{% endfor %}</datalist>
   <datalist id="provinces">{% for name, n in provinces %}<option value="{{ name }}">{% endfor %}</datalist>
 </form>
@@ -116,6 +116,17 @@
 <script>
 (function () {
   var form = document.getElementById("cust-filter"), loc = document.getElementById("cust-loc");
+  /* the export buttons follow whatever the form says right now, not what the page loaded with */
+  ["cust-export-xlsx", "cust-export-csv"].forEach(function (id) {
+    var link = document.getElementById(id); if (!link) return;
+    var base = link.getAttribute("href").split("?")[0], csv = id.indexOf("csv") > -1;
+    link.addEventListener("click", function () {
+      var params = new URLSearchParams(new FormData(form));
+      Array.from(params.keys()).forEach(function (k) { if (params.get(k) === "") params.delete(k); });
+      if (csv) params.set("format", "csv");
+      link.setAttribute("href", base + "?" + params.toString());
+    });
+  });
   form.addEventListener("click", function (e) {
     var b = e.target.closest("[data-loc]"); if (!b) return;
     loc.value = loc.value === b.dataset.loc ? "" : b.dataset.loc;

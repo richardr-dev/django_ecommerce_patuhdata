@@ -78,3 +78,32 @@ class CustomerPlacesTests(Base):
         self.assertEqual(self.names(channel="tokopedia", pending="0"), set())  # unless switched off
         self.assertEqual(self.names(pending="1"), {"@dewi", "Rina", "Tono", "Budi"})
         self.assertContains(self.client.get(self.url, {"channel": "tokopedia"}), "Menunggu persetujuan")
+
+
+class CustomerExportTests(CustomerPlacesTests):
+    def rows(self, **params):
+        import io
+
+        import openpyxl
+        response = self.client.get(reverse("merchant-customers-export"), params)
+        self.assertEqual(response.status_code, 200)
+        sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        return [[cell.value for cell in row] for row in sheet.iter_rows(min_row=1)]
+
+    def test_excel_has_the_filtered_people_with_city_province_and_channel(self):
+        rows = self.rows(channel="tokopedia")
+        self.assertEqual(rows[0][:8], ["Nama", "Perusahaan", "Telepon", "Email", "Alamat", "Kota", "Provinsi",
+            "Beli di"])
+        people = [r for r in rows[1:] if r and r[0] and not str(r[0]).startswith("Filter")]
+        self.assertEqual([(r[0], r[5], r[6], r[7]) for r in people],
+            [("@dewi", "Kab. Bogor", "Jawa Barat", "Tokopedia")])
+        self.assertTrue(any("beli di Tokopedia" in str(r[0]) for r in rows if r and r[0]))
+
+    def test_same_filters_as_the_screen_and_csv_option(self):
+        names = {r[0] for r in self.rows(location="surabaya")[1:] if r and r[0] and "Filter" not in str(r[0])}
+        self.assertEqual(names, {"Rina"})
+        csv = self.client.get(reverse("merchant-customers-export"), {"format": "csv", "channel": "shopee"})
+        text = csv.content.decode()
+        self.assertIn("Rina", text)
+        self.assertNotIn("Tono", text)
+        self.assertIn("text/csv", csv["Content-Type"])

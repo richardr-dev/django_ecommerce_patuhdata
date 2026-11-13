@@ -9,11 +9,12 @@ import datetime
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 
 from apps.orders.models import Order, OrderItem, ReturnRequest
 
-from .invoice_filters import apply_filters, date_range
+from .invoice_filters import apply_filters, date_range, values
+from .reporting import sales_report
 
 NOT_A_SALE = {"cancelled", "payment_failed", "refunded"}
 WEEKDAYS = ("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min")
@@ -48,6 +49,21 @@ def _sales(store, params, today):
     base = Order.objects.filter(store=store)
     scoped, active = apply_filters(base, params, today)
     return scoped.exclude(status__in=NOT_A_SALE), scoped, active
+
+
+def _margin(store, start, end, channels):
+    """What is left after the cost of goods and the fees the marketplace kept, from the same report
+    as Laporan margin per channel (net sales there exclude cancelled, returned and discounts)."""
+    report = sales_report(store, start, end)
+    rows = [r for r in report["channels"] if not channels or r["channel"] in channels]
+    total = {key: sum((r[key] for r in rows), Decimal(0)) for key in ("net_sales", "cogs", "fees", "margin")}
+    total["margin_pct"] = round(float(total["margin"]) / float(total["net_sales"]) * 100, 1) \
+        if total["net_sales"] else 0
+    for row in rows:
+        row["fees_missing"] = bool(row["orders"]) and not row["fees_known"] \
+            and row["channel"] not in {"web", "manual", "pos", "tv", "abshop"}
+    total["fees_missing"] = any(r["fees_missing"] for r in rows)
+    return {"rows": rows, "total": total}
 
 
 def analyze(store, params, today=None):
@@ -158,6 +174,11 @@ def analyze(store, params, today=None):
     weekdays = _bars([{"label": WEEKDAYS[i], "revenue": weekday[i][0], "orders": weekday[i][1]}
         for i in range(7)], lambda r: r["orders"])
 
+    margin = _margin(store, start, end, values(params, "channel"))
+    no_cost = (OrderItem.objects.filter(order__in=sales, unit_cost__isnull=True,
+        product__cost_price__isnull=True).filter(Q(variant__isnull=True) | Q(variant__cost_price__isnull=True))
+        .values("product").distinct().count())
+    margin["missing_cost"] = no_cost
     cancelled = scoped.filter(status__in={"cancelled", "payment_failed"}).count()
     returns = ReturnRequest.objects.filter(order__in=scoped).count()
     return {
@@ -174,4 +195,5 @@ def analyze(store, params, today=None):
         "cancelled": cancelled, "cancel_pct": round(cancelled / (orders + cancelled) * 100, 1)
             if orders + cancelled else 0,
         "returns": returns, "return_pct": round(returns / orders * 100, 1) if orders else 0,
+        "margin": margin,
     }
