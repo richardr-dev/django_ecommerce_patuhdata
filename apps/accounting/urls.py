@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import expenses, views, views_books, views_intercompany, views_purchasing, views_receipts
+from . import expenses, views, views_books, views_intercompany, views_purchasing, views_receipts, views_supplier
 
 urlpatterns = [
     path("merchant/accounting/bank/", views_books.merchant_bank_accounts,
@@ -46,6 +46,10 @@ urlpatterns = [
         name="merchant-profit-loss"),
     path("merchant/accounting/cash-flow/", views_books.merchant_cash_flow,
         name="merchant-cash-flow"),
+    path("merchant/accounting/nota-debit/", views_supplier.merchant_debit_notes, name="merchant-debit-notes"),
+    path("merchant/accounting/nota-debit/baru/", views_supplier.merchant_debit_note_new, name="merchant-debit-note-new"),
+    path("merchant/accounting/nota-debit/<uuid:note_id>/", views_supplier.merchant_debit_note, name="merchant-debit-note"),
+    path("merchant/accounting/suppliers/<int:supplier_id>/bayar/", views_supplier.merchant_supplier_pay, name="merchant-supplier-pay"),
     path("merchant/accounting/pesanan-pembelian/", views_purchasing.merchant_purchase_orders, name="merchant-purchase-orders"),
     path("merchant/accounting/pesanan-pembelian/baru/", views_purchasing.merchant_purchase_order_new, name="merchant-purchase-order-new"),
     path("merchant/accounting/pesanan-pembelian/<uuid:po_id>/", views_purchasing.merchant_purchase_order, name="merchant-purchase-order"),

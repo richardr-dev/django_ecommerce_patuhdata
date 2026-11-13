@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Bayar {{ supplier.name }}{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-supplier-detail' supplier.pk %}">{{ supplier.name }}</a></span><h1>Bayar beberapa tagihan</h1>
+  <p>Satu transfer untuk beberapa tagihan supplier ini. Setiap tagihan tetap mendapat pembayaran dan jurnalnya sendiri, jadi lunasnya dihitung per tagihan. Terisi otomatis dengan sisa utang; ubah bila bayar sebagian.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><h2>Tagihan terbuka</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tagihan</th><th>Jatuh tempo</th><th class="num">Sisa</th><th class="num" style="width:180px">Dibayar</th></tr></thead><tbody>
+      {% for b in bills %}<tr><td><b>{{ b.number|default:"Tanpa nomor" }}</b><small>{{ b.bill_date|date:"d M Y" }}</small></td><td>{{ b.due_date|date:"d M Y"|default:"—" }}</td><td class="num">{{ b.amount_due|rp }}</td>
+        <td><input name="amount_{{ b.pk }}" data-rupiah class="num pay-amount" value="{{ b.amount_due|floatformat:0 }}" aria-label="Dibayar {{ b.number }}"></td></tr>
+      {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Tidak ada tagihan terbuka.</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="panel"><header><h2>Pembayaran</h2></header><div class="dp-card-body"><div class="field-row">
+      <label class="field"><span>Tanggal bayar</span><input type="date" name="paid_on" value="{{ today }}" required></label>
+      <label class="field"><span>Metode</span><select name="method">{% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+      {% if banks %}<label class="field"><span>Dari rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>{% endif %}</div>
+      <label class="field"><span>No. referensi <em>(opsional)</em></span><input name="reference" maxlength="120"></label></div></section>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Total dibayar</small><strong id="pay-total" style="display:block;font-size:30px">Rp0</strong>
+    <button class="btn-primary btn-block" style="margin-top:14px;background:#fff;color:var(--ds-primary)">{% icon "check" %} Bayar semua</button></div></aside>
+</form>
+<script>
+(function () {
+  function num(v) { return Number(String(v || "").replace(/\./g, "")) || 0; }
+  function recalc() { var t = 0; document.querySelectorAll(".pay-amount").forEach(function (i) { t += num(i.value); }); document.getElementById("pay-total").textContent = "Rp" + t.toLocaleString("id-ID"); }
+  document.addEventListener("input", function (e) { if (e.target.classList && e.target.classList.contains("pay-amount")) recalc(); });
+  setTimeout(recalc, 50);
+})();
+</script>
+{% endblock %}

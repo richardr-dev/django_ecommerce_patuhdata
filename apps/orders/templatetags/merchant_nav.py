@@ -76,6 +76,7 @@ NAV = [
             Link("Pesanan pembelian", "merchant-purchase-orders", match=("/merchant/accounting/pesanan-pembelian/",)),
             Link("Penerimaan barang", "merchant-goods-receipts", match=("/merchant/accounting/penerimaan/",)),
             Link("Tagihan supplier", "merchant-bills"),
+            Link("Nota debit", "merchant-debit-notes", match=("/merchant/accounting/nota-debit/",)),
             Link("Buat tagihan", "merchant-bill-new"),
             Link("Umur utang", "merchant-payables"),
         ]),

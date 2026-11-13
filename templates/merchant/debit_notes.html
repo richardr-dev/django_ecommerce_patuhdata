@@ -1,0 +1,11 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Nota debit{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pembelian</span><h1>Nota debit</h1>
+  <p>Barang atau biaya yang dikembalikan ke supplier. Utang berkurang, stok keluar, dan PPN masukan dibalik. Buat dari halaman tagihan lewat "Retur ke supplier".</p></div></div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Nota</th><th>Supplier</th><th>Tagihan</th><th>Tanggal</th><th class="num">Jumlah</th></tr></thead><tbody>
+  {% for n in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-debit-note' n.pk %}"><b>{{ n.number }}</b></a><small>{{ n.reason }}</small></td><td>{{ n.supplier.name }}</td>
+    <td><a href="{% url 'merchant-bill-detail' n.bill_id %}">{{ n.bill.number|default:"tagihan" }}</a></td><td>{{ n.note_date|date:"d M Y" }}</td><td class="num"><b>{{ n.total|rp }}</b></td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada nota debit.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

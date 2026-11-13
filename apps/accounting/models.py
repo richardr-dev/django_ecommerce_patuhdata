@@ -259,8 +259,14 @@ class Bill(models.Model):
         return sum((p.amount for p in self.payments.all()), Decimal(0))
 
     @property
+    def amount_credited(self):
+        """What debit notes (goods or charges sent back to the supplier) took off this bill."""
+        from decimal import Decimal
+        return sum((n.total for n in self.debit_notes.all() if n.status == "issued"), Decimal(0))
+
+    @property
     def amount_due(self):
-        return self.total - self.amount_paid
+        return self.total - self.amount_paid - self.amount_credited
 
 
 class BillItem(models.Model):
@@ -783,3 +789,37 @@ class PurchaseOrderLine(models.Model):
     @property
     def billed_quantity(self):
         return sum(rl.quantity for rl in self.receipt_lines.select_related("receipt") if rl.receipt.bill_id)
+
+
+class DebitNote(models.Model):
+    """Nota debit: goods (or a charge) sent back to a supplier against one of its bills. It lowers what
+    is owed, takes the returned stock off the shelf at the bill's price, and reverses the PPN masukan
+    when the bill credited it. A note cannot exceed what is still unpaid on the bill, and is never
+    edited: a mistake is corrected with a new bill or a manual journal."""
+    ISSUED, VOID = "issued", "void"
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="debit_notes")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="debit_notes")
+    bill = models.ForeignKey(Bill, on_delete=models.PROTECT, related_name="debit_notes")
+    number = models.CharField(max_length=40)
+    note_date = models.DateField()
+    reason = models.CharField(max_length=200)
+    status = models.CharField(max_length=10, default=ISSUED)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2)
+    tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-note_date", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_debit_note_number")]
+
+
+class DebitNoteItem(models.Model):
+    note = models.ForeignKey(DebitNote, on_delete=models.CASCADE, related_name="items")
+    bill_item = models.ForeignKey(BillItem, on_delete=models.PROTECT, related_name="returns")
+    description = models.CharField(max_length=200)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    line_total = models.DecimalField(max_digits=14, decimal_places=2)

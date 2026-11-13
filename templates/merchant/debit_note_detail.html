@@ -1,0 +1,12 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ note.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-debit-notes' %}">Nota debit</a> / {{ note.number }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ note.number }}</h1><p>{{ note.supplier.name }} · {{ note.note_date|date:"d F Y" }} · atas tagihan <a href="{% url 'merchant-bill-detail' note.bill_id %}">{{ note.bill.number|default:"supplier" }}</a> · {{ note.reason }}</p></div></div>
+<div class="dp-grid"><div class="space-y-5">
+  <section class="panel"><header><h2>Yang dikembalikan</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang / biaya</th><th class="num">Jumlah</th><th class="num">Harga</th><th class="num">Nilai</th></tr></thead><tbody>
+    {% for i in items %}<tr><td>{{ i.description }}</td><td class="num">{{ i.quantity|floatformat:"-2" }}</td><td class="num">{{ i.unit_price|rp }}</td><td class="num"><b>{{ i.line_total|rp }}</b></td></tr>{% endfor %}
+    <tr><td colspan="3">PPN masukan</td><td class="num">{{ note.tax|rp }}</td></tr><tr><td colspan="3"><b>Total</b></td><td class="num"><b>{{ note.total|rp }}</b></td></tr></tbody></table></div></section>
+  {% include "merchant/_journal_card.html" %}
+</div><aside class="dp-rail"><div class="bb-summary"><small>Mengurangi utang</small><strong style="display:block;font-size:30px">{{ note.total|rp }}</strong></div></aside></div>
+{% endblock %}

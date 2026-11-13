@@ -12,6 +12,7 @@
     <p class="dp-sub">
       Dari <b>{{ bill.supplier.name }}</b>
       {% if bill.status != 'void' %} · Sisa utang <b>Rp{{ amount_due|floatformat:"0g" }}</b>{% endif %}
+      {% if bill.amount_credited %} · Nota debit <b>Rp{{ bill.amount_credited|floatformat:"0g" }}</b>{% endif %}
       {% if bill.due_date %} · Jatuh tempo <b>{{ bill.due_date|date:"d M Y" }}</b>{% endif %}
     </p>
   </div>
@@ -19,6 +20,7 @@
     {% if bill.status != 'void' and amount_due > 0 %}
     <button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Bayar tagihan</button>
     {% endif %}
+    {% if bill.status != 'void' and bill.status != 'draft' and amount_due > 0 %}<a class="btn" href="{% url 'merchant-debit-note-new' %}?bill={{ bill.id }}">{% icon "truck" %} Retur ke supplier</a>{% endif %}
     {% if bill.status != 'void' and to_receive %}
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="receive">
       <button type="submit" class="btn">{% icon "box" %} Terima barang ({{ to_receive }})</button>

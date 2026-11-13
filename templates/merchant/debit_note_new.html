@@ -1,0 +1,21 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Retur ke supplier{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-bill-detail' bill.pk %}">Tagihan {{ bill.number|default:"supplier" }}</a></span><h1>Retur ke supplier</h1>
+  <p>{{ bill.supplier.name }} · sisa utang {{ bill.amount_due|rp }}. Nota debit tidak boleh melebihi sisa utang. Barang yang sudah dibayar dan dikembalikan uangnya oleh supplier dicatat sebagai penerimaan kas.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}<input type="hidden" name="bill" value="{{ bill.pk }}"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><div><h2>Yang dikembalikan</h2><p>Barang hanya bisa dikembalikan sebanyak yang sudah diterima.</p></div></div></header>
+      <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang / biaya</th><th class="num">Harga</th><th class="num">Bisa diretur</th><th class="num" style="width:130px">Jumlah retur</th></tr></thead><tbody>
+      {% for i in items %}<tr><td>{{ i.description }}{% if i.is_goods %}<small>barang · stok keluar</small>{% else %}<small>biaya · tanpa stok</small>{% endif %}</td><td class="num">{{ i.unit_price|rp }}</td><td class="num">{{ i.max_return|floatformat:"-2" }}</td>
+        <td><input type="number" name="qty_{{ i.pk }}" min="0" max="{{ i.max_return }}" step="{% if i.is_goods %}1{% else %}0.01{% endif %}" class="num" {% if not i.max_return %}disabled{% endif %} aria-label="Jumlah retur {{ i.description }}"></td></tr>{% endfor %}
+      </tbody></table></div></section>
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><h2>Alasan</h2></div></header><div class="dp-card-body"><div class="field-row">
+      <label class="field"><span>Alasan retur</span><input name="reason" maxlength="200" value="{{ post.reason }}" required placeholder="mis. rusak saat diterima"></label>
+      <label class="field"><span>Tanggal</span><input type="date" name="note_date" value="{{ today }}" required></label></div></div></section>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Yang akan tercatat</small>
+    <p style="margin:8px 0 14px;opacity:.9">Utang usaha berkurang. Persediaan berkurang pada harga tagihan. PPN masukan dibalik bila tagihan mengkreditnya. Stok barang keluar.</p>
+    <button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Buat nota debit</button></div></aside>
+</form>
+{% endblock %}

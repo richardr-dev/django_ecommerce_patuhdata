@@ -15,6 +15,7 @@
     </p>
   </div>
   <div class="dp-actions">
+    {% if total_owed %}<a class="btn" href="{% url 'merchant-supplier-pay' supplier.pk %}">{% icon "cash" %} Bayar beberapa tagihan</a>{% endif %}
     <a class="btn-primary" href="{% url 'merchant-bill-new' %}">{% icon "plus" %} Tagihan baru</a>
   </div>
 </div>
