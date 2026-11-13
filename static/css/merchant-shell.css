@@ -1126,3 +1126,10 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 /* field errors under a design-system field */
 .field .errorlist { margin: 4px 0 0; padding: 0; list-style: none; color: var(--ds-bad); font-size: 12px; font-weight: 600; }
 .field input[aria-invalid="true"], .field:has(.errorlist) input, .field:has(.errorlist) select { box-shadow: inset 0 0 0 1.5px var(--ds-bad); }
+
+/* checkbox row in the design system */
+.ds-check-wrap { margin-bottom: 14px; }
+.ds-check { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--ds-ink); cursor: pointer; }
+.ds-check input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ds-primary); flex: none; box-shadow: none; }
+.ds-check-wrap > small { display: block; margin: 3px 0 0 28px; color: var(--ds-muted); font-size: 12px; }
+.ds-steps { display: grid; gap: 14px; }

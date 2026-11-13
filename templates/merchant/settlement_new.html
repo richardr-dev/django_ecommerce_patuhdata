@@ -1,25 +1,12 @@
-{% extends "merchant/base.html" %}{% load icons %}{% block title %}Buat Settlement{% endblock %}{% block content %}<div class="bo-heading"><div><span class="eyebrow">SETTLEMENT</span><h1>Buat Settlement Baru</h1></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'settlement-list' %}">← Kembali</a></div></div>
-
-<form method="post">{% csrf_token %}
-<section class="bo-card">
-<h2>Detail Settlement</h2>
-<div class="form-row">
-  <label>Mitra Konsinyasi<select name="partner_id" required><option value="">Pilih mitra…</option>{% for p in partners %}<option value="{{ p.pk }}">{{ p.name }}</option>{% endfor %}</select></label>
-</div>
-<div class="form-row">
-  <label>Periode Mulai<input type="date" name="period_start" value="{{ today }}" required></label>
-  <label>Periode Selesai<input type="date" name="period_end" value="{{ today }}" required></label>
-</div>
-<label>Catatan (opsional)<textarea name="notes" rows="2" placeholder="Catatan untuk mitra…"></textarea></label>
-<p class="muted">Pesanan AB Shop dalam periode yang dipilih akan otomatis ditambahkan ke settlement.</p>
-<button class="bo-button">{% icon "plus" %} Buat Settlement</button>
-</section>
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Buat settlement{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'settlement-list' %}">Settlement mitra</a></span><h1>Buat settlement baru</h1><p>Pesanan AB Shop dalam periode yang dipilih otomatis ditambahkan ke settlement.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}
+  <div class="space-y-5"><section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Detail settlement</h2></div></header><div class="dp-card-body">
+    <label class="field"><span>Mitra konsinyasi</span><select name="partner_id" required><option value="">Pilih mitra…</option>{% for p in partners %}<option value="{{ p.pk }}">{{ p.name }}</option>{% endfor %}</select></label>
+    <div class="field-row"><label class="field"><span>Periode mulai</span><input type="date" name="period_start" value="{{ today }}" required></label><label class="field"><span>Periode selesai</span><input type="date" name="period_end" value="{{ today }}" required></label></div>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" placeholder="Catatan untuk mitra…"></textarea></label></div></section>
+  {% if unbilled_orders %}<section class="panel"><header><div><h2>Pesanan belum ditagih ({{ unbilled_orders|length }})</h2><p>Yang masuk periode di atas akan ditagihkan.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>No. pesanan</th><th>Pembeli</th><th>Channel</th><th>Tanggal</th><th class="num">Total</th></tr></thead><tbody>
+    {% for o in unbilled_orders %}<tr><td>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</td><td>{{ o.customer_name }}</td><td>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</td><td>{{ o.created_at|date:"d M Y" }}</td><td class="num">{{ o.total|rp }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}</div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Settlement</small><p style="margin:8px 0 14px;opacity:.9">Dibuat sebagai draft. Setelah ditinjau, ubah statusnya menjadi diterbitkan agar piutang mitra dicatat.</p><button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "plus" %} Buat settlement</button></div></aside>
 </form>
-
-{% if unbilled_orders %}
-<section class="bo-card"><h2>Pesanan Belum Ditagih ({{ unbilled_orders|length }})</h2>
-<div class="data-table"><div class="data-row data-head" style="--cols:5"><span>No. Pesanan</span><span>Pembeli</span><span>Channel</span><span>Tanggal</span><span>Total</span></div>
-{% for o in unbilled_orders %}<div class="data-row" style="--cols:5"><span>{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</span><span>{{ o.customer_name }}</span><span>{{ o.get_ab_shop_source_display|default:o.get_channel_display }}</span><span>{{ o.created_at|date:"d M Y" }}</span><span>Rp{{ o.total|floatformat:"0g" }}</span></div>{% endfor %}
-</div></section>
-{% endif %}
 {% endblock %}

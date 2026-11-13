@@ -1,0 +1,1 @@
+<div class="ds-check-wrap"><label class="ds-check">{{ field }}<span>{{ field.label }}</span></label>{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<ul class="errorlist" role="alert">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}</div>
