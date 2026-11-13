@@ -302,11 +302,9 @@ def settlement_partner_detail(request, pk):
 
 
 def merchant_role_from_request(request, store):
-    from apps.shops.models import StaffMembership
-    try:
-        return StaffMembership.objects.get(store=store, user=request.user).role
-    except Exception:
-        return "admin"
+    from apps.shops.permissions import role_of
+    role = role_of(request.user, store)
+    return "admin" if role == "owner" else role
 
 
 @login_required(login_url="/login/")

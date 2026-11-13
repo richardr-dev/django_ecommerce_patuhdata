@@ -54,14 +54,14 @@ class AccountantRoleTests(Base):
     def test_cannot_open_staff_or_settings_and_is_shown_as_an_accountant(self):
         self.assertEqual(self.client.get(reverse("merchant-staff")).status_code, 404)
         page = self.client.get(reverse("merchant-profit-loss"))
-        self.assertContains(page, "Akuntan / Auditor")
+        self.assertContains(page, "Auditor")
         self.assertTrue(page.context["merchant_is_accountant"])
         self.assertEqual(page.context["merchant_role"], "viewer")
 
     def test_role_can_be_given_from_the_staff_page(self):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("merchant-staff"))
-        self.assertContains(page, "Akuntan / Auditor (hanya lihat)")
+        self.assertContains(page, "Auditor (hanya lihat)")
 
 
 class AuditTrailTests(Base):

@@ -677,8 +677,8 @@ def merchant_books_checks(request):
 
 # ── Anggaran (budget) and cost centres ───────────────────────────────────────
 
-BUDGET_VIEW = {"admin", "manager", "finance", "viewer"}
-BUDGET_EDIT = {"admin", "finance"}
+BUDGET_VIEW = VIEW_ROLES
+BUDGET_EDIT = EDIT_ROLES
 
 
 def _center(store, value):
@@ -792,7 +792,7 @@ def merchant_cost_centers(request):
 def merchant_attachment_add(request):
     from . import attachments
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance"})
+    _require_roles(request, store, EDIT_ROLES | roles("approval.decide"))
     try:
         attachments.add(store, request.POST.get("kind", ""), request.POST.get("object_id", ""),
             request.FILES.get("file"), actor=request.user, note=request.POST.get("note", ""))
@@ -808,7 +808,7 @@ def merchant_attachment_file(request, attachment_id):
     from . import attachments
     from .models import Attachment
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, VIEW_ROLES)
     attachment = get_object_or_404(Attachment, pk=attachment_id, store=store)
     return attachments.response(attachment)
 
@@ -819,7 +819,7 @@ def merchant_attachment_delete(request, attachment_id):
     from . import attachments
     from .models import Attachment
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "finance"})
+    _require_roles(request, store, EDIT_ROLES)
     attachment = get_object_or_404(Attachment, pk=attachment_id, store=store)
     record = attachments._target(store, attachment.kind, attachment.object_id)
     if record is not None:
@@ -840,7 +840,7 @@ def merchant_approvals(request):
     from .models import ApprovalPolicy, ApprovalRequest
 
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, VIEW_ROLES)
     is_admin = store.owner_id == request.user.id or store.staff_members.filter(
         user=request.user, role="admin").exists()
     if request.method == "POST":
@@ -877,7 +877,7 @@ def merchant_approval_decide(request, request_id):
     from .models import ApprovalRequest
 
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance"})
+    _require_roles(request, store, roles("approval.decide"))
     item = get_object_or_404(ApprovalRequest, pk=request_id, store=store)
     try:
         if request.POST.get("decision") == "approve":
@@ -911,7 +911,7 @@ def merchant_withholdings(request):
     from .models import WithholdingDeposit
 
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, VIEW_ROLES)
     year, month = _month_param(request)
     rows = list(pph.month_rows(store, year, month))
     if request.GET.get("format") == "csv":
@@ -943,7 +943,7 @@ def merchant_withholding_deposit(request):
     from .bank import bank_accounts
 
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "finance"})
+    _require_roles(request, store, EDIT_ROLES)
     try:
         date = datetime.date.fromisoformat(request.POST.get("date", ""))
         bank = next((b for b in bank_accounts(store) if str(b.pk) == request.POST.get("bank_account")), None)
@@ -962,7 +962,7 @@ def merchant_withholding_slip(request, withholding_id):
     from .models import Withholding
 
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, VIEW_ROLES)
     item = get_object_or_404(Withholding, pk=withholding_id, store=store)
     from apps.tax.services import tax_profile
     return render(request, "tax/withholding_slip.html", {"w": item, "store": store, "profile": tax_profile(store)})
@@ -976,8 +976,8 @@ def merchant_year_close(request):
     store = _staff_store(request)
     today = timezone.localdate()
     if request.method == "POST":
-        _require_roles(request, store, {"admin"} if request.POST.get("action") == "reopen"
-            else {"admin", "finance"})
+        _require_roles(request, store, roles("period.reopen") if request.POST.get("action") == "reopen"
+            else roles("period.close"))
         try:
             year = int(request.POST.get("year", ""))
         except ValueError:
@@ -998,7 +998,7 @@ def merchant_year_close(request):
         except closing.ClosingError as error:
             messages.error(request, str(error))
         return redirect("merchant-year-close")
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, VIEW_ROLES)
     previous = today.replace(day=1) - datetime.timedelta(days=1)
     try:
         year, month = (int(x) for x in (request.GET.get("month") or "").split("-"))

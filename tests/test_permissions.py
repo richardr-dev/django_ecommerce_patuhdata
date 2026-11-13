@@ -16,25 +16,25 @@ from apps.shops.models import StoreStaff
 
 # The matrix exactly as it was when the role sets were still scattered, so centralising changed nothing.
 EXPECTED = {
-    "books.view": {"admin", "manager", "finance", "viewer"}, "books.edit": {"admin", "finance"},
-    "approval.decide": {"admin", "manager", "finance"}, "period.close": {"admin", "finance"},
+    "books.view": {"admin", "manager", "finance", "viewer", "bookkeeper", "ar_staff", "ap_staff", "tax_staff"}, "books.edit": {"admin", "finance", "bookkeeper", "ap_staff"},
+    "approval.decide": {"admin", "manager", "finance"}, "period.close": {"admin", "finance", "bookkeeper"},
     "period.reopen": {"admin"}, "intercompany.create": {"admin"},
-    "tax.view": {"admin", "manager", "finance", "viewer"}, "tax.edit": {"admin", "finance"},
-    "sales.view": {"admin", "manager", "ops", "finance", "viewer"}, "sales.edit": {"admin", "manager", "ops", "finance"},
+    "tax.view": {"admin", "manager", "finance", "viewer", "bookkeeper", "tax_staff"}, "tax.edit": {"admin", "finance", "bookkeeper", "tax_staff"},
+    "sales.view": {"admin", "manager", "ops", "finance", "viewer", "bookkeeper", "ar_staff", "tax_staff"}, "sales.edit": {"admin", "manager", "ops", "finance", "bookkeeper", "ar_staff"},
     "orders.manage": {"admin", "manager", "ops", "customer_service"}, "giftcards.manage": {"admin", "manager", "customer_service"},
-    "settlement.manage": {"admin", "manager", "finance"}, "settlement.view": {"admin", "manager", "finance", "viewer"},
-    "stock.fulfil": {"admin", "manager", "ops", "warehouse"}, "stock.receive": {"admin", "manager", "finance", "warehouse"},
+    "settlement.manage": {"admin", "manager", "finance"}, "settlement.view": {"admin", "manager", "finance", "viewer", "bookkeeper"},
+    "stock.fulfil": {"admin", "manager", "ops", "warehouse"}, "stock.receive": {"admin", "manager", "finance", "warehouse", "bookkeeper", "ap_staff"},
     "stock.oversell": {"admin", "manager"},
     "stock.request": {"admin", "manager", "ops", "warehouse"},
     "stock.request_approve": {"admin", "manager"},
     "stock.send": {"admin", "manager", "ops", "warehouse"},
     "stock.count": {"admin", "manager", "ops", "warehouse"},
     "stock.count_approve": {"admin", "manager", "finance"},
-    "purchase.order": {"admin", "manager", "finance", "ops"},
-    "customers.view": {"admin", "manager", "ops", "customer_service", "viewer"},
+    "purchase.order": {"admin", "manager", "finance", "ops", "bookkeeper", "ap_staff"},
+    "customers.view": {"admin", "manager", "ops", "customer_service", "viewer", "ar_staff"},
     "customers.edit": {"admin", "manager", "customer_service"}, "customers.broadcast": {"admin", "manager"},
     "channels.manage": {"admin", "manager", "ops"}, "channels.mapping": {"admin", "manager", "ops"},
-    "channels.income": {"admin", "finance"}, "reports.view": {"admin", "manager", "finance", "ops", "viewer"},
+    "channels.income": {"admin", "finance", "bookkeeper"}, "reports.view": {"admin", "manager", "finance", "ops", "viewer", "bookkeeper", "ar_staff", "ap_staff", "tax_staff"},
     "recap.view": {"admin", "manager", "ops", "warehouse", "customer_service", "viewer"},
     "settings.manage": {"admin", "manager"}, "billing.manage": {"admin", "finance"}, "staff.manage": {"admin"},
 }
@@ -146,3 +146,59 @@ class AccessPageTests(Base):
         StoreStaff.objects.create(store=self.store, user=finance, role="finance")
         self.client.force_login(finance)
         self.assertEqual(self.client.get(reverse("merchant-access")).status_code, 404)
+
+
+class AccountingRoleTests(Base):
+    """The accounting roles work in their own area and are refused, by the server, everywhere else."""
+
+    def sign_in(self, role):
+        user = User.objects.create_user(role, password="x")
+        StoreStaff.objects.create(store=self.store, user=user, role=role)
+        self.client.force_login(user)
+
+    def code(self, name):
+        return self.client.get(reverse(name)).status_code
+
+    def test_the_accountant_keeps_the_books_but_not_the_store(self):
+        self.sign_in("bookkeeper")
+        for name in ["merchant-profit-loss", "merchant-bill-new", "merchant-journal-new", "merchant-sales-invoices",
+                "merchant-receive-payment"]:
+            self.assertEqual(self.code(name), 200, name)
+        for name in ["merchant-staff", "merchant-access", "merchant-billing", "merchant-settings"]:
+            self.assertEqual(self.code(name), 404, name)
+        page = self.client.get(reverse("merchant-profit-loss"))
+        self.assertEqual(page.context["merchant_role"], "finance")     # what the screens see
+        self.assertEqual(page.context["merchant_role_label"], "Akuntan")
+        self.assertFalse(page.context["merchant_is_accountant"])       # not the read-only auditor
+        self.assertNotIn(User.objects.get(username="bookkeeper"), permissions.holders(self.store, "approval.decide"))
+
+    def test_receivables_staff_invoice_and_collect_but_do_not_post_bills_or_journals(self):
+        self.sign_in("ar_staff")
+        for name in ["merchant-sales-invoices", "merchant-receive-payment", "merchant-profit-loss"]:
+            self.assertEqual(self.code(name), 200, name)
+        for name in ["merchant-bill-new", "merchant-journal-new", "merchant-staff", "merchant-billing"]:
+            self.assertEqual(self.code(name), 404, name)
+
+    def test_payables_staff_enter_bills_but_do_not_collect_from_customers(self):
+        self.sign_in("ap_staff")
+        for name in ["merchant-bill-new", "merchant-profit-loss"]:
+            self.assertEqual(self.code(name), 200, name)
+        for name in ["merchant-receive-payment", "merchant-staff", "merchant-billing"]:
+            self.assertEqual(self.code(name), 404, name)
+
+    def test_tax_staff_read_the_books_and_work_on_tax_only(self):
+        self.sign_in("tax_staff")
+        for name in ["merchant-tax", "merchant-profit-loss", "merchant-sales-invoices"]:
+            self.assertEqual(self.code(name), 200, name)
+        for name in ["merchant-bill-new", "merchant-journal-new", "merchant-receive-payment", "merchant-staff"]:
+            self.assertEqual(self.code(name), 404, name)
+
+    def test_every_role_has_a_label_a_help_text_and_a_choice(self):
+        from apps.shops.staff_views import ROLE_HELP
+        choices = {code for code, _ in StoreStaff._meta.get_field("role").choices}
+        self.assertEqual(choices, set(permissions.ROLE_ORDER))
+        self.assertEqual(set(permissions.ROLE_LABELS), set(permissions.ROLE_ORDER))
+        self.assertEqual(set(ROLE_HELP), set(permissions.ROLE_ORDER))
+        for role, shown in permissions.SCREEN_ROLE.items():
+            self.assertIn(role, permissions.ROLE_LABELS)
+            self.assertNotIn(shown, permissions.SCREEN_ROLE)   # a screen role is always one of the older ones

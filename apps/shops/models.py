@@ -209,7 +209,8 @@ class StoreStaff(models.Model):
     role = models.CharField(max_length=20, choices=[("admin", "Group/Brand Admin"),
         ("manager", "Brand Manager"), ("warehouse", "Warehouse"), ("finance", "Finance"),
         ("customer_service", "Customer Service"), ("ops", "Operations"), ("viewer", "Viewer"),
-        ("accountant", "Akuntan / Auditor (hanya lihat)")])
+        ("bookkeeper", "Akuntan"), ("ar_staff", "Staf Piutang (AR)"), ("ap_staff", "Staf Utang (AP)"),
+        ("tax_staff", "Staf Pajak"), ("accountant", "Auditor (hanya lihat)")])
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "user"], name="unique_store_staff")]
 

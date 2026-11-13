@@ -231,7 +231,7 @@ def merchant_import(request):
 def merchant_sales(request):
     """Unified sales dashboard — all channels combined: Lakuin, Shopee, Tokopedia, etc."""
     store = _staff_store(request)
-    _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
+    _require_roles(request, store, CHANNEL_ROLES | roles("sales.view"))
 
     from datetime import date, timedelta
     from decimal import Decimal
@@ -420,7 +420,7 @@ def merchant_sales_invoices(request):
     from apps.orders.models import Order
 
     store = _staff_store(request)
-    _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
+    _require_roles(request, store, CHANNEL_ROLES | roles("sales.view"))
 
     # Bulk issue invoices for all uninvoiced orders
     if request.method == "POST":
@@ -894,7 +894,7 @@ def merchant_sales_report(request):
     from apps.tax.models import Invoice
 
     store = _staff_store(request)
-    _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
+    _require_roles(request, store, CHANNEL_ROLES | roles("reports.view"))
 
     year_filter = request.GET.get("year", "")
     try:

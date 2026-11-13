@@ -214,6 +214,11 @@ def _score(link, path, href, query):
     return best + (500 if best and link.query else 0)
 
 
+def link_key(link):
+    """How ``nav_access.REFUSED`` names a link."""
+    return link.url + ("/" + "/".join(map(str, link.args)) if link.args else "") + (f"?{link.query}" if link.query else "")
+
+
 def build_nav(context):
     request = context.get("request")
     path = request.path if request else ""
@@ -222,6 +227,8 @@ def build_nav(context):
     store = context.get("merchant_store")
     flags = {"uses_platform_gateway": bool(store and getattr(getattr(
         store, "payment_settings", None), "use_platform_gateway", False))}
+    from apps.orders.nav_access import REFUSED
+    refused = REFUSED.get(context.get("merchant_real_role", ""), frozenset())
     sections, best, active = [], 0, None
     for title, groups in NAV:
         built_groups = []
@@ -229,6 +236,8 @@ def build_nav(context):
             links = []
             for link in group.links:
                 if link.roles and role not in link.roles:
+                    continue
+                if link_key(link) in refused:
                     continue
                 if link.when and not flags.get(link.when):
                     continue

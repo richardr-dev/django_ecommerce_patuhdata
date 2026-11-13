@@ -1015,13 +1015,16 @@ def _merchant_context(request, store, **context):
     stores = (Store.objects.filter(owner=request.user) |
         Store.objects.filter(staff_members__user=request.user)).distinct().order_by("name")
     role = "admin" if store.owner_id == request.user.id else store.staff_members.get(user=request.user).role
-    role_label = ""
-    if role == "accountant":
-        # Read-only like a viewer everywhere the screens decide what to show; named for what they are.
-        role, role_label = "viewer", "Akuntan / Auditor"
+    # The accounting roles look like an older role on screen (see permissions.SCREEN_ROLE) and are named
+    # for what they are; the auditor is read-only like a viewer.
+    from apps.shops import permissions as _permissions
+    real_role = "owner" if store.owner_id == request.user.id else role
+    is_auditor = role == "accountant"
+    role_label = _permissions.ROLE_LABELS[role] if role in _permissions.SCREEN_ROLE else ""
+    role = _permissions.screen_role(role)
     pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
-        "merchant_role_label": role_label, "merchant_is_accountant": bool(role_label),
+        "merchant_role_label": role_label, "merchant_is_accountant": is_auditor, "merchant_real_role": real_role,
         "approvals_pending": _approvals_pending(store, request.user),
         "merchant_is_owner": store.owner_id == request.user.id,
         "merchant_store_url": store_url(store), "merchant_preview_url": preview_url(store),
@@ -2380,7 +2383,7 @@ def merchant_integrations(request):
 @login_required(login_url="/login/")
 def merchant_finance(request):
     store = _staff_store(request)
-    _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
+    _require_roles(request, store, roles("books.view"))
     start = parse_date(request.GET.get("start", "") or "")
     end = parse_date(request.GET.get("end", "") or "")
     lines = JournalLine.objects.filter(entry__store=store).select_related("entry", "account")

@@ -27,7 +27,12 @@ ROLE_HELP = {
     "finance": "Laporan keuangan, pencairan, pajak, dan langganan.",
     "customer_service": "Pesanan dan pelanggan, termasuk membuat pesanan manual.",
     "viewer": "Hanya melihat, tanpa mengubah apa pun.",
-    "accountant": "Akuntan atau auditor eksternal: melihat dan mengunduh semua laporan, buku besar, "
+    "bookkeeper": "Akuntan: mencatat jurnal, tagihan, biaya, invoice, dan pajak, serta menutup periode. "
+        "Tidak menyetujui permintaan bernilai besar dan tidak mengelola langganan.",
+    "ar_staff": "Piutang: membuat invoice dan penawaran, menerima pembayaran pelanggan, melihat laporan.",
+    "ap_staff": "Utang: pesanan pembelian, penerimaan barang, tagihan supplier dan pembayarannya.",
+    "tax_staff": "Pajak: PPN, PPh, SPT, dan profil pajak; melihat pembukuan dan invoice.",
+    "accountant": "Auditor eksternal: melihat dan mengunduh semua laporan, buku besar, "
         "pajak, dan paket audit, tanpa bisa mengubah data.",
 }
 
