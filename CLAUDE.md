@@ -199,6 +199,16 @@ Four test files failed before this work and still do: `test_digital_products`,
   own address redirects to `/merchant/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
+- **Purchasing documents** (`accounting/purchasing.py`, `supplier_notes.py`, `stock_counts.py`,
+  `orders/stock_requests.py`; permissions `purchase.order`, `stock.count`, `stock.count_approve`,
+  `stock.request`, `stock.request_approve`, `stock.send`): a purchase order books nothing; each goods receipt
+  against it adds to `received_quantity` (never above the order) and posts Persediaan / GRNI; the bill is
+  made from the receipt. A debit note takes Utang usaha down and returns stock at the bill's price, never
+  above what is unpaid. A stok opname applies its difference on top of today's stock (the system quantity is
+  frozen when counting starts) and posts 6960 / Persediaan on approval by a different person. A stock
+  request moves stock out at *send* (in transit, counted by `inventory.reconciliation`) and in at *receive*;
+  missing units are a loss in transit at cost. None of these edit or delete a posted document: correct with
+  a new document.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -224,6 +234,9 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Sell stock between two brands of one Organization (two books) | `accounting/intercompany.py` | `accounting/views_intercompany.py` |
 | Who may do what (matrix, Hak akses page, segregation of duties) | `shops/permissions.py` | `shops/staff_views.py:merchant_access` |
 | Stok minus: switch, open list, cover on receipt, HPP correction | `orders/deficits.py` | `orders/deficit_views.py`, `templates/merchant/stock_minus.html` |
+| Purchase orders, debit notes, multi-bill payment | `accounting/purchasing.py`, `supplier_notes.py` | `views_purchasing.py`, `views_supplier.py` |
+| Stok opname document, outlet stock requests | `accounting/stock_counts.py`, `orders/stock_requests.py` | `views_counts.py`, `orders/stock_request_views.py` |
+| Stock card, slow-moving stock, inventory close picture | `accounting/inventory_reports.py` | `views_inventory.py` |
 | Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
@@ -381,66 +394,63 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
   CDN has no `@apply`, so write plain CSS. Page-level Tailwind is for layout (grid, gap,
   spacing) only; when a utility string for colour/shape repeats a third time, add a `bb-*` class.
 
-## Architecture check against `architecture.md` (checked 2026-11-13)
+## Architecture check against `architecture.md` (checked 2026-11-13, updated after purchasing work)
 
-Verdict: sufficient for one company (or a few brands) trading goods through its own store and
-marketplaces, with real books. Not yet the full ERP baseline of `architecture.md`: purchasing, warehouse
-documents and database-level isolation are the gaps. Deliberately not adopted: React/Next.js, DRF as the
-main interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layout.
+Verdict: sufficient for a company (or a few brands) trading goods through its own store and marketplaces,
+with real books and warehouse control. Not yet the full ERP baseline: sales-side documents, units of
+measure/lots and database-level isolation remain. Deliberately not adopted: React/Next.js, DRF as the main
+interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layout.
 
 **Met**
-- Modular monolith on Django + PostgreSQL (dev, CI and production); suite passes on PostgreSQL and SQLite.
-- Double-entry ledger as the only money record, balanced entries, reversal instead of edit, one live
-  entry per source document, backlog poster per module (our form of "no lost postings").
-- Perpetual inventory, moving weighted average, cost booked with the sale.
-- Append-only movement ledger (app + PostgreSQL trigger), balances replayable from movements.
-- Reservations: on-hand, reserved, available; the storefront cannot oversell; row locks on stock.
-- Hybrid negative stock with provisional cost and automatic revaluation on receipt (store switch).
-- GRNI: goods receipt before the bill, bill clears GRNI, price difference to 5150.
-- Multi-company: each store its own chart and ledger; intercompany transfer with an entry in each book.
+- Modular monolith on Django + PostgreSQL (dev, CI, production); suite passes on PostgreSQL and SQLite.
+- Double-entry ledger as the only money record, reversal instead of edit, one live entry per source
+  document, a backlog poster per module.
+- Perpetual inventory, moving average cost, cost booked with the sale; append-only movement ledger
+  (app + PostgreSQL trigger); balances replayable from movements; reservations; row locks.
+- Hybrid negative stock with provisional cost and revaluation on receipt (store switch, admin/manager).
+- Purchasing chain: purchase order → partial goods receipts (GRNI) → bill from the receipt, matched three
+  ways (ordered / received / billed) with price differences to 5150; overdue orders in the checks.
+- Supplier side: debit note (retur ke supplier: stock out, Utang usaha down, PPN masukan reversed),
+  one payment over several bills, goods receipt before bill.
+- Warehouse control: stok opname as a document (frozen system quantity, second-person approval, shrinkage
+  journal to 6960); outlet/warehouse stock requests (request → approve → send → receive) with goods in
+  transit and a loss in transit booked; transfers between brands with an entry in each book.
+- Inventory reports: stock card per item (+Excel), slow-moving stock, "Penutupan persediaan" picture and a
+  month-checklist step; reconciliation counts goods in transit, deficits and unreceived bills.
 - Period control: `LedgerLock`, year-end closing to 3300, month-end checklist, reopen by admin only.
-- Reconciliation: stock value vs Persediaan, movements vs balances, AR/AP/GRNI/PPh/intercompany ties,
-  all in `accounting/controls.py`.
-- Idempotency keys on the money forms; audit log per document; maker-checker approvals; one role matrix.
+- Idempotency keys on every create form; audit log per document; maker-checker approvals; one role matrix
+  with segregation of duties on bill payment, stock counts and stock requests.
 - Reports from the ledger: P&L, neraca, arus kas, neraca saldo, buku besar, Excel, SAK EMKM, audit pack.
-- Transactional outbox exists for integrations (`integrations.OutboxEvent`, `process_outbox`); ledger
-  posting does not use it (it posts in the same transaction, with the backlog as the safety net).
+- Transactional outbox for integrations (`integrations.OutboxEvent`); ledger posting is in-transaction
+  with the backlog as the safety net.
 
 **Partly met**
-- Negative stock policy: store level and role only. No warehouse or product level rule, no "critical"
-  tier that needs approval, variants excluded, a manual stock edit does not cover a deficit.
-- Valuation pool: one cost per product (or variant) per store. No per-warehouse pool, no cost layers,
-  no landed cost (freight, duty) spread into unit cost; a non-PKP's PPN is the only uplift.
-- Warehouse transfer and stock count: services only (`transfer_stock`, `count_stock`). No screens, no
-  count document, no approval of a count difference, and a count posts no journal (the stock-value
-  check shows the gap and `inventory.adjust_books` books it by hand).
-- Returns: customer returns are complete; there is no purchase return to a supplier.
-- Idempotency: forms only. The JSON API and the stock services have no key of their own.
-- Isolation between stores: enforced in views and services (`store=` on every query). No composite
-  foreign keys and no PostgreSQL Row-Level Security.
-- Fiscal periods: one lock date per store, not a period table with open/closed status per month.
-- Posting rules: account codes are constants in code (`ledger.py`), not a configurable mapping table.
-- Tests: example-based, including the architecture's worked examples. No property-based tests and no
-  two-connection concurrency test for stock (only `tests/test_postgres_concurrency.py` for other paths).
+- Negative stock policy: store level and role only; no warehouse/product rule, no "critical" approval tier,
+  variants excluded, a manual stock edit does not cover a deficit.
+- Valuation: one cost per product per store. No per-warehouse pool, no cost layers, no landed cost
+  (freight, duty). A returned item leaves at the bill's price without recomputing the average.
+- Debit note: only up to what is unpaid on the bill (money already paid is a cash entry, no supplier
+  credit balance); goods lines without variants only; no void (correct with a manual journal).
+- Stock count and request flows: product (not variant) level, one warehouse level per product.
+- Idempotency: forms only; the JSON API and stock services have no key of their own.
+- Isolation between stores: enforced in views and services; no composite keys or Row-Level Security.
+- Fiscal periods: one lock date per store, not a period table; account codes are constants, not a
+  configurable posting-rule table.
+- Tests: example-based, including the architecture's worked examples; no property-based tests and no
+  two-connection concurrency test for stock.
 
 **Missing**
-1. Purchase order → partial goods receipt → bill (three-way match). Today a receipt or a bill stands alone.
-2. Sales order with partial fulfilment and backorder: an invoice takes all its stock at once, and
-   "incoming" and "backordered" quantities are not tracked.
-3. Goods issue as its own document (surat jalan that moves stock). Stock leaves with the invoice.
-4. Outlet/warehouse request flow (request → approve → send → receive) and variant stock per location.
-5. Units of measure and conversions (box/pcs), decimal quantities, lots/batches, serial numbers, bins.
-6. Supplier side: purchase return, debit note, supplier credit, one payment over several bills.
-7. Stock count document with approval, and the shrinkage journal posted automatically.
-8. Database-level tenant isolation (RLS or composite keys); branches as an entity under a company.
-9. Consolidation: group reports with intercompany elimination; PPN on intercompany sales.
-10. Inventory close dashboard (negative SKUs, provisional values, unposted, GL difference on one page;
-    the pieces exist in the checks and the Tutup buku checklist).
-11. Reports: stock card per item, slow-moving stock, stock adjustment report.
-12. Monitoring (Sentry is wired but needs a DSN), S3 media in production, and a restore drill for backups.
+1. Sales order with partial fulfilment and backorder (an invoice takes all its stock at once; "incoming"
+   and "backordered" are not tracked).
+2. Goods issue / surat jalan as its own stock-moving document.
+3. Units of measure and conversions (box/pcs), decimal quantities, lots/batches, serial numbers, bins.
+4. Variant stock per warehouse.
+5. Database-level tenant isolation (RLS or composite keys); branches as an entity under a company.
+6. Consolidation: group reports with intercompany elimination; PPN on intercompany sales.
+7. Monitoring (Sentry needs a DSN), S3 media in production, a backup restore drill.
 
-**Suggested order**: 1 and 6 (purchasing is the weakest module) → 7 and 4 (warehouse control) → 2 and 3
-→ 5 only when a client needs it → 8 before hosting unrelated clients in one database → 9.
+**Suggested order**: 1 and 2 (sales side) → 4 → 3 only when a client needs it → 5 before hosting unrelated
+clients in one database → 6.
 
 ## Backlog
 
@@ -478,12 +488,12 @@ Tax (first thing Indonesian clients ask for):
 
 Sales and purchasing:
 - [ ] Surat jalan (delivery order) and proforma from a quote or invoice.
-- [ ] Purchase order before the bill; partial receiving against the PO.
+- [x] Purchase order before the bill; partial receiving against the PO.
 - [ ] Send invoice, quote and payment reminder by email and WhatsApp, with a public pay link.
 - [ ] Price lists per customer group; payment terms stored on the customer.
 
 Inventory:
-- [ ] Stok opname and transfer screens (services exist in `orders/stock.py`, no UI).
+- [x] Stok opname and warehouse/outlet transfer screens (stock count document, stock requests).
 - [ ] Push bundle stock to marketplaces; live marketplace APIs (import is file-based).
 
 Accounting:

@@ -164,6 +164,11 @@ def month_checklist(store, year, month, today):
     pph = Withholding.objects.filter(store=store, deposit__isnull=True, date__lt=last).count()
     step("PPh yang dipotong sudah disetor", not pph, "Semua PPh sudah disetor." if not pph
         else f"{pph} pemotongan belum disetor.", reverse("merchant-withholdings"), "Setor")
+    from . import inventory_reports
+    stock = inventory_reports.close_picture(store, today)
+    open_items = [i["title"] for i in stock["items"] if not i["ok"]]
+    step("Persediaan siap ditutup", not open_items, "Semua pos persediaan sudah beres." if not open_items
+        else "Belum beres: " + ", ".join(open_items[:3]) + ".", reverse("merchant-inventory-close"), "Buka penutupan persediaan")
     minus = results.get("negative_stock")
     step("Tidak ada stok minus (harga pokok sementara)", not minus or minus.status == controls.OK,
         "Tidak ada stok minus." if not minus or minus.status == controls.OK else minus.summary,

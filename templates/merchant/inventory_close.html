@@ -1,0 +1,10 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penutupan persediaan{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Penutupan persediaan</h1>
+  <p>Semua yang harus beres sebelum buku sebulan dikunci, di satu halaman. Angkanya dari buku besar, pergerakan stok, dan dokumen yang masih berjalan.</p></div></div>
+{% if picture.ready %}<div class="notice ok">{% icon "check-circle" %}<span><b>Persediaan siap ditutup.</b> Buku sama dengan stok dan tidak ada dokumen persediaan yang menggantung.</span></div>
+{% else %}<div class="notice">{% icon "alert" %}<span><b>Perlu ditinjau.</b> Ada pos yang belum beres; lihat yang bertanda kuning.</span></div>{% endif %}
+<div class="tiles">{% for i in picture.items %}<a class="tile {% if not i.ok %}warn{% elif forloop.first %}accent{% endif %}" href="{% url i.url_name %}" style="text-decoration:none"><small>{{ i.title }}</small><strong>{% if i.kind == 'money' %}{{ i.figure|rp }}{% else %}{{ i.figure }}{% endif %}</strong><span>{{ i.detail }}</span></a>{% endfor %}</div>
+<p class="dp-help">Setelah semuanya beres, kunci periode di <a href="{% url 'merchant-year-close' %}">Tutup buku</a>.</p>
+{% endblock %}
