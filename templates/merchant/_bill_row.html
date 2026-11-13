@@ -1,0 +1,6 @@
+<tr><td><input type="text" name="sku[]" maxlength="60" value="{{ r.sku }}" placeholder="Opsional" aria-label="SKU"></td>
+  <td><input type="text" name="description[]" value="{{ r.desc }}" placeholder="Nama barang / jasa" aria-label="Deskripsi"></td>
+  <td><input type="number" name="qty[]" value="{{ r.qty|default:'1' }}" min="0.01" step="0.01" class="qty-input num" aria-label="Jumlah"></td>
+  <td><input type="text" name="unit_price[]" data-rupiah inputmode="numeric" value="{{ r.price }}" class="price-input num" placeholder="0" aria-label="Harga satuan"></td>
+  <td class="num"><b class="line-total-display">Rp0</b></td>
+  <td data-no-row><button type="button" class="remove-row" aria-label="Hapus baris" style="border:0;background:none;color:var(--ds-faint);font-size:20px;cursor:pointer">&times;</button></td></tr>

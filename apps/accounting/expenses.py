@@ -54,6 +54,8 @@ class ExpenseForm(forms.ModelForm):
     def __init__(self, *args, is_pkp=False, store=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["input_vat"].required = False
+        for name in ("amount", "input_vat"):  # typed as 1.250.000, posted as plain digits
+            self.fields[name].widget = forms.TextInput(attrs={"data-rupiah": "", "inputmode": "numeric"})
         from .bank import bank_accounts
         accounts = bank_accounts(store) if store else []
         self.fields["bank_account"].queryset = BankAccount.objects.filter(

@@ -1102,3 +1102,23 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .close-steps li b{display:block;font-weight:600}
 .close-steps li small{display:block;color:var(--ds-muted)}
 .close-steps li.done b{color:var(--ds-muted);font-weight:500}
+
+/* line-item editors: fixed columns so the description gets the room */
+.tbl.editor { table-layout: fixed; width: 100%; }
+.tbl.editor input, .tbl.editor select { width: 100%; min-width: 0; }
+.tbl.editor td { vertical-align: middle; }
+
+/* stock rows (Kelola stok): one form per row, fields in a single line on wide screens */
+.stk { padding: 4px 12px 12px; }
+.stk-row { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(80px, 1fr)) 80px minmax(140px, 1.5fr) auto;
+  gap: 12px; align-items: end; padding: 14px 10px; border-radius: 16px; }
+.stk-row:hover { background: var(--ds-canvas); }
+.stk-row + .stk-row { border-top: 1px solid rgba(0, 102, 255, .05); }
+.stk-name { align-self: center; min-width: 0; } .stk-name b { display: block; font-weight: 600; }
+.stk-name small, .stk-avail small { display: block; color: var(--ds-muted); font-size: 12px; }
+.stk-avail { text-align: right; } .stk-avail b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.stk-row .field { margin: 0; } .stk-row .field input { height: 40px; }
+@media (max-width: 900px) { .stk-row { grid-template-columns: 1fr 1fr; } .stk-name, .stk-reason { grid-column: 1 / -1; } }
+
+.stk-row.simple { grid-template-columns: minmax(180px, 2fr) 140px minmax(140px, 1.5fr) auto; }
+@media (max-width: 900px) { .stk-row.simple { grid-template-columns: 1fr 1fr; } }

@@ -176,3 +176,24 @@ class FormDoubleSubmitTests(Base):
         self.assertIsNone(idempotency.claim(self.store, "bill", "stale"))
         IdempotencyKey.objects.update(created_at=timezone.now() - timedelta(minutes=5))
         self.assertIsNone(idempotency.claim(self.store, "bill", "stale"))
+
+
+class BillFormPageTests(Base):
+    def test_a_failed_save_keeps_what_was_typed(self):
+        from django.urls import reverse
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("merchant-bill-new"), {"supplier_id": "", "supplier_name": "", "number": "F-77",
+            "bill_date": self.today.isoformat(), "description[]": ["Kabel 2m"], "qty[]": ["3"], "unit_price[]": ["25000"],
+            "sku[]": [""], "category": "1400", "notes": "titip"}, follow=True)
+        self.assertContains(page, "Pilih atau masukkan nama supplier")
+        self.assertContains(page, 'value="F-77"')
+        self.assertContains(page, "Kabel 2m")
+        self.assertContains(page, "titip")
+
+    def test_the_new_form_has_the_summary_rail(self):
+        from django.urls import reverse
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("merchant-bill-new"))
+        self.assertContains(page, "Total tagihan")
+        self.assertContains(page, 'data-rupiah')
+        self.assertNotContains(page, "bg-gray-900")

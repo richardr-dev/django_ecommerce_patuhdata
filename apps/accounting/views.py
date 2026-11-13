@@ -364,6 +364,16 @@ def merchant_bills(request):
     return render_partial(request, "merchant/bills.html", "merchant/_bills_table.html", context)
 
 
+def _posted_bill_rows(request):
+    """The item rows the person had typed, so a failed save does not make them start over."""
+    from itertools import zip_longest
+    post = request.POST
+    rows = [{"sku": sku, "desc": desc, "qty": qty, "price": price} for sku, desc, qty, price in zip_longest(
+        post.getlist("sku[]"), post.getlist("description[]"), post.getlist("qty[]"), post.getlist("unit_price[]"),
+        fillvalue="")]
+    return [row for row in rows if row["desc"] or row["sku"] or row["price"]]
+
+
 @login_required(login_url="/merchant/login/")
 def merchant_bill_new(request):
     store = _staff_store(request)
@@ -398,8 +408,7 @@ def merchant_bill_new(request):
             if not supplier and supplier_name:
                 supplier, _ = Supplier.objects.get_or_create(store=store, name=supplier_name)
             if not supplier:
-                messages.error(request, "Pilih atau masukkan nama supplier.")
-                return redirect("merchant-bill-new")
+                raise ValueError("Pilih atau masukkan nama supplier.")
 
             descs = request.POST.getlist("description[]")
             qtys = request.POST.getlist("qty[]")
@@ -442,7 +451,8 @@ def merchant_bill_new(request):
     from . import idempotency as _idem
     today = timezone.localdate().isoformat()
     return render(request, "merchant/bill_new.html", _merchant_context(request, store,
-        suppliers=suppliers, today=today, idem_key=_idem.new_key(), bill_categories=BILL_CATEGORIES,
+        suppliers=suppliers, today=today, idem_key=_idem.new_key(), post=request.POST,
+        rows=_posted_bill_rows(request) if request.method == "POST" else [], bill_categories=BILL_CATEGORIES,
         cost_centers=CostCenter.objects.filter(store=store, is_active=True)))
 
 
