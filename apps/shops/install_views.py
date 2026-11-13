@@ -11,7 +11,7 @@ FIELDS = ("store_name", "slug", "owner_name", "owner_email", "owner_phone", "leg
     "taxpayer_type", "organization")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def partner_install(request):
     if not request.user.is_superuser:
         messages.error(request, "Instalasi toko hanya bisa dilakukan oleh akun partner platform. "

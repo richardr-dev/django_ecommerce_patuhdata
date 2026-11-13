@@ -49,7 +49,7 @@ def _email(card):
         logging.getLogger(__name__).exception("gift card email failed")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_gift_cards(request):
     from .views import _merchant_context, _require_roles, _staff_store
 
@@ -75,7 +75,7 @@ def merchant_gift_cards(request):
         title="Gift card", section="gift-cards", form=form, cards=cards, totals=totals))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_gift_card_toggle(request, card_id):
     from .views import _require_roles, _staff_store
 

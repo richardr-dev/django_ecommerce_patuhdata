@@ -41,7 +41,7 @@ def _sku_options(store):
     return sorted(options, key=lambda option: option["label"].lower())
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_new(request):
     from .views import _merchant_context, _require_roles, _staff_store
 
@@ -65,7 +65,7 @@ def merchant_order_new(request):
         posted_rows=posted_rows or [("", "1", "")], sku_options=_sku_options(store)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_payment_link(request, order_id):
     from .views import _merchant_context, _require_roles, _staff_store
 

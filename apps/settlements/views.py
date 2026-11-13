@@ -34,7 +34,7 @@ PAGE_SIZE = 20
 
 # ── Partner management ────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def settlement_partners(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -78,7 +78,7 @@ def settlement_partners(request):
 
 # ── Settlement list ───────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def settlement_list(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -117,7 +117,7 @@ def settlement_list(request):
 
 # ── New settlement ─────────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def settlement_new(request):
     store = _staff_store(request)
     _require_roles(request, store, SETTLEMENT_ROLES)
@@ -166,7 +166,7 @@ def settlement_new(request):
 
 # ── Settlement detail ─────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def settlement_detail(request, pk):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -254,7 +254,7 @@ def settlement_detail(request, pk):
 
 # ── Partner detail ───────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def settlement_partner_detail(request, pk):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -309,7 +309,7 @@ def merchant_role_from_request(request, store):
         return "admin"
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def product_partner_prices(request, product_id):
     """htmx endpoint — save per-partner sell-in prices for a product."""
     from apps.catalog.models import Product
@@ -362,7 +362,7 @@ def _mark_orders_billed(settlement: Settlement):
 
 # ── Mitra Invoice (manual sell-through entry) ─────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def mitra_invoice_list(request, partner_id):
     """All sell-through invoices for a specific Mitra partner."""
     from django.db.models import Count, Sum
@@ -387,7 +387,7 @@ def mitra_invoice_list(request, partner_id):
         ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def mitra_invoice_new(request, partner_id):
     """Create a sell-through invoice for a Mitra partner."""
     from decimal import Decimal, InvalidOperation
@@ -515,7 +515,7 @@ def _find_item(store, sku):
     return Product.objects.filter(store=store, sku=sku).first(), None
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def partner_stock(request):
     """Barang konsinyasi yang sedang dipegang mitra, plus kirim dan retur."""
     from .consignment import (

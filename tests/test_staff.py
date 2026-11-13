@@ -34,7 +34,7 @@ class StaffTests(TestCase):
         reply = newcomer.post(link, {"new_password1": "Rendang-Enak-88", "new_password2": "Rendang-Enak-88"})
         self.assertRedirects(reply, "/merchant/", fetch_redirect_response=False)
         self.assertContains(Client().get(link), "Link tidak berlaku")  # single use
-        login = Client().post("/merchant/login/", {"username": "081234567890",
+        login = Client().post("/login/", {"username": "081234567890",
             "password": "Rendang-Enak-88", "next": "/merchant/"})
         self.assertEqual(login.status_code, 302)
 

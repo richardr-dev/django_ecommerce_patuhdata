@@ -15,7 +15,7 @@ SIGNUP = {"store_name": "Toko Bu Sri", "slug": "bu-sri", "phone": "0812-3456-789
 class SellerLoginTests(TestCase):
     def _login(self, username, password="Sambal-Matah-77"):
         client = Client()
-        reply = client.post("/merchant/login/", {"username": username, "password": password,
+        reply = client.post("/login/", {"username": username, "password": password,
             "next": "/merchant/"})
         return client, reply
 
@@ -43,7 +43,7 @@ class SellerLoginTests(TestCase):
         self.assertEqual(reply.status_code, 200)
 
     def test_the_login_page_explains_whatsapp_sign_in(self):
-        page = Client().get("/merchant/login/")
+        page = Client().get("/login/")
         self.assertContains(page, "Email atau nomor WhatsApp")
 
     def test_owner_sees_kelola_toko_on_their_storefront_only(self):

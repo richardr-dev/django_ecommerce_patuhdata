@@ -26,13 +26,13 @@ class LogoutTests(TestCase):
         self.assertContains(dashboard, 'action="/merchant/logout/"')
         self.assertNotContains(dashboard, "/platform-admin/logout/")
         reply = self.seller.post("/merchant/logout/")
-        self.assertEqual(reply["Location"], "/merchant/login/?keluar=1")
+        self.assertEqual(reply["Location"], "/login/?keluar=1")
         self.assertEqual(reply["Clear-Site-Data"], '"cache", "storage", "cookies"')
         for name in ("sessionid", "csrftoken", SELLER_COOKIE):
             self.assertEqual(reply.cookies[name].value, "", name)
         self.assertFalse(Session.objects.exists())
-        self.assertRedirects(self.seller.get("/merchant/"), "/merchant/login/?next=/merchant/")
-        self.assertContains(self.seller.get("/merchant/login/?keluar=1"), "Anda sudah keluar")
+        self.assertRedirects(self.seller.get("/merchant/"), "/login/?next=/merchant/")
+        self.assertContains(self.seller.get("/login/?keluar=1"), "Anda sudah keluar")
 
     def test_a_link_cannot_sign_anyone_out(self):
         self.assertRedirects(self.seller.get("/merchant/logout/"), "/merchant/",

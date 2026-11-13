@@ -10,7 +10,7 @@ from . import deficits
 from .views import _merchant_context, _require_roles, _staff_store
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_stock_minus(request):
     store = _staff_store(request)
     _require_roles(request, store, permissions.roles("stock.fulfil") | permissions.roles("books.view"))

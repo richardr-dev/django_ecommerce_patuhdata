@@ -32,7 +32,7 @@ from .models import (
 )
 from .services import InvoiceError
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 VIEW_ROLES = roles("sales.view")
 EDIT_ROLES = roles("sales.edit")
 

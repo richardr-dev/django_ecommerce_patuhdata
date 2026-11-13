@@ -27,7 +27,7 @@ def describe(entry):
         "verb": VERBS.get(verb, verb.replace("_", " ")), "label": label or ""}
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_activity(request):
     from apps.catalog.views import paginate
     from apps.orders.views import _merchant_context, _staff_store

@@ -20,7 +20,7 @@ from .ledger import entries_for
 from .models import Bill, DebitNote, Supplier
 from .payables import open_bills
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 EDIT_ROLES = permissions.roles("books.edit")
 VIEW_ROLES = permissions.roles("books.view")
 

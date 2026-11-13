@@ -18,7 +18,7 @@ from .bank import bank_accounts
 from .ledger import entries_for
 from .models import Loan, LoanInstallment
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 EDIT_ROLES, VIEW_ROLES = permissions.roles("books.edit"), permissions.roles("books.view")
 
 

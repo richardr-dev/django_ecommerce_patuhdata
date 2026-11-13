@@ -8,7 +8,7 @@ from apps.shops import permissions
 
 from . import exports, reports
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 VIEW_ROLES = permissions.roles("books.view")
 
 

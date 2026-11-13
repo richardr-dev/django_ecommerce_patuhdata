@@ -14,7 +14,7 @@ from apps.shops.audit import log as audit_log
 from . import fiscal, tax_calendar
 from .models import FiscalAdjustment, TaxFiling
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 VIEW_ROLES, EDIT_ROLES = permissions.roles("tax.view"), permissions.roles("tax.edit")
 
 

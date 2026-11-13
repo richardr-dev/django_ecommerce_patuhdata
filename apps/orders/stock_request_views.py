@@ -16,7 +16,7 @@ from . import stock_requests
 from .models import StockRequest
 from .views import _merchant_context, _require_roles, _staff_store
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 ALL_ROLES = (permissions.roles("stock.request") | permissions.roles("stock.request_approve")
     | permissions.roles("stock.send") | {"viewer"})
 

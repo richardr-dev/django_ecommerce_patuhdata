@@ -41,7 +41,7 @@ class IncomeUploadForm(forms.Form):
         return upload
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_income_import(request):
     """Impor laporan penghasilan marketplace: biaya per pesanan dan pencairan dana."""
     store = _staff_store(request)

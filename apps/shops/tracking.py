@@ -69,7 +69,7 @@ def tracking_config(store):
     return mark_safe(json.dumps(config).replace("<", "\\u003c"))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_tracking(request):
     from apps.orders.views import _merchant_context, _require_editor, _staff_store
 

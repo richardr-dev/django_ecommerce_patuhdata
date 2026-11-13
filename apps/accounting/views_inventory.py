@@ -11,7 +11,7 @@ from apps.shops import permissions
 
 from . import exports, inventory_reports
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 VIEW_ROLES = permissions.roles("books.view") | permissions.roles("stock.fulfil")
 
 

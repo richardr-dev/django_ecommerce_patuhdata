@@ -14,7 +14,7 @@ from .receivables import BUCKETS, aging, statement
 ROLES = roles("books.view")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_receivables(request):
     """Umur piutang per pelanggan, dan surat tagihan satu pelanggan."""
     store = _staff_store(request)

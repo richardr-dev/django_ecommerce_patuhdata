@@ -229,7 +229,7 @@ def shipping_areas(request):
     return JsonResponse({"areas": areas})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_shipping_areas(request):
     """Area search for the warehouse form: the courier provider's own list of kecamatan and
     postal codes, so a warehouse's place matches what rates and pickups use."""
@@ -1058,7 +1058,7 @@ MERCHANT_PAGE_SIZE = 50
 MIN_PLATFORM_PAYOUT = Decimal(10000)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_dashboard(request):
     if request.user.is_superuser and not (Store.objects.filter(owner=request.user).exists()
             or Store.objects.filter(staff_members__user=request.user).exists()):
@@ -1165,7 +1165,7 @@ def _order_kpis(orders):
     }
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_orders(request):
     from .scope import MARKETPLACE_CHANNELS, marketplace_orders, website_orders
     store = _staff_store(request)
@@ -1258,7 +1258,7 @@ def merchant_orders(request):
         channels=Order.CHANNELS, order_types=Order.ORDER_TYPES))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_abshop(request):
     """AB Shop & Reseller order management: sell-in, sell-through, billing queue."""
     store = _staff_store(request)
@@ -1321,7 +1321,7 @@ def merchant_abshop(request):
         order_types=Order.ORDER_TYPES))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_returns(request):
     """Merchant-side return & exchange request list."""
     store = _staff_store(request)
@@ -1375,7 +1375,7 @@ def merchant_returns(request):
         types=ReturnRequest.TYPES, counts=counts))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_return_detail(request, return_id):
     """Merchant-side return/exchange detail with status transition actions."""
     store = _staff_store(request)
@@ -1494,7 +1494,7 @@ def merchant_return_detail(request, return_id):
         movements=return_service.movements(ret)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_return_create(request, order_id):
     """Record a return the seller received outside the storefront (WhatsApp, marketplace, counter)."""
     if request.method != "POST":
@@ -1550,7 +1550,7 @@ def _back_to_orders(request):
 FULFILMENT_ROLES = roles("stock.fulfil")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_advance(request, order_id):
     """One-click steps: pack (through confirmed, allocated and picking), received, completed."""
     if request.method != "POST":
@@ -1605,7 +1605,7 @@ def _apply_tracking(order, data):
     return ""
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_ship(request, order_id):
     """The seller handed the parcel to a courier: save the tracking number and mark it shipped,
     packing it first if that was not done yet."""
@@ -1641,7 +1641,7 @@ LABEL_FORMATS = {"100x150": "Thermal 100×150 mm", "100x100": "Thermal 100×100 
     "a6": "A6", "a4": "A4 (4 label per halaman)"}
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_courier_label(request, order_id):
     """Open the courier's official label (JNE, J&T, SiCepat, …) for an order booked through
     Biteship; print it at 100% on 10×15 cm thermal paper."""
@@ -1662,7 +1662,7 @@ def merchant_order_courier_label(request, order_id):
     return redirect(url)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_courier_labels(request):
     """The official courier labels of the ticked orders (?id=…&id=…) as one PDF to print in one
     go. Orders without a booked courier keep the Lakuin label."""
@@ -1692,7 +1692,7 @@ def merchant_order_courier_labels(request):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_labels(request):
     """Printable shipping labels like the marketplaces': ticked orders (?id=…&id=…), or a whole
     tab (?tab=). Opening the page marks the labels as printed."""
@@ -1735,7 +1735,7 @@ def merchant_order_labels(request):
         "courier_labels": [order for order in orders if order.courier_label]})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_stock(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
@@ -1829,7 +1829,7 @@ def merchant_stock(request):
         unstocked=unstocked,
         variant_range=variant_range, variant_query=variant_query, query=query))
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_detail(request, order_id):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
@@ -1853,7 +1853,7 @@ def merchant_order_detail(request, order_id):
         order=order, channel_order=channel_order, invoice=invoice, crm_customer=crm_customer))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_update(request, order_id):
     if request.method != "POST": raise Http404
     store = _staff_store(request)
@@ -1893,7 +1893,7 @@ def merchant_order_update(request, order_id):
     return _back_to_orders(request)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_tracking(request, order_id):
     if request.method != "POST":
         raise Http404
@@ -1927,7 +1927,7 @@ def merchant_order_tracking(request, order_id):
     return _back_to_orders(request)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_book_shipment(request, order_id):
     if request.method != "POST":
         raise Http404
@@ -1944,7 +1944,7 @@ def merchant_order_book_shipment(request, order_id):
     return _back_to_orders(request)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_refund(request, order_id):
     if request.method != "POST":
         raise Http404
@@ -1971,7 +1971,7 @@ def merchant_order_refund(request, order_id):
         messages.success(request, "Refund berhasil diproses dan dicatat.")
     return _back_to_orders(request)
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_order_confirm_transfer(request, order_id):
     """The seller saw the buyer's bank transfer arrive in their own account."""
     if request.method != "POST":
@@ -1993,7 +1993,7 @@ def merchant_order_confirm_transfer(request, order_id):
     return _back_to_orders(request)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_orders_csv(request):
     store = _staff_store(request)
     response = HttpResponse(content_type="text/csv")
@@ -2006,7 +2006,7 @@ def merchant_orders_csv(request):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_subscribers_csv(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops"})
@@ -2057,7 +2057,7 @@ def _entity_queryset(entity, store):
     raise Http404
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_entity_list(request, section):
     store = _staff_store(request)
     if section == "variants":  # variants live on their product's page now
@@ -2129,7 +2129,7 @@ def _list_cell(value, column):
     return value
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_entity_edit(request, section, object_id=None):
     store = _staff_store(request)
     if section == "variants":  # old links: open the variant's product instead
@@ -2234,7 +2234,7 @@ def _save_entity(request, store, section, entity, form, instance, variants):
     return saved, kept
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_settings(request):
     store = _staff_store(request)
     _require_editor(request, store)
@@ -2253,7 +2253,7 @@ def merchant_settings(request):
             preset["values"]["font_family"]]} for key, preset in STOREFRONT_TEMPLATES.items()}))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_apply_template(request):
     if request.method != "POST":
         raise Http404
@@ -2271,7 +2271,7 @@ def merchant_apply_template(request):
     return redirect("merchant-settings")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customer_detail(request, customer_id):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
@@ -2355,7 +2355,7 @@ def merchant_customer_detail(request, customer_id):
         open_invoice_count=len(open_lines)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_engagement(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "customer_service", "viewer"})
@@ -2366,7 +2366,7 @@ def merchant_engagement(request):
         _merchant_context(request, store, **summary))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_integrations(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "finance", "viewer"})
@@ -2377,7 +2377,7 @@ def merchant_integrations(request):
         integration_events=events, reconciliation_mismatches=mismatches))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_finance(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
@@ -2425,7 +2425,7 @@ def merchant_finance(request):
         missing_cost=missing_cost, journal_lines=lines[:200], start=start, end=end))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_payment_settings(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin"})
@@ -2446,7 +2446,7 @@ def merchant_payment_settings(request):
         doku_environment=doku_environment(), doku_test_url=request.session.pop("doku_test_url", "")))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_platform_balance(request):
     """Saldo DOKU Lakuin: what buyers paid through the platform's DOKU account for this store,
     and the payouts Lakuin made or is making to the store's bank account."""
@@ -2481,7 +2481,7 @@ def merchant_platform_balance(request):
         payouts=store.platform_payouts.all()[:20], minimum=MIN_PLATFORM_PAYOUT))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_payment_test(request):
     """Tes koneksi: open a Rp10.000 DOKU test page with the seller's saved keys."""
     if request.method != "POST":
@@ -2506,7 +2506,7 @@ def merchant_payment_test(request):
     return redirect("merchant-payment-settings")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_integration_retry(request, event_id):
     if request.method != "POST":
         raise Http404

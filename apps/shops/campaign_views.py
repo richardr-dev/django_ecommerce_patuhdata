@@ -76,7 +76,7 @@ def _links(store):
         .order_by("-created_at"))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def campaign_links(request):
     from apps.orders.views import _merchant_context, _require_editor, _staff_store
 
@@ -98,7 +98,7 @@ def campaign_links(request):
         title="Link kampanye", section="campaign-links", form=form, links=links))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def toggle_campaign_link(request, link_id):
     from apps.orders.views import _require_editor, _staff_store
 
@@ -113,7 +113,7 @@ def toggle_campaign_link(request, link_id):
     return redirect("merchant-campaign-links")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def feeds_and_qr(request):
     """Feed produk (Google Shopping, Meta) and QR katalog in one place."""
     from apps.orders.views import _merchant_context, _staff_store

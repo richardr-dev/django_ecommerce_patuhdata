@@ -76,7 +76,7 @@ def invite_link(user):
     return platform_url(reverse("staff-invite-accept", args=[uid, default_token_generator.make_token(user)]))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_staff(request):
     from apps.orders.views import _merchant_context, _staff_store
 
@@ -127,14 +127,14 @@ def _email_invite(store, user, link):
         send_mail(f"Undangan staf {store.name} di {settings.PLATFORM_NAME}",
             f"Halo {user.first_name or ''},\n\nAnda diundang mengelola toko {store.name}. Buat kata "
             f"sandi Anda lewat link ini (sekali pakai):\n{link}\n\nSetelah itu masuk di "
-            f"{platform_url('/merchant/login/')} dengan email ini.\n\n{settings.PLATFORM_NAME}",
+            f"{platform_url('/login/')} dengan email ini.\n\n{settings.PLATFORM_NAME}",
             settings.DEFAULT_FROM_EMAIL, [user.email])
     except Exception:  # the invite link is also shown on screen
         import logging
         logging.getLogger(__name__).exception("staff invite email failed")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_staff_update(request, staff_id):
     from apps.orders.views import _staff_store
 
@@ -182,7 +182,7 @@ def staff_invite_accept(request, uidb64, token):
         "invited": user if valid else None})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_access(request):
     """Hak akses: who may do what, who holds which role, and the recent changes to roles."""
     from apps.orders.views import _merchant_context, _staff_store

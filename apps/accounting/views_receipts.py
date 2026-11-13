@@ -24,7 +24,7 @@ from .models import GoodsReceipt, Supplier
 RECEIVE_ROLES = roles("stock.receive")
 BILL_ROLES = roles("books.edit")
 VIEW_ROLES = RECEIVE_ROLES | {"viewer"}
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 
 
 def _number(raw):

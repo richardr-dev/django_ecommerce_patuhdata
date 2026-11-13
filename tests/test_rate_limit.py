@@ -34,7 +34,7 @@ class RateLimitTests(TestCase):
             self.assertEqual(client.get("/account/login/").status_code, 200)
 
     def test_merchant_and_platform_admin_logins_are_limited(self):
-        for path in ("/merchant/login/", "/platform-admin/login/"):
+        for path in ("/login/", "/platform-admin/login/"):
             client = Client(REMOTE_ADDR=f"10.0.3.{len(path)}")
             statuses = [client.post(path, {"username": f"u{n}", "password": "x"}).status_code
                 for n in range(11)]

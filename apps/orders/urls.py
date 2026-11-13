@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
+from django.views.generic import RedirectView
 
 from apps.integrations import whatsapp_views
 from apps.shops import segment_views
@@ -48,7 +49,8 @@ urlpatterns = [
         success_url=reverse_lazy("password-reset-complete")), name="password-reset-confirm"),
     path("account/reset/complete/", auth_views.PasswordResetCompleteView.as_view(
         template_name="registration/password_reset_complete.html"), name="password-reset-complete"),
-    path("merchant/login/", login_limit(auth_views.LoginView.as_view(
+    path("merchant/login/", RedirectView.as_view(pattern_name="merchant-login", query_string=True, permanent=True)),
+    path("login/", login_limit(auth_views.LoginView.as_view(
         template_name="registration/merchant_login.html", authentication_form=MerchantLoginForm)),
         name="merchant-login"),
     path("merchant/logout/", merchant_logout, name="merchant-logout"),

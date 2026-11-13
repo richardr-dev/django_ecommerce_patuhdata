@@ -24,7 +24,7 @@ def _item(store, sku):
     return Product.objects.filter(store=store, sku=sku).first(), None
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sku_map(request):
     """Pemetaan SKU marketplace ke katalog, dan antrean SKU yang belum dikenali."""
     store = _staff_store(request)
@@ -91,7 +91,7 @@ def _components(store, text):
     return components
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_bundles(request):
     """Paket: satu SKU jual yang terdiri dari beberapa barang stok."""
     store = _staff_store(request)

@@ -42,7 +42,7 @@ def _warnings(store, profile):
     return []
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_tax(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -66,7 +66,7 @@ def merchant_tax(request):
         warnings=_warnings(store, profile)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_register(request):
     """Invoices of one month as CSV, laid out for preparing Faktur Pajak in Coretax."""
     store = _staff_store(request)
@@ -92,7 +92,7 @@ def merchant_invoice_register(request):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice(request, invoice_id):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -123,7 +123,7 @@ def order_invoice(request, order_id):
     return render(request, "tax/invoice.html", {"invoice": invoice})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_spt_ppn(request):
     """Lembar kerja SPT Masa PPN: keluaran, masukan, kompensasi, dan yang harus disetor."""
     from . import spt
@@ -163,7 +163,7 @@ def merchant_spt_ppn(request):
         month=f"{year}-{month:02d}", month_label=data["start"]))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_faktur_export(request):
     """Faktur Pajak Keluaran worksheet for a month (one row per line, problems flagged)."""
     from apps.accounting.exports import response as xlsx_response

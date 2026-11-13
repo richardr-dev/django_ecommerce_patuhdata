@@ -16,7 +16,7 @@ from .bank import bank_accounts
 from .ledger import chart_of_accounts
 from .models import EXPENSE_CATEGORIES, JournalTemplate, PrepaidExpense
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 EDIT_ROLES = permissions.roles("books.edit")
 VIEW_ROLES = permissions.roles("books.view")
 TABS = [("prepaid", "Dibayar di muka"), ("accrual", "Akrual & berulang"), ("provision", "Cadangan piutang")]

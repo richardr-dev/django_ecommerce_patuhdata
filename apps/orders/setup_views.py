@@ -162,7 +162,7 @@ def create_store_defaults(store):
     return warehouse_created, shipping_created
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_quick_defaults(request):
     if request.method != "POST":
         raise Http404
@@ -177,7 +177,7 @@ def merchant_quick_defaults(request):
     return redirect("merchant-settings")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_product_import_template(request):
     _setup_store(request)
     response = HttpResponse(content_type="text/csv")
@@ -188,7 +188,7 @@ def merchant_product_import_template(request):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_product_import(request):
     store, stores, role = _setup_store(request)
     if request.method == "POST":

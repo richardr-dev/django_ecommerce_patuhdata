@@ -123,7 +123,7 @@ class NoPublicRegistrationTests(TestCase):
             self.assertEqual(self.client.get(path).status_code, 404, path)
 
     def test_the_login_page_offers_no_registration(self):
-        page = self.client.get("/merchant/login/")
+        page = self.client.get("/login/")
         self.assertNotContains(page, "Daftar")
         self.assertContains(page, "partner")
 
@@ -131,7 +131,7 @@ class NoPublicRegistrationTests(TestCase):
 class PartnerLandingTests(TestCase):
     def test_a_partner_without_a_store_lands_on_the_install_page_after_login(self):
         User.objects.create_superuser("partner", "p@x.co", "pw")
-        response = self.client.post("/merchant/login/", {"username": "partner", "password": "pw", "next": "/merchant/"})
+        response = self.client.post("/login/", {"username": "partner", "password": "pw", "next": "/merchant/"})
         self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)
         self.assertRedirects(self.client.get("/merchant/"), "/instalasi/", fetch_redirect_response=False)
 

@@ -71,7 +71,7 @@ ACCOUNT_TYPES = [
 ]
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_accounting(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -116,7 +116,7 @@ def _has_role(request, store, roles):
     return store.staff_members.filter(user=request.user, role__in=roles).exists()
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_ledger_lock(request):
     """Tutup buku: close the books through a date, or reopen them by sending no date."""
     import datetime
@@ -144,7 +144,7 @@ def merchant_ledger_lock(request):
     return redirect("merchant-accounting")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_chart_of_accounts(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -200,7 +200,7 @@ class PayoutUploadForm(forms.Form):
         return upload
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_payouts(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -241,7 +241,7 @@ def merchant_payouts(request):
         can_reconcile=can_reconcile))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_payout_detail(request, payout_id):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -252,7 +252,7 @@ def merchant_payout_detail(request, payout_id):
         payout=payout, lines=lines))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def payout_template(request):
     _require_roles(request, _staff_store(request), VIEW_ROLES)
     response = HttpResponse(content_type="text/csv")
@@ -267,7 +267,7 @@ def payout_template(request):
 # Accounts Payable: Suppliers
 # ---------------------------------------------------------------------------
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_suppliers(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -303,7 +303,7 @@ def merchant_suppliers(request):
         context)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_supplier_detail(request, supplier_id):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -335,7 +335,7 @@ def merchant_supplier_detail(request, supplier_id):
 # Accounts Payable: Bills
 # ---------------------------------------------------------------------------
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_bills(request):
     from django.db.models import Q
     store = _staff_store(request)
@@ -374,7 +374,7 @@ def _posted_bill_rows(request):
     return [row for row in rows if row["desc"] or row["sku"] or row["price"]]
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_bill_new(request):
     store = _staff_store(request)
     _require_roles(request, store, EDIT_ROLES)
@@ -456,7 +456,7 @@ def merchant_bill_new(request):
         cost_centers=CostCenter.objects.filter(store=store, is_active=True)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_bill_detail(request, bill_id):
     import uuid as _uuid
 
@@ -551,7 +551,7 @@ def merchant_bill_detail(request, bill_id):
 # Reports: Balance Sheet & Trial Balance
 # ---------------------------------------------------------------------------
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_balance_sheet(request):
     from . import reports
     store = _staff_store(request)
@@ -581,7 +581,7 @@ def merchant_balance_sheet(request):
         sheet=sheet, as_of=as_of, compare=compare))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_payables(request):
     """Umur utang: what is owed to each supplier and how late."""
     import datetime
@@ -612,7 +612,7 @@ def merchant_payables(request):
         lines=lines, soon=due_soon(store, as_of)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_trial_balance(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -635,7 +635,7 @@ def merchant_trial_balance(request):
         balanced=(abs(total_debit - total_credit) < Decimal("0.02"))))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_journal_new(request):
     """Jurnal umum: saldo awal, setoran modal, penyusutan, dan koreksi."""
     import datetime

@@ -66,7 +66,7 @@ def search(store, query):
     return [group for group in groups if group]
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_search(request):
     store = _staff_store(request)
     query = request.GET.get("q", "").strip()[:80]

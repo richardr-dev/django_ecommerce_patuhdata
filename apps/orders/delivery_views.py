@@ -62,7 +62,7 @@ class DeliverySlotForm(forms.ModelForm):
         return cleaned
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_delivery(request):
     store = _staff_store(request)
     _require_roles(request, store, SETTINGS_ROLES | {"viewer"})
@@ -109,7 +109,7 @@ def merchant_delivery(request):
         slot_form=slot_form, slots=store.delivery_slots.all(), preorder_products=preorder_products))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_production_recap(request):
     """What to make and deliver per date: product totals and orders per slot."""
     store = _staff_store(request)

@@ -13,7 +13,7 @@ from .models import StoreWhatsAppSettings, WhatsAppMessage
 from .whatsapp import KINDS, msisdn, send
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_whatsapp(request):
     from apps.orders.views import _merchant_context, _require_roles, _staff_store
 
@@ -36,7 +36,7 @@ def merchant_whatsapp(request):
         account=account, log=log, test_phone=store.support_phone))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_whatsapp_test(request):
     from apps.orders.views import _require_roles, _staff_store
 

@@ -48,7 +48,7 @@ from .reports import SOURCE_LABELS, source_link
 
 VIEW_ROLES = roles("books.view")
 EDIT_ROLES = roles("books.edit")
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 
 
 def _store(request, roles=VIEW_ROLES):
@@ -689,7 +689,7 @@ def _center(store, value):
         return None
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_budget(request):
     """Anggaran vs realisasi: what was planned against what the books say, per account."""
     from . import budgets
@@ -712,7 +712,7 @@ def merchant_budget(request):
         years=range(today.year - 2, today.year + 2), has_budget=bool(budgets.get_budget(store, year, center))))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_budget_edit(request):
     """The budget grid: every cost account, twelve months."""
     from . import budgets
@@ -756,7 +756,7 @@ def merchant_budget_edit(request):
         months=budgets.MONTHS, years=range(today.year - 1, today.year + 3)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_cost_centers(request):
     """Pusat biaya: the branches, outlets or departments costs are tracked for."""
     from .models import CostCenter
@@ -787,7 +787,7 @@ def merchant_cost_centers(request):
 
 # ── Attachments ──────────────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 @require_POST
 def merchant_attachment_add(request):
     from . import attachments
@@ -803,7 +803,7 @@ def merchant_attachment_add(request):
     return attachments.back(request)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_attachment_file(request, attachment_id):
     from . import attachments
     from .models import Attachment
@@ -813,7 +813,7 @@ def merchant_attachment_file(request, attachment_id):
     return attachments.response(attachment)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 @require_POST
 def merchant_attachment_delete(request, attachment_id):
     from . import attachments
@@ -833,7 +833,7 @@ def merchant_attachment_delete(request, attachment_id):
 
 # ── Persetujuan (maker and checker) ──────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_approvals(request):
     """Requests waiting for a second person, and the rules that create them."""
     from . import approvals
@@ -870,7 +870,7 @@ def merchant_approvals(request):
         done=done, rules=rules, is_admin=is_admin, others=len(approvals.approvers(store, exclude=request.user))))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 @require_POST
 def merchant_approval_decide(request, request_id):
     from . import approvals
@@ -903,7 +903,7 @@ def _month_param(request):
     return year, month
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_withholdings(request):
     """PPh 21/23/4(2) held back from payments: the month's register, bukti potong, and deposits."""
     from . import withholding as pph
@@ -936,7 +936,7 @@ def merchant_withholdings(request):
         deposits=WithholdingDeposit.objects.filter(store=store)[:10], today=timezone.localdate().isoformat()))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 @require_POST
 def merchant_withholding_deposit(request):
     from . import withholding as pph
@@ -956,7 +956,7 @@ def merchant_withholding_deposit(request):
     return redirect("merchant-withholdings")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_withholding_slip(request, withholding_id):
     """Bukti potong to print or send to the payee."""
     from .models import Withholding
@@ -968,7 +968,7 @@ def merchant_withholding_slip(request, withholding_id):
     return render(request, "tax/withholding_slip.html", {"w": item, "store": store, "profile": tax_profile(store)})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_year_close(request):
     """Tutup buku: the month-end checklist, the year-end closing to Laba ditahan, and the lock."""
     from . import closing

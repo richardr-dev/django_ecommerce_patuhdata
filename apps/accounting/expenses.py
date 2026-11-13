@@ -121,7 +121,7 @@ def _is_pkp(store):
     return tax_profile(store).is_pkp
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_expenses(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
@@ -209,7 +209,7 @@ def _csv(store, month, expenses):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_expense_delete(request, expense_id):
     """Remove a wrongly entered expense together with its journal entry."""
     if request.method != "POST":
@@ -239,7 +239,7 @@ def merchant_expense_delete(request, expense_id):
     return redirect(f"/merchant/expenses/?month={expense.date:%Y-%m}")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_expense_receipt(request, expense_id):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)

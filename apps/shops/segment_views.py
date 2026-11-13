@@ -26,7 +26,7 @@ EDIT_ROLES = roles("customers.edit")
 BROADCAST_ROLES = roles("customers.broadcast")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customers(request):
     from apps.catalog.views import paginate
     from apps.orders.views import _merchant_context, _require_roles, _staff_store
@@ -104,7 +104,7 @@ def merchant_customers(request):
         tags=tags, audience=broadcast_audience(store, segment).count()))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customer_tags(request, customer_id):
     from apps.orders.views import _require_roles, _staff_store
 
@@ -120,7 +120,7 @@ def merchant_customer_tags(request, customer_id):
     return redirect("merchant-customer-detail", customer_id=customer.id)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_broadcasts(request):
     from apps.orders.views import _merchant_context, _require_roles, _staff_store
 
@@ -154,7 +154,7 @@ def merchant_broadcasts(request):
         broadcasts=EmailBroadcast.objects.filter(store=store)[:30]))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_store_toggle(request):
     """Toggle storefront open/closed state."""
     from apps.orders.views import _require_roles, _staff_store
@@ -183,7 +183,7 @@ def customer_unsubscribe(request, token):
     return render(request, "storefront/customer_unsubscribe.html", {"customer": customer, "done": done})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customer_search(request):
     """JSON autocomplete: returns up to 20 customers matching q (name/phone/code/company)."""
     from apps.orders.views import _staff_store
@@ -220,7 +220,7 @@ def merchant_customer_search(request):
     return JsonResponse({"results": results})
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customer_duplicates(request):
     """Customers that look like the same person, with one button to merge each group."""
     from apps.orders.views import _merchant_context, _require_roles, _staff_store
@@ -243,7 +243,7 @@ def merchant_customer_duplicates(request):
         groups=duplicate_groups(store)))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_customers_export(request):
     """The customers on screen (same filters), as Excel or CSV, with where they live and buy."""
     import csv

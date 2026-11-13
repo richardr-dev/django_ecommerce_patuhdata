@@ -19,7 +19,7 @@ from . import idempotency, intercompany
 from .ledger import entries_for
 from .models import IntercompanyTransfer
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 VIEW_ROLES = roles("books.view")
 
 

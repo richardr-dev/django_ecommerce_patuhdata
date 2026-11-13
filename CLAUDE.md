@@ -196,7 +196,7 @@ Four test files failed before this work and still do: `test_digital_products`,
   is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.
   Domains (`lakuin.store`) and the `lakuin-*.svg` brand files are infrastructure and have not been renamed.
 - **The first page is the login** (`HOME_IS_LOGIN`, default 1; `tenancy.opens_on_login`): `/` on the system's
-  own address redirects to `/merchant/login/` (or the dashboard when signed in), and the storefront gate lets
+  own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
 - **Purchasing documents** (`accounting/purchasing.py`, `supplier_notes.py`, `stock_counts.py`,

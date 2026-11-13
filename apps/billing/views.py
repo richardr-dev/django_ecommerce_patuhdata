@@ -25,7 +25,7 @@ from .services import (
 BILLING_ROLES = roles("billing.manage")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing(request):
     store = _staff_store(request)
     _require_roles(request, store, BILLING_ROLES)
@@ -42,7 +42,7 @@ def merchant_billing(request):
         ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing_checkout(request):
     if request.method != "POST":
         raise Http404
@@ -58,7 +58,7 @@ def merchant_billing_checkout(request):
     return redirect(invoice.checkout_url)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing_check(request, invoice_id):
     if request.method != "POST":
         raise Http404
@@ -72,7 +72,7 @@ def merchant_billing_check(request, invoice_id):
     return redirect("merchant-billing")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def billing_demo_pay(request, invoice_id):
     """Local stand-in for DOKU, only while PAYMENT_PROVIDER=demo: a demo invoice left over
     from before DOKU was configured must not activate a paid plan for free."""
@@ -91,7 +91,7 @@ def billing_demo_pay(request, invoice_id):
         title="Pembayaran demo", invoice=invoice))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing_pay(request, invoice_id):
     """Open a fresh payment page for a pending bill (renewal or not)."""
     if request.method != "POST":
@@ -107,7 +107,7 @@ def merchant_billing_pay(request, invoice_id):
     return redirect(url)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing_autorenew(request):
     if request.method != "POST":
         raise Http404
@@ -148,7 +148,7 @@ def _outlet_quote(subscription):
         return None
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_billing_outlets(request):
     """Add outlets (paid now for the rest of the period) or reduce them from now on."""
     if request.method != "POST":

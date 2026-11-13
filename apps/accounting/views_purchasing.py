@@ -18,7 +18,7 @@ from apps.shops.audit import trail as audit_trail
 from . import idempotency, purchasing
 from .models import PurchaseOrder, Supplier
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 ORDER_ROLES = permissions.roles("purchase.order")
 VIEW_ROLES = ORDER_ROLES | permissions.roles("stock.receive") | {"viewer"}
 

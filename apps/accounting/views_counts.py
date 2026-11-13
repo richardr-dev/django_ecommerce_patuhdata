@@ -18,7 +18,7 @@ from . import stock_counts
 from .ledger import entries_for
 from .models import StockCount
 
-LOGIN = "/merchant/login/"
+LOGIN = "/login/"
 COUNT_ROLES = permissions.roles("stock.count") | permissions.roles("stock.count_approve")
 VIEW_ROLES = COUNT_ROLES | {"viewer"}
 

@@ -29,7 +29,7 @@ OrdersCsvForm = OrdersImportForm
 CHANNEL_ROLES = roles("channels.manage")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_channels(request):
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
@@ -57,7 +57,7 @@ def merchant_channels(request):
         channels=channels, form=form, platforms=PLATFORMS))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_channel_detail(request, channel_id):
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
@@ -103,7 +103,7 @@ def merchant_channel_detail(request, channel_id):
         summary=summary, platform=PLATFORMS[channel.platform]))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_import(request):
     """3-step import wizard: pick platform → upload file → results saved to ImportBatch."""
     store = _staff_store(request)
@@ -227,7 +227,7 @@ def merchant_import(request):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales(request):
     """Unified sales dashboard — all channels combined: Lakuin, Shopee, Tokopedia, etc."""
     store = _staff_store(request)
@@ -349,7 +349,7 @@ def merchant_sales(request):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_stats(request):
     """htmx partial — summary cards + channel breakdown for the sales dashboard."""
     store = _staff_store(request)
@@ -410,7 +410,7 @@ def merchant_sales_stats(request):
     })
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_invoices(request):
     """Unified sales invoice list — all orders from all channels."""
     from decimal import Decimal
@@ -562,7 +562,7 @@ def merchant_sales_invoices(request):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_channel_buyers(request):
     """Marketplace buyer profiles auto-created from XLSX/CSV imports."""
     store = _staff_store(request)
@@ -597,7 +597,7 @@ def merchant_channel_buyers(request):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def channel_orders_template(request):
     _staff_store(request)
     response = HttpResponse(content_type="text/csv")
@@ -610,7 +610,7 @@ def channel_orders_template(request):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def channel_stock_csv(request, channel_id):
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
@@ -625,7 +625,7 @@ def channel_stock_csv(request, channel_id):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_issue(request, order_id):
     """Issue (create) an invoice for an existing order that doesn't have one yet."""
     import uuid as _uuid
@@ -652,7 +652,7 @@ def merchant_invoice_issue(request, order_id):
     raise Http404
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_detail(request, invoice_id):
     """Sales invoice detail page — shows issued invoice with line items and payment history."""
     import uuid as _uuid
@@ -761,7 +761,7 @@ def merchant_invoice_detail(request, invoice_id):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_email(request, invoice_id):
     """Email the invoice link (or a payment reminder when it is late) to the buyer."""
     import uuid as _uuid
@@ -784,7 +784,7 @@ def merchant_invoice_email(request, invoice_id):
     return redirect("merchant-invoice-detail", invoice_id=invoice.id)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_sent(request, invoice_id):
     """Remember that the seller sent the invoice (the WhatsApp link was opened)."""
     import uuid as _uuid
@@ -800,7 +800,7 @@ def merchant_invoice_sent(request, invoice_id):
     return HttpResponse(status=204)
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_delete(request, invoice_id):
     """Void (or hard-delete drafts) an invoice."""
     import uuid as _uuid
@@ -832,7 +832,7 @@ def merchant_invoice_delete(request, invoice_id):
     return redirect("merchant-sales-invoices")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoices_csv(request):
     """CSV export of the sales invoice list."""
     import csv as _csv
@@ -881,7 +881,7 @@ MONTHS_ID = ("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Ag
     "September", "Oktober", "November", "Desember")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_report(request):
     """Monthly sales report — revenue by channel and invoice status per month."""
     from collections import defaultdict
@@ -972,7 +972,7 @@ def merchant_sales_report(request):
     ))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_channel_stock(request):
     """Stock tracker — units sold per product broken down by channel."""
     from decimal import Decimal
@@ -1120,7 +1120,7 @@ def _resolve_invoice_qs(request, store):
     return qs.order_by("-issued_on", "-number")
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoice_pdf(request, invoice_id):
     """Single-invoice PDF download."""
     import uuid as _uuid
@@ -1144,7 +1144,7 @@ def merchant_invoice_pdf(request, invoice_id):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoices_pdf(request):
     """Bulk PDF export — all selected invoices merged into one file, one invoice per page."""
     import io
@@ -1185,7 +1185,7 @@ def merchant_invoices_pdf(request):
 
 # ── Invoice XLSX export ───────────────────────────────────────────────────────
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_invoices_xlsx(request):
     """Bulk XLSX export — summary sheet + line-items sheet."""
     import datetime

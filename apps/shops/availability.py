@@ -15,7 +15,7 @@ PREVIEW_SESSION_KEY = "storefront_preview"
 
 # Always reachable, whatever the store's state: the back office, payment and courier
 # callbacks, buyers' existing orders and accounts, and files.
-ALWAYS_OPEN = ("/merchant/", "/instalasi/", "/platform-admin/", "/integrations/", "/internal/", "/static/",
+ALWAYS_OPEN = ("/merchant/", "/login/", "/instalasi/", "/platform-admin/", "/integrations/", "/internal/", "/static/",
     "/media/", "/healthz/", "/orders/", "/account/", "/api/", "/robots.txt", "/favicon.ico",
     "/pages/", "/privacy/", "/terms/", "/newsletter/unsubscribe/", "/cart/recover/",
     "/i/")  # a buyer paying an invoice must reach it even while the shop is in setup or closed

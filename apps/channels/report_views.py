@@ -30,7 +30,7 @@ def _period(request):
     return start, end
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_overview(request):
     """Laporan penjualan semua channel: penjualan, batal/retur, HPP, biaya marketplace, margin."""
     store = _staff_store(request)
@@ -56,7 +56,7 @@ def merchant_sales_overview(request):
         today=date.today()))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_channel_recap(request):
     """Rekap invoice per channel: Shopee, Tokopedia, TikTok Shop, Lazada, mitra, toko online…"""
     from apps.accounting import reports as period_tools
@@ -135,7 +135,7 @@ def _workbook(orders, filename):
     return response
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_export(request):
     """Ekspor data penjualan lengkap: baris barang, per pesanan, dan pembayaran, semua channel."""
     from apps.accounting import reports as period_tools
@@ -170,7 +170,7 @@ def merchant_sales_export(request):
         channels=Order.CHANNELS, only_sold=only_sold, datasets=sales_export.DATASETS))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_analytics(request):
     """Analitik penjualan: omzet, channel, pelanggan baru dan lama, lokasi, produk, dan tren."""
     from urllib.parse import urlencode
@@ -194,7 +194,7 @@ def merchant_sales_analytics(request):
         channel_qs=urlencode([("channel", c) for c in selected])))
 
 
-@login_required(login_url="/merchant/login/")
+@login_required(login_url="/login/")
 def merchant_sales_analytics_xlsx(request):
     """The analytics dashboard as an Excel workbook: one sheet for each table, same filters."""
     import io
