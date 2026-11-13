@@ -37,6 +37,16 @@
   </tbody></table></div>
 </section>
 
+<section class="panel">
+  <header><div><h2>Laporan akhir tahun</h2><p>Untuk bank, pajak, dan auditor. Pilih tahun, lalu unduh.</p></div></header>
+  <form method="get" class="toolbar" style="padding:0 20px 20px;margin:0" data-no-soft>
+    <label class="field"><span>Tahun</span><select name="year" id="pack-year">{% for y in years %}<option value="{{ y.year }}"{% if y.year == month_label.year %} selected{% endif %}>{{ y.year }}</option>{% endfor %}</select></label>
+    <button class="btn" formaction="{% url 'merchant-emkm-pack' %}">{% icon "file" %} Laporan SAK EMKM</button>
+    <button class="btn" formaction="{% url 'merchant-emkm-pack' %}" name="format" value="pdf">{% icon "download" %} PDF SAK EMKM</button>
+    <button class="btn-primary" formaction="{% url 'merchant-audit-pack' %}">{% icon "download" %} Paket audit (Excel)</button>
+  </form>
+</section>
+
 <p class="text-sm text-slate-500">Ingin mengunci per tanggal tertentu tanpa menutup tahun? Gunakan kunci periode di <a class="text-blue-700" href="{% url 'merchant-accounting' %}">Ringkasan akuntansi</a>.</p>
 
 {% endblock %}

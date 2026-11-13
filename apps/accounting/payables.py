@@ -149,7 +149,7 @@ def pay_bill(bill, *, amount, paid_on, method="transfer", reference="", actor=No
     if withholding:
         from . import withholding as pph
         kind, rate = withholding
-        base = (amount * bill.subtotal / bill.total).quantize(Decimal("1")) if bill.total else amount
+        base = (amount * bill.subtotal / bill.total).quantize(Decimal(1)) if bill.total else amount
         try:
             held = pph.record(bill.store, kind=kind, date=paid_on, base=base, rate=rate,
                 payee_name=bill.supplier.name, payee_npwp=bill.supplier.npwp, source_type="bill_payment",

@@ -1010,3 +1010,60 @@ def merchant_year_close(request):
         month_label=first, month_end=last, years=closing.years(store, today),
         locked_through=locked_through(store), can_close=_can_edit(request, store),
         is_admin=store.owner_id == request.user.id or store.staff_members.filter(user=request.user, role="admin").exists()))
+
+
+REPORT_ROLES = {"admin", "manager", "finance", "viewer"}
+
+
+@login_required(login_url=LOGIN)
+def merchant_report_xlsx(request, kind):
+    """Excel for one financial report, over the same period or date as the screen."""
+    from . import exports
+    store = _store(request, REPORT_ROLES)
+    if kind not in exports.REPORTS:
+        raise Http404
+    today = timezone.localdate()
+    if kind == "neraca" or kind == "neraca-saldo":
+        end = _date(request.GET.get("as_of"), today)
+        start = end
+    else:
+        _, start, end, _ = _period(request)
+    wb = exports.report_workbook(kind, store, start, end)
+    return exports.response(wb, f"{kind}-{store.slug}-{end}.xlsx")
+
+
+@login_required(login_url=LOGIN)
+def merchant_audit_pack(request):
+    """Paket audit tahunan: the workbook an auditor or accountant asks for after year end."""
+    from . import exports
+    store = _store(request, REPORT_ROLES)
+    try:
+        year = int(request.GET.get("year", ""))
+    except ValueError:
+        year = timezone.localdate().year - 1
+    wb = exports.audit_workbook(store, year, with_activity=request.GET.get("log", "1") == "1")
+    AuditLog.objects.create(store=store, actor=request.user, action="export.audit_pack",
+        object_type="Store", object_id=str(store.pk), details={"year": str(year)})
+    return exports.response(wb, f"paket-audit-{year}-{store.slug}.xlsx")
+
+
+@login_required(login_url=LOGIN)
+def merchant_emkm_pack(request):
+    """Laporan keuangan SAK EMKM for a year: on screen, print, or PDF."""
+    from django.template.loader import render_to_string
+
+    from . import emkm
+    store = _store(request, REPORT_ROLES)
+    try:
+        year = int(request.GET.get("year", ""))
+    except ValueError:
+        year = timezone.localdate().year - 1
+    pack = emkm.pack(store, year)
+    if request.GET.get("format") == "pdf":
+        from weasyprint import HTML
+        html = render_to_string("merchant/emkm_pack.html", {"p": pack, "pdf": True}, request=request)
+        out = HttpResponse(HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf(),
+            content_type="application/pdf")
+        out["Content-Disposition"] = f'attachment; filename="laporan-sak-emkm-{year}-{store.slug}.pdf"'
+        return out
+    return render(request, "merchant/emkm_pack.html", {"p": pack, "pdf": False})

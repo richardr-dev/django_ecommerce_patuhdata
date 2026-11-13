@@ -5,7 +5,7 @@
   <div><span class="pg-kicker">Laporan keuangan</span><h1>Neraca</h1>
     <p>Posisi keuangan per tanggal tertentu: apa yang dimiliki, apa yang terutang, dan modal pemilik. Klik nama akun untuk melihat transaksinya.</p></div>
   <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button>
-    <a class="btn" href="?as_of={{ as_of|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a></div>
+    <a class="btn" href="?as_of={{ as_of|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a><a class="btn" href="{% url 'merchant-report-xlsx' 'neraca' %}?as_of={{ as_of|date:'Y-m-d' }}" data-no-soft>{% icon "download" %} Excel</a></div>
 </div>
 <form class="toolbar" method="get">
   <label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label>

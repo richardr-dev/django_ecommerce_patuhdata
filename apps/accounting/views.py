@@ -20,6 +20,7 @@ from .attachments import for_record as attachment_list
 from .ledger import account_balances, chart_of_accounts, locked_through
 from .models import (
     BILL_CATEGORIES,
+    WITHHOLDING_KINDS,
     Account,
     BankAccount,
     BankStatementLine,
@@ -30,7 +31,6 @@ from .models import (
     JournalEntry,
     LedgerLock,
     Payout,
-    WITHHOLDING_KINDS,
     Supplier,
 )
 from .payables import PayableError, create_bill, pay_bill, receive_bill, void_bill

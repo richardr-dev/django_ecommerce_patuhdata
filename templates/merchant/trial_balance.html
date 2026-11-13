@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pg-head">
   <div><span class="pg-kicker">Laporan keuangan</span><h1>Neraca saldo</h1><p>Semua akun buku besar dengan total debit dan kredit. Klik akun untuk melihat transaksinya.</p></div>
-  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?format=csv">{% icon "download" %} CSV</a></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?format=csv">{% icon "download" %} CSV</a><a class="btn" href="{% url 'merchant-report-xlsx' 'neraca-saldo' %}?" data-no-soft>{% icon "download" %} Excel</a></div>
 </div>
 {% if balanced %}<div class="notice ok">{% icon "check-circle" %}<span>Neraca saldo seimbang: total debit sama dengan total kredit.</span></div>
 {% else %}<div class="notice">{% icon "alert" %}<span>Tidak seimbang. Debit {{ total_debit|rp }} · kredit {{ total_credit|rp }}. Periksa jurnal manual.</span></div>{% endif %}

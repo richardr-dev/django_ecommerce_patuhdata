@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pg-head">
   <div><span class="pg-kicker">Laporan keuangan</span><h1>Laba Rugi</h1><p>Pendapatan dikurangi harga pokok dan beban, langsung dari buku besar. Klik nama akun untuk melihat transaksinya.</p></div>
-  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv">{% icon "download" %} CSV</a><a class="btn" href="{% url 'merchant-report-xlsx' 'laba-rugi' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}" data-no-soft>{% icon "download" %} Excel</a></div>
 </div>
 {% include "merchant/_period_bar.html" %}
 <div class="tiles">

@@ -1,0 +1,73 @@
+{% load books %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><title>Laporan keuangan SAK EMKM {{ p.year }} · {{ p.entity }}</title>
+<style>
+@page{size:A4;margin:18mm 16mm}
+*{box-sizing:border-box}
+body{margin:0;font:12px/1.5 "Plus Jakarta Sans",Inter,Arial,sans-serif;color:#0f1e36;background:#f4f8ff}
+.sheet{max-width:820px;margin:20px auto;background:#fff;border-radius:24px;padding:36px 40px;box-shadow:0 8px 24px -4px rgba(15,30,54,.05)}
+.cover{background:linear-gradient(135deg,#0066ff,#3898ff);color:#fff;border-radius:20px;padding:34px 36px}
+.cover h1{margin:0 0 4px;font-size:24px;letter-spacing:-.02em}.cover p{margin:2px 0;opacity:.9}
+h2{margin:0 0 2px;font-size:16px}.sub{margin:0 0 14px;color:#526685}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:6px 8px;text-align:left}th{background:#f4f8ff;color:#526685;font-size:11px;font-weight:600}
+td.n,th.n{text-align:right}tr.sec td{background:#ebf3ff;color:#0066ff;font-weight:700}
+tr.tot td{border-top:1.5px solid #0066ff;font-weight:700}
+.page{page-break-before:always}
+.bar{display:flex;gap:8px;justify-content:center;margin:16px}
+.bar a{padding:8px 18px;border-radius:99px;background:#0066ff;color:#fff;text-decoration:none;font-weight:600}
+.bar a.soft{background:#ebf3ff;color:#0066ff}
+.warn{background:#fff4e5;color:#b85d00;border-radius:12px;padding:8px 12px;margin-bottom:12px}
+.sign{display:flex;justify-content:space-between;margin-top:48px}.sign div{width:40%;text-align:center}
+.sign span{display:block;margin-top:56px;border-top:1px solid #0f1e36;padding-top:4px}
+@media print{body{background:#fff}.sheet{box-shadow:none;margin:0;padding:0;border-radius:0}.bar{display:none}}
+</style></head><body>
+{% if not pdf %}<div class="bar"><a href="?year={{ p.year }}&format=pdf">Unduh PDF</a><a class="soft" href="#" onclick="window.print();return false">Cetak</a><a class="soft" href="{% url 'merchant-year-close' %}">Kembali</a></div>{% endif %}
+<div class="sheet">
+  <div class="cover"><p>LAPORAN KEUANGAN</p><h1>{{ p.entity }}</h1><p>Untuk tahun yang berakhir 31 Desember {{ p.year }}</p><p>Disusun berdasarkan SAK EMKM</p>
+    {% if p.npwp %}<p>NPWP {{ p.npwp }}</p>{% endif %}{% if p.address %}<p>{{ p.address }}</p>{% endif %}</div>
+  {% if not p.balanced %}<div class="warn" style="margin-top:16px">Neraca belum seimbang (selisih {{ p.sheet.difference|rp }}). Periksa pembukuan sebelum laporan ini dipakai.</div>{% endif %}
+
+  <div class="page"><h2>Laporan Posisi Keuangan</h2><p class="sub">Per 31 Desember {{ p.year }} (dalam Rupiah)</p>
+  <table><thead><tr><th>Keterangan</th><th class="n">{{ p.year }}</th><th class="n">{{ p.year|add:"-1" }}</th></tr></thead><tbody>
+    <tr class="sec"><td colspan="3">ASET</td></tr>
+    {% for r in p.sheet.sections.current_assets %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    {% for r in p.sheet.sections.fixed_assets %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="tot"><td>Total aset</td><td class="n">{{ p.sheet.totals.assets.amount|rp }}</td><td class="n">{{ p.sheet.totals.assets.previous|rp }}</td></tr>
+    <tr class="sec"><td colspan="3">LIABILITAS</td></tr>
+    {% for r in p.sheet.sections.current_liabilities %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    {% for r in p.sheet.sections.long_liabilities %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="tot"><td>Total liabilitas</td><td class="n">{{ p.sheet.totals.liabilities.amount|rp }}</td><td class="n">{{ p.sheet.totals.liabilities.previous|rp }}</td></tr>
+    <tr class="sec"><td colspan="3">EKUITAS</td></tr>
+    {% for r in p.sheet.sections.equity %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="tot"><td>Total ekuitas</td><td class="n">{{ p.sheet.totals.equity.amount|rp }}</td><td class="n">{{ p.sheet.totals.equity.previous|rp }}</td></tr>
+    <tr class="tot"><td>Total liabilitas dan ekuitas</td><td class="n">{{ p.sheet.totals.liabilities_equity.amount|rp }}</td><td class="n">{{ p.sheet.totals.liabilities_equity.previous|rp }}</td></tr>
+  </tbody></table></div>
+
+  <div class="page"><h2>Laporan Laba Rugi</h2><p class="sub">Untuk tahun yang berakhir 31 Desember {{ p.year }} (dalam Rupiah)</p>
+  <table><thead><tr><th>Keterangan</th><th class="n">{{ p.year }}</th><th class="n">{{ p.year|add:"-1" }}</th></tr></thead><tbody>
+    <tr class="sec"><td colspan="3">PENDAPATAN</td></tr>
+    {% for r in p.pl.sections.revenue %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ r.previous|rp }}</td></tr>{% endfor %}
+    <tr class="tot"><td>Penjualan neto</td><td class="n">{{ p.pl.totals.revenue.amount|rp }}</td><td class="n">{{ p.prev.totals.revenue.amount|rp }}</td></tr>
+    {% for r in p.pl.sections.cogs %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n">{{ p.prev.totals.cogs.amount|rp }}</td></tr>{% endfor %}
+    <tr class="tot"><td>Laba bruto</td><td class="n">{{ p.pl.totals.gross.amount|rp }}</td><td class="n">{{ p.prev.totals.gross.amount|rp }}</td></tr>
+    <tr class="sec"><td colspan="3">BEBAN USAHA</td></tr>
+    {% for r in p.pl.sections.operating %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n"></td></tr>{% endfor %}
+    <tr class="tot"><td>Jumlah beban usaha</td><td class="n">{{ p.pl.totals.operating.amount|rp }}</td><td class="n">{{ p.prev.totals.operating.amount|rp }}</td></tr>
+    <tr class="sec"><td colspan="3">PENDAPATAN DAN BEBAN LAIN</td></tr>
+    {% for r in p.pl.sections.other_income %}<tr><td>{{ r.name }}</td><td class="n">{{ r.amount|rp }}</td><td class="n"></td></tr>{% endfor %}
+    {% for r in p.pl.sections.other_expense %}<tr><td>{{ r.name }}</td><td class="n">({{ r.amount|rp }})</td><td class="n"></td></tr>{% endfor %}
+    <tr class="tot"><td>Laba bersih</td><td class="n">{{ p.net_profit|rp }}</td><td class="n">{{ p.prev_net_profit|rp }}</td></tr>
+  </tbody></table></div>
+
+  <div class="page"><h2>Catatan atas Laporan Keuangan</h2><p class="sub">Tahun yang berakhir 31 Desember {{ p.year }}</p>
+    <h3>1. Umum</h3><p>{{ p.entity }} adalah usaha perdagangan yang membukukan penjualan dari toko sendiri dan marketplace. Laporan ini disusun dari buku besar yang dikelola melalui aplikasi.</p>
+    <h3>2. Ikhtisar kebijakan akuntansi</h3>
+    {% for title, text in p.policies %}<p><b>{{ title }}.</b> {{ text }}</p>{% endfor %}
+    <h3>3. Aset tetap</h3>
+    {% if p.fixed %}<table><thead><tr><th>Aset</th><th class="n">Harga perolehan</th><th class="n">Akumulasi penyusutan</th><th class="n">Nilai buku</th></tr></thead><tbody>
+      {% for f in p.fixed %}<tr><td>{{ f.name }}</td><td class="n">{{ f.cost|rp }}</td><td class="n">{{ f.accumulated|rp }}</td><td class="n">{{ f.book|rp }}</td></tr>{% endfor %}
+      <tr class="tot"><td>Total</td><td class="n">{{ p.fixed_cost|rp }}</td><td class="n">{{ p.fixed_accumulated|rp }}</td><td class="n">{{ p.fixed_book|rp }}</td></tr></tbody></table>{% else %}<p>Tidak ada aset tetap.</p>{% endif %}
+    <h3>4. Laba tahun berjalan</h3><p>Laba bersih tahun {{ p.year }} sebesar {{ p.net_profit|rp }} (tahun sebelumnya {{ p.prev_net_profit|rp }}).</p>
+    <div class="sign"><div>Disiapkan oleh<span>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</span></div><div>Disetujui oleh<span>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</span></div></div>
+  </div>
+</div></body></html>

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pg-head">
   <div><span class="pg-kicker">Laporan keuangan</span><h1>Arus Kas</h1><p>Uang yang benar-benar masuk dan keluar dari semua rekening kas & bank, dikelompokkan menurut tujuannya. Transfer antar rekening sendiri tidak dihitung.</p></div>
-  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn" href="{% url 'merchant-report-xlsx' 'arus-kas' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}" data-no-soft>{% icon "download" %} Excel</a></div>
 </div>
 {% include "merchant/_period_bar.html" %}
 <div class="tiles">
