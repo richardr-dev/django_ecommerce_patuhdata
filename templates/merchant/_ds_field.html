@@ -1,1 +1,1 @@
-<label class="field{% if wide %} span-2{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small style="color:var(--ds-bad)">{{ error }}</small>{% endfor %}</label>
+<label class="field{% if wide %} span-2{% endif %}"><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<ul class="errorlist" role="alert">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}</label>
