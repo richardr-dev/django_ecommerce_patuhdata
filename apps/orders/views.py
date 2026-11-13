@@ -1135,35 +1135,37 @@ def merchant_orders(request):
     outlet = request.GET.get("outlet", "")
     if outlet.isdigit():
         orders = orders.filter(pickup_outlet_id=int(outlet))
-    channel_filter = request.GET.get("channel", "")
-    if channel_filter:
-        orders = orders.filter(channel=channel_filter)
     order_type_filter = request.GET.get("order_type", "")
     if order_type_filter:
         orders = orders.filter(order_type=order_type_filter)
-    date_from = request.GET.get("date_from", "")
-    date_to = request.GET.get("date_to", "")
-    try:
-        if date_from:
-            orders = orders.filter(created_at__date__gte=date.fromisoformat(date_from))
-    except ValueError:
-        date_from = ""
-    try:
-        if date_to:
-            orders = orders.filter(created_at__date__lte=date.fromisoformat(date_to))
-    except ValueError:
-        date_to = ""
-    if group in {"pack", "ship"}:
-        # Scheduled orders first, by the day they must leave.
-        orders = orders.order_by(F("delivery_date").asc(nulls_last=True), "created_at")
+    # Search, channels (several), period, amount: the same filter as the invoice list. The order
+    # page also finds a parcel by its tracking number, payment reference or short #id.
+    from apps.accounting.views import render_partial
+    from apps.channels.invoice_filters import KEYS, PRESETS, SORTS, apply_filters, apply_sort, date_range, values
     query = request.GET.get("q", "").strip()
+    shared = request.GET.copy()
+    shared.pop("q", None)
+    shared.pop("status", None)  # the order page already applied status above
+    base = orders
+    orders, active_filters = apply_filters(orders, shared, date.today())
     if query:
-        matches = (models.Q(customer_name__icontains=query) | models.Q(phone__icontains=query) |
-            models.Q(tracking_number__icontains=query) |
-            models.Q(payment_reference__icontains=query))
+        from apps.channels.invoice_filters import search
+        matches = models.Q(pk__in=search(base, query).values("pk")) | models.Q(
+            tracking_number__icontains=query) | models.Q(payment_reference__icontains=query)
         if re.fullmatch(r"[0-9a-fA-F]{4,8}", query):  # the short #id shown on each order
             matches |= models.Q(id__startswith=query.lower())
         orders = orders.filter(matches)
+        active_filters.insert(0, {"label": f"Cari “{query}”", "keys": ["q"]})
+    sort = request.GET.get("sort", "")
+    if sort and group not in {"pack", "ship"}:
+        orders = apply_sort(orders, sort)
+    elif group in {"pack", "ship"}:
+        # Scheduled orders first, by the day they must leave.
+        orders = orders.order_by(F("delivery_date").asc(nulls_last=True), "created_at")
+    channel_filter = values(request.GET, "channel")
+    start, end, _label = date_range(request.GET, date.today())
+    date_from = request.GET.get("date_from") or (start.isoformat() if start and not request.GET.get("range") else "")
+    date_to = request.GET.get("date_to") or (end.isoformat() if end and not request.GET.get("range") else "")
     page, page_range, page_query = paginate(request, orders, MERCHANT_PAGE_SIZE)
     for order in page.object_list:
         order.available_statuses = allowed_order_transitions(order)
@@ -1177,8 +1179,14 @@ def merchant_orders(request):
             f"Pesanan #{str(order.id)[:8]}" + (f" sudah dikirim dengan {parcel['name']}, "
                 f"nomor resi {parcel['number']}." + (f" Lacak di {parcel['url']}" if parcel["url"]
                 else "") if parcel else ""))
-    return render(request, "merchant/orders.html", _merchant_context(request, store,
+    from urllib.parse import urlencode
+    return render_partial(request, "merchant/orders.html", "merchant/_orders_list.html",
+        _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
+        active_filters=active_filters, presets=PRESETS, sorts=SORTS, sort=sort or "newest",
+        range_preset=request.GET.get("range", ""), channel_selected=channel_filter,
+        filter_query=urlencode([(k, v) for k in KEYS if k not in {"inv", "status", "crm"}
+            for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),
         tabs=tabs, tab=group, query=query, total=all_orders.count(),
         outlets=Warehouse.objects.filter(store=store, is_outlet=True),
         statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS,

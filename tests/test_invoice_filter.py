@@ -126,3 +126,33 @@ class CustomerHistoryTests(InvoiceFilterTests):
         part = self.client.get(url, {"range": "30d"}, HTTP_HX_REQUEST="true")
         self.assertNotContains(part, "<html")
         self.assertContains(part, "Total belanja")
+
+
+class OrderPageFilterTests(InvoiceFilterTests):
+    def ids(self, **params):
+        page = self.client.get(reverse("merchant-orders"), {"tab": "all", **params})
+        return {o.pk for o in page.context["orders"]}
+
+    def test_same_search_and_period_as_the_invoice_list(self):
+        a, b = self.a.order_id, self.b.order_id
+        self.assertEqual(self.ids(q="LMP"), {b})
+        self.assertEqual(self.ids(q="+62 812 3456 7890"), {a})
+        self.assertEqual(self.ids(range="today"), {a})
+        self.assertEqual(self.ids(channel=["shopee", "tokopedia"]), {a, b})
+        self.assertEqual(self.ids(min_total="200000"), {a})
+
+    def test_tracking_number_and_short_id_still_work(self):
+        Order.objects.filter(pk=self.a.order_id).update(tracking_number="JNE123456")
+        self.assertEqual(self.ids(q="JNE123456"), {self.a.order_id})
+        self.assertEqual(self.ids(q=str(self.b.order_id)[:8]), {self.b.order_id})
+
+    def test_sort_and_live_partial(self):
+        page = self.client.get(reverse("merchant-orders"), {"tab": "all", "sort": "oldest"})
+        self.assertEqual(page.context["orders"][0].pk, self.b.order_id)
+        part = self.client.get(reverse("merchant-orders"), {"tab": "all", "q": "Siti"},
+            HTTP_HX_REQUEST="true")
+        self.assertNotContains(part, "<html")
+        self.assertContains(part, "Siti Aminah")
+        self.assertContains(part, "Filter aktif")
+        full = self.client.get(reverse("merchant-orders"), {"tab": "all"})
+        self.assertContains(full, 'id="ord-filter"')
