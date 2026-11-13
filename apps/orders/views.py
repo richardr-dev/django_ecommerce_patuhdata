@@ -1060,6 +1060,9 @@ MIN_PLATFORM_PAYOUT = Decimal(10000)
 
 @login_required(login_url="/merchant/login/")
 def merchant_dashboard(request):
+    if request.user.is_superuser and not (Store.objects.filter(owner=request.user).exists()
+            or Store.objects.filter(staff_members__user=request.user).exists()):
+        return redirect("partner-install")  # the platform partner has no store of their own: install one
     store = _staff_store(request)
     revenue_statuses = {"paid", "confirmed", "allocated", "picking", "packed", "shipped",
         "delivered", "completed", "refund_requested", "partially_refunded", "refunded"}

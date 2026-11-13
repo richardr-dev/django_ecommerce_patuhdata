@@ -90,9 +90,11 @@ class InstallPageTests(TestCase):
     def test_only_a_platform_superuser_sees_it(self):
         self.assertEqual(self.client.get("/instalasi/").status_code, 302)        # signed out: to the login
         self.client.force_login(self.owner)
-        self.assertEqual(self.client.get("/instalasi/").status_code, 404)        # a store owner: not found
+        shown = self.client.get("/instalasi/", follow=True)                      # a store owner: sent back, told why
+        self.assertRedirects(shown, "/merchant/")
+        self.assertContains(shown, "akun partner")
         self.assertEqual(self.client.post("/instalasi/", {"store_name": "X", "slug": "xx-toko", "owner_name": "A",
-            "owner_email": "a@x.co"}).status_code, 404)
+            "owner_email": "a@x.co"}).status_code, 302)
         self.assertFalse(Store.objects.filter(slug="xx-toko").exists())
         self.client.force_login(self.partner)
         self.assertContains(self.client.get("/instalasi/"), "Pasang toko untuk klien")
@@ -124,3 +126,18 @@ class NoPublicRegistrationTests(TestCase):
         page = self.client.get("/merchant/login/")
         self.assertNotContains(page, "Daftar")
         self.assertContains(page, "partner")
+
+
+class PartnerLandingTests(TestCase):
+    def test_a_partner_without_a_store_lands_on_the_install_page_after_login(self):
+        User.objects.create_superuser("partner", "p@x.co", "pw")
+        response = self.client.post("/merchant/login/", {"username": "partner", "password": "pw", "next": "/merchant/"})
+        self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/merchant/"), "/instalasi/", fetch_redirect_response=False)
+
+    def test_a_superuser_who_owns_a_store_still_sees_the_dashboard(self):
+        owner = install(**CLIENT)["owner"]
+        owner.is_superuser = True
+        owner.save()
+        self.client.force_login(owner)
+        self.assertEqual(self.client.get("/merchant/").status_code, 200)

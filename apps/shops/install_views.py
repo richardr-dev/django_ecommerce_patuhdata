@@ -1,8 +1,8 @@
-"""/instalasi/: the partner's page for installing a client's store. Platform superusers only; to
-everyone else the page does not exist."""
+"""/instalasi/: the partner's page for installing a client's store. Platform superusers only; a store
+account is sent back to its dashboard with a message."""
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from .models import Organization, Store
 from .provisioning import InstallError, install
@@ -14,7 +14,9 @@ FIELDS = ("store_name", "slug", "owner_name", "owner_email", "owner_phone", "leg
 @login_required(login_url="/merchant/login/")
 def partner_install(request):
     if not request.user.is_superuser:
-        raise Http404
+        messages.error(request, "Instalasi toko hanya bisa dilakukan oleh akun partner platform. "
+            "Anda masuk sebagai akun toko.")
+        return redirect("merchant-dashboard")
     result, error = None, ""
     values = {name: request.POST.get(name, "") for name in FIELDS}
     values["is_pkp"] = request.POST.get("is_pkp") == "1"
