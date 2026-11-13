@@ -1,67 +1,16 @@
-{% extends "merchant/base.html" %}
+{% extends "merchant/base.html" %}{% load icons %}
 {% block title %}Pemetaan SKU{% endblock %}
 {% block content %}
-
-<div class="bb-hero mb-5">
-  <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MARKETPLACE</p>
-  <h1 class="text-2xl font-bold text-gray-900 mb-1">Pemetaan SKU</h1>
-  <p class="text-sm text-gray-500">Samakan SKU di Shopee, TikTok Shop, Lazada, dan lainnya dengan SKU di katalog. SKU yang sudah dipetakan otomatis dikenali saat impor pesanan. Satu SKU marketplace juga bisa diarahkan ke paket.</p>
-</div>
-
-{% if queue %}
-<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
-  <h2 class="text-sm font-semibold text-amber-900 mb-1">Perlu dipetakan ({{ queue|length }})</h2>
-  <p class="text-xs text-amber-800 mb-3">SKU ini muncul di pesanan tetapi tidak ada di katalog. Pesanan dengan SKU ini ditolak, atau memakai produk sementara jika diimpor sebagai riwayat.</p>
-  <div class="space-y-2">
-    {% for row in queue %}
-    <form method="post" class="bg-white rounded-xl border border-amber-100 p-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
-      {% csrf_token %}<input type="hidden" name="unmapped" value="{{ row.id }}">
-      <div class="md:col-span-2 text-sm"><b>{{ row.sku|default:"(tanpa SKU)" }}</b>
-        <span class="block text-xs text-gray-500">{{ row.name }} · {{ row.channel }} · muncul {{ row.times_seen }}×</span></div>
-      <input name="target" required placeholder="SKU katalog atau SKU paket" class="text-sm border border-gray-200 rounded-lg px-3 py-2 md:col-span-2">
-      <button class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Petakan</button>
-    </form>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-  <h2 class="text-sm font-semibold text-gray-800 mb-3">Tambah pemetaan</h2>
-  {% if channels %}
-  <form method="post" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-    {% csrf_token %}
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Toko marketplace</span>
-      <select name="channel" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2">
-        {% for channel in channels %}<option value="{{ channel.id }}">{{ channel }}</option>{% endfor %}
-      </select></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU di marketplace</span>
-      <input name="external_sku" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU katalog atau paket</span>
-      <input name="target" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <button class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Simpan</button>
-  </form>
-  {% else %}
-  <p class="text-sm text-gray-500">Belum ada toko marketplace. Tambahkan dulu di menu Marketplace.</p>
-  {% endif %}
-</div>
-
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
-      <th class="text-left px-4 py-2">Toko</th><th class="text-left px-4 py-2">SKU marketplace</th>
-      <th class="text-left px-4 py-2">Dipetakan ke</th><th></th></tr></thead>
-    <tbody>
-    {% for row in mappings %}
-      <tr class="border-t border-gray-100">
-        <td class="px-4 py-2">{{ row.channel }}</td><td class="px-4 py-2 font-medium">{{ row.external_sku }}</td>
-        <td class="px-4 py-2">{{ row.target_label }}</td>
-        <td class="px-4 py-2 text-right"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ row.id }}"><button class="text-xs text-red-600">Hapus</button></form></td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada pemetaan.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<div class="pg-head"><div><span class="pg-kicker">Marketplace</span><h1>Pemetaan SKU</h1><p>Samakan SKU di Shopee, TikTok Shop, Lazada, dan lainnya dengan SKU di katalog. SKU yang sudah dipetakan otomatis dikenali saat impor pesanan. Satu SKU marketplace juga bisa diarahkan ke paket.</p></div></div>
+{% if queue %}<section class="panel"><header><div><h2>Perlu dipetakan ({{ queue|length }})</h2><p>SKU ini muncul di pesanan tetapi tidak ada di katalog. Pesanan dengan SKU ini ditolak, atau memakai produk sementara jika diimpor sebagai riwayat.</p></div></header>
+  <div class="dp-card-body" style="display:grid;gap:10px">{% for row in queue %}<form method="post" class="nested" style="padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="hidden" name="unmapped" value="{{ row.id }}">
+    <div style="flex:1;min-width:220px"><b>{{ row.sku|default:"(tanpa SKU)" }}</b><small style="display:block;color:var(--ds-muted)">{{ row.name }} · {{ row.channel }} · muncul {{ row.times_seen }}×</small></div>
+    <input name="target" required placeholder="SKU katalog atau SKU paket" aria-label="Petakan {{ row.sku }} ke" style="flex:1;min-width:220px;height:40px;border:0;border-radius:99px;padding:0 14px;background:#fff;box-shadow:inset 0 0 0 1px rgba(0,102,255,.14)"><button class="btn-primary">Petakan</button></form>{% endfor %}</div></section>{% endif %}
+<section class="panel"><header><h2>Tambah pemetaan</h2></header>{% if channels %}<form method="post" class="dp-card-body" data-unsaved>{% csrf_token %}
+  <div class="field-row"><label class="field"><span>Toko marketplace</span><select name="channel">{% for channel in channels %}<option value="{{ channel.id }}">{{ channel }}</option>{% endfor %}</select></label><label class="field"><span>SKU di marketplace</span><input name="external_sku" required></label><label class="field"><span>SKU katalog atau paket</span><input name="target" required></label></div>
+  <button class="btn-primary">{% icon "check" %} Simpan</button></form>
+  {% else %}<div class="dp-card-body"><p class="dp-help" style="margin:0">Belum ada toko marketplace. Tambahkan dulu di menu Marketplace.</p></div>{% endif %}</section>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Toko</th><th>SKU marketplace</th><th>Dipetakan ke</th><th></th></tr></thead><tbody>
+  {% for row in mappings %}<tr><td>{{ row.channel }}</td><td><b>{{ row.external_sku }}</b></td><td>{{ row.target_label }}</td><td class="num" data-no-row><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ row.id }}"><button class="btn btn-danger" data-confirm="Hapus pemetaan {{ row.external_sku }}?" data-confirm-ok="Hapus">Hapus</button></form></td></tr>
+  {% empty %}<tr><td colspan="4" class="!py-10 text-center text-slate-400">Belum ada pemetaan.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

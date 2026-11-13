@@ -1,91 +1,17 @@
-{% extends "merchant/base.html" %}
-{% block title %}Stok di Mitra{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Stok di mitra{% endblock %}
 {% block content %}
-
-<div class="mb-6">
-  <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">KONSINYASI</p>
-  <h1 class="text-2xl font-bold text-gray-900 mb-1">Stok di Mitra</h1>
-  <p class="text-sm text-gray-500">Barang yang dititipkan ke mitra tetap milik toko sampai terjual. Mengirim barang ke mitra tidak dihitung sebagai penjualan; penjualan tercatat saat settlement ditagihkan.</p>
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Nilai stok di mitra</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ total_value|floatformat:"0g" }}</p>
-    <p class="text-xs text-gray-400 mt-1">pada harga pokok, masuk persediaan toko</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Jenis barang</p>
-    <p class="text-2xl font-bold text-gray-900">{{ rows|length }}</p>
-    <p class="text-xs text-gray-400 mt-1">item yang masih dipegang mitra</p>
-  </div>
-</div>
-
-{% if can_edit and partners %}
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-  <h2 class="text-sm font-semibold text-gray-800 mb-3">Kirim atau retur barang</h2>
-  <form method="post" class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
-    {% csrf_token %}
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Mitra</span>
-      <select name="partner" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2">
-        {% for partner in partners %}<option value="{{ partner.id }}">{{ partner.name }}</option>{% endfor %}
-      </select></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">SKU</span>
-      <input name="sku" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Jumlah</span>
-      <input type="number" name="quantity" min="1" value="1" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Tanggal</span>
-      <input type="date" name="date" value="{{ today }}" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <label class="block"><span class="text-xs font-medium text-gray-600 block mb-1">Catatan</span>
-      <input name="note" maxlength="200" placeholder="No. surat jalan" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"></label>
-    <div class="flex gap-2">
-      <button name="action" value="send" class="px-3 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium">Kirim</button>
-      <button name="action" value="return" class="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm">Retur</button>
-    </div>
-  </form>
-</div>
-{% endif %}
-
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
-  <table class="w-full text-sm">
-    <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
-      <th class="text-left px-4 py-2">Mitra</th><th class="text-left px-4 py-2">Barang</th>
-      <th class="text-left px-4 py-2">SKU</th><th class="text-right px-4 py-2">Jumlah</th>
-      <th class="text-right px-4 py-2">Nilai</th></tr></thead>
-    <tbody>
-    {% for item in rows %}
-      <tr class="border-t border-gray-100">
-        <td class="px-4 py-2">{{ item.row.partner.name }}</td>
-        <td class="px-4 py-2">{{ item.row.label }}</td>
-        <td class="px-4 py-2 text-gray-500">{{ item.row.sku }}</td>
-        <td class="px-4 py-2 text-right {% if item.row.quantity < 0 %}text-red-600 font-semibold{% endif %}">{{ item.row.quantity }}
-          {% if item.row.quantity < 0 %}<span class="block text-xs font-normal">Mitra melaporkan terjual lebih banyak daripada yang tercatat dikirim. Periksa pengiriman.</span>{% endif %}</td>
-        <td class="px-4 py-2 text-right">Rp{{ item.value|floatformat:"0g" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Belum ada barang yang dititipkan ke mitra.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-  <h2 class="text-sm font-semibold text-gray-800 px-4 py-3">Riwayat pergerakan</h2>
-  <table class="w-full text-sm">
-    <tbody>
-    {% for move in recent %}
-      <tr class="border-t border-gray-100">
-        <td class="px-4 py-2 text-gray-500">{{ move.date|date:"d/m/Y" }}</td>
-        <td class="px-4 py-2">{{ move.stock.partner.name }}</td>
-        <td class="px-4 py-2">{{ move.stock.label }}</td>
-        <td class="px-4 py-2">{{ move.get_kind_display }}</td>
-        <td class="px-4 py-2 text-right">{{ move.quantity }}</td>
-        <td class="px-4 py-2 text-gray-400">{{ move.note }}</td>
-      </tr>
-    {% empty %}
-      <tr><td class="px-4 py-6 text-center text-gray-400">Belum ada pergerakan.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<div class="pg-head"><div><span class="pg-kicker">Konsinyasi</span><h1>Stok di mitra</h1><p>Barang yang dititipkan ke mitra tetap milik toko sampai terjual. Mengirim barang ke mitra tidak dihitung sebagai penjualan; penjualan tercatat saat settlement ditagihkan.</p></div></div>
+<div class="tiles"><div class="tile accent"><small>Nilai stok di mitra</small><strong>{{ total_value|rp }}</strong><span>pada harga pokok, masuk persediaan toko</span></div><div class="tile"><small>Jenis barang</small><strong>{{ rows|length }}</strong><span>item yang masih dipegang mitra</span></div></div>
+{% if can_edit and partners %}<form method="post" class="panel" data-unsaved>{% csrf_token %}<header><h2>Kirim atau retur barang</h2></header><div class="dp-card-body">
+  <div class="field-row"><label class="field"><span>Mitra</span><select name="partner" required>{% for partner in partners %}<option value="{{ partner.id }}">{{ partner.name }}</option>{% endfor %}</select></label><label class="field"><span>SKU</span><input name="sku" required></label><label class="field"><span>Jumlah</span><input type="number" name="quantity" min="1" value="1" required></label></div>
+  <div class="field-row"><label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}"></label><label class="field"><span>Catatan</span><input name="note" maxlength="200" placeholder="No. surat jalan"></label></div></div>
+  <footer style="display:flex;gap:10px"><button class="btn-primary" name="action" value="send">{% icon "truck" %} Kirim</button><button class="btn" name="action" value="return">Retur</button></footer></form>{% endif %}
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Mitra</th><th>Barang</th><th>SKU</th><th class="num">Jumlah</th><th class="num">Nilai</th></tr></thead><tbody>
+  {% for item in rows %}<tr><td>{{ item.row.partner.name }}</td><td>{{ item.row.label }}</td><td><small>{{ item.row.sku }}</small></td>
+    <td class="num">{% if item.row.quantity < 0 %}<span class="pill pill-overdue">{{ item.row.quantity }}</span><small>Mitra melaporkan terjual lebih banyak daripada yang tercatat dikirim. Periksa pengiriman.</small>{% else %}<b>{{ item.row.quantity }}</b>{% endif %}</td><td class="num">{{ item.value|rp }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada barang yang dititipkan ke mitra.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel"><header><h2>Riwayat pergerakan</h2></header><div class="scroll-x"><table class="tbl"><tbody>
+  {% for move in recent %}<tr><td>{{ move.date|date:"d M Y" }}</td><td>{{ move.stock.partner.name }}</td><td>{{ move.stock.label }}</td><td><span class="pill pill-info">{{ move.get_kind_display }}</span></td><td class="num">{{ move.quantity }}</td><td><small>{{ move.note }}</small></td></tr>
+  {% empty %}<tr><td class="!py-8 text-center text-slate-400">Belum ada pergerakan.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

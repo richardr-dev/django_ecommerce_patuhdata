@@ -482,7 +482,7 @@ foreign currency; no fiscal loss carry-forward ledger (it is a manual negative c
 threshold (only the one-off manual journal is).
 
 Legacy pages still on the old markup (scan of `templates/merchant` for `bo-card`, `kpi-grid`, `data-table`,
-`bo-heading`, `bo-button`, `entity-form`, Tailwind `bg-gray-*`, updated after the last rebuild pass): _customer_history, _customers_list, _orders_list, abshop, billing, billing_demo_pay, customer_detail, customers, entity_form, entity_list, import, integrations, mitra_invoice_list, mitra_invoice_new, order_detail, order_new, order_payment_link, orders, partner_stock, product_partner_prices_partial, sales, sales_stats_partial, settings, sku_map.
+`bo-heading`, `bo-button`, `entity-form`, Tailwind `bg-gray-*`, after the last rebuild pass): _customer_history, _customers_list, _orders_list, abshop, billing, billing_demo_pay, customer_detail, customers, entity_form, import, mitra_invoice_list, mitra_invoice_new, order_detail, order_new, order_payment_link, orders, product_partner_prices_partial, sales, sales_stats_partial, settings.
 They work and take the blue palette; they are not yet laid out with the shell components. Large ones need care: `settings`
 (storefront theme, own CSS), `entity_form` (product form), `sales` (htmx replaces the whole page), `billing` (own CSS).
 
