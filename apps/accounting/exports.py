@@ -328,3 +328,46 @@ def audit_workbook(store, year, *, with_activity=True):
                 item.action, item.object_type, item.object_id, str(item.details)[:200])
         log.finish("A5")
     return wb
+
+
+# ---------------------------------------------------------------------------
+# Laporan kuartal
+# ---------------------------------------------------------------------------
+
+def quarter_workbook(store, year, quarter):
+    """The quarter's statements, one sheet each, from the same services as the screen."""
+    start, end = reports.quarter_bounds(year, quarter)
+    wb = Workbook()
+    table = reports.quarterly_profit(store, year)
+    sheet = Sheet(wb, "Per kuartal", store, f"tahun {year}", first=True)
+    sheet.header("Keterangan", "Kuartal 1", "Kuartal 2", "Kuartal 3", "Kuartal 4", "Tahun")
+    for key, label in (("revenue", "Pendapatan"), ("cogs", "Harga pokok penjualan"), ("gross", "Laba kotor"),
+            ("operating", "Beban operasional"), ("other", "Pendapatan (beban) lain"), ("net", "Laba bersih")):
+        sheet.add(label, *[q[key] for q in table["quarters"]], table["total"][key], bold=key in ("gross", "net"))
+    sheet.add("Margin kotor %", *[q["gross_margin"] if q["gross_margin"] is not None else "" for q in table["quarters"]], "", fmt="0.0")
+    sheet.add("Margin bersih %", *[q["net_margin"] if q["net_margin"] is not None else "" for q in table["quarters"]], "", fmt="0.0")
+    sheet.finish("A5")
+    profit_loss(wb, store, start, end)
+    balance_sheet(wb, store, end)
+    flow = reports.cash_flow_indirect(store, start, end)
+    cf = Sheet(wb, "Arus kas (tidak langsung)", store, f"{start:%d/%m/%Y} s.d. {end:%d/%m/%Y}")
+    cf.header("Keterangan", "Jumlah")
+    for section in flow["sections"]:
+        cf.section(section["label"], 2)
+        for label, value in section["rows"]:
+            cf.add(label, value)
+        cf.add(f"Kas bersih {section['label'].lower()}", section["net"], total=True)
+    cf.blank()
+    cf.add("Kenaikan (penurunan) kas", flow["net"], bold=True)
+    cf.add("Kas awal", flow["opening"])
+    cf.add("Kas akhir", flow["closing"], bold=True, total=True)
+    cf.add("Selisih (harus nol)", flow["difference"])
+    cf.finish("A5")
+    eq = reports.equity_statement(store, start, end)
+    es = Sheet(wb, "Perubahan ekuitas", store, f"{start:%d/%m/%Y} s.d. {end:%d/%m/%Y}")
+    es.header("Keterangan", "Jumlah")
+    for label, value in eq["rows"]:
+        es.add(label, value)
+    es.add("Ekuitas akhir", eq["closing"], bold=True, total=True)
+    es.finish("A5")
+    return wb

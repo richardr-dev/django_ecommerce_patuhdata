@@ -120,6 +120,7 @@ NAV = [
             Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
         ]),
         Group("Laporan Keuangan", "bar-chart", [
+            Link("Laporan kuartal", "merchant-quarter-report"),
             Link("Laba rugi", "merchant-profit-loss"),
             Link("Arus kas", "merchant-cash-flow"),
             Link("Buku besar & neraca saldo", "merchant-finance"),

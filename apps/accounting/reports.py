@@ -10,7 +10,9 @@ from django.urls import NoReverseMatch, reverse
 
 from .ledger import (
     ACCUMULATED_DEPRECIATION,
+    ASSET_GAIN,
     COGS,
+    DEPRECIATION,
     FIXED_ASSETS,
     LOANS,
     account_balances,
@@ -359,3 +361,111 @@ def balance_sheet(store, as_of, *, compare_to=None):
     difference = totals["assets"]["amount"] - totals["liabilities_equity"]["amount"]
     return {"sections": sections, "totals": totals, "difference": difference,
         "balanced": abs(difference) < Decimal("0.02")}
+
+
+# ---------------------------------------------------------------------------
+# Kuartal: bounds, the four quarters side by side, equity statement, indirect cash flow
+# ---------------------------------------------------------------------------
+
+def quarter_bounds(year, quarter):
+    start = Date(year, (quarter - 1) * 3 + 1, 1)
+    return start, _shift_months(start, 3) - timedelta(days=1)
+
+
+def quarter_of(day):
+    return day.year, (day.month - 1) // 3 + 1
+
+
+def previous_quarter(year, quarter):
+    return (year - 1, 4) if quarter == 1 else (year, quarter - 1)
+
+
+def quarterly_profit(store, year):
+    """The four quarters of ``year`` side by side: revenue, cost of goods, gross profit, operating
+    expenses, other items and net profit, with margins. Closing entries are left out."""
+    quarters = []
+    for q in (1, 2, 3, 4):
+        start, end = quarter_bounds(year, q)
+        report = profit_and_loss(store, start, end, compare=False)
+        t = report["totals"]
+        revenue = t["revenue"]["amount"]
+        quarters.append({"q": q, "start": start, "end": end, "revenue": revenue, "cogs": t["cogs"]["amount"],
+            "gross": t["gross"]["amount"], "operating": t["operating"]["amount"],
+            "other": t["other_income"]["amount"] - t["other_expense"]["amount"], "net": t["net"]["amount"],
+            "gross_margin": round(t["gross"]["amount"] / revenue * 100, 1) if revenue else None,
+            "net_margin": round(t["net"]["amount"] / revenue * 100, 1) if revenue else None})
+    total = {key: sum((q[key] for q in quarters), ZERO) for key in ("revenue", "cogs", "gross", "operating", "other", "net")}
+    return {"quarters": quarters, "total": total}
+
+
+def equity_statement(store, start, end):
+    """Laporan perubahan ekuitas: opening equity, owner's capital added, drawings, profit for the period,
+    anything else (a manual journal straight to equity), closing equity. The closing figure is the balance
+    sheet's own, so the statement ties to the neraca by construction."""
+    day_before = start - timedelta(days=1)
+    opening = balance_sheet(store, day_before)["totals"]["equity"]["amount"]
+    closing = balance_sheet(store, end)["totals"]["equity"]["amount"]
+    moved = {a.code: a.balance for a in account_balances(store, start=start, end=end, exclude_closing=True)}
+    capital, drawings = moved.get("3100", ZERO), moved.get("3200", ZERO)
+    profit = profit_and_loss(store, start, end, compare=False)["totals"]["net"]["amount"]
+    other = closing - opening - capital - drawings - profit
+    rows = [("Ekuitas awal", opening), ("Setoran modal", capital), ("Prive (pengambilan pemilik)", drawings),
+        ("Laba (rugi) periode", profit)]
+    if abs(other) >= Decimal("0.01"):
+        rows.append(("Penyesuaian lain langsung ke ekuitas", other))
+    return {"rows": rows, "opening": opening, "closing": closing, "capital": capital, "drawings": drawings,
+        "profit": profit, "other": other}
+
+
+# accounts whose change is working capital (operating), by balance sheet side
+_OPERATING_ASSETS = ("1200", "1250", "1255", "1260", "1300", "1400", "1450", "1500", "1550")
+_OPERATING_LIABILITIES = ("2100", "2150", "2200", "2300", "2310", "2350", "2360", "2400")
+
+
+def cash_flow_indirect(store, start, end):
+    """Arus kas metode tidak langsung: profit, add back what was not cash (depreciation), then the change
+    in each working-capital balance, investing (fixed assets) and financing (loans, capital, drawings).
+    ``difference`` must be zero: the result is checked against the actual movement of the cash accounts."""
+    chart_of_accounts(store)
+    moved = {a.code: a for a in account_balances(store, start=start, end=end, exclude_closing=True)}
+
+    def change(code):  # increase of a debit-normal account, or of a credit-normal one
+        a = moved.get(code)
+        return a.balance if a else ZERO
+
+    profit = profit_and_loss(store, start, end, compare=False)["totals"]["net"]["amount"]
+    depreciation = change(DEPRECIATION)
+    gain_on_assets = change(ASSET_GAIN)  # a non-cash item in profit; the cash is in investing below
+    operating = [("Laba (rugi) bersih", profit), ("Penyusutan", depreciation)]
+    if gain_on_assets:
+        operating.append(("Laba (rugi) pelepasan aset", -gain_on_assets))
+    for code in _OPERATING_ASSETS:
+        if change(code):
+            operating.append((f"{'Kenaikan' if change(code) > 0 else 'Penurunan'} {moved[code].name}", -change(code)))
+    for code in _OPERATING_LIABILITIES:
+        if change(code):
+            operating.append((f"{'Kenaikan' if change(code) > 0 else 'Penurunan'} {moved[code].name}", change(code)))
+    fixed = change(FIXED_ASSETS)
+    investing = []
+    if fixed:
+        investing.append(("Perolehan (pelepasan) aset tetap", -fixed))
+    # the part of accumulated depreciation that is not this period's charge (a disposal) is investing too
+    other_accum = change(ACCUMULATED_DEPRECIATION)
+    extra = other_accum + depreciation  # accumulated is a contra-asset: a charge makes it more negative
+    if abs(extra) >= Decimal("0.01"):
+        investing.append(("Akumulasi penyusutan aset yang dilepas", -extra))
+    if gain_on_assets:
+        pass  # proceeds from a disposal arrive through the cash/bank leg of its own entry
+    financing = []
+    for code, label in ((LOANS, "Pinjaman bank (penerimaan dikurangi pembayaran)"), ("3100", "Setoran modal"),
+            ("3200", "Prive (pengambilan pemilik)")):
+        if change(code):
+            financing.append((label, change(code)))
+    sections = []
+    for key, label, rows in (("operating", "Aktivitas operasi", operating), ("investing", "Aktivitas investasi", investing),
+            ("financing", "Aktivitas pendanaan", financing)):
+        sections.append({"key": key, "label": label, "rows": rows, "net": sum((v for _l, v in rows), ZERO)})
+    net = sum((s["net"] for s in sections), ZERO)
+    opening, closing = _cash_balance(store, before=start), _cash_balance(store, through=end)
+    return {"sections": sections, "net": net, "opening": opening, "closing": closing,
+        "difference": closing - opening - net}

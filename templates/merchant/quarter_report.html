@@ -1,0 +1,52 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Laporan kuartal {{ quarter }} {{ year }}{% endblock %}
+{% block content %}
+<div class="pg-head no-print-actions"><div><span class="pg-kicker">Laporan keuangan</span><h1>Laporan kuartal</h1>
+  <p>Satu paket untuk penutupan kuartal: perbandingan empat kuartal, laba rugi, neraca, arus kas metode tidak langsung, dan perubahan ekuitas. Semua angka dari buku besar yang sama dengan laporan lain.</p></div>
+  <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button><a class="btn-primary" href="?year={{ year }}&q={{ quarter }}&format=xlsx" data-no-soft>{% icon "download" %} Excel</a></div></div>
+
+<form method="get" class="toolbar no-print"><label class="field"><span>Tahun</span><select name="year" onchange="this.form.submit()">{% for y in years %}<option value="{{ y }}"{% if y == year %} selected{% endif %}>{{ y }}</option>{% endfor %}</select></label>
+  <div class="tabs" role="group" aria-label="Kuartal">{% for q in quarters %}<a href="?year={{ year }}&q={{ q }}" class="{% if q == quarter %}on{% endif %}">Kuartal {{ q }}</a>{% endfor %}</div></form>
+<p class="dp-help" style="margin-top:0">Kuartal {{ quarter }} {{ year }} · {{ start|date:"d M Y" }} s.d. {{ end|date:"d M Y" }} · pembanding: {{ prev_label }}</p>
+
+<div class="tiles">
+  <div class="tile accent"><small>Pendapatan</small><strong>{{ this_q.revenue|rp }}</strong><span>kuartal {{ quarter }}</span></div>
+  <div class="tile"><small>Laba kotor</small><strong>{{ this_q.gross|rp }}</strong><span>{% if this_q.gross_margin is not None %}margin {{ this_q.gross_margin|floatformat:1 }}%{% else %}belum ada pendapatan{% endif %}</span></div>
+  <div class="tile"><small>Laba bersih</small><strong>{{ this_q.net|rp }}</strong><span>{% if this_q.net_margin is not None %}margin {{ this_q.net_margin|floatformat:1 }}%{% else %}belum ada pendapatan{% endif %}</span></div>
+  <div class="tile"><small>Kas akhir</small><strong>{{ flow.closing|rp }}</strong><span>naik {{ flow.net|signed_rp }} dari kas awal</span></div>
+</div>
+
+<section class="panel"><header><div><h2>Pemeriksaan sebelum laporan dipakai</h2></div></header><div class="dp-card-body" style="display:grid;gap:8px">
+  {% for title, ok, text in checks %}<div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble {% if ok %}ok{% else %}bad{% endif %}" style="width:28px;height:28px">{% if ok %}{% icon "check" %}{% else %}{% icon "alert" %}{% endif %}</span><div><b>{{ title }}</b><small style="display:block;color:var(--ds-muted)">{{ text }}</small></div></div>{% endfor %}</div></section>
+
+<section class="panel"><header><div><h2>Empat kuartal {{ year }}</h2><p>Kuartal yang belum berjalan masih nol.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th></th>{% for q in table.quarters %}<th class="num">Kuartal {{ q.q }}</th>{% endfor %}<th class="num">Tahun</th></tr></thead><tbody>
+  <tr><td>Pendapatan</td>{% for q in table.quarters %}<td class="num">{{ q.revenue|rp:"-" }}</td>{% endfor %}<td class="num"><b>{{ table.total.revenue|rp:"-" }}</b></td></tr>
+  <tr><td>Harga pokok penjualan</td>{% for q in table.quarters %}<td class="num">{{ q.cogs|rp:"-" }}</td>{% endfor %}<td class="num"><b>{{ table.total.cogs|rp:"-" }}</b></td></tr>
+  <tr><td><b>Laba kotor</b></td>{% for q in table.quarters %}<td class="num"><b>{{ q.gross|rp:"-" }}</b></td>{% endfor %}<td class="num"><b>{{ table.total.gross|rp:"-" }}</b></td></tr>
+  <tr><td>Beban operasional</td>{% for q in table.quarters %}<td class="num">{{ q.operating|rp:"-" }}</td>{% endfor %}<td class="num"><b>{{ table.total.operating|rp:"-" }}</b></td></tr>
+  <tr><td>Pendapatan (beban) lain</td>{% for q in table.quarters %}<td class="num">{{ q.other|rp:"-" }}</td>{% endfor %}<td class="num"><b>{{ table.total.other|rp:"-" }}</b></td></tr>
+  <tr><td><b>Laba bersih</b></td>{% for q in table.quarters %}<td class="num"><b>{{ q.net|rp:"-" }}</b></td>{% endfor %}<td class="num"><b>{{ table.total.net|rp:"-" }}</b></td></tr>
+  <tr><td>Margin bersih</td>{% for q in table.quarters %}<td class="num">{% if q.net_margin is not None %}{{ q.net_margin|floatformat:1 }}%{% else %}–{% endif %}</td>{% endfor %}<td class="num"></td></tr>
+</tbody></table></div></section>
+
+<section class="panel"><header><h2>Laba rugi kuartal {{ quarter }}</h2></header><div class="scroll-x"><table class="stmt"><thead><tr><th>Keterangan</th><th class="num">Kuartal {{ quarter }}</th><th class="num">{{ prev_label }}</th></tr></thead><tbody>
+  <tr class="section"><td colspan="3">Pendapatan</td></tr>{% for r in pl.sections.revenue %}<tr class="line"><td>{{ r.name }}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+  <tr class="section"><td colspan="3">Harga pokok penjualan</td></tr>{% for r in pl.sections.cogs %}<tr class="line"><td>{{ r.name }}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+  <tr class="total"><td>Laba kotor</td><td class="num">{{ pl.totals.gross.amount|rp }}</td><td class="num">{{ pl.totals.gross.previous|rp }}</td></tr>
+  <tr class="section"><td colspan="3">Beban operasional</td></tr>{% for r in pl.sections.operating %}<tr class="line"><td>{{ r.name }}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}
+  {% if pl.sections.other_income or pl.sections.other_expense %}<tr class="section"><td colspan="3">Pendapatan dan beban lain</td></tr>{% for r in pl.sections.other_income %}<tr class="line"><td>{{ r.name }}</td><td class="num">{{ r.amount|rp }}</td><td class="num">{{ r.previous|rp }}</td></tr>{% endfor %}{% for r in pl.sections.other_expense %}<tr class="line"><td>{{ r.name }}</td><td class="num">({{ r.amount|rp }})</td><td class="num">({{ r.previous|rp }})</td></tr>{% endfor %}{% endif %}
+  <tr class="total bottom"><td>Laba bersih</td><td class="num">{{ pl.totals.net.amount|rp }}</td><td class="num">{{ pl.totals.net.previous|rp }}</td></tr>
+</tbody></table></div></section>
+
+{% include "merchant/_sheet_part.html" with title="Aset" first="current_assets" first_label="Aset lancar" second="fixed_assets" second_label="Aset tetap (nilai buku)" grand_label="Total aset" grand=sheet.totals.assets as_of=end compare=sheet_compare %}
+{% include "merchant/_sheet_part.html" with title="Liabilitas dan ekuitas" first="current_liabilities" first_label="Liabilitas jangka pendek" second="long_liabilities" second_label="Liabilitas jangka panjang" third="equity" third_label="Ekuitas" grand_label="Total liabilitas dan ekuitas" grand=sheet.totals.liabilities_equity as_of=end compare=sheet_compare %}
+
+<section class="panel"><header><div><h2>Arus kas (metode tidak langsung)</h2><p>Dimulai dari laba bersih, lalu menyesuaikan yang bukan kas dan perubahan modal kerja. Hasilnya dicocokkan dengan saldo kas.</p></div></header><div class="scroll-x"><table class="stmt"><tbody>
+  {% for s in flow.sections %}<tr class="section"><td colspan="2">{{ s.label }}</td></tr>{% for label, value in s.rows %}<tr class="line"><td>{{ label }}</td><td class="num">{{ value|signed_rp }}</td></tr>{% empty %}<tr class="line"><td class="muted" colspan="2">Tidak ada.</td></tr>{% endfor %}<tr class="total"><td>Kas bersih {{ s.label|lower }}</td><td class="num">{{ s.net|signed_rp }}</td></tr>{% endfor %}
+  <tr class="line"><td>Kas awal</td><td class="num">{{ flow.opening|rp }}</td></tr><tr class="total bottom"><td>Kas akhir</td><td class="num">{{ flow.closing|rp }}</td></tr>
+</tbody></table></div></section>
+
+<section class="panel"><header><h2>Perubahan ekuitas</h2></header><div class="scroll-x"><table class="stmt"><tbody>
+  {% for label, value in equity.rows %}<tr class="line"><td>{{ label }}</td><td class="num">{{ value|signed_rp }}</td></tr>{% endfor %}<tr class="total bottom"><td>Ekuitas akhir</td><td class="num">{{ equity.closing|rp }}</td></tr>
+</tbody></table></div></section>
+{% endblock %}
