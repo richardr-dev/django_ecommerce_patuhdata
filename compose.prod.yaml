@@ -47,6 +47,12 @@ services:
       interval: 30s
       timeout: 10s
       start_period: 30s
+  books:
+    # The accounting worker: posts documents the ledger missed, issues due recurring invoices and
+    # books monthly depreciation. Every step is idempotent, so running it every few hours is safe.
+    <<: *app
+    command: sh -c 'while true; do python manage.py run_books; sleep ${BOOKS_EVERY_SECONDS:-21600}; done'
+    depends_on: {web: {condition: service_healthy}}
   db:
     image: postgres:17-alpine
     restart: always

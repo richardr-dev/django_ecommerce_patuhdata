@@ -6,13 +6,14 @@ from django.shortcuts import render
 from apps.accounting.models import BankAccount
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from .income import import_income
 from .models import ChannelOrderIncome, SalesChannel
 from .parsers.income import parse_income
 from .services import ChannelImportError
 
-INCOME_ROLES = {"admin", "finance"}
+INCOME_ROLES = roles("channels.income")
 
 
 class IncomeUploadForm(forms.Form):

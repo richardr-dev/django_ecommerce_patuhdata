@@ -14,6 +14,7 @@ from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.audit import log as audit_log
 from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog
+from apps.shops.permissions import maker_may_not_check, roles
 
 from . import approvals
 from .attachments import for_record as attachment_list
@@ -44,8 +45,8 @@ from .payouts import (
     unsettled_payments,
 )
 
-VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
-EDIT_ROLES = {"admin", "finance"}
+VIEW_ROLES = roles("books.view")
+EDIT_ROLES = roles("books.edit")
 
 
 def _banks(store):
@@ -482,6 +483,10 @@ def merchant_bill_detail(request, bill_id):
                          "bank_account_id": bank.pk if bank else None}, request.user, subject=bill)
                     messages.info(request, "Pembayaran ini perlu persetujuan orang lain karena nilainya besar. "
                         "Sudah diajukan di menu Persetujuan.")
+                    return redirect("merchant-bill-detail", bill_id=bill.id)
+                if maker_may_not_check(store, request.user, bill.created_by, "books.edit"):
+                    messages.error(request, "Orang yang membuat tagihan tidak boleh membayarnya sendiri. "
+                        "Minta admin atau keuangan lain untuk membayar.")
                     return redirect("merchant-bill-detail", bill_id=bill.id)
                 pay_bill(bill, amount=amount, paid_on=paid_on,
                     method=request.POST.get("method", "transfer"),

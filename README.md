@@ -262,3 +262,11 @@ quarterly restore exercise. Maintain cost per store and gross margin dashboards 
 With the default `.env`, `pytest` runs against PostgreSQL (start it with `docker compose up -d db`),
 including the race-condition tests in `tests/test_postgres_concurrency.py`, which are skipped on
 SQLite. CI runs the suite on both databases on every push.
+
+## Accounting worker (`run_books`)
+
+`python manage.py run_books` posts documents whose ledger entry failed, issues recurring invoices that
+are due, and books monthly depreciation. Every step is idempotent. In production the `books` service in
+`compose.prod.yaml` runs it every 6 hours (`BOOKS_EVERY_SECONDS`); without Docker, schedule it with cron:
+`0 */6 * * * cd /path/to/app && .venv/bin/python manage.py run_books`. The Tutup buku checklist and
+Beranda's "Perlu tindakan" show what it has not yet done.

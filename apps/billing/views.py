@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.catalog.models import Product
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from .models import Plan, Subscription, SubscriptionInvoice
 from .plans import allowed_outlets, effective_plan, plan_amount, subscription_status
@@ -22,7 +23,7 @@ from .services import (
     start_outlet_purchase,
 )
 
-BILLING_ROLES = {"admin", "finance"}
+BILLING_ROLES = roles("billing.manage")
 
 
 @login_required(login_url="/merchant/login/")

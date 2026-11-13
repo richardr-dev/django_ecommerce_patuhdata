@@ -180,3 +180,25 @@ def staff_invite_accept(request, uidb64, token):
         return redirect("merchant-dashboard")
     return render(request, "registration/staff_invite.html", {"form": form, "valid": valid,
         "invited": user if valid else None})
+
+
+@login_required(login_url="/merchant/login/")
+def merchant_access(request):
+    """Hak akses: who may do what, who holds which role, and the recent changes to roles."""
+    from apps.orders.views import _merchant_context, _staff_store
+
+    from . import permissions
+
+    store = _staff_store(request)
+    if not _can_manage(request, store):
+        raise Http404
+    people = [{"name": store.owner.get_full_name() or store.owner.username, "role": "owner",
+        "label": "Pemilik", "since": None}]
+    for member in store.staff_members.select_related("user").order_by("user__username"):
+        people.append({"name": member.user.get_full_name() or member.user.username, "role": member.role,
+            "label": permissions.ROLE_LABELS.get(member.role, member.role), "since": None})
+    changes = AuditLog.objects.filter(store=store, action__startswith="staff.").select_related("actor").order_by(
+        "-created_at")[:20]
+    return render(request, "merchant/access.html", _merchant_context(request, store, title="Hak akses",
+        section="staff", matrix=permissions.grouped(), role_order=[(r, permissions.ROLE_LABELS[r])
+        for r in permissions.ROLE_ORDER], people=people, changes=changes))

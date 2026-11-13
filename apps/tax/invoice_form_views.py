@@ -18,6 +18,7 @@ from apps.catalog.models import Product, annotate_available_stock
 from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog, Customer
+from apps.shops.permissions import roles
 
 from .models import Invoice
 from .sales import (
@@ -30,7 +31,7 @@ from .sales import (
 )
 from .services import InvoiceError, normalize_npwp, vat_for
 
-EDIT_ROLES = {"admin", "manager", "ops", "finance"}
+EDIT_ROLES = roles("sales.edit")
 LOGIN = "/merchant/login/"
 TERMS = [("0", "Lunas saat diterima"), ("7", "7 hari"), ("14", "14 hari"), ("30", "30 hari"),
     ("45", "45 hari"), ("60", "60 hari")]

@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.billing.plans import channel_limit_error
 from apps.catalog.views import paginate
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.permissions import roles
 from apps.shops.models import AuditLog
 
 from .adapters import PLATFORMS
@@ -25,7 +26,7 @@ from .services import (
 # Keep old alias used in a few tests.
 OrdersCsvForm = OrdersImportForm
 
-CHANNEL_ROLES = {"admin", "manager", "ops"}
+CHANNEL_ROLES = roles("channels.manage")
 
 
 @login_required(login_url="/merchant/login/")

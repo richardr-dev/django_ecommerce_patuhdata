@@ -17,6 +17,7 @@ urlpatterns = [
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),
     path("s/<slug:code>/", shortlinks.campaign_redirect, name="campaign-short-slash"),
     path("merchant/staff/", staff_views.merchant_staff, name="merchant-staff"),
+    path("merchant/staff/akses/", staff_views.merchant_access, name="merchant-access"),
     path("merchant/activity/", activity.merchant_activity, name="merchant-activity"),
     path("merchant/tracking/", tracking.merchant_tracking, name="merchant-tracking"),
     path("merchant/staff/<int:staff_id>/", staff_views.merchant_staff_update,

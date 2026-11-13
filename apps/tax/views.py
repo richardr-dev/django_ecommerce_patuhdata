@@ -10,13 +10,14 @@ from django.utils import timezone
 from apps.orders.access import get_customer_order_or_404
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from .forms import BuyerNpwpForm, TaxProfileForm
 from .models import Invoice
 from .services import money, month_bounds, monthly_tax, tax_profile
 
-VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
-EDIT_ROLES = {"admin", "finance"}
+VIEW_ROLES = roles("tax.view")
+EDIT_ROLES = roles("tax.edit")
 
 
 def _month(request):

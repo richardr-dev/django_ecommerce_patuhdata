@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from apps.catalog.models import Product, ProductVariant
 from apps.integrations.http import ProviderError
+from apps.shops.permissions import roles
 
 from .access import get_customer_order_or_404, remember_customer_order
 from .manual_orders import (
@@ -24,7 +25,7 @@ from .manual_orders import (
 from .models import Order
 
 logger = logging.getLogger(__name__)
-ORDER_ROLES = {"admin", "manager", "ops", "customer_service"}
+ORDER_ROLES = roles("orders.manage")
 
 
 def _sku_options(store):

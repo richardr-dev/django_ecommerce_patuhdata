@@ -16,13 +16,14 @@ from django.utils import timezone
 
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from . import approvals
 from .ledger import locked_through, post_expense
 from .models import WITHHOLDING_KINDS, BankAccount, Expense
 
-VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
-EDIT_ROLES = {"admin", "finance"}
+VIEW_ROLES = roles("books.view")
+EDIT_ROLES = roles("books.edit")
 # The file is served from the back office's own origin, so its type is fixed by extension.
 RECEIPT_TYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
     "webp": "image/webp", "pdf": "application/pdf"}

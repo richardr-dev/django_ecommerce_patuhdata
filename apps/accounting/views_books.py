@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from . import assets as asset_service
 from . import bank as bank_service
@@ -45,8 +46,8 @@ from .models import (
 )
 from .reports import SOURCE_LABELS, source_link
 
-VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
-EDIT_ROLES = {"admin", "finance"}
+VIEW_ROLES = roles("books.view")
+EDIT_ROLES = roles("books.edit")
 LOGIN = "/merchant/login/"
 
 
@@ -1012,7 +1013,7 @@ def merchant_year_close(request):
         is_admin=store.owner_id == request.user.id or store.staff_members.filter(user=request.user, role="admin").exists()))
 
 
-REPORT_ROLES = {"admin", "manager", "finance", "viewer"}
+REPORT_ROLES = roles("books.view")
 
 
 @login_required(login_url=LOGIN)

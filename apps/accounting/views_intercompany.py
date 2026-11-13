@@ -13,13 +13,14 @@ from django.utils import timezone
 
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.audit import log as audit_log
+from apps.shops.permissions import roles
 
 from . import idempotency, intercompany
 from .ledger import entries_for
 from .models import IntercompanyTransfer
 
 LOGIN = "/merchant/login/"
-VIEW_ROLES = {"admin", "manager", "finance", "viewer"}
+VIEW_ROLES = roles("books.view")
 
 
 def _admin_of(user, store):

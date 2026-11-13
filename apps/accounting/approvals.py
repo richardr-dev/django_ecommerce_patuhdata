@@ -12,10 +12,11 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.shops.audit import log as audit_log
+from apps.shops.permissions import roles
 
 from .models import ApprovalPolicy, ApprovalRequest
 
-APPROVER_ROLES = {"admin", "manager", "finance"}
+APPROVER_ROLES = roles("approval.decide")
 
 
 class ApprovalError(ValueError):

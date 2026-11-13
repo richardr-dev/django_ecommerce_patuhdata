@@ -9,12 +9,13 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 from apps.shops.tenancy import store_url
 
 from .gift_cards import issue
 from .models import GiftCard
 
-ROLES = {"admin", "manager", "customer_service"}
+ROLES = roles("giftcards.manage")
 
 
 class GiftCardForm(forms.Form):

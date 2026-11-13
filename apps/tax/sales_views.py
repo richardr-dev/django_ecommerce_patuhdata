@@ -19,6 +19,7 @@ from apps.catalog.models import Product
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.audit import trail as audit_trail
 from apps.shops.models import AuditLog, Customer
+from apps.shops.permissions import roles
 
 from . import credit_notes, quotes, receipts, recurring
 from .models import (
@@ -32,8 +33,8 @@ from .models import (
 from .services import InvoiceError
 
 LOGIN = "/merchant/login/"
-VIEW_ROLES = {"admin", "manager", "ops", "finance", "viewer"}
-EDIT_ROLES = {"admin", "manager", "ops", "finance"}
+VIEW_ROLES = roles("sales.view")
+EDIT_ROLES = roles("sales.edit")
 
 
 def _store(request, roles=VIEW_ROLES):

@@ -11,13 +11,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from .models import DeliverySettings, DeliverySlot, Order, OrderItem
 from .scheduling import RELEASED_STATUSES
 from .views import _merchant_context, _require_roles, _staff_store
 
-SETTINGS_ROLES = {"admin", "manager"}
-RECAP_ROLES = {"admin", "manager", "ops", "warehouse", "customer_service", "viewer"}
+SETTINGS_ROLES = roles("settings.manage")
+RECAP_ROLES = roles("recap.view")
 RECAP_DAYS = 14
 
 

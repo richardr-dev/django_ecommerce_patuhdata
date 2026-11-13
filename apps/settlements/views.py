@@ -10,6 +10,7 @@ from django.utils.dateparse import parse_date
 from apps.catalog.views import paginate
 from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.permissions import roles
 
 from .models import ConsignmentPartner, PartnerProductPrice, Settlement, SettlementPayment
 
@@ -26,8 +27,8 @@ from .services import (
     transition,
 )
 
-SETTLEMENT_ROLES = {"admin", "manager", "finance"}
-VIEW_ROLES = SETTLEMENT_ROLES | {"viewer"}
+SETTLEMENT_ROLES = roles("settlement.manage")
+VIEW_ROLES = roles("settlement.view")
 PAGE_SIZE = 20
 
 

@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from apps.shops.permissions import roles
+
 from .models import AuditLog, Customer, EmailBroadcast
 from .segments import (
     add_tag,
@@ -19,9 +21,9 @@ from .segments import (
     read_unsubscribe,
 )
 
-VIEW_ROLES = {"admin", "manager", "ops", "customer_service", "viewer"}
-EDIT_ROLES = {"admin", "manager", "customer_service"}
-BROADCAST_ROLES = {"admin", "manager"}
+VIEW_ROLES = roles("customers.view")
+EDIT_ROLES = roles("customers.edit")
+BROADCAST_ROLES = roles("customers.broadcast")
 
 
 @login_required(login_url="/merchant/login/")

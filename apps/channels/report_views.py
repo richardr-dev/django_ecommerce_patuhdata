@@ -10,12 +10,13 @@ from django.utils.dateparse import parse_date
 
 from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.permissions import roles
 
 from . import analytics, sales_export
 from .invoice_recap import invoice_recap
 from .reporting import sales_report
 
-REPORT_ROLES = {"admin", "manager", "finance", "ops", "viewer"}
+REPORT_ROLES = roles("reports.view")
 
 
 def _period(request):

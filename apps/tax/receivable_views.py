@@ -7,10 +7,11 @@ from django.utils.dateparse import parse_date
 
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import Customer
+from apps.shops.permissions import roles
 
 from .receivables import BUCKETS, aging, statement
 
-ROLES = {"admin", "manager", "finance", "viewer"}
+ROLES = roles("books.view")
 
 
 @login_required(login_url="/merchant/login/")

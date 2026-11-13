@@ -4,11 +4,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.catalog.models import Bundle, Product, ProductVariant
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
+from apps.shops.permissions import roles
 
 from .mapping import MappingError, map_sku, resolve_unmapped, save_bundle
 from .models import ChannelSku, SalesChannel, UnmappedSku
 
-MAPPING_ROLES = {"admin", "manager", "ops"}
+MAPPING_ROLES = roles("channels.mapping")
 
 
 def _item(store, sku):

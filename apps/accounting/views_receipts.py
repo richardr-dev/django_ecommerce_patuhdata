@@ -13,6 +13,7 @@ from apps.catalog.models import Warehouse
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.audit import log as audit_log
 from apps.shops.audit import trail as audit_trail
+from apps.shops.permissions import roles
 
 from . import idempotency, receipts
 from .ledger import entries_for
@@ -20,8 +21,8 @@ from .models import GoodsReceipt, Supplier
 
 # Whoever receives goods does not have to be whoever books the bill: the warehouse records what
 # arrived, finance turns it into the supplier's bill.
-RECEIVE_ROLES = {"admin", "manager", "finance", "warehouse"}
-BILL_ROLES = {"admin", "finance"}
+RECEIVE_ROLES = roles("stock.receive")
+BILL_ROLES = roles("books.edit")
 VIEW_ROLES = RECEIVE_ROLES | {"viewer"}
 LOGIN = "/merchant/login/"
 

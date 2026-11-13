@@ -63,6 +63,7 @@ from apps.integrations.platform_balance import platform_orders
 from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider, shipping_origin
 from apps.shops.availability import preview_url, store_state
+from apps.shops.permissions import roles
 from apps.shops.models import (
     AuditLog,
     Customer,
@@ -1543,7 +1544,7 @@ def _back_to_orders(request):
     return redirect("merchant-orders")
 
 
-FULFILMENT_ROLES = {"admin", "manager", "ops", "warehouse"}
+FULFILMENT_ROLES = roles("stock.fulfil")
 
 
 @login_required(login_url="/merchant/login/")
