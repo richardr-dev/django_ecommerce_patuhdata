@@ -158,4 +158,4 @@ class PlatformCompanyTests(TestCase):
         block = re.search(r'<script type="application/ld\+json">(.*?)</script>', page.content.decode())
         data = json.loads(block.group(1))
         self.assertEqual(data["name"], "PT Patuhdata Solusi Nusantara")
-        self.assertEqual(data["brand"]["name"], "Lakuin")
+        self.assertEqual(data["brand"]["name"], "Patuhdata")

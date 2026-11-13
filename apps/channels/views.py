@@ -171,7 +171,7 @@ def merchant_import(request):
             "tagline": "Channel lain atau input manual",
             "badge": ".csv",
             "instructions": [
-                "Unduh template CSV Lakuin",
+                "Unduh template CSV Patuhdata",
                 "Isi data pesanan dari channel manapun",
                 "Upload file .csv di sini",
             ],

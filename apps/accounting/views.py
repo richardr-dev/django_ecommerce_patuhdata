@@ -188,7 +188,7 @@ def merchant_chart_of_accounts(request):
 class PayoutUploadForm(forms.Form):
     provider = forms.ChoiceField(label="Dicairkan oleh", choices=payout_providers)
     file = forms.FileField(label="File CSV pencairan",
-        help_text="Template Lakuin: satu baris per pesanan, maksimal 2 MB.")
+        help_text="Template Patuhdata: satu baris per pesanan, maksimal 2 MB.")
     bank_account = forms.ModelChoiceField(BankAccount.objects.none(), required=False,
         empty_label="Kas utama", label="Masuk ke rekening",
         help_text="Rekening yang menerima uangnya, agar cocok dengan mutasi banknya.")

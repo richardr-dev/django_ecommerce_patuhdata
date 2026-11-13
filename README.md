@@ -89,7 +89,7 @@ Set `PLATFORM_DOMAIN` (e.g. `niagakit.id`) to run NiagaKit as a store builder:
   (`PLATFORM_DOMAIN=localhost`, `PLATFORM_BASE_URL=http://localhost:8000`). `PUBLIC_BASE_URL`
   may stay an ngrok tunnel for DOKU webhooks: its host is treated as a platform host, while
   `PLATFORM_BASE_URL` sets the links people click.
-- **Brand:** `PLATFORM_NAME` (default **Lakuin**) and `PLATFORM_TAGLINE` (default *Biar Jualan
+- **Brand:** `PLATFORM_NAME` (default **Patuhdata**) and `PLATFORM_TAGLINE` (default *Biar Jualan
   Makin Laku*) name the platform in page titles, the landing page, and every store's footer.
 - **Store contact:** each store's WhatsApp number (asked at signup) and optional Instagram
   handle show as icons in the storefront footer, plus a floating "Chat penjual" WhatsApp button.

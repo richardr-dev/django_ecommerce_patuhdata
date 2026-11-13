@@ -1,6 +1,6 @@
 {% extends "merchant/base.html" %}{% load static %}{% block title %}Link kampanye{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
 <div class="bo-heading"><div><span class="eyebrow">PROMOSI TOKO</span><h1>Link kampanye</h1><p>Link pendek untuk mempromosikan toko Anda di bio Instagram, TikTok, iklan, atau broadcast WhatsApp. Lihat berapa klik, pesanan, dan penjualan yang datang dari setiap link.</p></div></div>
-<p class="muted campaign-note">Ingin mengajak penjual lain memakai Lakuin dan hemat langganan? Itu lewat <a href="{% url 'merchant-billing' %}#ajak-teman">Ajak teman</a>, bukan link kampanye.</p>
+<p class="muted campaign-note">Ingin mengajak penjual lain memakai {{ platform_name }} dan hemat langganan? Itu lewat <a href="{% url 'merchant-billing' %}#ajak-teman">Ajak teman</a>, bukan link kampanye.</p>
 {% if merchant_role != 'viewer' %}<form method="post" class="bo-card entity-form campaign-form">{% csrf_token %}<h2>Buat link baru</h2>{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="field-grid">
 <label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
 <label>{{ form.target.label }}{{ form.target }}{{ form.target.errors }}</label>

@@ -13,7 +13,7 @@ class SalesChannelForm(forms.ModelForm):
 class OrdersImportForm(forms.Form):
     file = forms.FileField(
         label="File pesanan",
-        help_text="XLSX dari Shopee Seller Center, atau CSV template Lakuin. Maks 10 MB.",
+        help_text="XLSX dari Shopee Seller Center, atau CSV template Patuhdata. Maks 10 MB.",
     )
 
     def clean_file(self):

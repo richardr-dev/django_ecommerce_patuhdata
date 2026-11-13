@@ -53,7 +53,7 @@ def merchant_whatsapp_test(request):
     else:
         try:
             sent = send(account, kind="test", to=to, text=f"Tes notifikasi WhatsApp dari "
-                f"{store.name} melalui Lakuin. Jika pesan ini sampai, koneksi sudah benar.")
+                f"{store.name} melalui Patuhdata. Jika pesan ini sampai, koneksi sudah benar.")
         except ProviderError as error:
             messages.error(request, f"Pesan tes gagal: {error}")
         else:

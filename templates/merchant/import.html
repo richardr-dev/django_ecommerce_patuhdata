@@ -93,7 +93,7 @@
       </ol>
       {% if selected.file_type == "csv" %}
       <p class="text-xs text-indigo-600 mt-3">
-        <a class="hover:text-indigo-800" href="{% url 'merchant-channel-template' %}">Unduh template CSV Lakuin →</a>
+        <a class="hover:text-indigo-800" href="{% url 'merchant-channel-template' %}">Unduh template CSV {{ platform_name }} →</a>
       </p>
       {% endif %}
     </div>
@@ -143,7 +143,7 @@
     <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
       <li>Buka <b>Shopee Seller Center → Produk</b></li>
       <li>Edit setiap produk → isi kolom <b>Nomor Referensi SKU</b></li>
-      <li>Pastikan SKU sama persis dengan yang ada di katalog Lakuin</li>
+      <li>Pastikan SKU sama persis dengan yang ada di katalog {{ platform_name }}</li>
       <li>Ekspor ulang pesanan, lalu upload di sini</li>
     </ol>
     <p class="text-xs text-gray-400 mt-3">Jika SKU belum diisi, centang "Impor data historis" agar pesanan tetap masuk tanpa potong stok.</p>
@@ -151,13 +151,13 @@
     <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
       <li>Buka <b>Tokopedia Seller Center → Produk</b></li>
       <li>Edit setiap produk → isi kolom <b>SKU (Stock Keeping Unit)</b></li>
-      <li>Pastikan SKU sama persis dengan yang ada di katalog Lakuin</li>
+      <li>Pastikan SKU sama persis dengan yang ada di katalog {{ platform_name }}</li>
       <li>Ekspor ulang pesanan dalam format .xlsx, lalu upload di sini</li>
     </ol>
     <p class="text-xs text-gray-400 mt-3">Jika SKU kosong, centang "Impor data historis" — produk placeholder akan dibuat otomatis.</p>
     {% else %}
     <ol class="text-sm text-gray-600 space-y-2 pl-5 list-decimal">
-      <li>Pastikan kolom <b>sku</b> di CSV terisi dengan SKU yang ada di katalog Lakuin</li>
+      <li>Pastikan kolom <b>sku</b> di CSV terisi dengan SKU yang ada di katalog {{ platform_name }}</li>
       <li>Cek SKU di <a class="text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-entity-list' 'products' %}">Katalog → Semua Produk</a></li>
       <li>Jika belum ada produk, tambahkan dulu atau gunakan mode historis</li>
     </ol>

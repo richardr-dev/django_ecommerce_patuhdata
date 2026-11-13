@@ -40,3 +40,25 @@ class LoginFirstTests(TestCase):
     def test_the_login_page_itself_is_reachable_and_inner_paths_are_not_redirected(self):
         self.assertEqual(self.client.get("/merchant/login/").status_code, 200)
         self.assertNotEqual(self.client.get("/cart/").get("Location"), "/merchant/login/")
+
+
+class LoginPageTests(TestCase):
+    def test_the_sign_in_page_is_a_plain_card_named_for_the_system(self):
+        from django.conf import settings
+        page = self.client.get("/merchant/login/")
+        self.assertContains(page, "<title>Masuk · " + settings.PLATFORM_NAME)
+        self.assertContains(page, 'name="username"')
+        self.assertContains(page, 'name="password"')
+        self.assertContains(page, "Lupa kata sandi?")
+        self.assertNotContains(page, "Coba gratis")
+
+    def test_a_wrong_password_shows_one_clear_message(self):
+        User.objects.create_user("owner", password="pw")
+        page = self.client.post("/merchant/login/", {"username": "owner", "password": "salah"})
+        self.assertContains(page, "kata sandi salah")
+        self.assertContains(page, 'role="alert"')
+
+    def test_signing_in_opens_the_dashboard(self):
+        User.objects.create_user("owner2", password="pw")
+        response = self.client.post("/merchant/login/", {"username": "owner2", "password": "pw", "next": "/merchant/"})
+        self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)

@@ -49,7 +49,7 @@ def _resolve_sku(store, sku):
         return variant.product, variant
     product = Product.objects.filter(store=store, sku=sku).first()
     if not product:
-        raise ChannelImportError(f"SKU {sku} tidak ada di katalog Lakuin.")
+        raise ChannelImportError(f"SKU {sku} tidak ada di katalog Patuhdata.")
     if product.variants.filter(is_active=True).exists():
         raise ChannelImportError(f"SKU {sku} punya varian: gunakan SKU varian di marketplace.")
     return product, None

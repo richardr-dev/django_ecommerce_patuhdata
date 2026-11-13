@@ -124,7 +124,7 @@ class ReferralTests(TestCase):
         page = seller.get("/merchant/billing/")
         self.assertContains(page, "Tingkat Mitra · 70%")
         self.assertContains(page, "Ajak 6 toko lagi")
-        self.assertContains(page, "Duta Lakuin")
+        self.assertContains(page, "Duta Patuhdata")
 
     @override_settings(REFERRAL_TIERS=[(1, "Teman", 50), (2, "Duta", 90)])
     def test_top_tier_and_public_program_page(self):
@@ -143,5 +143,5 @@ class ReferralTests(TestCase):
 
         self.assertIsNone(referral_summary(self.inviter)["tier"])
         self.assertEqual(referral_summary(self.inviter)["next_tier"]["name"], "Teman")
-        self.assertEqual(tier_for(10)[0]["name"], "Duta Lakuin")
+        self.assertEqual(tier_for(10)[0]["name"], "Duta Patuhdata")
         self.assertIsNone(tier_for(25)[1])

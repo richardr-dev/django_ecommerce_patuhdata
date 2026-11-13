@@ -167,7 +167,7 @@ class DokuPaymentProvider:
         someone pays it, and its notification is acknowledged without touching any order."""
         try:
             return self.create_checkout(invoice_number=f"{TEST_INVOICE_PREFIX}{uuid.uuid4().hex[:20]}",
-                amount=10000, customer={"name": "Tes koneksi Lakuin"}, request_id=uuid.uuid4().hex)
+                amount=10000, customer={"name": "Tes koneksi Patuhdata"}, request_id=uuid.uuid4().hex)
         except ProviderError as error:
             if "HTTP 401" in str(error) or "HTTP 403" in str(error):
                 raise ProviderError(f"DOKU menolak kredensial ({doku_environment()}). Cek Client "

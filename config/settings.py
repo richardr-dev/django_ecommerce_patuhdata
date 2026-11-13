@@ -208,7 +208,7 @@ PLATFORM_DOMAIN = os.getenv("PLATFORM_DOMAIN", "").strip().lower()
 # The store-address suffix shown to sellers; lets a local copy show "lakuin.store" while its
 # real links stay on PLATFORM_DOMAIN (localhost).
 PLATFORM_DISPLAY_DOMAIN = os.getenv("PLATFORM_DISPLAY_DOMAIN", "").strip().lower()
-PLATFORM_NAME = os.getenv("PLATFORM_NAME", "Lakuin")
+PLATFORM_NAME = os.getenv("PLATFORM_NAME", "Patuhdata")
 PLATFORM_TAGLINE = os.getenv("PLATFORM_TAGLINE", "Biar Jualan Makin Laku")
 # Scheme and port for links to the platform and store subdomains. Defaults to PUBLIC_BASE_URL;
 # set it when PUBLIC_BASE_URL is a tunnel for webhooks (e.g. ngrok) but people browse localhost.
@@ -225,7 +225,7 @@ TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
 # Ajak teman: each side of a referral gets this percent off one month of its plan (1-90).
 REFERRAL_DISCOUNT_PERCENT = int(os.getenv("REFERRAL_DISCOUNT_PERCENT", "50"))
 # Ajak teman tiers for the inviting store: (paid invites needed, name, % off one month each).
-REFERRAL_TIERS = [(1, "Teman", 50), (3, "Mitra", 70), (10, "Duta Lakuin", 90)]
+REFERRAL_TIERS = [(1, "Teman", 50), (3, "Mitra", 70), (10, "Duta Patuhdata", 90)]
 # Renewal billing: bill the next period this many days ahead, and keep a paying store fully
 # active this many days after its period ends while the renewal is unpaid.
 RENEWAL_NOTICE_DAYS = int(os.getenv("RENEWAL_NOTICE_DAYS", "7"))
@@ -234,14 +234,14 @@ RENEWAL_GRACE_DAYS = int(os.getenv("RENEWAL_GRACE_DAYS", "3"))
 MOBILE_TOKEN_TTL_DAYS = int(os.getenv("MOBILE_TOKEN_TTL_DAYS", "30"))
 
 # Buyers pay each seller's own DOKU/Xendit account or bank account (back office > Pembayaran).
-# PAYMENT_PROVIDER is the platform's own account: Lakuin subscriptions and the local demo. Store
+# PAYMENT_PROVIDER is the platform's own account: Patuhdata subscriptions and the local demo. Store
 # checkouts use it only when PLATFORM_COLLECTS_PAYMENTS=1, because collecting buyers' money for
 # sellers needs a payment licence (or a split-payment partner agreement).
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "doku" if os.getenv("DOKU_CLIENT_ID") else "demo")
 PLATFORM_COLLECTS_PAYMENTS = os.getenv("PLATFORM_COLLECTS_PAYMENTS", "0") == "1"
-# "DOKU Lakuin": a seller may opt in (Back office > Pembayaran) to take QRIS / VA / e-wallet through
-# the platform's DOKU account; Lakuin then pays out their balance. PLATFORM_DOKU_FEE_PERCENT is
-# Lakuin's fee on those orders, deducted from the balance.
+# "DOKU Patuhdata": a seller may opt in (Back office > Pembayaran) to take QRIS / VA / e-wallet through
+# the platform's DOKU account; Patuhdata then pays out their balance. PLATFORM_DOKU_FEE_PERCENT is
+# Patuhdata fee on those orders, deducted from the balance.
 PLATFORM_DOKU_FOR_STORES = os.getenv("PLATFORM_DOKU_FOR_STORES", "1") == "1"
 PLATFORM_DOKU_FEE_PERCENT = Decimal(os.getenv("PLATFORM_DOKU_FEE_PERCENT", "0"))
 # Encrypts sellers' gateway secrets; defaults to SECRET_KEY, so set it before rotating SECRET_KEY.

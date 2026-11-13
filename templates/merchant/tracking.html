@@ -1,5 +1,5 @@
 {% extends "merchant/base.html" %}{% block title %}Pelacakan & pixel{% endblock %}{% block content %}
-<div class="bo-heading"><div><span class="eyebrow">INTEGRASI</span><h1>Pelacakan & pixel</h1><p>Hubungkan toko dengan Google Analytics, iklan Meta/TikTok/Google, dan Search Console. Cukup tempel ID-nya: Lakuin memasang kodenya dan mengirim event kunjungan serta pembelian.</p></div></div>
+<div class="bo-heading"><div><span class="eyebrow">INTEGRASI</span><h1>Pelacakan & pixel</h1><p>Hubungkan toko dengan Google Analytics, iklan Meta/TikTok/Google, dan Search Console. Cukup tempel ID-nya: {{ platform_name }} memasang kodenya dan mengirim event kunjungan serta pembelian.</p></div></div>
 <form method="post" class="bo-card entity-form">{% csrf_token %}{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
 <h2>Analitik</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.ga4_id %}{% include "merchant/form_field.html" with field=form.gtm_id %}{% include "merchant/form_field.html" with field=form.clarity_id %}</div>
 <h2>Iklan</h2><div class="field-grid">{% include "merchant/form_field.html" with field=form.meta_pixel_id %}{% include "merchant/form_field.html" with field=form.tiktok_pixel_id %}{% include "merchant/form_field.html" with field=form.google_ads_id %}</div>

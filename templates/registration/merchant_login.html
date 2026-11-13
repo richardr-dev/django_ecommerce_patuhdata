@@ -1,4 +1,39 @@
-{% extends "platform/base.html" %}{% block title %}Masuk Back Office{% endblock %}{% block content %}
-<section class="pf-form-card"><h1>Masuk Back Office</h1><p class="pf-muted">Kelola produk, foto, stok, pesanan, dan pengaturan toko. Belum punya toko? <a href="{% url 'store-signup' %}">Coba gratis 14 hari</a>.</p>
-{% if request.GET.keluar %}<p class="pf-notice" role="status">Anda sudah keluar. Sesi di browser ini sudah dihapus.</p>{% endif %}<form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next|default:'/merchant/' }}"><button class="pf-button pf-button-lg">Masuk ke Dashboard</button></form><p class="pf-muted"><small>Daftar tanpa email? Masuk dengan nomor WhatsApp toko Anda, misalnya 081234567890.</small></p><p class="pf-muted"><small>Lupa kata sandi? <a href="{% url 'password-reset' %}">Atur ulang lewat email</a>{% if platform_sales_url %}, atau bila tidak memakai email, <a href="{{ platform_sales_url }}" target="_blank" rel="noopener">hubungi admin {{ platform_name }}</a>{% elif platform_support_email %}, atau bila tidak memakai email, hubungi admin {{ platform_name }} di <a href="mailto:{{ platform_support_email }}">{{ platform_support_email }}</a>{% endif %}.</small></p></section>
-{% endblock %}
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Masuk · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><div class="ln-mark" aria-hidden="true">{{ platform_name|slice:":1"|upper }}</div><div><strong>{{ platform_name }}</strong><span>Penjualan, stok, dan pembukuan</span></div></div>
+    <h1>Masuk</h1>
+    <p class="ln-sub">Gunakan email atau nomor WhatsApp yang terdaftar.</p>
+    {% if request.GET.keluar %}<p class="ln-msg ok" role="status">Anda sudah keluar.</p>{% endif %}
+    {% if form.errors %}<p class="ln-msg bad" role="alert">{% for error in form.non_field_errors %}{{ error }}{% empty %}Periksa isian Anda, lalu coba lagi.{% endfor %}</p>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      <label class="ln-field"><span>Email atau nomor WhatsApp</span><span class="ln-input"><input type="text" name="username" value="{{ form.username.value|default:'' }}" autocomplete="username" autocapitalize="none" autofocus required placeholder="nama@perusahaan.com atau 0812…"></span></label>
+      <label class="ln-field"><span>Kata sandi</span><span class="ln-input has-toggle"><input type="password" name="password" id="ln-password" autocomplete="current-password" required placeholder="Kata sandi"><button type="button" class="ln-toggle" id="ln-toggle" aria-controls="ln-password" aria-pressed="false">Lihat</button></span></label>
+      <div class="ln-row"><a href="{% url 'password-reset' %}">Lupa kata sandi?</a></div>
+      <input type="hidden" name="next" value="{{ next|default:'/merchant/' }}">
+      <button class="ln-btn" id="ln-submit">Masuk</button>
+    </form>
+    <p class="ln-alt">Belum punya akun? <a href="{% url 'store-signup' %}">Daftar</a></p>
+  </div>
+  <p class="ln-foot">{{ platform_company_name }}</p>
+</main>
+<script>
+(function () {
+  var field = document.getElementById("ln-password"), toggle = document.getElementById("ln-toggle");
+  toggle.addEventListener("click", function () {
+    var show = field.type === "password";
+    field.type = show ? "text" : "password";
+    toggle.textContent = show ? "Sembunyikan" : "Lihat";
+    toggle.setAttribute("aria-pressed", show ? "true" : "false");
+  });
+  document.querySelector("form").addEventListener("submit", function () {
+    var button = document.getElementById("ln-submit"); button.disabled = true; button.textContent = "Memeriksa…";
+  });
+})();
+</script></body></html>

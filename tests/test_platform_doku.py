@@ -39,7 +39,7 @@ class PlatformDokuTests(TestCase):
     def test_the_seller_opts_in_and_checkout_offers_doku_through_lakuin(self):
         self.assertEqual(payment_options(self.store), [])
         page = self.seller.get("/merchant/payments/")
-        self.assertContains(page, "DOKU Lakuin")
+        self.assertContains(page, "DOKU Patuhdata")
         self.seller.post("/merchant/payments/", {"bank_name": "BCA",
             "bank_account_number": "1234567890", "bank_account_holder": "Ruuma",
             "use_platform_gateway": "on"})
@@ -72,7 +72,7 @@ class PlatformDokuTests(TestCase):
     def test_the_platform_can_switch_it_off(self):
         StorePaymentSettings.objects.filter(id=self.account.id).update(use_platform_gateway=True)
         self.assertEqual(payment_options(self.store), [])
-        self.assertNotContains(self.seller.get("/merchant/payments/"), "3. DOKU Lakuin")
+        self.assertNotContains(self.seller.get("/merchant/payments/"), "3. DOKU Patuhdata")
 
     @patch("apps.integrations.payments.request_json",
         return_value={"response": {"payment": {"url": "https://doku.test/pay"}}})

@@ -1652,7 +1652,7 @@ def merchant_order_courier_label(request, order_id):
     except ProviderError as error:
         logger.warning("courier label for %s failed: %s", order.id, error)
         messages.error(request, "Label resmi kurir belum tersedia. Coba lagi sebentar, atau cetak "
-            "label Lakuin.")
+            "label Patuhdata.")
         return redirect("merchant-orders")
     Order.objects.filter(id=order.id, label_printed_at__isnull=True).update(
         label_printed_at=timezone.now())
@@ -1677,7 +1677,7 @@ def merchant_order_courier_labels(request):
     pdf, missing = merged_courier_labels(orders)
     if pdf is None:
         messages.error(request, "Label resmi kurir belum tersedia. Coba lagi sebentar, atau cetak "
-            "label Lakuin.")
+            "label Patuhdata.")
         return redirect("merchant-orders")
     Order.objects.filter(id__in=[order.id for order in orders if order not in missing],
         label_printed_at__isnull=True).update(label_printed_at=timezone.now())

@@ -1,4 +1,4 @@
-# Lakuin / Patuhdata back office
+# Patuhdata back office (formerly Lakuin)
 
 Accounting backbone for Indonesian commerce and SMEs: sales from every channel (own store,
 Shopee, Tokopedia/TikTok Shop, Lazada, mitra konsinyasi), inventory, invoicing, purchasing, a
@@ -155,6 +155,10 @@ Four test files failed before this work and still do: `test_digital_products`,
   "Hak akses" page prints the same table. The accountant reads and never writes. **Segregation of duties:**
   `maker_may_not_check` stops the person who created a bill from paying it when someone else could; a
   one-person store is never locked out. Give a new action a permission key, not a new role set.
+- **The system's name is one setting**: `PLATFORM_NAME` (default `Patuhdata`). Templates print `{{ platform_name }}`;
+  never type the name into a template. The sign-in page (`registration/merchant_login.html`, `static/css/login.css`)
+  is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.
+  Domains (`lakuin.store`) and the `lakuin-*.svg` brand files are infrastructure and have not been renamed.
 - **The first page is the login** (`HOME_IS_LOGIN`, default 1; `tenancy.opens_on_login`): `/` on the system's
   own address redirects to `/merchant/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the

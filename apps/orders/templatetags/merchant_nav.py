@@ -108,7 +108,7 @@ NAV = [
             Link("Aset tetap", "merchant-assets"),
             Link("Biaya operasional", "merchant-expenses"),
             Link("Pencairan dana", "merchant-payouts"),
-            Link("Saldo DOKU Lakuin", "merchant-platform-balance", when="uses_platform_gateway"),
+            Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
         ]),
         Group("Laporan Keuangan", "bar-chart", [
             Link("Laba rugi", "merchant-profit-loss"),

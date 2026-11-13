@@ -30,7 +30,7 @@ def tiers():
     """[(min_paid_invites, name, percent)], lowest first. The first tier never pays less than
     the welcome discount, and no tier more than 90%."""
     rows = getattr(settings, "REFERRAL_TIERS", None) or [(1, "Teman", 50), (3, "Mitra", 70),
-        (10, "Duta Lakuin", 90)]
+        (10, "Duta Patuhdata", 90)]
     rows = sorted((max(1, int(at)), str(name), max(1, min(90, int(percent))))
         for at, name, percent in rows)
     _, name, percent = rows[0]
