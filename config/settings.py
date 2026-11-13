@@ -123,8 +123,12 @@ if USE_S3:
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=604800"}
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
-# Sign-ins last SESSION_DAYS (default 7) and the cookie is never readable by page scripts.
-SESSION_COOKIE_AGE = int(os.getenv("SESSION_DAYS", "7")) * 24 * 3600
+# A sign-in lasts SESSION_DAYS (default 14) of inactivity: every request renews it, so someone who
+# works in the system is never signed out mid-task, and closing the browser does not end it. The
+# cookie is never readable by page scripts. SESSION_DAYS=... shortens it for a stricter client.
+SESSION_COOKIE_AGE = int(os.getenv("SESSION_DAYS", "14")) * 24 * 3600
+SESSION_SAVE_EVERY_REQUEST = os.getenv("SESSION_SLIDING", "1") == "1"
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
