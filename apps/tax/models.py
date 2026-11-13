@@ -460,3 +460,36 @@ class RecurringRun(models.Model):
         ordering = ["-run_date"]
         constraints = [models.UniqueConstraint(fields=["recurring", "run_date"],
             name="unique_recurring_run")]
+
+
+class FiscalAdjustment(models.Model):
+    """A line of the annual corporate tax worksheet: a positive or negative koreksi fiskal (commercial
+    profit to taxable income), or a tax credit (PPh 22/23/25 already paid or withheld). Entered by the
+    accountant with a note, never derived, so the worksheet shows exactly what was claimed and why."""
+    POSITIVE, NEGATIVE, CREDIT = "positive", "negative", "credit"
+    KINDS = [(POSITIVE, "Koreksi positif (menambah laba kena pajak)"), (NEGATIVE, "Koreksi negatif (mengurangi laba kena pajak)"),
+        (CREDIT, "Kredit pajak (PPh 22/23/25 yang sudah dibayar)")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="fiscal_adjustments")
+    year = models.PositiveIntegerField()
+    kind = models.CharField(max_length=10, choices=KINDS)
+    description = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["kind", "id"]
+
+
+class TaxFiling(models.Model):
+    """The accountant's tracker for a tax duty that has been done (deposited and/or reported): which
+    duty (``code``, e.g. ``ppn:2026-10``), when, and the reference (NTPN / BPE)."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="tax_filings")
+    code = models.CharField(max_length=40)
+    done_on = models.DateField()
+    reference = models.CharField(max_length=80, blank=True)
+    done_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_tax_filing")]

@@ -1,11 +1,13 @@
 from django.urls import path
 
-from . import public_views, receivable_views, sales_views, views
+from . import public_views, receivable_views, sales_views, views, views_annual
 
 urlpatterns = [
     path("i/<str:token>/", public_views.public_invoice, name="invoice-public"),
     path("merchant/tax/", views.merchant_tax, name="merchant-tax"),
     path("merchant/tax/spt-ppn/", views.merchant_spt_ppn, name="merchant-spt-ppn"),
+    path("merchant/tax/spt-tahunan/", views_annual.merchant_spt_tahunan, name="merchant-spt-tahunan"),
+    path("merchant/tax/kalender/", views_annual.merchant_tax_calendar, name="merchant-tax-calendar"),
     path("merchant/tax/faktur-keluaran/", views.merchant_faktur_export, name="merchant-faktur-export"),
     path("merchant/tax/tampilan-invoice/", sales_views.merchant_invoice_style,
         name="merchant-invoice-style"),

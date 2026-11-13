@@ -1,0 +1,21 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Kalender pajak{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pajak</span><h1>Kalender pajak</h1>
+  <p>Kewajiban yang jatuh tempo bulan ini, dengan jumlah dari buku besar. Tandai yang sudah disetor atau dilaporkan beserta NTPN/BPE-nya, agar tidak ada yang terlewat.</p></div></div>
+<div class="tabs" aria-label="Bulan"><a href="?month={{ prev }}">← Bulan lalu</a><a class="on" href="?month={{ year }}-{{ month|stringformat:'02d' }}">{{ month_date|date:"F Y" }}</a><a href="?month={{ next }}">Bulan depan →</a></div>
+<div class="tiles"><div class="tile {% if counts.overdue %}warn{% endif %}"><small>Terlambat</small><strong>{{ counts.overdue }}</strong><span>lewat jatuh tempo</span></div><div class="tile"><small>Segera</small><strong>{{ counts.soon }}</strong><span>dalam 7 hari</span></div>
+  <div class="tile"><small>Akan datang</small><strong>{{ counts.upcoming }}</strong><span>bulan ini</span></div><div class="tile accent"><small>Selesai</small><strong>{{ counts.done }}</strong><span>sudah dilakukan</span></div></div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Kewajiban</th><th>Jatuh tempo</th><th class="num">Jumlah</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><a class="rowlink" href="{{ r.url }}"><b>{{ r.title }}</b></a>{% if r.note %}<small>{{ r.note }}</small>{% endif %}</td><td>{{ r.due|date:"d M Y" }}</td><td class="num">{% if r.amount is not None %}<b>{{ r.amount|rp }}</b>{% else %}—{% endif %}</td>
+    <td>{% if r.status == 'done' %}<span class="pill pill-paid">Selesai</span>{% if r.filing %}<small>{{ r.filing.done_on|date:"d M Y" }}{% if r.filing.reference %} · {{ r.filing.reference }}{% endif %}</small>{% endif %}{% elif r.status == 'overdue' %}<span class="pill pill-overdue">Terlambat</span>{% elif r.status == 'soon' %}<span class="pill pill-pending">Segera</span>{% else %}<span class="pill pill-info">Akan datang</span>{% endif %}</td>
+    <td class="num" data-no-row>{% if can_edit %}{% if r.filing %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="undo"><input type="hidden" name="code" value="{{ r.code }}"><button class="btn">Batalkan tanda</button></form>
+      {% elif r.status != 'done' %}<button type="button" class="btn" data-open="done-dialog" data-code="{{ r.code }}" data-title="{{ r.title }}" onclick="document.getElementById('done-code').value=this.dataset.code;document.getElementById('done-title').textContent=this.dataset.title">Tandai selesai</button>{% endif %}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Tidak ada kewajiban yang jatuh tempo bulan ini.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if can_edit %}<dialog id="done-dialog" class="pd-dialog" aria-labelledby="done-heading"><form method="post">{% csrf_token %}<input type="hidden" name="code" id="done-code">
+  <header><h2 id="done-heading">Tandai selesai</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <p class="dp-help" id="done-title"></p><div class="field-row"><label class="field"><span>Tanggal dilakukan</span><input type="date" name="done_on" value="{{ today }}" required></label><label class="field"><span>NTPN / BPE <em>(opsional)</em></span><input name="reference" maxlength="80"></label></div></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan</button></footer></form></dialog>{% endif %}
+<p class="dp-help">Batas waktu umum: PPh 21/23/4(2) disetor tanggal 10 dan dilaporkan tanggal 20 bulan berikutnya; PPh 25 dan PPh Final tanggal 15; PPN disetor dan dilaporkan paling lambat akhir bulan berikutnya. Konfirmasi tanggal terbaru di aturan DJP.</p>
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

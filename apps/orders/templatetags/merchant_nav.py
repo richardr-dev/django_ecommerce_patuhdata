@@ -134,7 +134,9 @@ NAV = [
         ]),
         Group("Pajak", "percent", [
             Link("PPN & PPh", "merchant-tax"),
+            Link("Kalender pajak", "merchant-tax-calendar"),
             Link("SPT Masa PPN", "merchant-spt-ppn"),
+            Link("SPT Tahunan badan", "merchant-spt-tahunan"),
             Link("PPh dipotong", "merchant-withholdings", match=("/merchant/tax/pph/",)),
             Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
         ]),

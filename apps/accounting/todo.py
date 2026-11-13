@@ -33,6 +33,11 @@ def todo_items(store, today, user=None):
             items.append({"count": count, "label": label, "url": url, "action": action,
                 "icon": icon, "tone": tone})
 
+    from apps.tax import tax_calendar
+    due = tax_calendar.attention(store, today)
+    late = [r for r in due if r["status"] == "overdue"]
+    add(len(late), "kewajiban pajak lewat jatuh tempo", reverse("merchant-tax-calendar"), "Periksa →", "alert", "danger")
+    add(len(due) - len(late), "kewajiban pajak jatuh tempo dalam 7 hari", reverse("merchant-tax-calendar"), "Lihat →", "clock", "warn")
     from . import budgets
     from .approvals import pending_count
     add(pending_count(store, user) if user else 0, "permintaan menunggu persetujuan Anda",
