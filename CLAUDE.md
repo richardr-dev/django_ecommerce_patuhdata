@@ -150,6 +150,11 @@ Four test files failed before this work and still do: `test_digital_products`,
 - **PostgreSQL is the production database**; develop and test on it too. `select_for_update` with
   `select_related` over a nullable relation needs `of=("self",)` (SQLite hides this). The customer key
   migration (`shops/0024`) rebuilds the key in SQL on PostgreSQL.
+- **Roles come from one table** (`shops/permissions.py`: `MATRIX`, `roles("books.edit")`). A view never
+  declares its own role set (`tests/test_permissions.py` fails if one does, and pins the matrix); the
+  "Hak akses" page prints the same table. The accountant reads and never writes. **Segregation of duties:**
+  `maker_may_not_check` stops the person who created a bill from paying it when someone else could; a
+  one-person store is never locked out. Give a new action a permission key, not a new role set.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -173,6 +178,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Faktur Pajak Keluaran worksheet for the Coretax template | `tax/faktur.py` | `tax/views.py:merchant_faktur_export` |
 | Goods received before the bill (GRNI 2350), bill made from a receipt | `accounting/receipts.py` | `accounting/views_receipts.py` |
 | Sell stock between two brands of one Organization (two books) | `accounting/intercompany.py` | `accounting/views_intercompany.py` |
+| Who may do what (matrix, Hak akses page, segregation of duties) | `shops/permissions.py` | `shops/staff_views.py:merchant_access` |
 | Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
