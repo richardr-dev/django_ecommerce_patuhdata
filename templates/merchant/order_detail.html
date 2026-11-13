@@ -80,7 +80,7 @@
             class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors
               {% if status_key == 'paid' or status_key == 'completed' %}bg-green-500 text-white hover:bg-green-600
               {% elif status_key == 'confirmed' %}bg-indigo-500 text-white hover:bg-indigo-600
-              {% elif status_key == 'packed' or status_key == 'picking' or status_key == 'allocated' %}bg-purple-500 text-white hover:bg-purple-600
+              {% elif status_key == 'packed' or status_key == 'picking' or status_key == 'allocated' %}bg-blue-500 text-white hover:bg-purple-600
               {% elif status_key == 'delivered' %}bg-teal-500 text-white hover:bg-teal-600
               {% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
       → {{ status_label }}

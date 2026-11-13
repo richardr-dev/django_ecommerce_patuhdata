@@ -10,9 +10,7 @@
     </div>
     <form method="post">{% csrf_token %}
       <input type="hidden" name="action" value="approve_all">
-      <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity" style="background:#4f46e5">
-        Setujui Semua ({{ pending_count }})
-      </button>
+      <button type="submit" class="btn-primary">Setujui semua ({{ pending_count }})</button>
     </form>
   </div>
 

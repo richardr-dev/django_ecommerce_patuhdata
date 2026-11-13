@@ -124,7 +124,7 @@
     {% if year_total %}
     <div class="flex-1 flex flex-col items-center gap-1">
       <div class="w-full rounded-t transition-all"
-           style="height:{% widthratio row.total year_total 100 %}%;min-height:{% if row.total %}2px{% else %}0{% endif %};background:#6366f1;"
+           style="height:{% widthratio row.total year_total 100 %}%;min-height:{% if row.total %}2px{% else %}0{% endif %};background:#3898ff;"
            title="{{ row.name }}: Rp{{ row.total|floatformat:'0g' }}"></div>
       <span class="text-gray-400 text-center leading-none" style="font-size:9px">{{ row.abbr }}</span>
     </div>
