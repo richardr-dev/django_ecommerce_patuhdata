@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import expenses, views, views_books
+from . import expenses, views, views_books, views_intercompany, views_receipts
 
 urlpatterns = [
     path("merchant/accounting/bank/", views_books.merchant_bank_accounts,
@@ -46,6 +46,12 @@ urlpatterns = [
         name="merchant-profit-loss"),
     path("merchant/accounting/cash-flow/", views_books.merchant_cash_flow,
         name="merchant-cash-flow"),
+    path("merchant/accounting/penerimaan/", views_receipts.merchant_goods_receipts, name="merchant-goods-receipts"),
+    path("merchant/accounting/penerimaan/baru/", views_receipts.merchant_goods_receipt_new, name="merchant-goods-receipt-new"),
+    path("merchant/accounting/penerimaan/<uuid:receipt_id>/", views_receipts.merchant_goods_receipt, name="merchant-goods-receipt"),
+    path("merchant/accounting/antar-brand/", views_intercompany.merchant_intercompany, name="merchant-intercompany"),
+    path("merchant/accounting/antar-brand/baru/", views_intercompany.merchant_intercompany_new, name="merchant-intercompany-new"),
+    path("merchant/accounting/antar-brand/<uuid:transfer_id>/", views_intercompany.merchant_intercompany_detail, name="merchant-intercompany-detail"),
     path("merchant/accounting/ekspor/<slug:kind>.xlsx", views_books.merchant_report_xlsx, name="merchant-report-xlsx"),
     path("merchant/accounting/paket-audit/", views_books.merchant_audit_pack, name="merchant-audit-pack"),
     path("merchant/accounting/sak-emkm/", views_books.merchant_emkm_pack, name="merchant-emkm-pack"),

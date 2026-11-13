@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 CASH, GATEWAY, RECEIVABLE, MARKETPLACE = "1100", "1200", "1250", "1300"
 INVENTORY, CONSIGNED, INPUT_VAT = "1400", "1450", "1500"
 VAT, UNIDENTIFIED, PAYABLE = "2100", "2200", "2300"
+INTERCO_RECEIVABLE, INTERCO_PAYABLE, INTERCO_SALES = "1260", "2360", "4150"
+GRNI = "2350"  # Barang diterima belum ditagih: goods on the shelf whose supplier bill has not arrived
+PURCHASE_VARIANCE = "5150"  # Selisih harga pembelian: bill price against the price the goods were received at
 CUSTOMER_CREDIT = "2400"
 WITHHELD = "2150"  # PPh 21 / 23 / 4(2) held back from a payment, owed to the tax office
 FIXED_ASSETS, ACCUMULATED_DEPRECIATION = "1600", "1690"
@@ -45,6 +48,7 @@ CHART = [
     (GATEWAY, "Piutang payment gateway", "asset"),
     (RECEIVABLE, "Piutang usaha", "asset"),
     (MARKETPLACE, "Piutang marketplace", "asset"),
+    (INTERCO_RECEIVABLE, "Piutang antar perusahaan", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
     (CONSIGNED, "Persediaan di mitra (konsinyasi)", "asset"),
     (INPUT_VAT, "PPN masukan", "asset"),
@@ -54,6 +58,8 @@ CHART = [
     (WITHHELD, "Utang PPh dipotong (21/23/4(2))", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (PAYABLE, "Utang usaha", "liability"),
+    (GRNI, "Barang diterima belum ditagih (GRNI)", "liability"),
+    (INTERCO_PAYABLE, "Utang antar perusahaan", "liability"),
     (CUSTOMER_CREDIT, "Uang muka & kredit pelanggan", "liability"),
     (LOANS, "Utang bank & pinjaman", "liability"),
     (EQUITY, "Modal pemilik", "equity"),
@@ -61,9 +67,11 @@ CHART = [
     (RETAINED, "Laba ditahan", "equity"),
     (SALES, "Penjualan", "revenue"),
     (SHIPPING, "Pendapatan ongkos kirim", "revenue"),
+    (INTERCO_SALES, "Penjualan antar perusahaan", "revenue"),
     (REFUNDS, "Retur & refund penjualan", "revenue"),
     (DISCOUNTS, "Potongan penjualan", "revenue"),
     (COGS, "Harga pokok penjualan", "expense"),
+    (PURCHASE_VARIANCE, "Selisih harga pembelian", "expense"),
     (FEES, "Biaya payment gateway & marketplace lainnya", "expense"),
     ("6110", "Komisi marketplace", "expense"),
     ("6120", "Biaya layanan & transaksi marketplace", "expense"),

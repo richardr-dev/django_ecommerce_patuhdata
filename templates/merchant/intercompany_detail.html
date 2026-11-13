@@ -1,0 +1,12 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Transfer {{ transfer.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-intercompany' %}">Transfer antar brand</a> / {{ transfer.number|default:"Tanpa nomor" }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ transfer.from_store.name }} → {{ transfer.to_store.name }}</h1><p>{{ transfer.transfer_date|date:"d F Y" }} · {% if seller %}Anda penjual{% else %}Anda pembeli{% endif %}</p></div></div>
+<div class="dp-grid"><div class="space-y-5">
+  <section class="panel"><header><h2>Barang</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Jumlah</th><th class="num">Harga transfer</th>{% if seller %}<th class="num">Harga pokok</th>{% endif %}<th class="num">Nilai</th></tr></thead><tbody>
+    {% for l in lines %}<tr><td>{{ l.description }}<small>{{ l.sku }}</small></td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_price|rp }}</td>{% if seller %}<td class="num">{{ l.unit_cost|rp }}</td>{% endif %}<td class="num"><b>{{ l.value|rp }}</b></td></tr>{% endfor %}
+  </tbody></table></div></section>
+  {% include "merchant/_journal_card.html" %}
+</div><aside class="dp-rail"><div class="bb-summary"><small>Harga transfer</small><strong style="display:block;font-size:30px">{{ transfer.price_total|rp }}</strong>{% if seller %}<p style="margin:8px 0 0;opacity:.85">Harga pokok {{ transfer.cost_total|rp }}</p>{% endif %}</div></aside></div>
+{% endblock %}

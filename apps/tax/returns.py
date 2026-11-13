@@ -33,7 +33,7 @@ class ReturnError(ValueError):
 
 def _lock(ret):
     from apps.orders.models import ReturnRequest
-    return ReturnRequest.objects.select_for_update().select_related("order", "order_item",
+    return ReturnRequest.objects.select_for_update(of=("self",)).select_related("order", "order_item",
         "order_item__product", "original_variant", "replacement_variant").get(pk=ret.pk)
 
 

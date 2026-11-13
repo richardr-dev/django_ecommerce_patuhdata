@@ -353,6 +353,37 @@ def withholding_tie(store, today, ledger):
     return check
 
 
+def intercompany_tie(store, today, ledger):
+    """Between the Organization's brands, what one is owed equals what the other owes."""
+    from .intercompany import group_balances
+    if not store.organization_id or store.organization.stores.count() < 2:
+        return Check("intercompany", "Transfer antar brand", INFO, "Hanya ada satu brand di organisasi ini.")
+    receivable, payable = group_balances(store.organization)
+    return _tie("intercompany", "Piutang dan utang antar brand saling hapus", receivable, payable,
+        "Utang antar perusahaan", url=reverse("merchant-intercompany"), action="Buka transfer antar brand",
+        ok="Piutang antar perusahaan sama dengan utang antar perusahaan di seluruh brand.",
+        off="Piutang dan utang antar brand tidak sama: ada pembayaran antar brand yang baru dicatat di satu sisi.",
+        status_off=INFO)
+
+
+def grni_tie(store, today, ledger):
+    """Barang diterima belum ditagih equals the value of receipts still waiting for their bill."""
+    from .models import GoodsReceipt
+    waiting = sum((r.value for r in GoodsReceipt.objects.filter(store=store, bill__isnull=True
+        ).prefetch_related("lines")), ZERO)
+    check = _tie("grni", "GRNI sama dengan penerimaan yang belum ditagih", ledger.get("2350", ZERO), waiting,
+        "Penerimaan belum ditagih", url=reverse("merchant-goods-receipts"), action="Buka penerimaan barang",
+        ok="Saldo GRNI sama dengan nilai penerimaan barang yang belum ditagih.",
+        off="Saldo GRNI berbeda dari penerimaan yang belum ditagih (ada jurnal manual ke akun GRNI atau tagihan dibatalkan tanpa membuka penerimaan).")
+    from datetime import timedelta as _td
+
+    from .models import GoodsReceipt as _GR
+    old = _GR.objects.filter(store=store, bill__isnull=True, received_on__lt=today - _td(days=30)).count()
+    if old and check.status == OK:
+        check.status, check.summary = INFO, f"{old} penerimaan barang lebih dari 30 hari belum ada tagihannya."
+    return check
+
+
 def year_close_tie(store, today, ledger):
     """A closed year's profit still equals what was moved to Laba ditahan (nothing slipped in
     after the closing)."""
@@ -482,7 +513,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie]
 
 
 def run_checks(store, today):

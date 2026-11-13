@@ -5,6 +5,8 @@ def strip_uuid_dashes(apps, schema_editor):
     """Migration 0025 stored UUIDs with dashes; Django's SQLite backend queries without dashes.
     Convert all id values to 32-char no-dash hex so ORM pk-based lookups work."""
     db = schema_editor.connection
+    if db.vendor != "sqlite":
+        return  # PostgreSQL stores real uuids; only SQLite kept text ids
     with db.cursor() as cursor:
         cursor.execute("SELECT id FROM shops_customer")
         rows = cursor.fetchall()

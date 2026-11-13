@@ -20,6 +20,7 @@ from .attachments import for_record as attachment_list
 from .ledger import account_balances, chart_of_accounts, locked_through
 from .models import (
     BILL_CATEGORIES,
+    WITHHOLDING_KINDS,
     Account,
     BankAccount,
     BankStatementLine,
@@ -30,7 +31,6 @@ from .models import (
     JournalEntry,
     LedgerLock,
     Payout,
-    WITHHOLDING_KINDS,
     Supplier,
 )
 from .payables import PayableError, create_bill, pay_bill, receive_bill, void_bill
@@ -372,6 +372,12 @@ def merchant_bill_new(request):
         import datetime
         from decimal import InvalidOperation
 
+        from . import idempotency
+        idem = request.POST.get("idem", "")
+        earlier = idempotency.claim(store, "bill", idem)
+        if earlier is not None:
+            messages.info(request, "Tagihan ini sudah disimpan.")
+            return redirect("merchant-bill-detail", bill_id=earlier) if earlier else redirect("merchant-bills")
         try:
             supplier_id = request.POST.get("supplier_id", "")
             supplier_name = request.POST.get("supplier_name", "").strip()[:160]
@@ -424,15 +430,18 @@ def merchant_bill_new(request):
                 cost_center=CostCenter.objects.filter(store=store, is_active=True,
                     pk=request.POST.get("cost_center") or 0).first())
 
+            idempotency.finish(store, "bill", idem, bill.pk)
             audit_log(store, request.user, "bill.created", bill, total=bill.total, supplier=supplier.name)
             messages.success(request, f"Bill {number or str(bill.id)[:8]} berhasil dibuat.")
             return redirect("merchant-bill-detail", bill_id=bill.id)
         except Exception as exc:
+            idempotency.release(store, "bill", idem)
             messages.error(request, f"Gagal: {exc}")
 
+    from . import idempotency as _idem
     today = timezone.localdate().isoformat()
     return render(request, "merchant/bill_new.html", _merchant_context(request, store,
-        suppliers=suppliers, today=today, bill_categories=BILL_CATEGORIES,
+        suppliers=suppliers, today=today, idem_key=_idem.new_key(), bill_categories=BILL_CATEGORIES,
         cost_centers=CostCenter.objects.filter(store=store, is_active=True)))
 
 

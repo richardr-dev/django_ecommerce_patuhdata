@@ -1,0 +1,23 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penerimaan barang{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Penerimaan barang</h1>
+    <p>Barang yang sudah sampai tetapi tagihan supplier belum datang. Stok langsung bertambah; utangnya dicatat di GRNI sampai tagihan dibuat dari penerimaan ini.</p></div>
+  <div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-goods-receipt-new' %}">{% icon "plus" %} Terima barang</a></div>
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Belum ditagih (GRNI)</small><strong>{{ waiting_value|rp }}</strong><span>{{ waiting_count }} penerimaan menunggu tagihan</span></div>
+</div>
+
+<div class="tabs"><a href="?show=waiting" class="{% if show == 'waiting' %}on{% endif %}">Belum ditagih</a><a href="?show=all" class="{% if show == 'all' %}on{% endif %}">Semua</a></div>
+
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Penerimaan</th><th>Supplier</th><th>Tanggal</th><th class="num">Nilai</th><th>Status</th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td><a class="rowlink" href="{% url 'merchant-goods-receipt' r.pk %}"><b>{{ r.number|default:"Tanpa nomor" }}</b></a><small>{{ r.lines.all|length }} barang</small></td>
+    <td>{{ r.supplier.name }}</td><td>{{ r.received_on|date:"d M Y" }}</td><td class="num"><b>{{ r.value|rp }}</b></td>
+    <td>{% if r.bill_id %}<span class="pill pill-paid">Sudah ditagih</span>{% else %}<span class="pill pill-pending">Belum ditagih</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada penerimaan barang. Pilih "Terima barang" saat barang tiba sebelum faktur supplier.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

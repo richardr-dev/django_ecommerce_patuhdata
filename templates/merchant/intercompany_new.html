@@ -1,0 +1,22 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Transfer baru{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-intercompany' %}">Transfer antar brand</a></span><h1>Transfer baru</h1>
+  <p>Dari {{ merchant_store.name }}. Barang keluar dari stok brand ini dan masuk ke stok brand tujuan pada harga transfer. SKU harus sudah ada di katalog brand tujuan.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><h2>1. Ke brand mana</h2></header><div class="dp-card-body"><div class="field-row">
+      <label class="field"><span>Brand tujuan</span><select name="to_store" required><option value="">— Pilih brand —</option>{% for s in targets %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>No. dokumen</span><input name="number" maxlength="40"></label>
+      <label class="field"><span>Tanggal</span><input type="date" name="transfer_date" value="{{ today }}" required></label></div></div></section>
+    <section class="panel"><header><h2>2. Barang</h2><p>Harga transfer adalah harga jual ke brand tujuan; harga pokok penjual tetap rata-rata biayanya.</p></header>
+      <div class="scroll-x"><table class="tbl editor"><thead><tr><th>SKU</th><th class="num">Jumlah</th><th class="num">Harga transfer</th></tr></thead><tbody>
+        {% for i in "123" %}<tr><td><input name="sku[]" maxlength="60" aria-label="SKU baris {{ forloop.counter }}"></td><td><input name="qty[]" inputmode="numeric" class="num" aria-label="Jumlah baris {{ forloop.counter }}"></td><td><input name="unit_price[]" data-rupiah class="num" aria-label="Harga baris {{ forloop.counter }}"></td></tr>{% endfor %}
+      </tbody></table></div></section>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300"></textarea></label>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Yang akan tercatat</small>
+    <p style="margin:8px 0 14px;opacity:.9">Di brand ini: piutang, penjualan antar perusahaan, HPP, stok berkurang.<br>Di brand tujuan: stok bertambah dan utang antar perusahaan.</p>
+    <button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Kirim barang</button></div></aside>
+</form>
+{% endblock %}

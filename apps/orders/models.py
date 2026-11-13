@@ -388,7 +388,22 @@ class InventoryAllocation(models.Model):
         constraints = [models.UniqueConstraint(fields=["order_item", "inventory_level"], name="unique_item_inventory_allocation")]
 
 
+class MovementImmutable(Exception):
+    pass
+
+
+class MovementQuerySet(models.QuerySet):
+    """The movement ledger is append-only: a mistake is corrected by a new movement."""
+
+    def update(self, **kwargs):
+        raise MovementImmutable("Pergerakan stok tidak boleh diubah. Buat pergerakan koreksi.")
+
+    def delete(self):
+        raise MovementImmutable("Pergerakan stok tidak boleh dihapus. Buat pergerakan koreksi.")
+
+
 class InventoryMovement(models.Model):
+    objects = MovementQuerySet.as_manager()
     KIND = [("reserve", "Reserve"), ("release", "Release"), ("commit", "Commit"),
         ("adjust", "Adjust"), ("return", "Return"), ("receipt", "Barang masuk"),
         ("transfer_in", "Transfer masuk"), ("transfer_out", "Transfer keluar"),
@@ -418,6 +433,14 @@ class InventoryMovement(models.Model):
     class Meta:
         constraints = [models.CheckConstraint(condition=(models.Q(inventory_level__isnull=False) |
             models.Q(variant__isnull=False)), name="movement_has_stock_target")]
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            raise MovementImmutable("Pergerakan stok tidak boleh diubah. Buat pergerakan koreksi.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise MovementImmutable("Pergerakan stok tidak boleh dihapus. Buat pergerakan koreksi.")
 
 class PaymentEvent(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)

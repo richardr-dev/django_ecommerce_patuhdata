@@ -604,3 +604,114 @@ class Withholding(models.Model):
     @property
     def tax_name(self):
         return next((t for code, _l, t, _r in WITHHOLDING_KINDS if code == self.kind), "PPh")
+
+
+class GoodsReceipt(models.Model):
+    """Penerimaan barang: goods that arrived before the supplier's bill. It puts the stock on the
+    shelf and books Persediaan against "Barang diterima belum ditagih" (GRNI); the bill, when it
+    comes, clears that liability into Utang usaha."""
+    STATUS_OPEN, STATUS_BILLED = "open", "billed"
+    STATUS_CHOICES = [(STATUS_OPEN, "Belum ditagih"), (STATUS_BILLED, "Sudah ditagih")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="goods_receipts")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="goods_receipts")
+    number = models.CharField(max_length=40, blank=True, help_text="Nomor surat jalan supplier")
+    received_on = models.DateField()
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    bill = models.OneToOneField(Bill, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="goods_receipt")
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_on", "-created_at"]
+
+    def __str__(self):
+        return f"Penerimaan {self.number or str(self.id)[:8]} — {self.supplier.name}"
+
+    @property
+    def value(self):
+        from decimal import Decimal
+        return sum((line.line_total for line in self.lines.all()), Decimal(0))
+
+
+class GoodsReceiptLine(models.Model):
+    receipt = models.ForeignKey(GoodsReceipt, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    description = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def line_total(self):
+        return self.quantity * self.unit_cost
+
+
+class IdempotencyKey(models.Model):
+    """A form submission that already ran. A retry or double-click carrying the same key gets the
+    first result back instead of creating a second invoice, bill, receipt or payment."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="+")
+    scope = models.CharField(max_length=40)
+    key = models.CharField(max_length=64)
+    result_id = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["store", "scope", "key"], name="unique_idempotency_key")]
+
+
+class IntercompanyTransfer(models.Model):
+    """Goods sold from one brand to another brand of the same Organization. Each brand is its own
+    legal entity with its own books: the seller books a receivable, the sale and its HPP; the buyer
+    books the stock and a payable. A transfer is never edited; a return is a transfer back."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey("shops.Organization", on_delete=models.PROTECT, related_name="+")
+    from_store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="transfers_out")
+    to_store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="transfers_in")
+    number = models.CharField(max_length=40, blank=True)
+    transfer_date = models.DateField()
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-transfer_date", "-created_at"]
+        constraints = [models.CheckConstraint(condition=~models.Q(from_store=models.F("to_store")),
+            name="intercompany_two_different_stores")]
+
+    @property
+    def price_total(self):
+        from decimal import Decimal
+        return sum((line.quantity * line.unit_price for line in self.lines.all()), Decimal(0))
+
+    @property
+    def cost_total(self):
+        from decimal import Decimal
+        return sum((line.quantity * line.unit_cost for line in self.lines.all()), Decimal(0))
+
+
+class IntercompanyLine(models.Model):
+    transfer = models.ForeignKey(IntercompanyTransfer, on_delete=models.CASCADE, related_name="lines")
+    from_product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    to_product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    sku = models.CharField(max_length=60)
+    description = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)   # the seller's average cost
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)  # the transfer price
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def value(self):
+        return self.quantity * self.unit_price

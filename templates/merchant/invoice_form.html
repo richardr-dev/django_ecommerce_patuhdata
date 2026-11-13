@@ -36,7 +36,7 @@
 {% endif %}
 
 <form method="post" id="inv-form" data-unsaved class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-  {% csrf_token %}
+  {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
   <input type="hidden" name="customer_id" id="customer-id" value="{{ initial.customer.id|default:'' }}">
 
   <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">

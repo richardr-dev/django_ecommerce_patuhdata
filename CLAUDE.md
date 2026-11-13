@@ -130,6 +130,26 @@ Four test files failed before this work and still do: `test_digital_products`,
   field layout is not confirmed in this repo. `tax/faktur.py` therefore produces a checked worksheet (per
   line, buyer NPWP/NIK flagged) and says so; do not claim it is an importable XML until the current DJP
   template (pajak.go.id, Coretax, Template XML dan Converter) has been read and the format tested.
+- **Stock movements are append-only** (`InventoryMovement`): `save` on an existing row, `delete`, and the
+  queryset `update`/`delete` raise `MovementImmutable`, and on PostgreSQL a trigger refuses raw UPDATE and
+  DELETE too (migration `orders/0041`; only deleting a user may blank `actor`). A mistake is a new movement.
+  `tests/test_movement_ledger.py` replays every level from its movements.
+- **GRNI** (`accounting/receipts.py`): goods that arrive before the supplier's bill are a `GoodsReceipt`:
+  stock up, Persediaan / GRNI (2350). The bill is made *from* the receipt (`bill_receipt`): it clears GRNI
+  into Utang usaha and books only the price difference to Selisih harga pembelian (5150); voiding that bill
+  reopens the receipt. The warehouse role may receive goods but not bill them. `controls.grni_tie` checks it.
+- **Double submits**: forms that create money documents carry `<input name="idem" value="{{ idem_key }}">`
+  and call `idempotency.claim / finish / release` (a claim older than two minutes with no result is stale).
+  A new create form for an invoice, bill, receipt, payment or transfer must do the same.
+- **Intercompany** (`accounting/intercompany.py`): brands of one Organization are separate legal entities.
+  A transfer moves stock out of one store and into the other at the transfer price and posts one entry in
+  each book (seller: 1260 Piutang antar perusahaan / 4150 Penjualan antar perusahaan and HPP / Persediaan;
+  buyer: Persediaan / 2360 Utang antar perusahaan). The SKU must exist in both catalogs; the person must be
+  admin of both. PPN and consolidation eliminations are not applied. `controls.intercompany_tie` checks the
+  group's receivable against payable.
+- **PostgreSQL is the production database**; develop and test on it too. `select_for_update` with
+  `select_related` over a nullable relation needs `of=("self",)` (SQLite hides this). The customer key
+  migration (`shops/0024`) rebuilds the key in SQL on PostgreSQL.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -151,6 +171,9 @@ Four test files failed before this work and still do: `test_digital_products`,
 | PPh 21/23/4(2) withholding, bukti potong, deposit | `accounting/withholding.py` | `views_books.py:merchant_withholdings` |
 | SPT Masa PPN worksheet with kompensasi | `tax/spt.py` | `tax/views.py:merchant_spt_ppn` |
 | Faktur Pajak Keluaran worksheet for the Coretax template | `tax/faktur.py` | `tax/views.py:merchant_faktur_export` |
+| Goods received before the bill (GRNI 2350), bill made from a receipt | `accounting/receipts.py` | `accounting/views_receipts.py` |
+| Sell stock between two brands of one Organization (two books) | `accounting/intercompany.py` | `accounting/views_intercompany.py` |
+| Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
@@ -329,7 +352,7 @@ tabular-nums` on KPIs, money, dates and table columns. Page title 24px bold (`-0
 - [ ] Product variants per warehouse; variants keep a single stock number today.
 - [x] One scheduled worker: `manage.py run_books` (ledger backlog, recurring invoices,
       monthly depreciation). It still has to be scheduled (cron) in deployment.
-- [ ] Tests run on SQLite. Add a PostgreSQL CI job for the `select_for_update` paths.
+- [~] Tests run on SQLite; the suite also runs on PostgreSQL locally (`DATABASE_URL=postgres://... pytest`). Add a CI job.
 - [ ] Fix the four failing test files listed above.
 
 ### 2. Features still missing

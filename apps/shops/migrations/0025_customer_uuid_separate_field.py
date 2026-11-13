@@ -6,6 +6,8 @@ def fix_integer_ids(apps, schema_editor):
     """Migration 0024 changed id to UUIDField but SQLite kept integer values.
     Replace each integer id with a proper UUID string using raw SQL."""
     db = schema_editor.connection
+    if db.vendor != "sqlite":
+        return  # PostgreSQL stores real uuids; only SQLite kept text ids
     with db.cursor() as cursor:
         cursor.execute("SELECT id FROM shops_customer")
         rows = cursor.fetchall()

@@ -1,0 +1,33 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penerimaan {{ receipt.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-goods-receipts' %}">Penerimaan barang</a> / {{ receipt.number|default:"Tanpa nomor" }}</div>
+<div class="pg-head"><div><h1 class="dp-title">Penerimaan {{ receipt.number|default:"tanpa nomor" }}</h1>
+  <p>{{ receipt.supplier.name }} · diterima {{ receipt.received_on|date:"d F Y" }}
+    {% if receipt.bill_id %}· <span class="pill pill-paid">Sudah ditagih</span>{% else %}· <span class="pill pill-pending">Belum ditagih</span>{% endif %}</p></div>
+  <div class="dp-actions">{% if receipt.bill_id %}<a class="btn" href="{% url 'merchant-bill-detail' receipt.bill_id %}">{% icon "file" %} Lihat tagihan</a>
+    {% elif can_bill %}<button type="button" class="btn-primary" data-open="bill-dialog">{% icon "plus" %} Buat tagihan</button>{% endif %}</div></div>
+<div class="dp-grid"><div class="space-y-5">
+  <section class="panel"><header><h2>Barang diterima</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Jumlah</th><th class="num">Harga</th><th class="num">Nilai</th></tr></thead><tbody>
+    {% for l in lines %}<tr><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_cost|rp }}</td><td class="num"><b>{{ l.line_total|rp }}</b></td></tr>{% endfor %}
+    <tr><td colspan="3"><b>Total</b></td><td class="num"><b>{{ receipt.value|rp }}</b></td></tr></tbody></table></div></section>
+  {% include "merchant/_journal_card.html" %}
+</div>
+<aside class="dp-rail"><div class="bb-summary"><small>Nilai penerimaan</small><strong style="display:block;font-size:30px">{{ receipt.value|rp }}</strong>
+  <p style="margin:8px 0 0;opacity:.85">{% if receipt.bill_id %}GRNI sudah dipindah ke Utang usaha lewat tagihan.{% else %}Tercatat di GRNI sampai tagihan supplier dibuat.{% endif %}</p></div></aside></div>
+
+{% if can_bill and not receipt.bill_id %}
+<dialog id="bill-dialog" class="pd-dialog" aria-labelledby="bill-title"><form method="post">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="bill-title">Buat tagihan dari penerimaan</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div>
+    <div class="field-row"><label class="field"><span>No. faktur supplier</span><input name="number" maxlength="40"></label>
+      <label class="field"><span>Tanggal faktur</span><input type="date" name="bill_date" value="{{ today }}" required></label></div>
+    <div class="field-row"><label class="field"><span>Jatuh tempo <em>(opsional)</em></span><input type="date" name="due_date"></label>
+      <label class="field"><span>PPN</span><input name="tax" data-rupiah placeholder="0"></label></div>
+    <p class="dp-help">Isi harga hanya bila faktur supplier berbeda dari harga saat barang diterima. Selisihnya dicatat sebagai Selisih harga pembelian.</p>
+    {% for l in lines %}<label class="field"><span>{{ l.description }} ×{{ l.quantity }} · harga faktur</span><input name="price_{{ l.pk }}" data-rupiah placeholder="{{ l.unit_cost|floatformat:0 }}"></label>{% endfor %}
+  </div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Buat tagihan</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

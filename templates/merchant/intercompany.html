@@ -1,0 +1,20 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Transfer antar brand{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Transfer antar brand</h1>
+    <p>Jual barang dari satu brand ke brand lain dalam organisasi yang sama. Setiap brand punya pembukuan sendiri: penjual mencatat piutang, penjualan, dan HPP; pembeli mencatat stok dan utang.</p></div>
+  <div class="dp-actions">{% if can_create and others %}<a class="btn-primary" href="{% url 'merchant-intercompany-new' %}">{% icon "plus" %} Transfer baru</a>{% endif %}</div>
+</div>
+{% if not others %}<div class="notice">{% icon "alert" %}<span>Organisasi ini baru punya satu brand. Tambahkan brand lain untuk memakai transfer antar brand.</span></div>{% endif %}
+<div class="tiles">
+  <div class="tile accent"><small>Piutang ke brand lain</small><strong>{{ owed_to_me|rp }}</strong><span>Akun 1260 di brand ini</span></div>
+  <div class="tile"><small>Utang ke brand lain</small><strong>{{ i_owe|rp }}</strong><span>Akun 2360 di brand ini</span></div>
+  <div class="tile {% if group_receivable != group_payable %}warn{% endif %}"><small>Seluruh brand</small><strong>{{ group_receivable|rp }} / {{ group_payable|rp }}</strong><span>piutang / utang, harus sama</span></div>
+</div>
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Transfer</th><th>Dari</th><th>Ke</th><th>Tanggal</th><th class="num">Harga transfer</th></tr></thead><tbody>
+  {% for t in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-intercompany-detail' t.pk %}"><b>{{ t.number|default:"Tanpa nomor" }}</b></a><small>{{ t.lines.all|length }} barang</small></td>
+    <td>{{ t.from_store.name }}</td><td>{{ t.to_store.name }}</td><td>{{ t.transfer_date|date:"d M Y" }}</td><td class="num"><b>{{ t.price_total|rp }}</b></td></tr>
+  {% empty %}<tr><td colspan="5" class="!py-10 text-center text-slate-400">Belum ada transfer antar brand.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

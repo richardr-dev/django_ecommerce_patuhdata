@@ -8,8 +8,10 @@ from django.db import transaction
 
 from .ledger import (
     CASH,
+    GRNI,
     INPUT_VAT,
     PAYABLE,
+    PURCHASE_VARIANCE,
     WITHHELD,
     LedgerError,
     post_entry,
@@ -35,10 +37,18 @@ def _can_credit_input_vat(store):
 def post_bill(bill, *, strict=False, actor=None):
     """Only a PKP may credit PPN masukan; for everyone else the PPN is part of the cost."""
     vat = bill.tax if _can_credit_input_vat(bill.store) else Decimal(0)
+    memo = f"Tagihan {bill.supplier.name} {bill.number}".strip()
+    receipt = getattr(bill, "goods_receipt", None)
+    if receipt:
+        # The goods were booked at receipt: the bill clears GRNI, and only the price difference
+        # (and the PPN a non-PKP cannot credit) is new cost.
+        received = receipt.value
+        amounts = {GRNI: received, PURCHASE_VARIANCE: bill.total - vat - received, INPUT_VAT: vat,
+            PAYABLE: -bill.total}
+    else:
+        amounts = {bill.category: bill.total - vat, INPUT_VAT: vat, PAYABLE: -bill.total}
     return post_entry(bill.store, date=bill.bill_date, strict=strict, actor=actor,
-        source=("bill", bill.pk), cost_center=bill.cost_center,
-        memo=f"Tagihan {bill.supplier.name} {bill.number}".strip(),
-        amounts={bill.category: bill.total - vat, INPUT_VAT: vat, PAYABLE: -bill.total})
+        source=("bill", bill.pk), cost_center=bill.cost_center, memo=memo, amounts=amounts)
 
 
 def post_bill_payment(payment, *, strict=False, actor=None):
@@ -81,7 +91,7 @@ def receive_bill(bill, *, warehouse=None, actor=None):
     uplift = Decimal(0) if _can_credit_input_vat(bill.store) or not bill.subtotal else (
         bill.tax / bill.subtotal)
     received = 0
-    for item in bill.items.select_for_update().select_related("product", "variant"):
+    for item in bill.items.select_for_update(of=("self",)).select_related("product", "variant"):
         if not item.product_id:
             continue
         if item.quantity != int(item.quantity):
@@ -105,8 +115,9 @@ def receive_bill(bill, *, warehouse=None, actor=None):
 
 @transaction.atomic
 def create_bill(store, *, supplier, lines, bill_date, due_date=None, number="", tax=Decimal(0),
-        category="1400", notes="", actor=None, cost_center=None):
-    """``lines`` is a list of dicts with description, qty, unit_price."""
+        category="1400", notes="", actor=None, cost_center=None, receipt=None):
+    """``lines`` is a list of dicts with description, qty, unit_price. ``receipt`` is the goods
+    receipt this bill invoices: its stock is already on the shelf, so the lines count as received."""
     if category not in dict(Bill._meta.get_field("category").choices):
         raise PayableError("Kategori tagihan tidak dikenal.")
     if not lines:
@@ -125,7 +136,13 @@ def create_bill(store, *, supplier, lines, bill_date, due_date=None, number="", 
         notes=notes, created_by=actor, cost_center=cost_center)
     BillItem.objects.bulk_create(BillItem(bill=bill, description=line["description"],
         quantity=line["qty"], unit_price=line["unit_price"], product=line["product"],
-        variant=line["variant"], line_total=line["qty"] * line["unit_price"]) for line in lines)
+        variant=line["variant"], line_total=line["qty"] * line["unit_price"],
+        received_quantity=int(line["qty"]) if receipt and line["product"] else 0) for line in lines)
+    if receipt:
+        receipt.bill = bill
+        receipt.status = "billed"
+        receipt.save(update_fields=["bill", "status"])
+        bill = Bill.objects.get(pk=bill.pk)  # so bill.goods_receipt resolves
     try:
         post_bill(bill, strict=True, actor=actor)
     except LedgerError as error:
@@ -184,6 +201,8 @@ def void_bill(bill, *, actor=None):
         raise PayableError(str(error)) from error
     bill.status = Bill.STATUS_VOID
     bill.save(update_fields=["status"])
+    from .receipts import reopen_after_void
+    reopen_after_void(bill)
     return bill
 
 

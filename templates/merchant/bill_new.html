@@ -12,7 +12,7 @@
 </div>
 
 <form method="post" data-unsaved class="space-y-5">
-{% csrf_token %}
+{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
 
 {# Supplier + header #}
 <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">

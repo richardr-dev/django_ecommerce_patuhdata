@@ -1,0 +1,50 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Terima barang{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-goods-receipts' %}">Penerimaan barang</a></span><h1>Terima barang</h1>
+  <p>Catat barang yang tiba. Stok bertambah sekarang dan harga pokok rata-rata ikut berubah.</p></div></div>
+<form method="post" data-unsaved class="dp-grid">
+  {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><h2>1. Dari siapa</h2></header><div class="dp-card-body">
+      <div class="field-row">
+        <label class="field"><span>Supplier</span><select name="supplier_id" id="supplier-select"><option value="">— Pilih supplier —</option>{% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Atau supplier baru</span><input name="supplier_name" maxlength="160" placeholder="Nama supplier baru"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>No. surat jalan</span><input name="number" maxlength="40" placeholder="mis. SJ-2026-001"></label>
+        <label class="field"><span>Tanggal diterima</span><input type="date" name="received_on" value="{{ today }}" required></label>
+        {% if warehouses|length > 1 %}<label class="field"><span>Gudang</span><select name="warehouse">{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
+      </div>
+    </div></section>
+    <section class="panel"><header><h2>2. Barang yang diterima</h2><p>Gunakan SKU produk di katalog. Jumlah dalam unit utuh.</p></header>
+      <div class="scroll-x"><table class="tbl editor"><thead><tr><th>SKU</th><th class="num">Jumlah</th><th class="num">Harga satuan</th><th class="num">Nilai</th></tr></thead><tbody id="rows">
+        {% for i in "12345" %}<tr><td><input name="sku[]" aria-label="SKU baris {{ forloop.counter }}" maxlength="60"></td>
+          <td><input name="qty[]" inputmode="numeric" class="num" aria-label="Jumlah baris {{ forloop.counter }}"></td>
+          <td><input name="unit_cost[]" data-rupiah class="num" aria-label="Harga baris {{ forloop.counter }}"></td>
+          <td class="num"><span data-line>Rp0</span></td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300"></textarea></label>
+  </div>
+  <aside class="dp-rail"><div class="bb-summary"><small>Nilai penerimaan</small><strong id="total" style="display:block;font-size:30px">Rp0</strong>
+    <p style="margin:8px 0 14px;opacity:.85">Persediaan bertambah dan GRNI (utang belum ditagih) bertambah sebesar ini.</p>
+    <button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Simpan penerimaan</button></div></aside>
+</form>
+<script>
+(function () {
+  var rows = document.querySelectorAll("#rows tr"), total = document.getElementById("total");
+  function num(v) { return Number((v || "0").replace(/\./g, "").replace(",", ".")) || 0; }
+  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function recalc() {
+    var sum = 0;
+    rows.forEach(function (tr) {
+      var q = num(tr.querySelector('[name="qty[]"]').value), c = num(tr.querySelector('[name="unit_cost[]"]').value);
+      tr.querySelector("[data-line]").textContent = fmt(q * c); sum += q * c;
+    });
+    total.textContent = fmt(sum);
+  }
+  rows.forEach(function (tr) { tr.addEventListener("input", recalc); });
+})();
+</script>
+{% endblock %}

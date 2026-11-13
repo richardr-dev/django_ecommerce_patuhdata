@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
+from apps.accounting import idempotency
 from apps.accounting.bank import parse_amount
 from apps.accounting.ledger import LedgerError
 from apps.catalog.models import Product, annotate_available_stock
@@ -166,6 +167,11 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
     initial = _initial(store, source, mode, _customer(store, request.GET.get("customer")))
     if request.method == "POST":
         post = request.POST
+        idem = "" if editing else post.get("idem", "")
+        earlier = idempotency.claim(store, "invoice", idem)
+        if earlier is not None:  # the same form was already submitted: do not invoice twice
+            messages.info(request, "Invoice ini sudah dibuat.")
+            return redirect("merchant-invoice-detail", invoice_id=earlier) if earlier else redirect("merchant-sales-invoices")
         customer = _customer(store, post.get("customer_id"))
         try:
             lines = _post_lines(request, store) if not locks else None
@@ -197,6 +203,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                     tracking_number=post.get("tracking_number", ""),
                     partner=_partner(store, post.get("partner_id")))
         except (InvoiceError, LedgerError, InvalidOperation, ValueError) as error:
+            idempotency.release(store, "invoice", idem)
             messages.error(request, f"Gagal: {error}" if str(error) else "Isian tidak valid.")
             initial.update({"customer": customer, "buyer_name": post.get("buyer_name", ""),
                 "company_name": post.get("company_name", ""), "npwp": post.get("buyer_npwp", ""),
@@ -213,6 +220,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
             except InvalidOperation:
                 pass
         else:
+            idempotency.finish(store, "invoice", idem, invoice.pk)
             AuditLog.objects.create(store=store, actor=request.user,
                 action="invoice.updated" if editing else "invoice.created", object_type="Invoice",
                 object_id=str(invoice.pk), details={"number": invoice.number,
@@ -225,7 +233,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
     return render(request, "merchant/invoice_form.html", _merchant_context(request, store,
         mode=mode, source=source, locks=locks, initial=initial, terms=TERMS, vat_rate=vat_rate,
         channels=[c for c in Order.CHANNELS if c[0] not in {"pos", "abshop"}],
-        catalog=_catalog(store), partners=_partners(store),
+        catalog=_catalog(store), partners=_partners(store), idem_key=idempotency.new_key(),
         today=timezone.localdate().isoformat(), post=request.POST))
 
 
