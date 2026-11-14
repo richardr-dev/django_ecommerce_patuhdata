@@ -27,19 +27,19 @@ class StorefrontCustomizationTests(TestCase):
         return {key: value for key, value in data.items() if value is not None}
 
     def test_applying_template_sets_design_but_keeps_merchant_content(self):
-        response = self.client.post("/merchant/settings/template/", {"template": "boutique"})
-        self.assertRedirects(response, "/merchant/settings/")
+        response = self.client.post("/books/settings/template/", {"template": "boutique"})
+        self.assertRedirects(response, "/books/settings/")
         self.store.refresh_from_db()
         for field, value in STOREFRONT_TEMPLATES["boutique"]["values"].items():
             self.assertEqual(getattr(self.store, field), value)
         self.assertEqual(self.store.storefront_template, "boutique")
         self.assertEqual(self.store.hero_title, "Judul milik merchant")
         self.assertTrue(AuditLog.objects.filter(store=self.store, action="store.template_applied").exists())
-        settings_page = self.client.get("/merchant/settings/")
+        settings_page = self.client.get("/books/settings/")
         self.assertContains(settings_page, "Sedang dipakai ✓")
 
     def test_unknown_template_is_rejected(self):
-        self.client.post("/merchant/settings/template/", {"template": "nope"})
+        self.client.post("/books/settings/template/", {"template": "nope"})
         self.store.refresh_from_db()
         self.assertEqual(self.store.storefront_template, "")
 
@@ -57,16 +57,16 @@ class StorefrontCustomizationTests(TestCase):
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
             banners = [SimpleUploadedFile(f"banner{n}.png", PNG, content_type="image/png")
                 for n in range(3)]
-            response = self.client.post("/merchant/settings/", self._settings_data(
+            response = self.client.post("/books/settings/", self._settings_data(
                 show_store_name="on", banners=banners))
-            self.assertRedirects(response, "/merchant/settings/")
+            self.assertRedirects(response, "/books/settings/")
             slides = list(self.store.storefront_slides.all())
             self.assertEqual([slide.position for slide in slides], [1, 2, 3])
             home = self.client.get("/")
             self.assertContains(home, "commercial-carousel")
             self.assertContains(home, 'class="carousel-slide"', count=3)
 
-            self.client.post("/merchant/settings/", self._settings_data(show_store_name="on",
+            self.client.post("/books/settings/", self._settings_data(show_store_name="on",
                 remove_banners=[slides[0].id]))
             self.assertEqual(self.store.storefront_slides.count(), 2)
 
@@ -110,7 +110,7 @@ class StorefrontCustomizationTests(TestCase):
         self.assertIn("background_color", form.errors)
 
     def test_theme_picker_previews_every_preset_including_asian_market_looks(self):
-        page = self.client.get("/merchant/settings/")
+        page = self.client.get("/books/settings/")
         self.assertContains(page, 'class="theme-preview"', count=len(STOREFRONT_TEMPLATES))
         self.assertContains(page, "Promo Merah")
         self.assertContains(page, "Pastel Manis")

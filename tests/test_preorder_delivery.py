@@ -171,17 +171,17 @@ class DeliveryBackOfficeTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_seller_sets_closed_days_and_adds_slots(self):
-        self.client.post("/merchant/delivery/", {"action": "settings", "enabled": "on",
+        self.client.post("/books/delivery/", {"action": "settings", "enabled": "on",
             "min_days": "1", "max_days": "10", "closed_weekdays": ["6"]})
         settings_obj = DeliverySettings.objects.get(store=self.store)
         self.assertEqual((settings_obj.enabled, settings_obj.closed_days), (True, {6}))
 
-        self.client.post("/merchant/delivery/", {"action": "add_slot", "start_time": "09:00",
+        self.client.post("/books/delivery/", {"action": "add_slot", "start_time": "09:00",
             "end_time": "12:00", "capacity": "10"})
         slot = DeliverySlot.objects.get(store=self.store)
         self.assertEqual((slot.label, slot.capacity), ("09.00–12.00", 10))
 
-        page = self.client.post("/merchant/delivery/", {"action": "add_slot",
+        page = self.client.post("/books/delivery/", {"action": "add_slot",
             "start_time": "14:00", "end_time": "13:00"})
         self.assertContains(page, "Jam selesai harus setelah jam mulai")
 
@@ -196,7 +196,7 @@ class DeliveryBackOfficeTests(TestCase):
             OrderItem.objects.create(order=order, product=product, name="Eclair", sku="E",
                 unit_price=1, quantity=quantity, line_total=Decimal(1))
 
-        page = self.client.get(f"/merchant/delivery/recap/?date={day.isoformat()}")
+        page = self.client.get(f"/books/delivery/recap/?date={day.isoformat()}")
         self.assertEqual(next(iter(page.context["totals"]))["quantity"], 7)
         self.assertContains(page, "2 pesanan dibayar")
 
@@ -243,4 +243,4 @@ class CartDateAndNoteTests(PreorderTests):
         self.assertNotIn("cart_notes", self.buyer.session)
         seller = Client()
         seller.force_login(self.owner)
-        self.assertContains(seller.get("/merchant/orders/?tab=all"), "Happy Birthday Ayu")
+        self.assertContains(seller.get("/books/orders/?tab=all"), "Happy Birthday Ayu")

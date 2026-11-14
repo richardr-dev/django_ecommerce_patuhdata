@@ -64,7 +64,7 @@ class DigitalProductTests(TestCase):
     def test_a_digital_product_needs_a_file_or_link(self):
         seller = Client()
         seller.force_login(self.owner)
-        reply = seller.post("/merchant/setup/products/new/", {"name": "Kelas", "slug": "kelas",
+        reply = seller.post("/books/setup/products/new/", {"name": "Kelas", "slug": "kelas",
             "sku": "KELAS", "price": "99000", "is_active": "on", "is_digital": "on",
             "weight_grams": 0, "length_cm": 0, "width_cm": 0, "height_cm": 0, "preorder_days": 1})
         self.assertContains(reply, "Unggah file atau isi link digital")

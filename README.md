@@ -60,7 +60,7 @@ fallback exists only for the quick CI job and should not be used for development
 Set `PLATFORM_DOMAIN` (e.g. `niagakit.id`) to run NiagaKit as a store builder:
 
 - **Hosts:** `niagakit.id` is the platform (marketing home with plans, `/stores/` directory,
-  `/start/` signup, `/merchant/` back office); `<slug>.niagakit.id` is each store; a store on a
+  `/start/` signup, `/books/` back office); `<slug>.niagakit.id` is each store; a store on a
   plan with custom domains is also served on its own domain. Any other host gets a 404 before a
   view runs, so platform mode can use `ALLOWED_HOSTS=*`. Leaving `PLATFORM_DOMAIN` empty keeps
   single-host mode (custom domain or `?store=slug`).
@@ -102,7 +102,7 @@ Set `PLATFORM_DOMAIN` (e.g. `niagakit.id`) to run NiagaKit as a store builder:
 
 ## Storefront design and catalog scale
 
-- **Templates:** `/merchant/settings/` offers one-click storefront templates (Retail, Minimalis,
+- **Templates:** `/books/settings/` offers one-click storefront templates (Retail, Minimalis,
   Butik, Segar, Elektronik) that set brand colour, page background, font, cover layout, and logo
   size. Logo, cover photo, and copy are never overwritten, and every value stays editable.
   Presets live in `apps/shops/storefront_templates.py`.
@@ -117,7 +117,7 @@ Set `PLATFORM_DOMAIN` (e.g. `niagakit.id`) to run NiagaKit as a store builder:
 
 ## Brand storefront
 
-Everything a brand's own DTC website needs beyond checkout, managed per store from `/merchant/`:
+Everything a brand's own DTC website needs beyond checkout, managed per store from `/books/`:
 
 - **Product reviews:** only signed-in customers with a delivered/completed order for the product can
   rate it (1–5★, one review per customer, editable). Names show as "Ayu S.". The back office
@@ -155,9 +155,9 @@ Everything a brand's own DTC website needs beyond checkout, managed per store fr
   shipping/discount/tax totals.
 - Search/category/sort controls, cart quantity editing, product measurements, variants, multiple
   images, customer profiles, tracking timelines, returns, notifications, and audit logs.
-- Merchant fulfillment workspace and accounting CSV export at `/merchant/orders/`.
+- Merchant fulfillment workspace and accounting CSV export at `/books/orders/`.
 - Group/holding ownership with multiple brands, merchant brand switching, role-aware access, and a
-  dedicated back office at `/merchant/` for sales KPIs, daily revenue, top products, low-stock
+  dedicated back office at `/books/` for sales KPIs, daily revenue, top products, low-stock
   alerts, catalog/variant setup, warehouses, inventory, shipping, vouchers, and store settings.
 
 ## Brand isolation and database placement

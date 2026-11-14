@@ -97,7 +97,7 @@ class WholesaleTests(TestCase):
     def test_manual_order_uses_tiers_unless_a_price_is_typed(self):
         data = {**FORM, "sku": ["KOPI", "KAOS-S", "KAOS-XL"], "quantity": ["10", "4", "2"],
             "price": ["", "", "110000"]}
-        self.seller.post("/merchant/orders/new/", data)
+        self.seller.post("/books/orders/new/", data)
         items = {item.sku: item.unit_price for item in Order.objects.get().items.all()}
         self.assertEqual(items, {"KOPI": 45000, "KAOS-S": 80000, "KAOS-XL": 110000})
 
@@ -111,7 +111,7 @@ class WholesaleFormTests(TestCase):
             sku="KOPI", price=50000)
         self.seller = Client()
         self.seller.force_login(self.owner)
-        self.url = f"/merchant/setup/products/{self.product.id}/"
+        self.url = f"/books/setup/products/{self.product.id}/"
 
     def _save(self, **extra):
         data = {"name": "Kopi", "slug": "kopi", "sku": "KOPI", "price": "50000",

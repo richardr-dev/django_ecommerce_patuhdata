@@ -36,24 +36,24 @@ class SegmentTests(TestCase):
             status=status, idempotency_key=key)
 
     def test_filters_use_real_sales(self):
-        page = self.seller.get("/merchant/customers/?min_orders=2")
+        page = self.seller.get("/books/customers/?min_orders=2")
         self.assertContains(page, "Sri")
         self.assertNotContains(page, "Ani")
         self.assertContains(page, "Rp300.000")
-        lapsed = self.seller.get("/merchant/customers/?inactive_days=60")
+        lapsed = self.seller.get("/books/customers/?inactive_days=60")
         self.assertContains(lapsed, "Ani")
         self.assertNotContains(lapsed, "<b>Sri</b>")
-        self.assertNotContains(self.seller.get("/merchant/customers/?min_spend=500000"), "<b>Budi</b>")
+        self.assertNotContains(self.seller.get("/books/customers/?min_spend=500000"), "<b>Budi</b>")
 
     def test_bulk_tag_then_filter_by_tag(self):
-        self.seller.post("/merchant/customers/", {"min_orders": "2", "add_tag": "vip"})
+        self.seller.post("/books/customers/", {"min_orders": "2", "add_tag": "vip"})
         self.loyal.refresh_from_db()
         self.assertEqual(self.loyal.tag_list, ["vip"])
-        self.assertContains(self.seller.get("/merchant/customers/?tag=VIP"), "Sri")
-        self.assertNotContains(self.seller.get("/merchant/customers/?tag=vip"), "<b>Ani</b>")
+        self.assertContains(self.seller.get("/books/customers/?tag=VIP"), "Sri")
+        self.assertNotContains(self.seller.get("/books/customers/?tag=vip"), "<b>Ani</b>")
 
     def test_broadcast_reaches_only_consenting_customers_and_can_be_unsubscribed(self):
-        self.seller.post("/merchant/broadcasts/", {"subject": "Promo", "body": "Halo {nama}, diskon 20%!"})
+        self.seller.post("/books/broadcasts/", {"subject": "Promo", "body": "Halo {nama}, diskon 20%!"})
         broadcast = EmailBroadcast.objects.get()
         self.assertEqual(broadcast.recipients, 2)  # Sri and Ani; Budi did not consent
         send_broadcast_batch()
@@ -68,7 +68,7 @@ class SegmentTests(TestCase):
         self.assertFalse(self.loyal.accepts_marketing)
 
     def test_empty_audience_is_refused(self):
-        reply = self.seller.post("/merchant/broadcasts/?tag=tidak-ada", {"tag": "tidak-ada",
+        reply = self.seller.post("/books/broadcasts/?tag=tidak-ada", {"tag": "tidak-ada",
             "subject": "Promo", "body": "Halo semuanya, ada promo"})
         self.assertContains(reply, "Tidak ada penerima")
         self.assertFalse(EmailBroadcast.objects.exists())

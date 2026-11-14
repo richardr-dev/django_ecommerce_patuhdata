@@ -143,7 +143,7 @@
      whatever another tab switched to. */
   var tabStore = document.body.dataset.store || "";
   function withStore(href) {
-    if (!tabStore || !href || href.charAt(0) !== "/" || href.indexOf("/merchant/") !== 0) return href;
+    if (!tabStore || !href || href.charAt(0) !== "/" || href.indexOf("/books/") !== 0) return href;
     if (/[?&]store=/.test(href)) return href;
     var hash = "", i = href.indexOf("#");
     if (i > -1) { hash = href.slice(i); href = href.slice(0, i); }
@@ -158,7 +158,7 @@
     document.addEventListener("submit", function (event) {
       var form = event.target;
       var action = form.getAttribute("action") || (window.location.pathname);
-      if (!form.hasAttribute("hx-get") && !form.hasAttribute("hx-post") && action.indexOf("/merchant/") === 0
+      if (!form.hasAttribute("hx-get") && !form.hasAttribute("hx-post") && action.indexOf("/books/") === 0
           && !form.querySelector("input[name=store]")) {
         var field = document.createElement("input");
         field.type = "hidden"; field.name = "store"; field.value = tabStore;
@@ -166,7 +166,7 @@
       }
     }, true);
     document.addEventListener("htmx:configRequest", function (event) {
-      if (event.detail.path && event.detail.path.indexOf("/merchant/") === 0) event.detail.parameters.store = tabStore;
+      if (event.detail.path && event.detail.path.indexOf("/books/") === 0) event.detail.parameters.store = tabStore;
     });
   }
 
@@ -243,7 +243,7 @@
           || a.hasAttribute("onclick") || a.hasAttribute("hx-get")) return;
       var href = a.getAttribute("href");
       if (href && href.charAt(0) === "?") href = location.pathname + href;   // pagination links
-      if (!href || href.charAt(0) !== "/" || href.indexOf("/merchant/") !== 0 || SKIP.test(href)) return;
+      if (!href || href.charAt(0) !== "/" || href.indexOf("/books/") !== 0 || SKIP.test(href)) return;
       if (href.indexOf("#") > -1 && samePath(href.split("#")[0] || location.pathname, location.href)) return;
       event.preventDefault();
       if (samePath(href, location.href)) { window.scrollTo(0, 0); return; }
@@ -256,7 +256,7 @@
   }
   window.pdNavigate = function (url) {
     leaveIfClean(function () {
-      if (navBox && mainBox && window.fetch && url.indexOf("/merchant/") === 0) softLoad(withStore(url), true);
+      if (navBox && mainBox && window.fetch && url.indexOf("/books/") === 0) softLoad(withStore(url), true);
       else location.href = url;
     });
   };

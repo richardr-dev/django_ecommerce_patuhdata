@@ -31,10 +31,10 @@ class EngagementTrackingTests(TestCase):
         CommerceSession.objects.filter(id=session.id).update(
             last_seen_at=timezone.now() - timedelta(hours=1))
         self.client.force_login(self.owner)
-        dashboard = self.client.get("/merchant/")
+        dashboard = self.client.get("/books/")
         self.assertContains(dashboard, "keranjang tertinggal")
         self.assertContains(dashboard, "250.000")
-        detail = self.client.get("/merchant/engagement/")
+        detail = self.client.get("/books/engagement/")
         self.assertContains(detail, "Interesting Product")
 
     def test_high_intent_browsing_requires_analytics_consent(self):

@@ -120,21 +120,21 @@ class FinancePageTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_page_shows_trial_balance(self):
-        page = self.client.get("/merchant/finance/")
+        page = self.client.get("/books/finance/")
 
         self.assertContains(page, "Neraca saldo")
         self.assertContains(page, "Seimbang")
         self.assertEqual(page.context["summary"]["net_revenue"], Decimal(50000))
 
     def test_csv_export_lists_journal_lines(self):
-        response = self.client.get("/merchant/finance/", {"format": "csv"})
+        response = self.client.get("/books/finance/", {"format": "csv"})
 
         rows = response.content.decode().strip().splitlines()
         self.assertEqual(rows[0].split(",")[0], "Tanggal")
         self.assertEqual(len(rows), 3)
 
     def test_date_filter_excludes_other_periods(self):
-        page = self.client.get("/merchant/finance/", {"start": "2000-01-01", "end": "2000-12-31"})
+        page = self.client.get("/books/finance/", {"start": "2000-01-01", "end": "2000-12-31"})
 
         self.assertEqual(list(page.context["journal_lines"]), [])
 
@@ -143,7 +143,7 @@ class FinancePageTests(TestCase):
         stranger.force_login(User.objects.create_user("stranger"))
         Store.objects.create(owner=User.objects.get(username="stranger"), name="Lain", slug="lain")
 
-        page = stranger.get("/merchant/finance/")
+        page = stranger.get("/books/finance/")
         self.assertEqual(page.context["summary"]["net_revenue"], 0)
 
 

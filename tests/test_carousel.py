@@ -17,13 +17,13 @@ class StorefrontCarouselTests(TestCase):
     def test_merchant_uploads_slide_and_storefront_renders_carousel(self):
         image = SimpleUploadedFile("campaign.webp", b"fake-webp", content_type="image/webp")
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
-            response = self.client.post("/merchant/setup/slides/new/", {
+            response = self.client.post("/books/setup/slides/new/", {
                 "image": image, "eyebrow": "PROMO TERBATAS", "headline": "Belanja lebih hemat",
                 "subheadline": "Penawaran minggu ini", "button_label": "Lihat promo",
                 "link_url": "/#catalog", "text_alignment": "left", "position": 1,
                 "is_active": "on",
             })
-            self.assertRedirects(response, "/merchant/setup/slides/")
+            self.assertRedirects(response, "/books/setup/slides/")
             slide = StorefrontSlide.objects.get(store=self.store)
             storefront = self.client.get("/")
             self.assertContains(storefront, "commercial-carousel")

@@ -1,11 +1,11 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from config.ratelimit import rate_limit
 
-from .views import health
+from .views import health, legacy_merchant
 
 urlpatterns = [
     path("healthz/", health, name="health"),
@@ -22,6 +22,8 @@ urlpatterns = [
     path("", include("apps.accounting.urls")),
     path("", include("apps.catalog.urls")),
     path("", include("apps.settlements.urls")),
+    # Last: the back office moved from /merchant/ to /books/, and the old addresses keep working.
+    re_path(r"^merchant/(?P<rest>.*)$", legacy_merchant),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

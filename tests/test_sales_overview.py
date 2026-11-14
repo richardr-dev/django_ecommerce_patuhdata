@@ -110,7 +110,7 @@ class OverviewTests(TestCase):
     def test_page_and_csv(self):
         self.order("shopee")
         self.client.force_login(self.owner)
-        url = f"/merchant/sales/laporan/?store={self.store.id}"
+        url = f"/books/sales/laporan/?store={self.store.id}"
 
         self.assertContains(self.client.get(url), "Shopee")
         csv = self.client.get(url + "&format=csv")

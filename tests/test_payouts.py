@@ -189,13 +189,13 @@ class PayoutPageTests(PayoutTestCase):
         csv = ("payout_reference,payout_date,order_reference,amount,fee\n"
             "PO-1,2026-11-02,NK1,100000,2500\nPO-2,2026-11-02,NOPE,1,0\n")
 
-        page = self.client.post("/merchant/payouts/", {"provider": "xendit",
+        page = self.client.post("/books/payouts/", {"provider": "xendit",
             "file": SimpleUploadedFile("p.csv", csv.encode(), content_type="text/csv")})
 
         self.assertEqual(page.context["summary"]["created"], 1)
         self.assertEqual(len(page.context["summary"]["errors"]), 1)
         self.assertContains(page, "Rp97.500")
-        detail = self.client.get(f"/merchant/payouts/{Payout.objects.get().id}/")
+        detail = self.client.get(f"/books/payouts/{Payout.objects.get().id}/")
         self.assertContains(detail, "NK1")
 
     def test_finance_page_shows_profit_and_loss(self):
@@ -203,7 +203,7 @@ class PayoutPageTests(PayoutTestCase):
         post_pending_entries()
         self._payout([("NK1", 100000, 2000)])
 
-        page = self.client.get("/merchant/finance/")
+        page = self.client.get("/books/finance/")
         self.assertEqual(page.context["profit"]["gross"], Decimal(40000))
         self.assertEqual(page.context["profit"]["net"], Decimal(38000))
         self.assertContains(page, "Laba kotor")
@@ -216,7 +216,7 @@ class PayoutPageTests(PayoutTestCase):
         client = Client()
         client.force_login(stranger)
 
-        self.assertEqual(client.get(f"/merchant/payouts/{payout.id}/").status_code, 404)
+        self.assertEqual(client.get(f"/books/payouts/{payout.id}/").status_code, 404)
 
 
 class ProductImportCostTests(TestCase):

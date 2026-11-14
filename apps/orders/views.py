@@ -1544,7 +1544,7 @@ def _whatsapp_link(phone, text):
 def _back_to_orders(request):
     """Return to the tab and page the seller acted from."""
     target = request.POST.get("next", "")
-    if target.startswith("/merchant/orders/") and url_has_allowed_host_and_scheme(target,
+    if target.startswith("/books/orders/") and url_has_allowed_host_and_scheme(target,
             allowed_hosts={request.get_host()}):
         return redirect(target)
     return redirect("merchant-orders")
@@ -1891,7 +1891,7 @@ def merchant_order_update(request, order_id):
             object_type="Order", object_id=str(order.id), details={"from": old_status, "to": new_status})
     messages.success(request, "Pesanan diperbarui.")
     next_url = request.POST.get("next", "")
-    if next_url and next_url.startswith("/merchant/"):
+    if next_url and next_url.startswith("/books/"):
         return redirect(next_url)
     return _back_to_orders(request)
 

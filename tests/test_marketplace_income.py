@@ -153,7 +153,7 @@ class ImportTests(TestCase):
         upload = SimpleUploadedFile("income.xlsx", _xlsx(
             [["S1", "2026-11-10", 90000, -4000, 0, 0, 0, 0, 100000]]).read())
 
-        response = self.client.post(f"/merchant/marketplace/penghasilan/?store={self.store.id}",
+        response = self.client.post(f"/books/marketplace/penghasilan/?store={self.store.id}",
             {"channel": self.channel.id, "file": upload})
 
         self.assertContains(response, "Hasil impor")

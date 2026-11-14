@@ -36,12 +36,12 @@ class ManualOrderTests(TestCase):
     def _create(self, items=(("KOPI", "2", ""), ("KAOS-M", "1", "90000")), **extra):
         data = {**FORM, **extra, "sku": [i[0] for i in items], "quantity": [i[1] for i in items],
             "price": [i[2] for i in items]}
-        return self.seller.post("/merchant/orders/new/", data)
+        return self.seller.post("/books/orders/new/", data)
 
     def test_seller_creates_an_order_and_stock_is_reserved(self):
         reply = self._create()
         order = Order.objects.get(source="manual")
-        self.assertRedirects(reply, f"/merchant/orders/{order.id}/payment-link/",
+        self.assertRedirects(reply, f"/books/orders/{order.id}/payment-link/",
             fetch_redirect_response=False)
         # 2 × 50.000 + 1 × 90.000 (custom price) − 5.000 + 15.000 ongkir
         self.assertEqual((order.subtotal, order.discount, order.shipping_cost, order.total),
@@ -51,7 +51,7 @@ class ManualOrderTests(TestCase):
         self.kaos_m.refresh_from_db()
         self.assertEqual((self.level.reserved, self.kaos_m.reserved), (2, 1))
         self.assertGreater(order.payment_expires_at, timezone.now() + timedelta(days=1, hours=23))
-        page = self.seller.get(f"/merchant/orders/{order.id}/payment-link/")
+        page = self.seller.get(f"/books/orders/{order.id}/payment-link/")
         self.assertContains(page, f"/orders/{order.id}/?token={order.access_token}")
         self.assertContains(page, "https://wa.me/6281234567890?text=")
         self.assertEqual(self._create().status_code, 302)  # double submit with the same key
@@ -91,5 +91,5 @@ class ManualOrderTests(TestCase):
         StoreStaff.objects.create(store=self.store, user=clerk, role="warehouse")
         client = Client()
         client.force_login(clerk)
-        self.assertEqual(client.get("/merchant/orders/new/").status_code, 404)
-        self.assertContains(self.seller.get("/merchant/orders/"), "+ Buat pesanan")
+        self.assertEqual(client.get("/books/orders/new/").status_code, 404)
+        self.assertContains(self.seller.get("/books/orders/"), "+ Buat pesanan")

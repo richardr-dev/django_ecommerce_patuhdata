@@ -23,8 +23,8 @@ class QuickSetupTests(TestCase):
         self.assertContains(response, "Gratis ongkir hari ini")
 
     def test_quick_defaults_are_idempotent(self):
-        self.client.post("/merchant/quick-defaults/")
-        self.client.post("/merchant/quick-defaults/")
+        self.client.post("/books/quick-defaults/")
+        self.client.post("/books/quick-defaults/")
         self.assertEqual(Warehouse.objects.filter(store=self.store, code="MAIN").count(), 1)
         self.assertEqual(ShippingMethod.objects.filter(store=self.store, code="reguler").count(), 1)
 
@@ -32,8 +32,8 @@ class QuickSetupTests(TestCase):
         first = SimpleUploadedFile("products.csv",
             b"name,sku,price,stock,category,description,weight_grams,image_url\nKaos,KAOS-1,99000,8,Pakaian,Katun,250,\n",
             content_type="text/csv")
-        response = self.client.post("/merchant/products/import/", {"file": first})
-        self.assertRedirects(response, "/merchant/setup/products/")
+        response = self.client.post("/books/products/import/", {"file": first})
+        self.assertRedirects(response, "/books/setup/products/")
         product = Product.objects.get(store=self.store, sku="KAOS-1")
         self.assertEqual(product.price, 99000)
         self.assertEqual(product.category.name, "Pakaian")
@@ -41,7 +41,7 @@ class QuickSetupTests(TestCase):
 
         second = SimpleUploadedFile("products.csv",
             b"name,sku,price,stock\nKaos Baru,KAOS-1,109000,12\n", content_type="text/csv")
-        self.client.post("/merchant/products/import/", {"file": second})
+        self.client.post("/books/products/import/", {"file": second})
         product.refresh_from_db()
         self.assertEqual(Product.objects.filter(store=self.store, sku="KAOS-1").count(), 1)
         self.assertEqual(product.name, "Kaos Baru")

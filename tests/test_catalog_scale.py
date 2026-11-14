@@ -70,26 +70,26 @@ class CatalogScaleTests(TestCase):
         make_products(self.store, self.warehouse, 1, 120)
         self.client.force_login(self.owner)
         with CaptureQueriesContext(connection) as queries:
-            response = self.client.get("/merchant/setup/products/")
+            response = self.client.get("/books/setup/products/")
         self.assertEqual(len(response.context["table_rows"]), 50)
         self.assertLess(len(queries), 30)
         self.assertContains(response, "120 data")
         self.assertContains(response, "Stok tersedia")
-        response = self.client.get("/merchant/setup/products/?q=SKU-0011")
+        response = self.client.get("/books/setup/products/?q=SKU-0011")
         self.assertEqual(len(response.context["table_rows"]), 10)
 
     def test_stock_page_paginates_and_searches(self):
         make_products(self.store, self.warehouse, 1, 70)
         self.client.force_login(self.owner)
-        response = self.client.get("/merchant/stock/")
+        response = self.client.get("/books/stock/")
         self.assertEqual(len(response.context["levels"]), 50)
         self.assertContains(response, "<strong>70</strong>")
-        response = self.client.get("/merchant/stock/?q=SKU-00007")
+        response = self.client.get("/books/stock/?q=SKU-00007")
         self.assertEqual(len(response.context["levels"]), 1)
         level = response.context["levels"][0]
-        response = self.client.post("/merchant/stock/?q=SKU-00007&page=1", {"target_type": "level",
+        response = self.client.post("/books/stock/?q=SKU-00007&page=1", {"target_type": "level",
             "target_id": level.id, "stock": "4", "safety_stock": "0", "reason": "Opname"})
-        self.assertRedirects(response, "/merchant/stock/?q=SKU-00007&page=1",
+        self.assertRedirects(response, "/books/stock/?q=SKU-00007&page=1",
             fetch_redirect_response=False)
 
     def test_sql_stock_annotation_matches_python_property(self):
@@ -112,7 +112,7 @@ class CatalogScaleTests(TestCase):
         products = make_products(self.store, self.warehouse, 1, 12)
         InventoryLevel.objects.filter(product__in=products[:9]).update(on_hand=2)
         self.client.force_login(self.owner)
-        response = self.client.get("/merchant/")
+        response = self.client.get("/books/")
         self.assertEqual(response.context["low_stock_count"], 9)
         self.assertEqual(len(response.context["low_stock"]), 8)
 
@@ -140,14 +140,14 @@ class BulkImportTests(TestCase):
 
     def _upload(self, lines):
         content = "name,sku,price,stock,category\n" + "\n".join(lines)
-        return self.client.post("/merchant/products/import/", {"file": SimpleUploadedFile(
+        return self.client.post("/books/products/import/", {"file": SimpleUploadedFile(
             "products.csv", content.encode(), content_type="text/csv")})
 
     def test_imports_more_than_the_old_thousand_row_limit_with_bounded_queries(self):
         lines = [f"Barang {n},B-{n:05d},{1000 + n},{n % 7},Kategori {n % 5}" for n in range(2500)]
         with CaptureQueriesContext(connection) as queries:
             response = self._upload(lines)
-        self.assertRedirects(response, "/merchant/setup/products/", fetch_redirect_response=False)
+        self.assertRedirects(response, "/books/setup/products/", fetch_redirect_response=False)
         self.assertEqual(Product.objects.filter(store=self.store).count(), 2500)
         self.assertEqual(self.store.categories.count(), 5)
         self.assertEqual(InventoryLevel.objects.filter(product__store=self.store).count(), 2500)

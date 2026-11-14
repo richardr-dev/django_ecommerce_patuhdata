@@ -267,11 +267,11 @@ class PayableTests(Base):
 class PageTests(Base):
     def test_owner_closes_and_reopens_the_books(self):
         self.client.force_login(self.owner)
-        url = "/merchant/accounting/lock/"
+        url = "/books/accounting/lock/"
 
         self.client.post(f"{url}?store={self.store.id}", {"locked_through": "2026-10-31"})
         self.assertEqual(ledger.locked_through(self.store), date(2026, 10, 31))
-        page = self.client.get(f"/merchant/accounting/?store={self.store.id}")
+        page = self.client.get(f"/books/accounting/?store={self.store.id}")
         self.assertContains(page, "31/10/2026")
 
         self.client.post(f"{url}?store={self.store.id}", {"locked_through": ""})
@@ -288,7 +288,7 @@ class ManualInvoiceVatTests(Base):
             "address": "Bandung", "product[]": [product.pk], "description[]": [""], "qty[]": ["1"],
             "unit_price[]": ["100000"], "line_discount[]": [""], "discount": "0", "shipping": "0",
             **extra}
-        return self.client.post(f"/merchant/sales/invoices/new/?store={self.store.id}", data)
+        return self.client.post(f"/books/sales/invoices/new/?store={self.store.id}", data)
 
     def test_a_pkp_seller_charges_ppn_and_books_it(self):
         TaxProfile.objects.create(store=self.store, is_pkp=True)

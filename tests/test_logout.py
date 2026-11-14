@@ -22,25 +22,25 @@ class LogoutTests(TestCase):
         self.seller.force_login(self.owner)
 
     def test_keluar_returns_to_the_merchant_login_and_clears_the_browser(self):
-        dashboard = self.seller.get("/merchant/")
-        self.assertContains(dashboard, 'action="/merchant/logout/"')
+        dashboard = self.seller.get("/books/")
+        self.assertContains(dashboard, 'action="/books/logout/"')
         self.assertNotContains(dashboard, "/platform-admin/logout/")
-        reply = self.seller.post("/merchant/logout/")
+        reply = self.seller.post("/books/logout/")
         self.assertEqual(reply["Location"], "/login/?keluar=1")
         self.assertEqual(reply["Clear-Site-Data"], '"cache", "storage", "cookies"')
         for name in ("sessionid", "csrftoken", SELLER_COOKIE):
             self.assertEqual(reply.cookies[name].value, "", name)
         self.assertFalse(Session.objects.exists())
-        self.assertRedirects(self.seller.get("/merchant/"), "/login/?next=/merchant/")
+        self.assertRedirects(self.seller.get("/books/"), "/login/?next=/books/")
         self.assertContains(self.seller.get("/login/?keluar=1"), "Anda sudah keluar")
 
     def test_a_link_cannot_sign_anyone_out(self):
-        self.assertRedirects(self.seller.get("/merchant/logout/"), "/merchant/",
+        self.assertRedirects(self.seller.get("/books/logout/"), "/books/",
             fetch_redirect_response=False)
-        self.assertEqual(self.seller.get("/merchant/").status_code, 200)
+        self.assertEqual(self.seller.get("/books/").status_code, 200)
 
     def test_back_office_pages_are_never_cached(self):
-        cache_control = self.seller.get("/merchant/")["Cache-Control"]
+        cache_control = self.seller.get("/books/")["Cache-Control"]
         self.assertIn("no-store", cache_control)
         self.assertIn("private", cache_control)
 

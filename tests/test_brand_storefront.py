@@ -36,7 +36,7 @@ class BrandStorefrontTestCase(TestCase):
     def owner_client(self):
         client = Client()
         client.force_login(self.owner)
-        client.get("/merchant/", {"store": self.store.id})
+        client.get("/books/", {"store": self.store.id})
         return client
 
 
@@ -111,9 +111,9 @@ class ProductReviewTests(BrandStorefrontTestCase):
         review = ProductReview.objects.create(store=self.store, product=self.product,
             user=self.buyer, rating=2, body="Kurang segar", display_name="Ayu S.")
         client = self.owner_client()
-        self.assertEqual(client.get("/merchant/setup/reviews/new/").status_code, 404)
-        self.assertNotContains(client.get("/merchant/setup/reviews/"), "+ Tambah")
-        response = client.post(f"/merchant/setup/reviews/{review.id}/",
+        self.assertEqual(client.get("/books/setup/reviews/new/").status_code, 404)
+        self.assertNotContains(client.get("/books/setup/reviews/"), "+ Tambah")
+        response = client.post(f"/books/setup/reviews/{review.id}/",
             {"merchant_reply": "Maaf, kami kirim pengganti.", "rating": 5, "body": "Diubah"})
         self.assertEqual(response.status_code, 302)
         review.refresh_from_db()
@@ -126,8 +126,8 @@ class ProductReviewTests(BrandStorefrontTestCase):
         review = ProductReview.objects.create(store=self.other_store, product=product,
             user=self.buyer, rating=5, body="Teh lain", display_name="Ayu S.")
         client = self.owner_client()
-        self.assertNotContains(client.get("/merchant/setup/reviews/"), "Teh")
-        self.assertEqual(client.get(f"/merchant/setup/reviews/{review.id}/").status_code, 404)
+        self.assertNotContains(client.get("/books/setup/reviews/"), "Teh")
+        self.assertEqual(client.get(f"/books/setup/reviews/{review.id}/").status_code, 404)
 
 
 class WishlistTests(BrandStorefrontTestCase):
@@ -185,9 +185,9 @@ class StorePageTests(BrandStorefrontTestCase):
         client = self.owner_client()
         payload = {"title": "FAQ 2", "body": "y", "position": 0, "is_published": "on",
             "show_in_footer": "on"}
-        response = client.post("/merchant/setup/pages/new/", payload | {"slug": "faq"})
+        response = client.post("/books/setup/pages/new/", payload | {"slug": "faq"})
         self.assertContains(response, "sudah dipakai")
-        client.post("/merchant/setup/pages/new/", payload | {"slug": "ukuran"})
+        client.post("/books/setup/pages/new/", payload | {"slug": "ukuran"})
         self.assertTrue(StorePage.objects.filter(store=self.store, slug="ukuran").exists())
 
 
@@ -224,15 +224,15 @@ class NewsletterTests(BrandStorefrontTestCase):
             unsubscribed_at="2026-01-01T00:00:00Z")
         NewsletterSubscriber.objects.create(store=self.other_store, email="lain@example.com")
         client = self.owner_client()
-        body = client.get("/merchant/subscribers.csv").content.decode()
+        body = client.get("/books/subscribers.csv").content.decode()
         self.assertIn("aktif@example.com", body)
         self.assertNotIn("berhenti@example.com", body)
         self.assertNotIn("lain@example.com", body)
-        self.assertEqual(client.get("/merchant/setup/subscribers/new/").status_code, 404)
+        self.assertEqual(client.get("/books/setup/subscribers/new/").status_code, 404)
 
     def test_customer_without_staff_role_cannot_export(self):
         self.client.force_login(self.buyer)
-        self.assertEqual(self.client.get("/merchant/subscribers.csv").status_code, 404)
+        self.assertEqual(self.client.get("/books/subscribers.csv").status_code, 404)
 
 
 class DiscoveryTests(BrandStorefrontTestCase):

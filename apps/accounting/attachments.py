@@ -83,7 +83,7 @@ def response(attachment):
 
 def back(request, default="merchant-dashboard"):
     target = request.POST.get("next", "")
-    if target.startswith("/merchant/") and url_has_allowed_host_and_scheme(target,
+    if target.startswith("/books/") and url_has_allowed_host_and_scheme(target,
             allowed_hosts={request.get_host()}):
         return redirect(target)
     return redirect(default)

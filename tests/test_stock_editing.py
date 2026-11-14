@@ -17,7 +17,7 @@ class StockEditingTests(TestCase):
             price=50000)
         self.seller = Client()
         self.seller.force_login(self.owner)
-        self.url = f"/merchant/setup/products/{self.product.id}/"
+        self.url = f"/books/setup/products/{self.product.id}/"
 
     def _save(self, **extra):
         data = {"name": "Kopi", "slug": "kopi", "sku": "KOPI", "price": "50000", "is_active": "on",
@@ -48,10 +48,10 @@ class StockEditingTests(TestCase):
         self.assertNotContains(self.seller.get(self.url), "Stok di Gudang Utama")
 
     def test_kelola_stok_lists_products_without_a_stock_entry(self):
-        page = self.seller.get("/merchant/stock/")
+        page = self.seller.get("/books/stock/")
         self.assertContains(page, "Produk belum punya stok")
         self.assertContains(page, "Kopi")
-        self.seller.post("/merchant/stock/", {"target_type": "product",
+        self.seller.post("/books/stock/", {"target_type": "product",
             "target_id": self.product.id, "stock": 7, "safety_stock": 0, "reason": "Stok awal"})
         self.assertEqual(InventoryLevel.objects.get(product=self.product).on_hand, 7)
-        self.assertNotContains(self.seller.get("/merchant/stock/"), "Produk belum punya stok")
+        self.assertNotContains(self.seller.get("/books/stock/"), "Produk belum punya stok")

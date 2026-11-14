@@ -184,7 +184,7 @@ class WhatsAppSettingsPageTests(TestCase):
     def _save(self, **data):
         base = {"provider": "fonnte", "token": "", "template_language": "id",
             "notify_order_created": "on", "notify_shipped": "on"}
-        return self.client.post("/merchant/whatsapp/", {**base, **data})
+        return self.client.post("/books/whatsapp/", {**base, **data})
 
     def test_token_is_encrypted_and_kept_when_left_blank(self):
         self._save(token="secret-device-token")
@@ -199,7 +199,7 @@ class WhatsAppSettingsPageTests(TestCase):
         self.assertEqual(account.seller_alert_phone, "0819 9988 8777")
         self.assertTrue(AuditLog.objects.filter(store=self.store,
             action="whatsapp.settings_updated").exists())
-        page = self.client.get("/merchant/whatsapp/")
+        page = self.client.get("/books/whatsapp/")
         self.assertContains(page, "Fonnte terhubung")
         self.assertNotContains(page, "secret-device-token")
 
@@ -216,7 +216,7 @@ class WhatsAppSettingsPageTests(TestCase):
     @patch(FONNTE, return_value={"status": True, "id": ["5"]})
     def test_test_message(self, post):
         self._save(token="device-token")
-        response = self.client.post("/merchant/whatsapp/test/", {"phone": "081234567890"},
+        response = self.client.post("/books/whatsapp/test/", {"phone": "081234567890"},
             follow=True)
         self.assertContains(response, "Pesan tes terkirim ke +6281234567890")
         self.assertEqual(WhatsAppMessage.objects.get().kind, "test")
@@ -227,4 +227,4 @@ class WhatsAppSettingsPageTests(TestCase):
         StoreStaff.objects.create(store=self.store, user=staff, role="ops")
         client = Client()
         client.force_login(staff)
-        self.assertIn(client.get("/merchant/whatsapp/").status_code, {403, 404})
+        self.assertIn(client.get("/books/whatsapp/").status_code, {403, 404})

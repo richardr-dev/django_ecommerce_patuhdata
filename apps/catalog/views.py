@@ -283,7 +283,7 @@ SITEMAP_URL_LIMIT = 50000
 def robots_txt(request):
     lines = ["User-agent: *"]
     if request.store:
-        lines += [f"Disallow: {path}" for path in ("/merchant/", "/cart/", "/checkout/",
+        lines += [f"Disallow: {path}" for path in ("/books/", "/cart/", "/checkout/",
             "/account/", "/orders/", "/wishlist/", "/newsletter/")]
         lines.append(f"Sitemap: {request.build_absolute_uri(reverse('sitemap'))}")
     else:

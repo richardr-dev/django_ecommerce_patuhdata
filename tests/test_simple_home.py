@@ -48,7 +48,7 @@ class SimpleHomeTests(TestCase):
 
     def test_product_takes_several_photos_at_once(self):
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
-            response = self.client.post("/merchant/setup/products/new/", {"name": "Kaos",
+            response = self.client.post("/books/setup/products/new/", {"name": "Kaos",
                 "slug": "kaos", "sku": "KAOS", "price": "50000", "is_active": "on",
                 "weight_grams": 0, "length_cm": 0, "width_cm": 0, "height_cm": 0,
                 "photos": [_png("depan.png"), _png("belakang.png"), _png("detail.png")]})
@@ -59,7 +59,7 @@ class SimpleHomeTests(TestCase):
             self.assertTrue(product.images.first().file.name.startswith("stores/toko/products/kaos/"))
             self.assertEqual(product.images.count(), 2)
 
-            edit = f"/merchant/setup/products/{product.id}/"
+            edit = f"/books/setup/products/{product.id}/"
             self.client.post(edit, {"name": "Kaos", "slug": "kaos", "sku": "KAOS",
                 "price": "50000", "is_active": "on", "weight_grams": 0, "length_cm": 0,
                 "width_cm": 0, "height_cm": 0, "photos": [_png("baru.png")]})

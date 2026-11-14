@@ -88,7 +88,7 @@ class CommerceReliabilityTests(TestCase):
         transition_order(self.order, "paid")
         client = Client()
         client.force_login(self.owner)
-        client.post(f"/merchant/orders/{self.order.id}/update/", {"status": "refunded"})
+        client.post(f"/books/orders/{self.order.id}/update/", {"status": "refunded"})
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "paid")
         self.assertFalse(self.order.refunds.exists())
@@ -98,7 +98,7 @@ class CommerceReliabilityTests(TestCase):
             transition_order(self.order, status)
         client = Client()
         client.force_login(self.owner)
-        client.post(f"/merchant/orders/{self.order.id}/update/", {"status": "shipped"})
+        client.post(f"/books/orders/{self.order.id}/update/", {"status": "shipped"})
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "packed")
 
@@ -114,7 +114,7 @@ class CommerceReliabilityTests(TestCase):
         client = Client()
         client.force_login(self.owner)
 
-        response = client.get("/merchant/", {"store": self.store.id})
+        response = client.get("/books/", {"store": self.store.id})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["today_gross"], Decimal("100.00"))

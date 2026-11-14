@@ -145,12 +145,12 @@ class PageTests(Base):
         with self.assertRaises(ChannelImportError):
             import_order(self.channel, _order("NEW-9"))
 
-        page = self.client.get(f"/merchant/marketplace/sku/{base}")
+        page = self.client.get(f"/books/marketplace/sku/{base}")
         self.assertContains(page, "NEW-9")
-        self.client.post(f"/merchant/marketplace/sku/{base}", {
+        self.client.post(f"/books/marketplace/sku/{base}", {
             "unmapped": UnmappedSku.objects.get().id, "target": "KOPI"})
         self.assertEqual(ChannelSku.objects.get().product, self.kopi)
 
-        self.client.post(f"/merchant/paket/{base}", {"sku": "P-9", "name": "Paket",
+        self.client.post(f"/books/paket/{base}", {"sku": "P-9", "name": "Paket",
             "components": "KOPI x 2\nTEH"})
-        self.assertContains(self.client.get(f"/merchant/paket/{base}"), "Paket")
+        self.assertContains(self.client.get(f"/books/paket/{base}"), "Paket")

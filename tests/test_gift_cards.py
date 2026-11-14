@@ -34,12 +34,12 @@ class GiftCardTests(TestCase):
     def test_seller_issues_a_card_and_the_recipient_gets_the_code(self):
         seller = Client()
         seller.force_login(self.owner)
-        seller.post("/merchant/gift-cards/", {"value": "75000", "recipient_name": "Sri",
+        seller.post("/books/gift-cards/", {"value": "75000", "recipient_name": "Sri",
             "recipient_email": "sri@example.com"})
         card = GiftCard.objects.get()
         self.assertEqual((card.balance, len(card.code)), (75000, 19))
         self.assertIn(card.code, mail.outbox[0].body)
-        self.assertContains(seller.get("/merchant/gift-cards/"), card.code)
+        self.assertContains(seller.get("/books/gift-cards/"), card.code)
 
     def test_checkout_redeems_part_of_the_card_and_cancel_restores_it(self):
         card = issue(self.store, 30000)

@@ -166,7 +166,7 @@ def merchant_store_toggle(request):
     store.save(update_fields=["is_open"])
     status = "dibuka" if store.is_open else "ditutup"
     messages.success(request, f"Toko {status}.")
-    return redirect(request.META.get("HTTP_REFERER", "/merchant/"))
+    return redirect(request.META.get("HTTP_REFERER", "/books/"))
 
 
 def customer_unsubscribe(request, token):

@@ -94,10 +94,10 @@ class StoreGateTests(TestCase):
     def test_the_dashboard_says_whether_shoppers_see_the_store(self):
         seller = Client()
         seller.force_login(self.owner)
-        page = seller.get("/merchant/")
+        page = seller.get("/books/")
         self.assertContains(page, "Toko belum tampil untuk pembeli")
         self.assertContains(page, "Wajib")
         self.assertContains(page, "?preview=")
         self._finish_setup()
-        self.assertContains(seller.get("/merchant/"), "Toko sudah tampil untuk pembeli")
+        self.assertContains(seller.get("/books/"), "Toko sudah tampil untuk pembeli")
 

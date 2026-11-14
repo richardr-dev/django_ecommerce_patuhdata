@@ -345,7 +345,7 @@ function switchProductTab(tab) {
 {% if section == 'settings' %}
 <section class="store-identity-preview bo-card">
   <div>{% if merchant_store.logo %}<img src="{{ merchant_store.logo.url }}" alt="Logo {{ merchant_store.name }}">{% else %}<span>{{ merchant_store.name|slice:':1' }}</span>{% endif %}</div>
-  <p><strong>Identitas toko</strong><small>Logo ini akan tampil di header, footer, dan dashboard merchant.</small></p>
+  <p><strong>Identitas toko</strong><small>Logo ini akan tampil di header, footer, dan back office.</small></p>
   <a class="bo-link" href="{{ merchant_store_url }}" target="_blank" rel="noopener">Pratinjau toko ↗</a>
 </section>
 {% endif %}

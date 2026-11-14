@@ -68,7 +68,7 @@ class ShortLinkTests(TestCase):
 
     # Link kampanye (the seller's own store marketing)
     def _create(self, **data):
-        return self.seller.post("/merchant/campaign-links/", {"name": "Bio IG", "target": "home",
+        return self.seller.post("/books/campaign-links/", {"name": "Bio IG", "target": "home",
             **data})
 
     def test_seller_creates_a_campaign_link_and_orders_are_counted_for_it(self):
@@ -87,7 +87,7 @@ class ShortLinkTests(TestCase):
         link.refresh_from_db()
         self.assertEqual(link.clicks, 1)
         Order.objects.filter(pk=order.pk).update(status="paid")
-        page = self.seller.get("/merchant/campaign-links/")
+        page = self.seller.get("/books/campaign-links/")
         self.assertContains(page, "Promo kaos")
         self.assertContains(page, "/s/promo-kaos")
         self.assertContains(page, f"Rp{int(order.total):,}".replace(",", "."))
@@ -103,7 +103,7 @@ class ShortLinkTests(TestCase):
     def test_inactive_links_stop_and_other_stores_are_not_credited(self):
         self._create(code="bio")
         link = CampaignLink.objects.get(code="bio")
-        self.seller.post(f"/merchant/campaign-links/{link.id}/toggle/")
+        self.seller.post(f"/books/campaign-links/{link.id}/toggle/")
         self.assertEqual(Client().get("/s/bio").status_code, 404)
         other = Store.objects.create(owner=User.objects.create_user("o"), name="Lain", slug="lain")
         CampaignLink.objects.create(store=other, name="X", code="lain-x")

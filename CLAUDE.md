@@ -195,6 +195,12 @@ Four test files failed before this work and still do: `test_digital_products`,
   never type the name into a template. The sign-in page (`registration/merchant_login.html`, `static/css/login.css`)
   is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.
   Domains (`lakuin.store`) and the `lakuin-*.svg` brand files are infrastructure and have not been renamed.
+- **The back office lives under `/books/`** (it was `/merchant/`, a word that suits a shop, not an accounting
+  product). Old `/merchant/...` addresses redirect (`config/views.py:legacy_merchant`: 301 for GET, 308 for
+  anything else, `/merchant/login/` goes to `/login/`), so bookmarks, invite emails and forms in flight keep
+  working. Route names (`merchant-*`), template folders and view functions keep the old word on purpose: nobody
+  sees them. A new back-office route is `path("books/...")`. Dropping the prefix entirely was ruled out: it
+  collides with `orders/<id>/`, the site root and storefront paths (`products`, `feeds`, `integrations`).
 - **The first page is the login** (`HOME_IS_LOGIN`, default 1; `tenancy.opens_on_login`): `/` on the system's
   own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
@@ -224,7 +230,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Stock value vs Persediaan | `accounting/inventory.py` | `accounting/views_books.py` |
 | Install a client's store or add a brand (partner only) | `shops/provisioning.py`, `manage.py install_store` | `shops/install_views.py`, `templates/platform/install.html` |
 | Reports (P&L, cash flow, neraca, account ledger) | `accounting/reports.py` | both |
-| Excel for each report, auditor yearly pack (`/merchant/accounting/paket-audit/`) | `accounting/exports.py` | `accounting/views_books.py` |
+| Excel for each report, auditor yearly pack (`/books/accounting/paket-audit/`) | `accounting/exports.py` | `accounting/views_books.py` |
 | SAK EMKM statements (screen, print, PDF) | `accounting/emkm.py` | `views_books.py:merchant_emkm_pack`, `templates/merchant/emkm_pack.html` |
 | Year-end closing, reopen, monthly close checklist | `accounting/closing.py` | `views_books.py:merchant_year_close`, `templates/merchant/year_close.html` |
 | PPh 21/23/4(2) withholding, bukti potong, deposit | `accounting/withholding.py` | `views_books.py:merchant_withholdings` |

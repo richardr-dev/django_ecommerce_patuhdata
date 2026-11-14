@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.db import connection
-from django.http import JsonResponse
+from django.http import HttpResponse, HttpResponsePermanentRedirect, JsonResponse
 from django.utils import timezone
 
 from apps.integrations.models import OutboxEvent, WorkerHeartbeat
@@ -52,3 +52,18 @@ def health(request):
         "outbox_dead_events": dead_events,
         "worker_last_seen_seconds": round(worker_age) if worker_age is not None else None,
         "alerts": alerts})
+
+
+def legacy_merchant(request, rest=""):
+    """The back office used to live under /merchant/. Old bookmarks, invite emails and open forms still
+    work: GET goes to the same page under /books/ (the sign-in page is /login/), and any other method
+    gets a 308 so a form posted to an old address keeps its method and body."""
+    target = "/login/" if rest.startswith("login") else "/books/" + rest
+    query = request.META.get("QUERY_STRING", "")
+    if query:
+        target += "?" + query
+    if request.method in ("GET", "HEAD"):
+        return HttpResponsePermanentRedirect(target)
+    response = HttpResponse(status=308)
+    response["Location"] = target
+    return response

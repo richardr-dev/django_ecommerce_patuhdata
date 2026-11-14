@@ -22,7 +22,7 @@ class LoginFirstTests(TestCase):
 
     def test_root_goes_to_the_dashboard_when_signed_in(self):
         self.client.force_login(self.owner)
-        self.assertRedirects(self.client.get("/"), "/merchant/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/"), "/books/", fetch_redirect_response=False)
 
     def test_an_explicit_store_link_still_shows_the_storefront(self):
         response = self.client.get("/?store=kopi")
@@ -60,5 +60,5 @@ class LoginPageTests(TestCase):
 
     def test_signing_in_opens_the_dashboard(self):
         User.objects.create_user("owner2", password="pw")
-        response = self.client.post("/login/", {"username": "owner2", "password": "pw", "next": "/merchant/"})
-        self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)
+        response = self.client.post("/login/", {"username": "owner2", "password": "pw", "next": "/books/"})
+        self.assertRedirects(response, "/books/", fetch_redirect_response=False)

@@ -41,7 +41,7 @@ class ExpenseTests(TestCase):
     def _record(self, **data):
         values = {"date": self.today.isoformat(), "category": "6300",
             "description": "Sewa ruko November", "amount": "2500000"}
-        return self.client.post("/merchant/expenses/", {**values, **data})
+        return self.client.post("/books/expenses/", {**values, **data})
 
     def test_expense_posts_to_ledger_and_profit(self):
         response = self._record(vendor="Pak Budi")
@@ -51,7 +51,7 @@ class ExpenseTests(TestCase):
             {"6300": Decimal(2500000), CASH: Decimal(-2500000)})
         self.assertTrue(AuditLog.objects.filter(action="expense.created").exists())
 
-        finance = self.client.get("/merchant/finance/")
+        finance = self.client.get("/books/finance/")
         self.assertContains(finance, "Sewa tempat")
         self.assertEqual(finance.context["profit"]["net"], Decimal(-2500000))
 
@@ -71,7 +71,7 @@ class ExpenseTests(TestCase):
         report = monthly_tax(self.store, self.today.year, self.today.month)
         self.assertEqual((report.vat, report.input_vat), (Decimal(11000), Decimal(110000)))
         self.assertEqual(report.vat_payable, Decimal(-99000))  # lebih bayar
-        self.assertContains(self.client.get("/merchant/tax/"), "lebih bayar")
+        self.assertContains(self.client.get("/books/tax/"), "lebih bayar")
 
     def test_input_vat_is_ignored_for_non_pkp(self):
         self._record(input_vat="100000")
@@ -92,7 +92,7 @@ class ExpenseTests(TestCase):
         self._record(receipt=SimpleUploadedFile("nota.pdf", b"%PDF-1.4 nota", "application/pdf"))
         expense = Expense.objects.get()
         self.assertTrue(expense.receipt.name.startswith("expenses/buku/"))
-        response = self.client.get(f"/merchant/expenses/{expense.id}/receipt/")
+        response = self.client.get(f"/books/expenses/{expense.id}/receipt/")
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.4 nota")
 
@@ -100,12 +100,12 @@ class ExpenseTests(TestCase):
         Store.objects.create(owner=other, name="Lain", slug="lain")
         stranger = Client()
         stranger.force_login(other)
-        self.assertEqual(stranger.get(f"/merchant/expenses/{expense.id}/receipt/").status_code, 404)
+        self.assertEqual(stranger.get(f"/books/expenses/{expense.id}/receipt/").status_code, 404)
 
     def test_delete_removes_journal_entry(self):
         self._record()
         expense = Expense.objects.get()
-        self.client.post(f"/merchant/expenses/{expense.id}/delete/")
+        self.client.post(f"/books/expenses/{expense.id}/delete/")
         self.assertFalse(Expense.objects.exists())
         self.assertFalse(JournalLine.objects.exists())
         self.assertTrue(AuditLog.objects.filter(action="expense.removed").exists())
@@ -115,16 +115,16 @@ class ExpenseTests(TestCase):
         last_month = (self.today.replace(day=1) - timedelta(days=1))
         Expense.objects.create(store=self.store, date=last_month, category="6200",
             description="Gaji Oktober", amount=Decimal(3000000))
-        page = self.client.get("/merchant/expenses/")
+        page = self.client.get("/books/expenses/")
         self.assertContains(page, "Sewa ruko November")
         self.assertNotContains(page, "Gaji Oktober")
         self.assertEqual(page.context["total"], Decimal(2500000))
 
-        csv = self.client.get(f"/merchant/expenses/?month={last_month:%Y-%m}&format=csv")
+        csv = self.client.get(f"/books/expenses/?month={last_month:%Y-%m}&format=csv")
         self.assertIn("Gaji Oktober", csv.content.decode())
 
         source = Expense.objects.get(description="Gaji Oktober")
-        copy = self.client.get(f"/merchant/expenses/?copy={source.id}")
+        copy = self.client.get(f"/books/expenses/?copy={source.id}")
         self.assertEqual(copy.context["form"].initial["description"], "Gaji Oktober")
         self.assertEqual(copy.context["form"].initial["date"], self.today)
 
@@ -133,10 +133,10 @@ class ExpenseTests(TestCase):
         StoreStaff.objects.create(store=self.store, user=viewer, role="viewer")
         client = Client()
         client.force_login(viewer)
-        page = client.get("/merchant/expenses/")
+        page = client.get("/books/expenses/")
         self.assertEqual(page.status_code, 200)
         self.assertNotContains(page, "Simpan biaya")
-        response = client.post("/merchant/expenses/", {"date": self.today.isoformat(),
+        response = client.post("/books/expenses/", {"date": self.today.isoformat(),
             "category": "6300", "description": "x", "amount": "1"})
         self.assertIn(response.status_code, {403, 404})
         self.assertFalse(Expense.objects.exists())

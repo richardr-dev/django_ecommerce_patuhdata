@@ -31,7 +31,7 @@ class DokuConnectionTests(TestCase):
 
     @patch("apps.integrations.payments.request_json", return_value=PAGE)
     def test_seller_test_opens_a_test_page_with_their_own_keys(self, request_json):
-        reply = self.client.post("/merchant/payments/test/", follow=True)
+        reply = self.client.post("/books/payments/test/", follow=True)
         self.assertContains(reply, "Koneksi DOKU berhasil (Sandbox)")
         self.assertContains(reply, 'href="https://sandbox.doku.test/pay/abc"')
 
@@ -45,22 +45,22 @@ class DokuConnectionTests(TestCase):
     @patch("apps.integrations.payments.request_json",
         side_effect=ProviderError('Provider returned HTTP 401: {"error":"invalid signature"}'))
     def test_wrong_keys_are_explained(self, _request_json):
-        reply = self.client.post("/merchant/payments/test/", follow=True)
+        reply = self.client.post("/books/payments/test/", follow=True)
         self.assertContains(reply, "DOKU menolak kredensial (Sandbox)")
 
     @patch("apps.integrations.payments.request_json",
         side_effect=ProviderError("Provider returned HTTP 503: <html>alb</html>"))
     def test_doku_downtime_is_explained_without_raw_html(self, _request_json):
-        reply = self.client.post("/merchant/payments/test/", follow=True)
+        reply = self.client.post("/books/payments/test/", follow=True)
         self.assertContains(reply, "Server DOKU sedang tidak dapat dihubungi")
         self.assertNotContains(reply, "&lt;html&gt;")
 
     def test_only_the_store_admin_can_run_it_and_only_with_saved_keys(self):
         self.account.gateway = ""
         self.account.save()
-        reply = self.client.post("/merchant/payments/test/", follow=True)
+        reply = self.client.post("/books/payments/test/", follow=True)
         self.assertContains(reply, "Simpan Client ID dan Secret Key DOKU terlebih dahulu")
-        self.assertEqual(Client().post("/merchant/payments/test/").status_code, 302)
+        self.assertEqual(Client().post("/books/payments/test/").status_code, 302)
 
     def test_a_paid_test_page_is_acknowledged_without_touching_orders(self):
         path = "/integrations/webhooks/doku/"

@@ -46,7 +46,7 @@ class FeedTests(TestCase):
         CampaignLink.objects.create(store=self.store, name="QR etalase", code="etalase")
         seller = Client()
         seller.force_login(self.owner)
-        page = seller.get("/merchant/feeds/")
+        page = seller.get("/books/feeds/")
         self.assertContains(page, "/feeds/products.xml")
         self.assertContains(page, "Link kampanye: QR etalase")
         self.assertContains(page, "/s/etalase")

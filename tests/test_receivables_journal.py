@@ -75,7 +75,7 @@ class AgingTests(Base):
             Decimal(25000), 10))
 
         self.client.force_login(self.owner)
-        page = self.client.get(f"/merchant/sales/piutang/?store={self.store.id}&customer={sari.pk}")
+        page = self.client.get(f"/books/sales/piutang/?store={self.store.id}&customer={sari.pk}")
         self.assertContains(page, "Tagihan Sari")
         self.assertContains(page, invoice.number)
 
@@ -85,7 +85,7 @@ class JournalPageTests(Base):
         data = {"date": "2026-11-01", "memo": "Saldo awal", "account[]": [CASH, EQUITY, ""],
             "debit[]": ["5.000.000", "", ""], "credit[]": ["", "5.000.000", ""], **extra}
         self.client.force_login(self.owner)
-        return self.client.post(f"/merchant/accounting/journal/new/?store={self.store.id}", data)
+        return self.client.post(f"/books/accounting/journal/new/?store={self.store.id}", data)
 
     def test_opening_balance_is_booked(self):
         self.post()
@@ -106,6 +106,6 @@ class JournalPageTests(Base):
     def test_forms_load(self):
         self.client.force_login(self.owner)
         base = f"?store={self.store.id}"
-        self.assertContains(self.client.get(f"/merchant/accounting/journal/new/{base}&opening=1"),
+        self.assertContains(self.client.get(f"/books/accounting/journal/new/{base}&opening=1"),
             "Saldo Awal")
-        self.assertContains(self.client.get(f"/merchant/sales/piutang/{base}"), "Piutang Pelanggan")
+        self.assertContains(self.client.get(f"/books/sales/piutang/{base}"), "Piutang Pelanggan")

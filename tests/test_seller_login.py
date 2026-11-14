@@ -16,7 +16,7 @@ class SellerLoginTests(TestCase):
     def _login(self, username, password="Sambal-Matah-77"):
         client = Client()
         reply = client.post("/login/", {"username": username, "password": password,
-            "next": "/merchant/"})
+            "next": "/books/"})
         return client, reply
 
     def _seller(self, username="sri@example.com", phone="081234567890", slug="bu-sri"):
@@ -49,7 +49,7 @@ class SellerLoginTests(TestCase):
     def test_owner_sees_kelola_toko_on_their_storefront_only(self):
         self._seller()
         client, _ = self._login("081234567890")
-        client.get("/merchant/")
+        client.get("/books/")
         self.assertIn(SELLER_COOKIE, client.cookies)
         self.assertTrue(client.cookies[SELLER_COOKIE]["httponly"])
         self.assertContains(client.get("/"), "Kelola toko")

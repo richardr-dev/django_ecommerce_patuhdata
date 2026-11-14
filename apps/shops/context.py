@@ -32,8 +32,8 @@ def store_context(request):
         from .auth import read_seller_cookie
         if not store or store.id not in read_seller_cookie(request):
             return ""
-        # On a store address /merchant/ forwards to the platform, opening this store's dashboard.
-        return "/merchant/" if settings.PLATFORM_DOMAIN else f"/merchant/?store={store.id}"
+        # On a store address /books/ forwards to the platform, opening this store's dashboard.
+        return "/books/" if settings.PLATFORM_DOMAIN else f"/books/?store={store.id}"
 
     def pending_payment():
         from apps.orders.buyer import payment_link

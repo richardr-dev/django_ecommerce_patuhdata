@@ -46,8 +46,8 @@ class OutletBillingTests(TestCase):
     def test_starter_runs_one_outlet_and_is_pointed_to_pro(self):
         store = _store("starter", "free")
         client = self._client(store)
-        client.post("/merchant/setup/warehouses/new/", _outlet_form("Kemang"))
-        page = client.post("/merchant/setup/warehouses/new/", _outlet_form("Depok"))
+        client.post("/books/setup/warehouses/new/", _outlet_form("Kemang"))
+        page = client.post("/books/setup/warehouses/new/", _outlet_form("Depok"))
 
         self.assertEqual(store.warehouses.filter(is_outlet=True).count(), 1)
         self.assertContains(page, "Multi-outlet tersedia di paket Pro")
@@ -59,9 +59,9 @@ class OutletBillingTests(TestCase):
         self.assertEqual(plan_amount(pro, 1, 2), Decimal(399000 * 3))
         self.assertEqual(plan_amount(pro, 12, 2), Decimal(3990000 * 3))
 
-        page = self._client(store).post("/merchant/setup/warehouses/new/", _outlet_form("A"))
+        page = self._client(store).post("/books/setup/warehouses/new/", _outlet_form("A"))
         self.assertEqual(page.status_code, 302)
-        page = self._client(store).post("/merchant/setup/warehouses/new/", _outlet_form("B"))
+        page = self._client(store).post("/books/setup/warehouses/new/", _outlet_form("B"))
         self.assertContains(page, "Tambah outlet di menu Langganan")
 
     def test_a_mid_period_outlet_is_charged_for_the_days_left(self):
@@ -93,12 +93,12 @@ class OutletBillingTests(TestCase):
 
     def test_buying_outlets_from_the_billing_page_opens_payment(self):
         store = _store("halaman", "pro")
-        response = self._client(store).post("/merchant/billing/outlets/", {"action": "add",
+        response = self._client(store).post("/books/billing/outlets/", {"action": "add",
             "count": "1"})
         invoice = SubscriptionInvoice.objects.get(kind="outlets")
-        self.assertRedirects(response, f"/merchant/billing/{invoice.id}/demo-pay/",
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/",
             fetch_redirect_response=False)
-        self.assertContains(self._client(store).get("/merchant/billing/"), "0 outlet aktif dari 1")
+        self.assertContains(self._client(store).get("/books/billing/"), "0 outlet aktif dari 1")
 
     def test_outlets_can_be_reduced_once_the_extra_ones_are_closed(self):
         store = _store("hemat", "pro", extra=2)

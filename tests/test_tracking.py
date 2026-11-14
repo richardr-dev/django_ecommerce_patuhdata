@@ -17,7 +17,7 @@ class TrackingTests(TestCase):
     def _save(self, **data):
         fields = {"ga4_id": "", "gtm_id": "", "google_ads_id": "", "meta_pixel_id": "",
             "tiktok_pixel_id": "", "clarity_id": "", "google_site_verification": ""}
-        return self.seller.post("/merchant/tracking/", {**fields, **data})
+        return self.seller.post("/books/tracking/", {**fields, **data})
 
     def test_ids_are_saved_and_rendered_behind_consent(self):
         self._save(ga4_id="g-ab12cd34ef", meta_pixel_id="1234567890123456",

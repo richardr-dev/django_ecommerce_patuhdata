@@ -135,26 +135,26 @@ class RenewalPageTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_billing_page_shows_the_bill_and_pay_opens_checkout(self):
-        page = self.client.get("/merchant/billing/")
+        page = self.client.get("/books/billing/")
         self.assertContains(page, "TAGIHAN BERIKUTNYA")
         invoice = SubscriptionInvoice.objects.get(kind="renewal")
 
-        response = self.client.post(f"/merchant/billing/{invoice.id}/pay/")
-        self.assertRedirects(response, f"/merchant/billing/{invoice.id}/demo-pay/",
+        response = self.client.post(f"/books/billing/{invoice.id}/pay/")
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/",
             fetch_redirect_response=False)
-        self.client.post(f"/merchant/billing/{invoice.id}/demo-pay/")
+        self.client.post(f"/books/billing/{invoice.id}/demo-pay/")
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, "paid")
 
     def test_dashboard_points_to_the_open_bill(self):
-        self.assertContains(self.client.get("/merchant/"), "Tagihan Starter Rp99.000")
+        self.assertContains(self.client.get("/books/"), "Tagihan Starter Rp99.000")
 
     def test_switching_to_yearly_updates_the_open_bill_and_turning_off_cancels_it(self):
-        self.client.post("/merchant/billing/auto-renew/", {"auto_renew": "on", "renew_months": "12"})
+        self.client.post("/books/billing/auto-renew/", {"auto_renew": "on", "renew_months": "12"})
         invoice = SubscriptionInvoice.objects.get(kind="renewal")
         self.assertEqual((invoice.months, invoice.amount), (12, 990000))
 
-        self.client.post("/merchant/billing/auto-renew/", {"renew_months": "12"})
+        self.client.post("/books/billing/auto-renew/", {"renew_months": "12"})
         invoice.refresh_from_db()
         self.subscription.refresh_from_db()
         self.assertEqual((invoice.status, self.subscription.auto_renew), ("cancelled", False))

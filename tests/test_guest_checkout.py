@@ -108,7 +108,7 @@ class CourierLinkTests(TestCase):
         self.assertEqual(courier_tracking(self.order)["url"], "")
 
     def test_shipped_order_links_the_shopper_to_the_couriers_tracking_page(self):
-        self.seller.post(f"/merchant/orders/{self.order.id}/ship/", {"courier_code": "jne",
+        self.seller.post(f"/books/orders/{self.order.id}/ship/", {"courier_code": "jne",
             "tracking_number": "CGK1234567890", "fulfillment_method": "merchant_dropoff"})
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "shipped")
@@ -123,7 +123,7 @@ class CourierLinkTests(TestCase):
         self.order.status, self.order.courier_code = "shipped", "jnt"
         self.order.tracking_number = "JT0001"
         self.order.save()
-        page = self.seller.get("/merchant/orders/?tab=all")
+        page = self.seller.get("/books/orders/?tab=all")
         self.assertContains(page, "J%26T%20Express")
         self.assertContains(page, "jet.co.id")
         self.assertNotContains(page, "Simpan &amp; sinkronkan")

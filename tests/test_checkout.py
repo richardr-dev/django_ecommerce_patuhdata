@@ -121,7 +121,7 @@ class CheckoutTests(TestCase):
             "district": "Menteng", "postal_code": "10310"})
         self.client.force_login(self.store.owner)
         order = Order.objects.get()
-        self.client.post(f"/merchant/orders/{order.id}/update/", {"status": "cancelled"})
+        self.client.post(f"/books/orders/{order.id}/update/", {"status": "cancelled"})
         variant.refresh_from_db()
         self.assertEqual(variant.stock, 1)
         self.assertEqual(variant.reserved, 0)
@@ -129,16 +129,16 @@ class CheckoutTests(TestCase):
     def test_merchant_dashboard_and_product_setup_are_store_scoped(self):
         other = Store.objects.create(owner=self.owner, name="Other", slug="other-dashboard")
         self.client.force_login(self.owner)
-        response = self.client.get("/merchant/", {"store": self.store.id})
+        response = self.client.get("/books/", {"store": self.store.id})
         self.assertContains(response, "Perlu tindakan")
-        response = self.client.post("/merchant/setup/products/new/", {
+        response = self.client.post("/books/setup/products/new/", {
             "name": "Dashboard Product", "slug": "dashboard-product", "sku": "DASH-1",
             "description": "", "price": 45000, "compare_at_price": "", "image_url": "",
             "weight_grams": 100, "length_cm": 0, "width_cm": 0, "height_cm": 0,
             "seo_title": "", "seo_description": "", "is_active": "on",
             "warehouse": self.warehouse.id, "initial_stock": 7,
         })
-        self.assertRedirects(response, "/merchant/setup/products/")
+        self.assertRedirects(response, "/books/setup/products/")
         self.assertTrue(Product.objects.filter(store=self.store, sku="DASH-1").exists())
         self.assertFalse(Product.objects.filter(store=other, sku="DASH-1").exists())
         created = Product.objects.get(store=self.store, sku="DASH-1")
@@ -175,9 +175,9 @@ class CheckoutTests(TestCase):
             b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;",
             content_type="image/gif")
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
-            response = self.client.post("/merchant/setup/images/new/", {"product": self.product.sku,
+            response = self.client.post("/books/setup/images/new/", {"product": self.product.sku,
                 "file": image, "url": "", "alt_text": "Foto Item", "position": 1})
-        self.assertRedirects(response, "/merchant/setup/images/")
+        self.assertRedirects(response, "/books/setup/images/")
         self.assertTrue(ProductImage.objects.filter(product=self.product,
             alt_text="Foto Item").exists())
 
@@ -187,19 +187,19 @@ class CheckoutTests(TestCase):
             b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89",
             content_type="image/png")
         with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
-            response = self.client.post("/merchant/settings/", {
+            response = self.client.post("/books/settings/", {
                 "name": self.store.name, "logo": logo, "domain": "",
                 "description": "Toko uji", "theme": "modern", "primary_color": "#155eef",
                 "currency": "IDR", "tax_rate": "0", "support_phone": "",
                 "support_email": "", "terms_url": "", "privacy_url": "",
                 "return_policy": "",
             })
-            self.assertRedirects(response, "/merchant/settings/")
+            self.assertRedirects(response, "/books/settings/")
             self.store.refresh_from_db()
             self.assertTrue(self.store.logo.name.startswith(f"stores/{self.store.slug}/branding/"))
             storefront = self.client.get("/")
             self.assertContains(storefront, self.store.logo.url, count=3)
-            settings_page = self.client.get("/merchant/settings/")
+            settings_page = self.client.get("/books/settings/")
             self.assertContains(settings_page, "Identitas toko")
             self.assertContains(settings_page, self.store.logo.url)
 
@@ -207,10 +207,10 @@ class CheckoutTests(TestCase):
         self.level.reserved = 1
         self.level.save(update_fields=["reserved"])
         self.client.force_login(self.owner)
-        response = self.client.post("/merchant/stock/", {"target_type": "level",
+        response = self.client.post("/books/stock/", {"target_type": "level",
             "target_id": self.level.id, "stock": 8, "safety_stock": 2,
             "reason": "Barang masuk"})
-        self.assertRedirects(response, "/merchant/stock/")
+        self.assertRedirects(response, "/books/stock/")
         self.level.refresh_from_db()
         movement = InventoryMovement.objects.get(kind="adjust")
         self.assertEqual(self.level.on_hand, 8)
@@ -223,7 +223,7 @@ class CheckoutTests(TestCase):
         self.level.reserved = 2
         self.level.save(update_fields=["reserved"])
         self.client.force_login(self.owner)
-        self.client.post("/merchant/stock/", {"target_type": "level",
+        self.client.post("/books/stock/", {"target_type": "level",
             "target_id": self.level.id, "stock": 1, "safety_stock": 0})
         self.level.refresh_from_db()
         self.assertEqual(self.level.on_hand, 2)
@@ -295,12 +295,12 @@ class CheckoutTests(TestCase):
 
         self.client.force_login(self.owner)
         for status in ("confirmed", "allocated", "picking", "packed"):
-            response = self.client.post(f"/merchant/orders/{order.id}/update/", {"status": status})
-            self.assertRedirects(response, "/merchant/orders/")
-        self.client.post(f"/merchant/orders/{order.id}/update/",
+            response = self.client.post(f"/books/orders/{order.id}/update/", {"status": status})
+            self.assertRedirects(response, "/books/orders/")
+        self.client.post(f"/books/orders/{order.id}/update/",
             {"status": "shipped", "tracking_number": "JNE-123"})
         for status in ("delivered", "completed"):
-            self.client.post(f"/merchant/orders/{order.id}/update/", {"status": status,
+            self.client.post(f"/books/orders/{order.id}/update/", {"status": status,
                 "tracking_number": "JNE-123"})
 
         order.refresh_from_db()
@@ -316,16 +316,16 @@ class CheckoutTests(TestCase):
             customer_name="Ayu", phone="081234567890", shipping_address="Jakarta",
             subtotal=10000, total=10000, idempotency_key="manual-resi")
         self.client.force_login(self.owner)
-        response = self.client.post(f"/merchant/orders/{order.id}/tracking/", {
+        response = self.client.post(f"/books/orders/{order.id}/tracking/", {
             "fulfillment_method": "merchant_dropoff", "courier_code": "jne",
             "tracking_number": "JNE-SELF-123"})
-        self.assertRedirects(response, "/merchant/orders/")
+        self.assertRedirects(response, "/books/orders/")
         order.refresh_from_db()
         self.assertEqual(order.fulfillment_method, "merchant_dropoff")
         self.assertEqual(order.courier_code, "jne")
         self.assertEqual(order.tracking_number, "JNE-SELF-123")
         self.assertEqual(order.tracking_status, "ready_to_track")
-        page = self.client.get("/merchant/orders/")
+        page = self.client.get("/books/orders/")
         self.assertContains(page, "JNE-SELF-123")
         self.assertContains(page, "Toko antar ke drop point")
 

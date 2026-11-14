@@ -16,7 +16,7 @@
       <label class="ln-field"><span>Email atau nomor WhatsApp</span><span class="ln-input"><input type="text" name="username" value="{{ form.username.value|default:'' }}" autocomplete="username" autocapitalize="none" autofocus required placeholder="nama@perusahaan.com atau 0812…"></span></label>
       <label class="ln-field"><span>Kata sandi</span><span class="ln-input has-toggle"><input type="password" name="password" id="ln-password" autocomplete="current-password" required placeholder="Kata sandi"><button type="button" class="ln-toggle" id="ln-toggle" aria-controls="ln-password" aria-pressed="false">Lihat</button></span></label>
       <div class="ln-row"><a href="{% url 'password-reset' %}">Lupa kata sandi?</a></div>
-      <input type="hidden" name="next" value="{{ next|default:'/merchant/' }}">
+      <input type="hidden" name="next" value="{{ next|default:'/books/' }}">
       <button class="ln-btn" id="ln-submit">Masuk</button>
     </form>
     <p class="ln-alt">Akun dibuat oleh partner yang memasang sistem ini.</p>

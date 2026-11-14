@@ -24,7 +24,7 @@ class DashboardSetupTests(TestCase):
 
     def test_new_store_starts_with_nothing_ticked(self):
         self.assertEqual(self._done(), [False] * 6)
-        page = self.client.get("/merchant/")
+        page = self.client.get("/books/")
         self.assertContains(page, "0 dari 6 langkah selesai")
         self.assertContains(page, "Bagikan ke WhatsApp")
         self.assertContains(page, "Semua beres")
@@ -51,12 +51,12 @@ class DashboardSetupTests(TestCase):
             shipping_address="x", subtotal=Decimal(1), total=Decimal(1),
             payment_provider="bank_transfer", idempotency_key="first")
 
-        page = self.client.get("/merchant/")
+        page = self.client.get("/books/")
         self.assertNotContains(page, "Siapkan toko Anda")
         self.assertContains(page, "1</b> transfer bank menunggu dicek")
 
     def test_sidebar_groups_open_on_the_current_section(self):
-        page = self.client.get("/merchant/finance/").content.decode()
+        page = self.client.get("/books/finance/").content.decode()
         finance = page.split("Keuangan</summary>")[0].rsplit("<details", 1)[1]
         self.assertIn("open", finance)
         products = page.split("Produk</summary>")[0].rsplit("<details", 1)[1]

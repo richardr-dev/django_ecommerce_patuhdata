@@ -28,7 +28,7 @@ class ProductVariantTests(TestCase):
         self.seller.force_login(self.owner)
 
     def test_a_new_product_is_created_with_its_variants(self):
-        reply = self.seller.post("/merchant/setup/products/new/", {**PRODUCT, "initial_stock": 5,
+        reply = self.seller.post("/books/setup/products/new/", {**PRODUCT, "initial_stock": 5,
             **variant_rows([
                 {"name": "S", "sku": "KAOS-S", "stock": 4, "is_active": "on", "attributes": '{"Ukuran": "S"}'},
                 {"name": "M", "sku": "KAOS-M", "price": "110000", "stock": 6, "is_active": "on"},
@@ -45,10 +45,10 @@ class ProductVariantTests(TestCase):
     def test_editing_variant_stock_on_the_product_page_is_logged(self):
         product = Product.objects.create(store=self.store, sku="KAOS", slug="kaos", name="Kaos", price=100000)
         variant = ProductVariant.objects.create(product=product, name="S", sku="KAOS-S", stock=3, reserved=1)
-        page = self.seller.get(f"/merchant/setup/products/{product.id}/")
+        page = self.seller.get(f"/books/setup/products/{product.id}/")
         self.assertContains(page, 'id="variants"')
         self.assertContains(page, "KAOS-S")
-        reply = self.seller.post(f"/merchant/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
+        reply = self.seller.post(f"/books/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
             [{"id": variant.id, "name": "S", "sku": "KAOS-S", "stock": 9, "is_active": "on"}], initial=1)})
         self.assertEqual(reply.status_code, 302)
         variant.refresh_from_db()
@@ -59,7 +59,7 @@ class ProductVariantTests(TestCase):
     def test_variant_stock_cannot_drop_below_reserved_units(self):
         product = Product.objects.create(store=self.store, sku="KAOS", slug="kaos", name="Kaos", price=100000)
         variant = ProductVariant.objects.create(product=product, name="S", sku="KAOS-S", stock=5, reserved=4)
-        reply = self.seller.post(f"/merchant/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
+        reply = self.seller.post(f"/books/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
             [{"id": variant.id, "name": "S", "sku": "KAOS-S", "stock": 2, "is_active": "on"}], initial=1)})
         self.assertEqual(reply.status_code, 200)
         variant.refresh_from_db()
@@ -67,7 +67,7 @@ class ProductVariantTests(TestCase):
 
     def test_variant_skus_must_be_unique_in_the_store(self):
         Product.objects.create(store=self.store, sku="TOPI", slug="topi", name="Topi", price=50000)
-        reply = self.seller.post("/merchant/setup/products/new/", {**PRODUCT, **variant_rows([
+        reply = self.seller.post("/books/setup/products/new/", {**PRODUCT, **variant_rows([
             {"name": "S", "sku": "TOPI", "stock": 1, "is_active": "on"},
             {"name": "M", "sku": "KAOS-M", "stock": 1, "is_active": "on"},
             {"name": "L", "sku": "KAOS-M", "stock": 1, "is_active": "on"},
@@ -82,7 +82,7 @@ class ProductVariantTests(TestCase):
     def test_deleting_a_variant(self):
         product = Product.objects.create(store=self.store, sku="KAOS", slug="kaos", name="Kaos", price=100000)
         variant = ProductVariant.objects.create(product=product, name="S", sku="KAOS-S", stock=3)
-        self.seller.post(f"/merchant/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
+        self.seller.post(f"/books/setup/products/{product.id}/", {**PRODUCT, **variant_rows(
             [{"id": variant.id, "name": "S", "sku": "KAOS-S", "stock": 3, "is_active": "on",
               "DELETE": "on"}], initial=1)})
         self.assertFalse(ProductVariant.objects.filter(id=variant.id).exists())
@@ -90,15 +90,15 @@ class ProductVariantTests(TestCase):
     def test_the_standalone_variant_pages_lead_to_the_product(self):
         product = Product.objects.create(store=self.store, sku="KAOS", slug="kaos", name="Kaos", price=100000)
         variant = ProductVariant.objects.create(product=product, name="S", sku="KAOS-S")
-        self.assertRedirects(self.seller.get("/merchant/setup/variants/"), "/merchant/setup/products/")
-        reply = self.seller.get(f"/merchant/setup/variants/{variant.id}/")
-        self.assertEqual(reply["Location"], f"/merchant/setup/products/{product.id}/#variants")
-        self.assertNotContains(self.seller.get("/merchant/"), "/merchant/setup/variants/")
+        self.assertRedirects(self.seller.get("/books/setup/variants/"), "/books/setup/products/")
+        reply = self.seller.get(f"/books/setup/variants/{variant.id}/")
+        self.assertEqual(reply["Location"], f"/books/setup/products/{product.id}/#variants")
+        self.assertNotContains(self.seller.get("/books/"), "/books/setup/variants/")
 
     def test_the_product_list_counts_variants_and_finds_them_by_sku(self):
         product = Product.objects.create(store=self.store, sku="KAOS", slug="kaos", name="Kaos", price=100000)
         ProductVariant.objects.create(product=product, name="S", sku="KAOS-S")
         ProductVariant.objects.create(product=product, name="M", sku="KAOS-M")
-        page = self.seller.get("/merchant/setup/products/?q=KAOS-M")
+        page = self.seller.get("/books/setup/products/?q=KAOS-M")
         self.assertContains(page, "Varian")
         self.assertContains(page, "Kaos")

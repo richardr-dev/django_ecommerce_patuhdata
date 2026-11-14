@@ -1396,12 +1396,12 @@ class SidebarStaysOnTheRightItemTests(Base):
 
     def test_detail_and_form_pages_keep_their_menu_item(self):
         cases = {
-            "/merchant/sales/invoices/abc/": "Invoice penjualan",
-            "/merchant/sales/invoices/abc/duplicate/": "Invoice penjualan",
-            "/merchant/orders/abc/": "Pesanan",
-            "/merchant/sales/quotes/abc/": "Penawaran",
-            "/merchant/products/3/partner-prices/": "Semua produk",
-            "/merchant/shipping-areas/": "Pengiriman",
+            "/books/sales/invoices/abc/": "Invoice penjualan",
+            "/books/sales/invoices/abc/duplicate/": "Invoice penjualan",
+            "/books/orders/abc/": "Pesanan",
+            "/books/sales/quotes/abc/": "Penawaran",
+            "/books/products/3/partner-prices/": "Semua produk",
+            "/books/shipping-areas/": "Pengiriman",
         }
         for path, label in cases.items():
             self.assertEqual([item[1] for item in self.active(path)], [label], path)

@@ -186,12 +186,12 @@ class ChannelPageTests(ChannelTestCase):
         self.client.force_login(self.owner)
 
     def test_connect_channel_and_import_csv(self):
-        response = self.client.post("/merchant/marketplace/", {"platform": "tokopedia",
+        response = self.client.post("/books/marketplace/", {"platform": "tokopedia",
             "name": "Toko Tokopedia"})
         channel = SalesChannel.objects.get(platform="tokopedia")
-        self.assertRedirects(response, f"/merchant/marketplace/{channel.id}/")
+        self.assertRedirects(response, f"/books/marketplace/{channel.id}/")
 
-        page = self.client.post(f"/merchant/marketplace/{channel.id}/", {"action": "import",
+        page = self.client.post(f"/books/marketplace/{channel.id}/", {"action": "import",
             "file": SimpleUploadedFile("orders.csv", CSV.encode(), content_type="text/csv")})
         self.assertEqual(page.context["summary"]["created"], 2)
         self.assertEqual(channel.orders.count(), 2)
@@ -199,8 +199,8 @@ class ChannelPageTests(ChannelTestCase):
     def test_stock_csv_and_template_download(self):
         match_listings(self.channel)
 
-        stock = self.client.get(f"/merchant/marketplace/{self.channel.id}/stock.csv")
-        template = self.client.get("/merchant/marketplace/template.csv")
+        stock = self.client.get(f"/books/marketplace/{self.channel.id}/stock.csv")
+        template = self.client.get("/books/marketplace/template.csv")
         self.assertIn("KOPI,Kopi,,5", stock.content.decode())
         self.assertTrue(template.content.decode().startswith("order_id,buyer_name"))
 
@@ -210,7 +210,7 @@ class ChannelPageTests(ChannelTestCase):
         client = Client()
         client.force_login(stranger)
 
-        self.assertEqual(client.get(f"/merchant/marketplace/{self.channel.id}/").status_code, 404)
+        self.assertEqual(client.get(f"/books/marketplace/{self.channel.id}/").status_code, 404)
 
 
 class ImportWizardPageTests(ChannelTestCase):
@@ -220,14 +220,14 @@ class ImportWizardPageTests(ChannelTestCase):
         self.client.force_login(self.owner)
 
     def test_the_first_step_offers_one_card_for_tokopedia_and_tiktok_shop(self):
-        page = self.client.get("/merchant/marketplace/import/")
+        page = self.client.get("/books/marketplace/import/")
         self.assertContains(page, "Tokopedia / TikTok Shop")
         self.assertContains(page, "?platform=tokopedia")
         self.assertNotContains(page, "?platform=tiktok_shop")
         self.assertContains(page, "selesai / berhasil</b> dicatat")
 
     def test_an_old_tiktok_link_opens_the_merged_step(self):
-        page = self.client.get("/merchant/marketplace/import/?platform=tiktok_shop")
+        page = self.client.get("/books/marketplace/import/?platform=tiktok_shop")
         self.assertContains(page, 'name="platform" value="tokopedia"')
         self.assertContains(page, "yang belum selesai dilewati")
         self.assertContains(page, "Hanya pesanan selesai dan batal yang diimpor")

@@ -23,7 +23,7 @@ class InstallServiceTests(TestCase):
         store, owner = result["store"], result["owner"]
         self.assertEqual(owner.username, "budi@tokomaju.co.id")
         self.assertFalse(owner.has_usable_password())
-        self.assertIn("/merchant/invite/", result["invite_link"])
+        self.assertIn("/books/invite/", result["invite_link"])
         self.assertEqual(store.organization.name, "PT Maju Jaya")
         self.assertEqual(store.organization.owner, owner)
         self.assertTrue(Warehouse.objects.filter(store=store, is_active=True).exists())
@@ -72,7 +72,7 @@ class InstallCommandTests(TestCase):
         call_command("install_store", name="Toko Maju", code="toko-maju", owner="Budi", email="budi@x.co",
             legal_name="PT Maju", npwp="0123456789012345", pkp=True, stdout=out)
         self.assertIn("terpasang", out.getvalue())
-        self.assertIn("/merchant/invite/", out.getvalue())
+        self.assertIn("/books/invite/", out.getvalue())
         self.assertTrue(Store.objects.filter(slug="toko-maju").exists())
 
     def test_command_reports_problems_as_errors(self):
@@ -91,7 +91,7 @@ class InstallPageTests(TestCase):
         self.assertEqual(self.client.get("/registration/").status_code, 302)        # signed out: to the login
         self.client.force_login(self.owner)
         shown = self.client.get("/registration/", follow=True)                      # a store owner: sent back, told why
-        self.assertRedirects(shown, "/merchant/")
+        self.assertRedirects(shown, "/books/")
         self.assertContains(shown, "akun partner")
         self.assertEqual(self.client.post("/registration/", {"store_name": "X", "slug": "xx-toko", "owner_name": "A",
             "owner_email": "a@x.co"}).status_code, 302)
@@ -104,7 +104,7 @@ class InstallPageTests(TestCase):
         page = self.client.post("/registration/", {"store_name": "Kopi Senja", "slug": "kopi-senja", "owner_name": "Sari",
             "owner_phone": "081298765432", "taxpayer_type": "individual"})
         self.assertContains(page, "terpasang")
-        self.assertContains(page, "/merchant/invite/")
+        self.assertContains(page, "/books/invite/")
         store = Store.objects.get(slug="kopi-senja")
         self.assertEqual(store.owner.username, "081298765432")
         self.assertEqual(AuditLog.objects.get(store=store, action="store.installed").actor, self.partner)
@@ -119,7 +119,7 @@ class InstallPageTests(TestCase):
 
 class NoPublicRegistrationTests(TestCase):
     def test_the_old_registration_and_marketing_addresses_are_gone(self):
-        for path in ("/start/", "/stores/", "/ajak-teman/", "/merchant/brands/new/", "/r/toko-maju"):
+        for path in ("/start/", "/stores/", "/ajak-teman/", "/books/brands/new/", "/r/toko-maju"):
             self.assertEqual(self.client.get(path).status_code, 404, path)
 
     def test_the_login_page_offers_no_registration(self):
@@ -131,13 +131,13 @@ class NoPublicRegistrationTests(TestCase):
 class PartnerLandingTests(TestCase):
     def test_a_partner_without_a_store_lands_on_the_install_page_after_login(self):
         User.objects.create_superuser("partner", "p@x.co", "pw")
-        response = self.client.post("/login/", {"username": "partner", "password": "pw", "next": "/merchant/"})
-        self.assertRedirects(response, "/merchant/", fetch_redirect_response=False)
-        self.assertRedirects(self.client.get("/merchant/"), "/registration/", fetch_redirect_response=False)
+        response = self.client.post("/login/", {"username": "partner", "password": "pw", "next": "/books/"})
+        self.assertRedirects(response, "/books/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/books/"), "/registration/", fetch_redirect_response=False)
 
     def test_a_superuser_who_owns_a_store_still_sees_the_dashboard(self):
         owner = install(**CLIENT)["owner"]
         owner.is_superuser = True
         owner.save()
         self.client.force_login(owner)
-        self.assertEqual(self.client.get("/merchant/").status_code, 200)
+        self.assertEqual(self.client.get("/books/").status_code, 200)

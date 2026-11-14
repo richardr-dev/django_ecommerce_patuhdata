@@ -21,18 +21,18 @@ class ActivityTests(TestCase):
     def test_owner_sees_the_log_with_filters(self):
         client = Client()
         client.force_login(self.owner)
-        page = client.get("/merchant/activity/")
+        page = client.get("/books/activity/")
         self.assertContains(page, "menyesuaikan")
         self.assertContains(page, "Budi")
         self.assertContains(page, "mengundang")
         self.assertNotContains(page, "mengirim")  # another store's log
-        filtered = client.get("/merchant/activity/?group=Stok")
+        filtered = client.get("/books/activity/?group=Stok")
         self.assertContains(filtered, "menyesuaikan")
         self.assertNotContains(filtered, "mengundang")
-        by_person = client.get(f"/merchant/activity/?actor={self.owner.id}")
+        by_person = client.get(f"/books/activity/?actor={self.owner.id}")
         self.assertNotContains(by_person, "menyesuaikan")
 
     def test_staff_without_admin_role_cannot_see_it(self):
         client = Client()
         client.force_login(self.clerk)
-        self.assertEqual(client.get("/merchant/activity/").status_code, 404)
+        self.assertEqual(client.get("/books/activity/").status_code, 404)

@@ -221,7 +221,7 @@ def merchant_expense_delete(request, expense_id):
     if locked and expense.date <= locked:
         messages.error(request, f"Pembukuan sampai {locked:%d/%m/%Y} sudah ditutup: biaya ini "
             "tidak bisa dihapus.")
-        return redirect(f"/merchant/expenses/?month={expense.date:%Y-%m}")
+        return redirect(f"/books/expenses/?month={expense.date:%Y-%m}")
     with transaction.atomic():
         AuditLog.objects.create(store=store, actor=request.user, action="expense.removed",
             object_type="Expense", object_id=str(expense.id),
@@ -236,7 +236,7 @@ def merchant_expense_delete(request, expense_id):
             transaction.on_commit(lambda: Expense._meta.get_field("receipt").storage
                 .delete(receipt))
     messages.success(request, "Biaya dihapus dari pembukuan.")
-    return redirect(f"/merchant/expenses/?month={expense.date:%Y-%m}")
+    return redirect(f"/books/expenses/?month={expense.date:%Y-%m}")
 
 
 @login_required(login_url="/login/")

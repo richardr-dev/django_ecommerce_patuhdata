@@ -36,13 +36,13 @@ ADMIN = frozenset({"admin"})
 NAV = [
     ("Bisnis", [
         Group("Penjualan", "receipt", [
-            Link("Ringkasan penjualan", "merchant-sales", match=("=/merchant/sales/",
-                "/merchant/sales/stats/")),
+            Link("Ringkasan penjualan", "merchant-sales", match=("=/books/sales/",
+                "/books/sales/stats/")),
             Link("Analitik penjualan", "merchant-sales-analytics"),
-            Link("Pesanan", "merchant-orders", match=("/merchant/orders/",)),
+            Link("Pesanan", "merchant-orders", match=("/books/orders/",)),
             # Creating an invoice is one button on this page (and in "Buat baru"), not a menu item.
             Link("Invoice penjualan", "merchant-sales-invoices",
-                match=("/merchant/sales/invoices/",)),
+                match=("/books/sales/invoices/",)),
             Link("Penawaran", "merchant-quotes"),
             Link("Retur & penukaran", "merchant-returns"),
             Link("Rekap produksi", "merchant-production-recap"),
@@ -50,7 +50,7 @@ NAV = [
         Group("Piutang & pembayaran", "cash", [
             Link("Piutang pelanggan", "merchant-receivables"),
             Link("Terima pembayaran", "merchant-receive-payment",
-                match=("/merchant/sales/receipts/",)),
+                match=("/books/sales/receipts/",)),
             Link("Kredit pelanggan", "merchant-customer-credit"),
             Link("Nota kredit", "merchant-credit-notes"),
             Link("Invoice berulang", "merchant-recurring"),
@@ -72,23 +72,23 @@ NAV = [
         ]),
         Group("Pembelian", "truck", [
             Link("Supplier", "merchant-suppliers"),
-            Link("Transfer antar brand", "merchant-intercompany", match=("/merchant/accounting/antar-brand/",)),
-            Link("Pesanan pembelian", "merchant-purchase-orders", match=("/merchant/accounting/pesanan-pembelian/",)),
-            Link("Penerimaan barang", "merchant-goods-receipts", match=("/merchant/accounting/penerimaan/",)),
+            Link("Transfer antar brand", "merchant-intercompany", match=("/books/accounting/antar-brand/",)),
+            Link("Pesanan pembelian", "merchant-purchase-orders", match=("/books/accounting/pesanan-pembelian/",)),
+            Link("Penerimaan barang", "merchant-goods-receipts", match=("/books/accounting/penerimaan/",)),
             Link("Tagihan supplier", "merchant-bills"),
-            Link("Nota debit", "merchant-debit-notes", match=("/merchant/accounting/nota-debit/",)),
+            Link("Nota debit", "merchant-debit-notes", match=("/books/accounting/nota-debit/",)),
             Link("Buat tagihan", "merchant-bill-new"),
             Link("Umur utang", "merchant-payables"),
         ]),
     ]),
     ("Inventori", [
         Group("Stok & Produk", "box", [
-            Link("Semua produk", "merchant-entity-list", ("products",), match=("/merchant/products/",)),
+            Link("Semua produk", "merchant-entity-list", ("products",), match=("/books/products/",)),
             Link("Kategori", "merchant-entity-list", ("categories",)),
             Link("Paket (bundle)", "merchant-bundles"),
             Link("Stok gudang", "merchant-stock"),
-            Link("Stok opname", "merchant-stock-counts", match=("/merchant/accounting/stok-opname/",)),
-            Link("Permintaan stok", "merchant-stock-requests", match=("/merchant/stock/permintaan/",)),
+            Link("Stok opname", "merchant-stock-counts", match=("/books/accounting/stok-opname/",)),
+            Link("Permintaan stok", "merchant-stock-requests", match=("/books/stock/permintaan/",)),
             Link("Stok minus", "merchant-stock-minus"),
             Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
             Link("Lokasi stok", "merchant-entity-list", ("inventory",)),
@@ -98,18 +98,18 @@ NAV = [
     ]),
     ("Akuntansi", [
         Group("Akuntansi", "book", [
-            Link("Ringkasan", "merchant-accounting", match=("=/merchant/accounting/",)),
-            Link("Kas & bank", "merchant-bank-accounts", match=("/merchant/accounting/cash/",)),
+            Link("Ringkasan", "merchant-accounting", match=("=/books/accounting/",)),
+            Link("Kas & bank", "merchant-bank-accounts", match=("/books/accounting/cash/",)),
             Link("Jurnal", "merchant-journal-list"),
             Link("Pemeriksaan pembukuan", "merchant-books-checks"),
             Link("Tutup buku", "merchant-year-close"),
             Link("Persetujuan", "merchant-approvals", badge="approvals_pending"),
-            Link("Anggaran", "merchant-budget", match=("/merchant/accounting/budget/",)),
+            Link("Anggaran", "merchant-budget", match=("/books/accounting/budget/",)),
             Link("Pusat biaya", "merchant-cost-centers"),
             Link("Saldo awal", "merchant-opening-balances"),
             Link("Jurnal umum", "merchant-journal-new"),
             Link("Jurnal penyesuaian", "merchant-adjustments"),
-            Link("Pinjaman", "merchant-loans", match=("/merchant/accounting/pinjaman/",)),
+            Link("Pinjaman", "merchant-loans", match=("/books/accounting/pinjaman/",)),
             Link("Bagan akun", "merchant-chart-of-accounts"),
             Link("Nilai persediaan", "merchant-inventory-value"),
             Link("Penutupan persediaan", "merchant-inventory-close"),
@@ -137,7 +137,7 @@ NAV = [
             Link("Kalender pajak", "merchant-tax-calendar"),
             Link("SPT Masa PPN", "merchant-spt-ppn"),
             Link("SPT Tahunan badan", "merchant-spt-tahunan"),
-            Link("PPh dipotong", "merchant-withholdings", match=("/merchant/tax/pph/",)),
+            Link("PPh dipotong", "merchant-withholdings", match=("/books/tax/pph/",)),
             Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
         ]),
     ]),
@@ -165,12 +165,12 @@ NAV = [
     ("", [
         Group("Pengaturan", "sliders", [
             Link("Pembayaran", "merchant-payment-settings"),
-            Link("Pengiriman", "merchant-entity-list", ("shipping",), match=("/merchant/shipping-areas/",)),
+            Link("Pengiriman", "merchant-entity-list", ("shipping",), match=("/books/shipping-areas/",)),
             Link("Jadwal & pre-order", "merchant-delivery"),
             Link("WhatsApp", "merchant-whatsapp", roles=ADMIN),
             Link("Integrasi", "merchant-integrations"),
             Link("Pelacakan & pixel", "merchant-tracking"),
-            Link("Staf & akses", "merchant-staff", roles=ADMIN, match=("/merchant/staff/",)),
+            Link("Staf & akses", "merchant-staff", roles=ADMIN, match=("/books/staff/",)),
             Link("Hak akses", "merchant-access", roles=ADMIN),
             Link("Log aktivitas", "merchant-activity", roles=ADMIN),
             Link("Paket langganan", "merchant-billing"),
@@ -266,7 +266,7 @@ def build_nav(context):
 def merchant_nav(context):
     request = context.get("request")
     return {"sections": build_nav(context),
-        "home_active": bool(request and request.path == "/merchant/"),
+        "home_active": bool(request and request.path == "/books/"),
         "home_href": _url("merchant-dashboard")}
 
 

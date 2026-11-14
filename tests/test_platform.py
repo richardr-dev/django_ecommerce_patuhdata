@@ -118,7 +118,7 @@ class PlanLimitTests(TestCase):
                 sku=f"P{index}", price=1000)
 
     def _new_product(self, **extra):
-        return self.client.post("/merchant/setup/products/new/", {"name": "Baru", "slug": "baru",
+        return self.client.post("/books/setup/products/new/", {"name": "Baru", "slug": "baru",
             "sku": "BARU", "price": "1000", "weight_grams": 0, "length_cm": 0, "width_cm": 0,
             "height_cm": 0, **extra})
 
@@ -133,7 +133,7 @@ class PlanLimitTests(TestCase):
         csv = "name,sku,price,stock\nP0,P0,1000,1\nBaru,BARU,1000,1\n"
         upload = io.BytesIO(csv.encode())
         upload.name = "products.csv"
-        response = self.client.post("/merchant/products/import/", {"file": upload}, follow=True)
+        response = self.client.post("/books/products/import/", {"file": upload}, follow=True)
         self.assertContains(response, "maksimal 2 produk aktif")
         self.assertFalse(Product.objects.filter(sku="BARU").exists())
 
@@ -150,12 +150,12 @@ class BillingTests(TestCase):
         self.client.force_login(self.store.owner)
 
     def _checkout(self, months=1):
-        response = self.client.post("/merchant/billing/checkout/", {"plan": "pro", "months": months})
+        response = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": months})
         return response, SubscriptionInvoice.objects.filter(store=self.store).first()
 
     def test_demo_upgrade_activates_and_renewal_extends(self):
         response, invoice = self._checkout()
-        self.assertRedirects(response, f"/merchant/billing/{invoice.id}/demo-pay/")
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/")
         self.assertEqual(invoice.amount, Decimal(399000))
         self.client.post(response["Location"])
         subscription = Subscription.objects.get(store=self.store)
@@ -181,11 +181,11 @@ class BillingTests(TestCase):
         StoreStaff.objects.create(store=self.store, user=viewer, role="viewer")
         client = Client()
         client.force_login(viewer)
-        self.assertEqual(client.get("/merchant/billing/").status_code, 404)
-        self.assertEqual(client.post("/merchant/billing/checkout/", {"plan": "pro"}).status_code, 404)
+        self.assertEqual(client.get("/books/billing/").status_code, 404)
+        self.assertEqual(client.post("/books/billing/checkout/", {"plan": "pro"}).status_code, 404)
 
     def test_custom_plan_cannot_be_checked_out(self):
-        response = self.client.post("/merchant/billing/checkout/", {"plan": "custom"}, follow=True)
+        response = self.client.post("/books/billing/checkout/", {"plan": "custom"}, follow=True)
         self.assertContains(response, "tidak tersedia")
         self.assertFalse(SubscriptionInvoice.objects.exists())
 
@@ -200,11 +200,11 @@ class DokuSubscriptionTests(TestCase):
     @patch("apps.integrations.payments.request_json",
         return_value={"response": {"payment": {"url": "https://checkout.doku.test/pay"}}})
     def _start(self, request_json):
-        response = self.client.post("/merchant/billing/checkout/", {"plan": "pro", "months": 1})
+        response = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
         self.assertRedirects(response, "https://checkout.doku.test/pay", fetch_redirect_response=False)
         payload = json.loads(request_json.call_args.kwargs["encoded_payload"])
         self.assertEqual(payload["order"]["amount"], 399000)
-        self.assertEqual(payload["callbacks"]["url"], "https://niaga.test/merchant/billing/")
+        self.assertEqual(payload["callbacks"]["url"], "https://niaga.test/books/billing/")
         return SubscriptionInvoice.objects.get(store=self.store)
 
     def _notify(self, invoice, amount, request_id="sub-notification-1"):
@@ -270,7 +270,7 @@ class DemoPaymentsDisabledInProductionTests(TestCase):
         self.client.force_login(self.store.owner)
 
     def test_subscription_checkout_is_refused(self):
-        response = self.client.post("/merchant/billing/checkout/", {"plan": "pro", "months": 1},
+        response = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1},
             follow=True)
         self.assertContains(response, "belum dikonfigurasi")
         self.assertFalse(SubscriptionInvoice.objects.exists())
@@ -278,7 +278,7 @@ class DemoPaymentsDisabledInProductionTests(TestCase):
     def test_demo_payment_pages_are_closed(self):
         invoice = SubscriptionInvoice.objects.create(store=self.store, plan=Plan.objects.get(code="pro"),
             amount=Decimal(99000), provider="demo")
-        self.assertEqual(self.client.post(f"/merchant/billing/{invoice.id}/demo-pay/").status_code, 404)
+        self.assertEqual(self.client.post(f"/books/billing/{invoice.id}/demo-pay/").status_code, 404)
         self.assertEqual(Subscription.objects.get(store=self.store).plan.code, "free")
 
     def test_demo_provider_refuses_to_create_a_payment(self):

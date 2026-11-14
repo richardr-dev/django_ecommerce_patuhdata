@@ -186,12 +186,12 @@ class DokuLifecycleTests(TestCase):
         client = Client()
         client.force_login(self.owner)
 
-        missing = client.post(f"/merchant/orders/{self.order.id}/refund/",
+        missing = client.post(f"/books/orders/{self.order.id}/refund/",
             {"amount": "100000", "method": "manual_transfer"})
         self.assertFalse(self.order.refunds.exists())
         self.assertEqual(missing.status_code, 302)
 
-        client.post(f"/merchant/orders/{self.order.id}/refund/", {"amount": "100000",
+        client.post(f"/books/orders/{self.order.id}/refund/", {"amount": "100000",
             "method": "manual_transfer", "transfer_reference": "BCA-TRF-7781", "note": "Batal"})
         self.order.refresh_from_db()
         refund = self.order.refunds.get()
@@ -237,7 +237,7 @@ class SkuUniquenessTests(TestCase):
         variant.save()
 
     def test_back_office_form_shows_collision_as_field_error(self):
-        response = self.client.post("/merchant/setup/products/new/", {"name": "Baru", "slug": "baru",
+        response = self.client.post("/books/setup/products/new/", {"name": "Baru", "slug": "baru",
             "sku": "KAOS-M", "price": "1000", "weight_grams": 0, "length_cm": 0, "width_cm": 0,
             "height_cm": 0})
         self.assertEqual(response.status_code, 200)
@@ -270,8 +270,8 @@ class BiteshipBookingTests(TestCase):
     def test_merchant_books_checkout_courier_and_waybill_is_saved(self, request_json):
         request_json.return_value = {"success": True, "id": "bs-order-1", "status": "confirmed",
             "price": 18000, "courier": {"waybill_id": "JNE123", "tracking_id": "trk-1"}}
-        response = self.client.post(f"/merchant/orders/{self.order.id}/book-shipment/")
-        self.assertRedirects(response, "/merchant/orders/", fetch_redirect_response=False)
+        response = self.client.post(f"/books/orders/{self.order.id}/book-shipment/")
+        self.assertRedirects(response, "/books/orders/", fetch_redirect_response=False)
 
         payload = request_json.call_args.kwargs["payload"]
         self.assertEqual(request_json.call_args.kwargs["attempts"], 1)
@@ -309,7 +309,7 @@ class BiteshipBookingTests(TestCase):
         self.assertTrue(self.order.external_shipping_id.startswith("booking:"))
         with self.assertRaises(ShipmentBookingError):
             book_shipment(self.order, actor=self.owner)
-        page = self.client.get("/merchant/orders/")
+        page = self.client.get("/books/orders/")
         self.assertContains(page, "Cek dashboard Biteship")
 
     def test_booking_requires_packed_status(self):

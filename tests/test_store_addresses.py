@@ -13,15 +13,15 @@ class StoreAddressTests(TestCase):
         store = _store("kopi")
         client = _host(f"kopi.{PLATFORM}")
 
-        response = client.get("/merchant/orders/", {"q": "Budi"})
-        self.assertRedirects(response, f"https://{PLATFORM}/merchant/orders/?q=Budi&store={store.id}",
+        response = client.get("/books/orders/", {"q": "Budi"})
+        self.assertRedirects(response, f"https://{PLATFORM}/books/orders/?q=Budi&store={store.id}",
             fetch_redirect_response=False)
         self.assertRedirects(client.get("/dashboard"),
-            f"https://{PLATFORM}/merchant/?store={store.id}", fetch_redirect_response=False)
+            f"https://{PLATFORM}/books/?store={store.id}", fetch_redirect_response=False)
 
     def test_platform_host_back_office_is_not_redirected(self):
         _store("kopi")
-        response = _host(PLATFORM).get("/merchant/", HTTP_X_STORE_SLUG="kopi")
+        response = _host(PLATFORM).get("/books/", HTTP_X_STORE_SLUG="kopi")
 
         self.assertNotIn("store=", response.headers.get("Location", ""))
 
@@ -31,6 +31,6 @@ class StoreAddressTests(TestCase):
         client = _host(PLATFORM)
         client.force_login(first.owner)
 
-        response = client.get(f"/merchant/?store={second.id}")
+        response = client.get(f"/books/?store={second.id}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(client.session["merchant_store_id"], second.id)

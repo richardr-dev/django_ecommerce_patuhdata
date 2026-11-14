@@ -48,14 +48,14 @@ class TierLimitTests(TestCase):
         SalesChannel.objects.create(store=store, platform="shopee", name="Shopee")
         SalesChannel.objects.create(store=store, platform="lazada", name="Lazada")
 
-        response = self._client(store).post("/merchant/marketplace/", {"platform": "tokopedia",
+        response = self._client(store).post("/books/marketplace/", {"platform": "tokopedia",
             "name": "Tokopedia"})
         self.assertContains(response, "maksimal 2 toko marketplace")
         self.assertEqual(store.sales_channels.count(), 2)
 
         growth_store = _store("growth", plan=Plan.objects.get(code="pro"))
         SalesChannel.objects.create(store=growth_store, platform="shopee", name="Shopee")
-        self._client(growth_store).post("/merchant/marketplace/", {"platform": "tokopedia",
+        self._client(growth_store).post("/books/marketplace/", {"platform": "tokopedia",
             "name": "Tokopedia"})
         self.assertEqual(growth_store.sales_channels.count(), 2)
 
@@ -64,13 +64,13 @@ class TierLimitTests(TestCase):
         upload = {"provider": "xendit", "file": SimpleUploadedFile("p.csv",
             b"payout_reference,payout_date,order_reference,amount\nPO,2026-11-02,NK,1\n")}
 
-        page = self._client(store).post("/merchant/payouts/", upload)
+        page = self._client(store).post("/books/payouts/", upload)
         self.assertContains(page, "tersedia mulai paket Pro")
         self.assertIsNone(page.context["summary"])
 
         pro_store = _store("lengkap", plan=Plan.objects.get(code="pro"))
         upload["file"].seek(0)
-        page = self._client(pro_store).post("/merchant/payouts/", upload)
+        page = self._client(pro_store).post("/books/payouts/", upload)
         self.assertEqual(len(page.context["summary"]["errors"]), 1)  # NK is not a real order
 
     @override_settings(PLATFORM_SALES_URL="https://wa.me/6281200000000")
@@ -79,7 +79,7 @@ class TierLimitTests(TestCase):
         client = Client()
         client.force_login(User.objects.get(id=store.owner_id))
 
-        response = client.get("/merchant/billing/")
+        response = client.get("/books/billing/")
         self.assertContains(response, "Hubungi sales")
         self.assertContains(response, "2 toko marketplace")
         self.assertContains(response, "<dd>0 / 2</dd>")
@@ -109,7 +109,7 @@ class TrialTests(TestCase):
         self.assertIn("sudah berakhir", product_limit_error(store, 1))
         client = Client(HTTP_HOST=PLATFORM)
         client.force_login(store.owner)
-        self.assertContains(client.get("/merchant/"), "sudah berakhir")
+        self.assertContains(client.get("/books/"), "sudah berakhir")
 
 
 class FormerFreeStoreMigrationTests(TestCase):

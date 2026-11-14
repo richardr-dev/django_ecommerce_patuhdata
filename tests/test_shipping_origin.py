@@ -78,7 +78,7 @@ class WarehouseLocationTests(TestCase):
         self.seller.force_login(self.owner)
 
     def test_the_form_shows_the_map_and_saves_the_picked_place(self):
-        url = f"/merchant/setup/warehouses/{self.warehouse.id}/"
+        url = f"/books/setup/warehouses/{self.warehouse.id}/"
         page = self.seller.get(url)
         self.assertContains(page, "Lokasi pengiriman")
         self.assertContains(page, 'id="location-map"')
@@ -118,6 +118,6 @@ class WarehouseLocationTests(TestCase):
     @patch("apps.integrations.shipping.request_json", return_value={"areas": [{"id": "A1",
         "name": "Kemang, Jakarta Selatan. 12730", "postal_code": 12730}]})
     def test_the_seller_searches_the_couriers_area_list(self, _request_json):
-        reply = self.seller.get("/merchant/shipping-areas/?q=kemang")
+        reply = self.seller.get("/books/shipping-areas/?q=kemang")
         self.assertEqual(reply.json()["areas"][0]["postal_code"], "12730")
-        self.assertEqual(Client().get("/merchant/shipping-areas/?q=kemang").status_code, 302)
+        self.assertEqual(Client().get("/books/shipping-areas/?q=kemang").status_code, 302)

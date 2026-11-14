@@ -38,9 +38,9 @@ class PlatformDokuTests(TestCase):
 
     def test_the_seller_opts_in_and_checkout_offers_doku_through_lakuin(self):
         self.assertEqual(payment_options(self.store), [])
-        page = self.seller.get("/merchant/payments/")
+        page = self.seller.get("/books/payments/")
         self.assertContains(page, "DOKU Patuhdata")
-        self.seller.post("/merchant/payments/", {"bank_name": "BCA",
+        self.seller.post("/books/payments/", {"bank_name": "BCA",
             "bank_account_number": "1234567890", "bank_account_holder": "Ruuma",
             "use_platform_gateway": "on"})
         self.account.refresh_from_db()
@@ -58,12 +58,12 @@ class PlatformDokuTests(TestCase):
         StorePaymentSettings.objects.filter(id=self.account.id).update(use_platform_gateway=True)
         option = payment_options(self.store)[0]
         self.assertEqual((option.provider, option.store_account), ("doku", False))
-        page = self.seller.get("/merchant/payments/")
+        page = self.seller.get("/books/payments/")
         self.assertContains(page, "PT Patuhdata Solusi Nusantara")
         self.assertContains(page, 'role="switch"')
 
     def test_opting_in_needs_a_bank_account_for_payouts(self):
-        page = self.seller.post("/merchant/payments/", {"use_platform_gateway": "on"})
+        page = self.seller.post("/books/payments/", {"use_platform_gateway": "on"})
         self.assertContains(page, "rekening bank tujuan pencairan")
         self.account.refresh_from_db()
         self.assertFalse(self.account.use_platform_gateway)
@@ -72,7 +72,7 @@ class PlatformDokuTests(TestCase):
     def test_the_platform_can_switch_it_off(self):
         StorePaymentSettings.objects.filter(id=self.account.id).update(use_platform_gateway=True)
         self.assertEqual(payment_options(self.store), [])
-        self.assertNotContains(self.seller.get("/merchant/payments/"), "3. DOKU Patuhdata")
+        self.assertNotContains(self.seller.get("/books/payments/"), "3. DOKU Patuhdata")
 
     @patch("apps.integrations.payments.request_json",
         return_value={"response": {"payment": {"url": "https://doku.test/pay"}}})
@@ -107,10 +107,10 @@ class PlatformDokuTests(TestCase):
 
     def test_the_seller_requests_a_payout_once(self):
         self._order("delivered", 60000)
-        page = self.seller.get("/merchant/payments/balance/")
+        page = self.seller.get("/books/payments/balance/")
         self.assertContains(page, "Rp60.000")
-        self.seller.post("/merchant/payments/balance/")
-        self.seller.post("/merchant/payments/balance/")  # nothing left to request
+        self.seller.post("/books/payments/balance/")
+        self.seller.post("/books/payments/balance/")  # nothing left to request
         payout = PlatformPayout.objects.get()
         self.assertEqual((payout.amount, payout.bank_account_number, payout.status),
             (Decimal(60000), "1234567890", "requested"))
@@ -121,5 +121,5 @@ class PlatformDokuTests(TestCase):
 
     def test_small_balances_wait_for_the_minimum(self):
         self._order("delivered", 5000)
-        self.seller.post("/merchant/payments/balance/")
+        self.seller.post("/books/payments/balance/")
         self.assertFalse(PlatformPayout.objects.exists())

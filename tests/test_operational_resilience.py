@@ -50,10 +50,10 @@ class OutboxDeadLetterTests(TestCase):
         event = self._event(status="dead", attempts=OutboxEvent.MAX_ATTEMPTS, last_error="smtp down")
         client = Client()
         client.force_login(self.owner)
-        page = client.get("/merchant/integrations/")
-        self.assertContains(page, f"/merchant/integrations/{event.id}/retry/")
+        page = client.get("/books/integrations/")
+        self.assertContains(page, f"/books/integrations/{event.id}/retry/")
 
-        client.post(f"/merchant/integrations/{event.id}/retry/")
+        client.post(f"/books/integrations/{event.id}/retry/")
         event.refresh_from_db()
         self.assertEqual((event.status, event.attempts), ("pending", 0))
         self.assertTrue(process_one_event())

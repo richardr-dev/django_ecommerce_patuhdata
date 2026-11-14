@@ -151,12 +151,12 @@ class TaxPageTests(TaxTestCase):
         self.client.force_login(self.owner)
 
     def test_profile_form_normalizes_npwp_and_requires_it_for_pkp(self):
-        response = self.client.post("/merchant/tax/", {"legal_name": "CV Ayu",
+        response = self.client.post("/books/tax/", {"legal_name": "CV Ayu",
             "npwp": "", "taxpayer_type": "company", "pph_regime": "umkm_final", "is_pkp": "on",
             "invoice_prefix": "inv"})
         self.assertContains(response, "PKP wajib mengisi NPWP")
 
-        self.client.post("/merchant/tax/", {"legal_name": "CV Ayu",
+        self.client.post("/books/tax/", {"legal_name": "CV Ayu",
             "npwp": "12.345.678.9-012.345", "taxpayer_type": "company",
             "pph_regime": "umkm_final", "invoice_prefix": "inv"})
         self.profile.refresh_from_db()
@@ -167,7 +167,7 @@ class TaxPageTests(TaxTestCase):
         self.profile.is_pkp = False
         self.profile.save()
 
-        self.assertContains(self.client.get("/merchant/tax/"), "padahal belum PKP")
+        self.assertContains(self.client.get("/books/tax/"), "padahal belum PKP")
 
     def test_viewers_can_read_but_not_change_the_profile(self):
         viewer = User.objects.create_user("viewer")
@@ -175,8 +175,8 @@ class TaxPageTests(TaxTestCase):
         client = Client()
         client.force_login(viewer)
 
-        self.assertEqual(client.get("/merchant/tax/").status_code, 200)
-        self.assertEqual(client.post("/merchant/tax/", {"legal_name": "X"}).status_code, 404)
+        self.assertEqual(client.get("/books/tax/").status_code, 200)
+        self.assertEqual(client.post("/books/tax/", {"legal_name": "X"}).status_code, 404)
 
     def test_register_csv_lists_the_months_invoices_for_coretax(self):
         invoice, _ = issue_invoice(_order(self.store))
@@ -185,7 +185,7 @@ class TaxPageTests(TaxTestCase):
             method="manual_transfer", payment=order.payment_transactions.get(), reason="OTHERS")
         month = invoice.issued_on.strftime("%Y-%m")
 
-        rows = self.client.get(f"/merchant/tax/invoices.csv?month={month}").content.decode()
+        rows = self.client.get(f"/books/tax/invoices.csv?month={month}").content.decode()
         header, line = rows.strip().splitlines()
         self.assertIn("DPP nilai lain (11/12)", header)
         self.assertIn(invoice.number, line)
@@ -193,7 +193,7 @@ class TaxPageTests(TaxTestCase):
 
     def test_seller_adds_buyer_npwp_and_buyer_opens_their_copy(self):
         invoice, _ = issue_invoice(_order(self.store))
-        self.client.post(f"/merchant/invoices/{invoice.id}/", {"buyer_npwp": "3201234567890001"})
+        self.client.post(f"/books/invoices/{invoice.id}/", {"buyer_npwp": "3201234567890001"})
         invoice.refresh_from_db()
         self.assertEqual(invoice.buyer_npwp, "3201234567890001")
 
@@ -211,4 +211,4 @@ class TaxPageTests(TaxTestCase):
         client = Client()
         client.force_login(stranger)
 
-        self.assertEqual(client.get(f"/merchant/invoices/{invoice.id}/").status_code, 404)
+        self.assertEqual(client.get(f"/books/invoices/{invoice.id}/").status_code, 404)

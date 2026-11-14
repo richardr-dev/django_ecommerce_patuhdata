@@ -79,7 +79,7 @@ class StorePaymentTests(TestCase):
 
         seller = Client()
         seller.force_login(self.owner)
-        seller.post(f"/merchant/orders/{order.id}/confirm-transfer/")
+        seller.post(f"/books/orders/{order.id}/confirm-transfer/")
         order.refresh_from_db()
         self.assertEqual(order.status, "paid")
         post_pending_entries()
@@ -96,7 +96,7 @@ class StorePaymentTests(TestCase):
         client = Client()
         client.force_login(stranger)
 
-        self.assertEqual(client.post(f"/merchant/orders/{order.id}/confirm-transfer/").status_code, 404)
+        self.assertEqual(client.post(f"/books/orders/{order.id}/confirm-transfer/").status_code, 404)
         order.refresh_from_db()
         self.assertEqual(order.status, "pending")
 
