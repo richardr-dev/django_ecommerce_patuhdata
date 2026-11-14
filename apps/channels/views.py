@@ -120,7 +120,7 @@ def merchant_import(request):
             "badge": ".xlsx",
             "instructions": [
                 "Buka Shopee Seller Center → Pesanan Saya",
-                "Pilih tab Selesai, klik Ekspor Pesanan, pilih rentang tanggal",
+                "Pilih rentang tanggal, klik Ekspor Pesanan (semua status juga boleh: yang belum selesai dilewati)",
                 "Unduh file .xlsx yang dikirim ke email",
                 "Upload file tersebut di sini — tidak perlu reformatting",
             ],
@@ -133,7 +133,7 @@ def merchant_import(request):
             "badge": ".xlsx",
             "instructions": [
                 "Buka Seller Center Tokopedia / TikTok Shop → Pesanan → Kelola pesanan",
-                "Pilih tab Selesai, lalu klik Ekspor dan pilih rentang tanggal",
+                "Klik Ekspor, pilih rentang tanggal (semua status juga boleh: yang belum selesai dilewati)",
                 "Unduh file .xlsx yang dihasilkan (bukan template CSV)",
                 "Upload langsung di sini — tidak perlu reformatting",
             ],

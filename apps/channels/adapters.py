@@ -55,7 +55,7 @@ _STATE_WORDS = [
     (STATE_UNPAID, ("belum bayar", "menunggu pembayaran", "unpaid", "pending payment")),
     (STATE_RETURNED, ("embali", "retur", "return", "refund")),
     (STATE_CANCELLED, ("batal", "cancel")),
-    (STATE_COMPLETED, ("selesai", "complete", "delivered", "diterima", "terkirim")),
+    (STATE_COMPLETED, ("selesai", "berhasil", "sukses", "success", "complete", "delivered", "diterima", "terkirim")),
     (STATE_SHIPPED, ("kirim", "ship", "transit", "antar")),
 ]
 

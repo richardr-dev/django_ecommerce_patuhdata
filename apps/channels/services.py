@@ -182,6 +182,7 @@ def _record_dead_order(channel, data, batch):
         order = Order.objects.create(store=store, channel=channel.platform,
             external_order_id=data.external_id[:100], status=ORDER_STATUS[data.state],
             marketplace_status=data.status_text[:60],
+            shipping_service=data.courier[:80], tracking_number=data.tracking_number[:100],
             customer_name=(data.buyer_name or f"Pembeli {label}")[:120],
             phone=data.phone[:30] or "-", shipping_address=data.address or "-",
             subtotal=data.subtotal, discount=min(data.discount, data.subtotal),
@@ -433,15 +434,20 @@ def parse_orders_csv(upload):
         for order_id, head in grouped.items()]
 
 
+# The states a file import records when it takes finished orders only: the sale is done, or it was
+# called off. Anything in between (packing, shipped, in transit) waits for a later file.
+IMPORT_FINISHED = {STATE_COMPLETED} | REVERSING
+
+
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
                   category: str = "regular", finished_only: bool = False):
     """Import each order, create an ImportBatch record, return summary.
 
-    ``finished_only``: a marketplace file lists orders at every stage. Only an order the marketplace
-    calls finished (Selesai) becomes a sale; one still being packed or shipped is left for a later
-    file, and a cancelled or returned one is not recorded at all. An order imported earlier is still
-    brought up to date, so a return after completion takes the sale back."""
+    ``finished_only``: a marketplace file lists orders at every stage. An order the marketplace calls
+    finished (Selesai, Berhasil) becomes a sale, and a cancelled or returned one is recorded with its
+    status but is never a sale. One still being packed or shipped is left for a later file. An order
+    imported earlier is always brought up to date, so a return after completion takes the sale back."""
     from decimal import Decimal
     batch = ImportBatch.objects.create(
         store=channel.store, channel=channel, imported_by=imported_by,
@@ -461,7 +467,7 @@ def import_orders(channel, orders, soft: bool = False,
                 external_order_id__in=ids[start:start + 500]).values_list("external_order_id", flat=True))
 
     for data in orders:
-        if finished_only and data.state != STATE_COMPLETED and data.external_id not in known:
+        if finished_only and data.state not in IMPORT_FINISHED and data.external_id not in known:
             summary["not_finished"] += 1
             continue
         try:

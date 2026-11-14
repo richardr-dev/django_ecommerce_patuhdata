@@ -276,7 +276,8 @@ class InvoiceNeverLostTests(MarketplaceDateTests):
 
 
 class FinishedOnlyImportTests(TestCase):
-    """A marketplace file lists every stage; only finished (Selesai) orders become sales."""
+    """A marketplace file lists every stage: finished orders are sales, cancelled ones are recorded as
+    cancelled, anything in between waits for a later file."""
 
     def setUp(self):
         owner = User.objects.create_user("finished")
@@ -290,29 +291,65 @@ class FinishedOnlyImportTests(TestCase):
     def run_import(self, *orders):
         return import_orders(self.channel, list(orders), finished_only=True)
 
-    def test_only_finished_orders_become_sales(self):
-        summary = self.run_import(_order("Selesai", "A"), _order("Sedang dikirim", "B"),
-            _order("Perlu dikirim", "C"), _order("Dibatalkan", "D"), _order("Selesai", "E"))
-        self.assertEqual((summary["created"], summary["not_finished"], summary["cancelled"]), (2, 3, 0))
-        self.assertEqual(set(Order.objects.filter(store=self.store).values_list("external_order_id", flat=True)),
-            {"A", "E"})
+    def order(self, status, external_id, courier="", resi=""):
+        return MarketplaceOrder(external_id=external_id, buyer_name="Budi", phone="0812",
+            address="Bandung", status_text=status, courier=courier, tracking_number=resi,
+            lines=[OrderLine(sku="KOPI", quantity=2, unit_price=Decimal(15000))])
+
+    def test_finished_and_berhasil_are_sales_cancelled_is_recorded_the_rest_waits(self):
+        summary = self.run_import(self.order("Selesai", "A"), self.order("Sedang dikirim", "B"),
+            self.order("Perlu dikirim", "C"), self.order("Dibatalkan", "D"), self.order("Transaksi Berhasil", "E"))
+        self.assertEqual((summary["created"], summary["not_finished"], summary["cancelled"]), (2, 2, 1))
+        by_id = {o.external_order_id: o for o in Order.objects.filter(store=self.store)}
+        self.assertEqual(set(by_id), {"A", "D", "E"})
+        self.assertEqual((by_id["A"].status, by_id["D"].status, by_id["E"].status), ("completed", "cancelled", "completed"))
+        self.assertEqual(by_id["E"].marketplace_status, "Transaksi Berhasil")
         self.level.refresh_from_db()
-        self.assertEqual(self.level.on_hand, 46)                       # only the two finished orders took stock
+        self.assertEqual(self.level.on_hand, 46)                       # the cancelled order never took stock
+
+    def test_the_resi_and_the_courier_are_kept_on_a_sale_and_on_a_cancellation(self):
+        self.run_import(self.order("Selesai", "A", "J&T Express", "JY2130026621"),
+            self.order("Dibatalkan", "D", "SPX Standard", "SPX999"))
+        sale, called_off = Order.objects.get(external_order_id="A"), Order.objects.get(external_order_id="D")
+        self.assertEqual((sale.shipping_service, sale.tracking_number), ("J&T Express", "JY2130026621"))
+        self.assertEqual((called_off.shipping_service, called_off.tracking_number), ("SPX Standard", "SPX999"))
+
+    def test_a_later_file_fills_in_the_resi_and_follows_the_status(self):
+        self.import_early = import_orders(self.channel, [self.order("Perlu dikirim", "B")])      # no resi yet
+        self.assertEqual(Order.objects.get(external_order_id="B").tracking_number, "")
+        summary = self.run_import(self.order("Selesai", "B", "J&T Express", "JY1"))
+        self.assertEqual(summary["created"], 0)
+        late = Order.objects.get(external_order_id="B")
+        self.assertEqual((late.status, late.marketplace_status, late.shipping_service, late.tracking_number),
+            ("completed", "Selesai", "J&T Express", "JY1"))
 
     def test_an_unfinished_order_is_picked_up_by_a_later_file(self):
-        self.run_import(_order("Sedang dikirim", "B"))
+        self.run_import(self.order("Sedang dikirim", "B"))
         self.assertFalse(Order.objects.filter(store=self.store).exists())
-        summary = self.run_import(_order("Selesai", "B"))
+        summary = self.run_import(self.order("Selesai", "B"))
         self.assertEqual(summary["created"], 1)
 
     def test_a_finished_order_that_is_later_returned_is_still_taken_back(self):
-        self.run_import(_order("Selesai", "A"))
-        summary = self.run_import(_order("Pengembalian", "A"))
+        self.run_import(self.order("Selesai", "A"))
+        summary = self.run_import(self.order("Pengembalian", "A"))
         self.assertEqual(summary["not_finished"], 0)                    # known order: always brought up to date
         self.assertEqual(Order.objects.get(external_order_id="A").status, "returned")
         self.level.refresh_from_db()
         self.assertEqual(self.level.on_hand, 50)
 
     def test_without_the_filter_everything_is_still_imported(self):
-        summary = import_orders(self.channel, [_order("Sedang dikirim", "B")])
+        summary = import_orders(self.channel, [self.order("Sedang dikirim", "B")])
         self.assertEqual((summary["created"], summary["not_finished"]), (1, 0))
+
+    def test_the_real_tokopedia_tiktok_export_follows_status_resi_and_courier(self):
+        from apps.channels.parsers.tokopedia import parse_tokopedia_xlsx
+        with open("docs/formattokped.xlsx", "rb") as sample:
+            orders, skipped = parse_tokopedia_xlsx(sample)
+        summary = import_orders(self.channel, orders, soft=True, skipped=skipped, finished_only=True)
+        self.assertEqual((summary["created"], summary["cancelled"], summary["not_finished"], summary["errors"]),
+            (3, 1, 2, []))                                       # 3 Selesai, 1 Dibatalkan, 2 Dikirim waiting
+        done = Order.objects.filter(store=self.store, status="completed")
+        self.assertEqual(done.count(), 3)
+        self.assertEqual(sorted(done.values_list("shipping_service", flat=True)), ["Grab", "J&T Express", "J&T Express"])
+        self.assertTrue(all(done.values_list("tracking_number", flat=True)))
+        self.assertEqual(Order.objects.get(store=self.store, status="cancelled").marketplace_status, "Dibatalkan")

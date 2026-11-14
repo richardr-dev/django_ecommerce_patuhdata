@@ -2,7 +2,7 @@
 {% block title %}Impor pesanan{% endblock %}
 {% block content %}
 <div class="pg-head"><div><span class="pg-kicker">Marketplace</span><h1>Impor pesanan</h1>
-  <p>{% if not selected %}Pilih asal file pesanan. Hanya pesanan yang sudah <b>selesai</b> di marketplace yang dicatat sebagai penjualan.{% elif not summary %}Unggah file ekspor dari {{ selected.label }}.{% else %}Hasil impor dari {{ selected.label }}.{% endif %}</p></div>
+  <p>{% if not selected %}Pilih asal file pesanan. Pesanan yang <b>selesai / berhasil</b> dicatat sebagai penjualan, pesanan <b>batal</b> dicatat sebagai batal.{% elif not summary %}Unggah file ekspor dari {{ selected.label }}.{% else %}Hasil impor dari {{ selected.label }}.{% endif %}</p></div>
   <div class="dp-actions">{% if selected %}<a class="btn" href="{% url 'merchant-import' %}">{% icon "undo" %} Ganti marketplace</a>{% endif %}<a class="btn" href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a></div></div>
 
 {% if not selected %}
@@ -54,7 +54,7 @@
         {% for step in selected.instructions %}<li>{{ step }}</li>{% endfor %}</ol>
         {% if selected.file_type == "csv" %}<p style="margin:14px 0 0"><a class="btn" href="{% url 'merchant-channel-template' %}" data-no-soft>{% icon "download" %} Unduh template CSV {{ platform_name }}</a></p>{% endif %}
       </div></section>
-    {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Hanya pesanan selesai yang diimpor.</b> Pesanan yang masih dikemas atau dikirim dilewati dan akan masuk saat Anda mengimpor file berikutnya. Pesanan batal tidak dicatat. Pesanan yang sudah pernah diimpor tetap diperbarui bila kemudian diretur.</span></div>{% endif %}
+    {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Hanya pesanan selesai dan batal yang diimpor.</b> Pesanan <b>selesai / berhasil</b> menjadi penjualan, lengkap dengan nomor resi dan nama ekspedisinya. Pesanan <b>batal</b> dicatat dengan statusnya, bukan penjualan. Pesanan yang masih dikemas atau dalam pengiriman dilewati dan masuk saat Anda mengimpor file berikutnya. Pesanan yang sudah pernah diimpor selalu diperbarui: status, resi, dan ekspedisinya, termasuk bila kemudian diretur.</span></div>{% endif %}
     <section class="panel"><header><h2>Agar stok terpotong otomatis</h2></header>
       <div class="dp-card-body"><ol style="margin:0;padding-left:20px;display:grid;gap:8px;color:var(--ds-ink)">
         {% if platform == "shopee" %}<li>Di <b>Shopee Seller Center → Produk</b>, isi kolom <b>Nomor Referensi SKU</b> tiap produk.</li>
@@ -92,7 +92,7 @@
 <div class="tiles">
   <div class="tile accent"><small>Pesanan baru</small><strong>{{ summary.created }}</strong><span>dicatat sebagai penjualan</span></div>
   <div class="tile"><small>Sudah pernah diimpor</small><strong>{{ summary.duplicates }}</strong><span>dilewati, tidak dobel</span></div>
-  {% if summary.not_finished %}<div class="tile"><small>Belum selesai</small><strong>{{ summary.not_finished }}</strong><span>dilewati: masih diproses, dikirim, atau batal</span></div>{% endif %}
+  {% if summary.not_finished %}<div class="tile"><small>Belum selesai</small><strong>{{ summary.not_finished }}</strong><span>dilewati: masih dikemas atau dalam pengiriman</span></div>{% endif %}
   {% if summary.updated %}<div class="tile"><small>Status diperbarui</small><strong>{{ summary.updated }}</strong><span>pesanan lama</span></div>{% endif %}
   {% if summary.cancelled %}<div class="tile"><small>Batal / retur</small><strong>{{ summary.cancelled }}</strong><span>penjualannya ditarik kembali</span></div>{% endif %}
   {% if summary.skipped %}<div class="tile"><small>Belum dibayar</small><strong>{{ summary.skipped }}</strong><span>dilewati</span></div>{% endif %}

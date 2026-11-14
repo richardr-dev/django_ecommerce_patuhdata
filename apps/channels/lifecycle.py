@@ -70,6 +70,14 @@ def sync_order_state(channel, order, data):
     order = Order.objects.select_for_update().get(pk=order.pk)
     state = data.state
     changed = False
+    # The resi and the courier arrive later than the order: fill them in, and follow a changed resi.
+    shipping = {name: value for name, value in (("tracking_number", data.tracking_number[:100]),
+        ("shipping_service", data.courier[:80])) if value and getattr(order, name) != value}
+    if shipping:
+        for name, value in shipping.items():
+            setattr(order, name, value)
+        order.save(update_fields=list(shipping))
+        changed = True
     if data.status_text and order.marketplace_status != data.status_text[:60]:
         order.marketplace_status = data.status_text[:60]
         order.save(update_fields=["marketplace_status"])

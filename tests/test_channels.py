@@ -224,10 +224,10 @@ class ImportWizardPageTests(ChannelTestCase):
         self.assertContains(page, "Tokopedia / TikTok Shop")
         self.assertContains(page, "?platform=tokopedia")
         self.assertNotContains(page, "?platform=tiktok_shop")
-        self.assertContains(page, "sudah <b>selesai</b>")
+        self.assertContains(page, "selesai / berhasil</b> dicatat")
 
     def test_an_old_tiktok_link_opens_the_merged_step(self):
         page = self.client.get("/merchant/marketplace/import/?platform=tiktok_shop")
         self.assertContains(page, 'name="platform" value="tokopedia"')
-        self.assertContains(page, "Pilih tab Selesai")
-        self.assertContains(page, "Hanya pesanan selesai yang diimpor")
+        self.assertContains(page, "yang belum selesai dilewati")
+        self.assertContains(page, "Hanya pesanan selesai dan batal yang diimpor")
