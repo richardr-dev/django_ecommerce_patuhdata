@@ -49,7 +49,8 @@ urlpatterns = [
         success_url=reverse_lazy("password-reset-complete")), name="password-reset-confirm"),
     path("account/reset/complete/", auth_views.PasswordResetCompleteView.as_view(
         template_name="registration/password_reset_complete.html"), name="password-reset-complete"),
-    path("merchant/login/", RedirectView.as_view(pattern_name="merchant-login", query_string=True, permanent=True)),
+    path("merchant/login/", RedirectView.as_view(pattern_name="merchant-login", query_string=True, permanent=True),
+        name="merchant-login-old"),
     path("login/", login_limit(auth_views.LoginView.as_view(
         template_name="registration/merchant_login.html", authentication_form=MerchantLoginForm)),
         name="merchant-login"),

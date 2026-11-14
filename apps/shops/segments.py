@@ -255,7 +255,7 @@ def queue_broadcast(store, user, subject, body, segment):
 
 
 def unsubscribe_url(store, customer):
-    token = signing.dumps({"c": customer.id, "s": store.id}, salt=UNSUBSCRIBE_SALT)
+    token = signing.dumps({"c": str(customer.id), "s": store.id}, salt=UNSUBSCRIBE_SALT)  # a customer id is a UUID
     return store_url(store, reverse("customer-unsubscribe", args=[token]))
 
 

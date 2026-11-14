@@ -108,8 +108,19 @@ class SmokeUrlTests(TestCase):
     def _urls(self):
         samples = self.url_kwargs()
         for _route, pattern in _routes():
+            if pattern.name is None:
+                continue  # an unnamed route (the development /media/ server) cannot be reversed
             names = list(pattern.pattern.converters)
-            kwargs = {name: samples[name] for name in names}
+            kwargs = {}
+            for name, converter in pattern.pattern.converters.items():
+                if name in samples:
+                    kwargs[name] = samples[name]
+                elif type(converter).__name__ == "IntConverter":
+                    kwargs[name] = 1                  # a route nobody listed above still gets crawled
+                elif type(converter).__name__ == "UUIDConverter":
+                    kwargs[name] = uuid.uuid4()
+                else:
+                    kwargs[name] = "smoke"
             if pattern.name == "password-reset-confirm":
                 kwargs["token"] = "set-password"
             path = reverse(pattern.name, kwargs=kwargs)

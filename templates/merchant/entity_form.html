@@ -221,8 +221,35 @@
         <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.initial_stock.label }}</label>
         {{ form.initial_stock }}
         {% if form.initial_stock.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.initial_stock.help_text }}</p>{% endif %}
+        {% if form.initial_stock.errors %}<p class="text-xs text-red-500 mt-1">{{ form.initial_stock.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+      {# Stock of an existing product: one warehouse, edited here and logged as a stock movement #}
+      {% if form.stock %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.stock.label }}</label>
+        {{ form.stock }}
+        {% if form.stock.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.stock.help_text }}</p>{% endif %}
+        {% if form.stock.errors %}<p class="text-xs text-red-500 mt-1">{{ form.stock.errors.0 }}</p>{% endif %}
       </div>{% endif %}
     </div>
+
+    {# Digital product: a file or a link the buyer opens after paying #}
+    {% if form.is_digital %}<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Produk digital</h3>
+      <label class="flex items-center gap-2 text-sm font-medium text-gray-700">{{ form.is_digital }} {{ form.is_digital.label }}</label>
+      {% if form.is_digital.help_text %}<p class="text-xs text-gray-400">{{ form.is_digital.help_text }}</p>{% endif %}
+      {% if form.digital_file %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.digital_file.label }}</label>
+        {{ form.digital_file }}
+        {% if form.digital_file.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.digital_file.help_text }}</p>{% endif %}
+        {% if form.digital_file.errors %}<p class="text-xs text-red-500 mt-1">{{ form.digital_file.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+      {% if form.digital_url %}<div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.digital_url.label }}</label>
+        {{ form.digital_url }}
+        {% if form.digital_url.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ form.digital_url.help_text }}</p>{% endif %}
+        {% if form.digital_url.errors %}<p class="text-xs text-red-500 mt-1">{{ form.digital_url.errors.0 }}</p>{% endif %}
+      </div>{% endif %}
+    </div>{% endif %}
 
     {# Marketplace channels #}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
