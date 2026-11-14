@@ -126,7 +126,7 @@ def parse_lazada(upload):
         for item in items:
             row = item["row"]
             sku = _get(row, index, "sku") or "[Tanpa SKU: {}]".format(
-                (_get(row, index, "name") + " " + _get(row, index, "variation")).strip()[:50])
+                (_get(row, index, "name") + " " + _get(row, index, "variation")).strip()[:47])
             key = (sku, item["price"])
             if key in lines:
                 lines[key].quantity += item["quantity"]

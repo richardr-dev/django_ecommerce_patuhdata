@@ -62,12 +62,15 @@ def _tax_rate(store, tax_base, tax):
 def _create_invoice_items(invoice, order):
     """Copy OrderItems into InvoiceItems. Called inside the same transaction as the invoice."""
     from apps.orders.models import OrderItem
+    # A catalog SKU may be longer (80) than an invoice line's (60): never lose an invoice over it.
+    sku_width = InvoiceItem._meta.get_field("sku").max_length
+    text_width = InvoiceItem._meta.get_field("description").max_length
     for item in OrderItem.objects.filter(order=order).select_related("product"):
         InvoiceItem.objects.create(
             invoice=invoice,
             product=item.product,
-            description=item.name,
-            sku=item.sku or "",
+            description=item.name[:text_width],
+            sku=(item.sku or "")[:sku_width],
             quantity=item.quantity,
             unit_price=item.unit_price,
             discount=getattr(item, "discount", Decimal(0)),

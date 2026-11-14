@@ -81,7 +81,7 @@ def _sku(row, index):
         return val
     name = _get(row, index, "product_name")
     variation = _get(row, index, "variation")
-    display = f"{name} {variation}".strip()[:50]
+    display = f"{name} {variation}".strip()[:47]  # "[Tanpa SKU: " + 47 + "]" = 60, the width of an invoice line's SKU
     return f"[Tanpa SKU: {display}]"
 
 

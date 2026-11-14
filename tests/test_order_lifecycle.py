@@ -409,6 +409,13 @@ class FinishedOnlyImportTests(TestCase):
             {("Ninja Xpress", "SHP3416253009"), ("Ninja Xpress", "SHP7367041320")})
         self.assertTrue(all(o.channel_order.attention for o in done))                        # flagged for SKU mapping
         self.assertEqual(sorted(set(done.values_list("marketplace_status", flat=True))), ["Selesai"])
+        # Every finished sale has its invoice, and no invoice line is wider than its column (a swallowed error
+        # here once left a sale without an invoice on PostgreSQL while the import still reported success).
+        from apps.tax.models import Invoice, InvoiceItem
+        for order in done:
+            self.assertTrue(Invoice.objects.filter(order=order).exists(), order.external_order_id)
+        for item in InvoiceItem.objects.filter(invoice__store=self.store):
+            self.assertLessEqual(len(item.sku), 60, item.sku)
         # SQLite does not enforce string lengths, PostgreSQL does: the placeholder products must fit their columns.
         placeholders = Product.objects.filter(store=self.store, sku__startswith="[Tanpa SKU")
         self.assertGreaterEqual(placeholders.count(), 2)
