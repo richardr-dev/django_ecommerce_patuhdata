@@ -202,7 +202,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_a_marketplace_card_shows_courier_resi_and_follows_the_marketplace_status(self):
         self.sale("MP1", courier="JNE YES", resi="JY91008038038")
-        html = self.page("?tab=all&sumber=semua").content.decode()
+        html = self.page("?tab=all").content.decode()
         card = html.split("<article")[1].split("</article>")[0]
         for expected in ("JNE YES", "JY91008038038", "Salin", "Status mengikuti Shopee", "Selesai, tidak ada langkah berikutnya"):
             self.assertIn(expected, card)
@@ -212,7 +212,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_a_marketplace_order_without_a_resi_offers_to_add_one(self):
         self.sale("MP2")
-        html = self.page("?tab=all&sumber=semua").content.decode()
+        html = self.page("?tab=all").content.decode()
         self.assertIn("Belum ada resi", html)
         self.assertIn('class="mk-resi"', html)
         viewer = User.objects.create_user("pelihat", password="x")
@@ -228,22 +228,21 @@ class OrdersPageTests(MarketplaceFixtures):
         order.refresh_from_db()
         self.assertEqual((order.tracking_number, order.courier_code), ("CM123456789", "jne"))
 
-    def test_the_source_banner_matches_the_filter_on_screen(self):
+    def test_the_page_shows_everything_by_default_and_the_website_view_says_so(self):
         self.sale("MP4")
         default = self.page().content.decode()
-        self.assertIn("1 pesanan marketplace tidak ditampilkan", default)
-        chosen = self.page("?channel=shopee").content.decode()
-        self.assertIn("sesuai channel yang dipilih", chosen)
-        self.assertNotIn("tidak ditampilkan", chosen)
-        everything = self.page("?sumber=semua").content.decode()
-        self.assertIn("semua pesanan</b>, termasuk marketplace", everything)
-        self.assertIn('name="sumber"', everything)
+        self.assertNotIn("tidak ditampilkan", default)                # nothing hidden, no banner
+        self.assertIn("MP4" if False else "Selesai", default)
+        web = self.page("?sumber=web").content.decode()
+        self.assertIn("1 pesanan marketplace tidak ditampilkan di sini", web)
+        self.assertIn("Tampilkan semua", web)
+        self.assertNotIn("sumber=web", web.split("Tampilkan semua")[0].split("href=")[-1])   # the link leaves the website view
 
-    def test_a_partial_refresh_carries_the_banner_too(self):
+    def test_a_partial_refresh_carries_the_tabs_too(self):
         self.sale("MP5")
-        partial = self.client.get("/books/orders/?channel=shopee", HTTP_HX_REQUEST="true").content.decode()
-        self.assertIn("src-bar", partial)
-        self.assertIn("sesuai channel yang dipilih", partial)
+        partial = self.client.get("/books/orders/?channel=shopee&tab=all", HTTP_HX_REQUEST="true").content.decode()
+        self.assertIn("order-tabs", partial)                          # the tabs refresh with the list
+        self.assertNotIn("<html", partial)
 
     def test_search_finds_an_order_by_its_resi(self):
         self.sale("MP6", resi="JY91008038038")
@@ -254,7 +253,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_the_review_flag_is_visible_and_says_what_to_do(self):
         self.sale("MP8", sku="TIDAK-ADA")
-        html = self.page("?sumber=semua&tab=all").content.decode()
+        html = self.page("?tab=all").content.decode()
         self.assertIn("Perlu dicek", html)
         self.assertIn("Produk dibuat otomatis", html)                 # the reason is written out, not only a tooltip
         self.assertIn("Buka Pemetaan SKU", html)
@@ -262,7 +261,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_a_cancelled_order_without_shipping_data_has_no_empty_shipping_panel(self):
         self.sale("MP10", status="Dibatalkan")
-        card = self.page("?sumber=semua&tab=all").content.decode().split("<article")[1].split("</article>")[0]
+        card = self.page("?tab=all").content.decode().split("<article")[1].split("</article>")[0]
         self.assertIn("Pesanan ini tidak menjadi penjualan", card)
         self.assertNotIn("mk-ship", card)
 
@@ -273,3 +272,30 @@ class OrdersPageTests(MarketplaceFixtures):
         self.assertEqual(header[10:], ["tracking", "channel", "marketplace_order_id", "marketplace_status", "courier"])
         for expected in ("004535364538", "shopee", "MP9", "Selesai", "SiCepat REG"):
             self.assertIn(expected, row)
+
+    def test_the_detail_page_shows_courier_and_resi_with_a_copy_button(self):
+        order = self.sale("MP11", courier="JNE YES", resi="JY91008038038")
+        html = self.client.get(f"/books/orders/{order.id}/").content.decode()
+        for expected in ("Ekspedisi:", "JNE YES", "JY91008038038", 'data-copy="JY91008038038"', "Salin"):
+            self.assertIn(expected, html)
+        self.assertNotIn('name="courier_code"', html)                     # a resi is already there: no form
+        self.assertNotIn(">0812<", html)                                  # a marketplace "phone" is only a username
+
+    def test_the_detail_page_saves_courier_and_resi_together_and_returns_to_the_order(self):
+        order = self.sale("MP12")
+        html = self.client.get(f"/books/orders/{order.id}/").content.decode()
+        self.assertIn('name="courier_code"', html)
+        self.assertIn('<option value="sicepat">SiCepat</option>', html)
+        reply = self.client.post(f"/books/orders/{order.id}/tracking/", {"courier_code": "sicepat",
+            "tracking_number": "004685080641", "next": f"/books/orders/{order.id}/"})
+        self.assertEqual(reply["Location"], f"/books/orders/{order.id}/")
+        order.refresh_from_db()
+        self.assertEqual((order.courier_code, order.tracking_number), ("sicepat", "004685080641"))
+
+    def test_the_detail_page_shortens_a_masked_address(self):
+        order = self.sale("MP13")
+        Order.objects.filter(pk=order.pk).update(shipping_address="**********************************, Jakarta")
+        html = self.client.get(f"/books/orders/{order.id}/").content.decode()
+        self.assertIn("•••, Jakarta", html)
+        self.assertNotIn("*****", html)
+

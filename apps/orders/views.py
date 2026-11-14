@@ -1154,8 +1154,9 @@ def merchant_dashboard(request):
             payment_provider="bank_transfer").count(),
         month_revenue=sum((row["revenue"] for row in daily), Decimal(0))))
 
-def _order_kpis(orders):
-    """The four numbers the page opens with: today's sales, orders, and what waits for the seller."""
+def _order_kpis(orders, own=None):
+    """The numbers the page opens with: today's sales and orders (of the orders on screen) and what waits
+    for the seller. ``own`` is what the store packs and ships itself: a marketplace moves its own parcels."""
     from django.utils import timezone as tz
     today = tz.localdate()
     paid = {"paid", "confirmed", "allocated", "picking", "packed", "shipped", "delivered", "completed"}
@@ -1163,8 +1164,9 @@ def _order_kpis(orders):
     return {
         "revenue": todays.filter(status__in=paid).aggregate(t=Sum("total"))["t"] or 0,
         "orders": todays.exclude(status__in={"cancelled", "payment_failed"}).count(),
-        "to_check": orders.filter(status="pending").count(),
-        "to_ship": orders.filter(status__in={"paid", "confirmed", "allocated", "picking", "packed"}).count(),
+        "to_check": (orders if own is None else own).filter(status="pending").count(),
+        "to_ship": (orders if own is None else own).filter(
+            status__in={"paid", "confirmed", "allocated", "picking", "packed"}).count(),
     }
 
 
@@ -1172,25 +1174,15 @@ def _order_kpis(orders):
 def merchant_orders(request):
     from .scope import MARKETPLACE_CHANNELS, marketplace_orders, website_orders
     store = _staff_store(request)
-    # Marketplace imports are not website orders: hidden unless asked for (or filtered to).
+    # Everything is shown by default. "?sumber=web" narrows to website, manual and cash-register orders
+    # (the old default); picking a marketplace channel always shows marketplace orders.
     chosen = set(request.GET.getlist("channel")) | {c for v in request.GET.getlist("channel") for c in v.split(",")}
-    with_marketplace = request.GET.get("sumber") == "semua" or bool(chosen & MARKETPLACE_CHANNELS)
-    hidden_marketplace = 0 if with_marketplace else marketplace_orders(store).count()
-    all_orders = Order.objects.filter(store=store) if with_marketplace else website_orders(store)
-    counts = dict(all_orders.values_list("status").annotate(total=Count("id")))
-    tabs = [{"key": key, "label": label, "count": sum(counts.get(status, 0) for status in statuses)}
-        for key, label, statuses in ORDER_GROUPS]
-    group = request.GET.get("tab")
-    if group not in {tab["key"] for tab in tabs} | {"all"}:
-        # Open where the work is: payments to check, then orders to pack, then to ship.
-        group = next((tab["key"] for tab in tabs[:3] if tab["count"]), "all")
+    web_only = request.GET.get("sumber") == "web" and not (chosen & MARKETPLACE_CHANNELS)
+    with_marketplace = not web_only
+    hidden_marketplace = marketplace_orders(store).count() if web_only else 0
+    all_orders = website_orders(store) if web_only else Order.objects.filter(store=store)
     orders = all_orders.select_related("pickup_outlet", "channel_order").prefetch_related("items",
         "tracking_events").order_by("-created_at")
-    if group != "all":
-        orders = orders.filter(status__in={key: statuses for key, _, statuses in ORDER_GROUPS}[group])
-    status = request.GET.get("status")
-    if status:
-        orders = orders.filter(status=status)
     try:
         orders = orders.filter(delivery_date=date.fromisoformat(request.GET.get("date", "")))
     except ValueError:
@@ -1219,6 +1211,27 @@ def merchant_orders(request):
             matches |= models.Q(id__startswith=query.lower())
         orders = orders.filter(matches)
         active_filters.insert(0, {"label": f"Cari “{query}”", "keys": ["q"]})
+    # Tab counts follow every filter above (channel, period, search), so the numbers on the tabs and the
+    # list below always agree. The three work-queue tabs count only what the store packs and ships itself:
+    # a marketplace moves its own parcels.
+    scoped = orders
+    counts = dict(scoped.order_by().values_list("status").annotate(total=Count("id")))
+    queue_counts = dict(scoped.exclude(pk__in=marketplace_orders(store).values("pk")).order_by()
+        .values_list("status").annotate(total=Count("id")))
+    tabs = [{"key": key, "label": label,
+        "count": sum((queue_counts if index < 3 else counts).get(status, 0) for status in statuses)}
+        for index, (key, label, statuses) in enumerate(ORDER_GROUPS)]
+    group = request.GET.get("tab")
+    if group not in {tab["key"] for tab in tabs} | {"all"}:
+        # Open where the work is: payments to check, then orders to pack, then to ship.
+        group = next((tab["key"] for tab in tabs[:3] if tab["count"]), "all")
+    if group != "all":
+        orders = orders.filter(status__in={key: statuses for key, _, statuses in ORDER_GROUPS}[group])
+        if group in {key for key, _, _ in ORDER_GROUPS[:3]}:
+            orders = orders.exclude(pk__in=marketplace_orders(store).values("pk"))
+    status = request.GET.get("status")
+    if status:
+        orders = orders.filter(status=status)
     sort = request.GET.get("sort", "")
     if sort and group not in {"pack", "ship"}:
         orders = apply_sort(orders, sort)
@@ -1252,11 +1265,13 @@ def merchant_orders(request):
         has_printable=any(order.can_print_label for order in page.object_list),
         can_set_resi=store.owner_id == request.user.id or store.staff_members.filter(user=request.user,
             role__in=FULFILMENT_ROLES).exists(),
-        kpi=_order_kpis(all_orders),
+        kpi=_order_kpis(all_orders, own=website_orders(store)),
         range_preset=request.GET.get("range", ""), channel_selected=channel_filter,
         filter_query=urlencode([(k, v) for k in (*KEYS, "sumber") if k not in {"inv", "status", "crm"}
             for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),
-        tabs=tabs, tab=group, query=query, total=all_orders.count(),
+        filter_query_all=urlencode([(k, v) for k in KEYS if k not in {"inv", "status", "crm"}
+            for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),
+        tabs=tabs, tab=group, query=query, total=scoped.count(),
         outlets=Warehouse.objects.filter(store=store, is_outlet=True),
         statuses=Order.STATUS, fulfillment_methods=Order.FULFILLMENT_METHODS,
         tracking_sync=bool(settings.BITESHIP_API_KEY or settings.RAJAONGKIR_API_KEY),
@@ -1856,8 +1871,12 @@ def merchant_order_detail(request, order_id):
         invoice = None
     order.available_statuses = allowed_order_transitions(order)
     crm_customer = getattr(order, "customer", None)
+    from .resi_labels import COURIERS
     return render(request, "merchant/order_detail.html", _merchant_context(request, store,
-        order=order, channel_order=channel_order, invoice=invoice, crm_customer=crm_customer))
+        order=order, channel_order=channel_order, invoice=invoice, crm_customer=crm_customer,
+        courier_choices=sorted(COURIERS.items(), key=lambda item: item[1].lower()),
+        can_set_resi=store.owner_id == request.user.id or store.staff_members.filter(user=request.user,
+            role__in=FULFILMENT_ROLES).exists()))
 
 
 @login_required(login_url="/login/")

@@ -1,4 +1,4 @@
-"""Pesanan is the website's queue: marketplace imports live in Invoice penjualan, not twice."""
+"""Pesanan shows every order by default; website-only is one click, and the work-queue tabs stay the store's own."""
 from django.urls import reverse
 from test_sales_docs import Base
 
@@ -30,34 +30,59 @@ class OrdersScopeTests(Base):
         self.assertEqual(set(marketplace_orders(self.store).values_list("pk", flat=True)),
             {self.shopee.pk, self.imported.pk})
 
-    def test_marketplace_orders_are_hidden_by_default(self):
+    def test_everything_is_shown_by_default_including_marketplace(self):
         names, page = self.names()
+        self.assertEqual(names, {"Pembeli Web", "Pembeli Shopee", "Impor File"})
+        self.assertTrue(page.context["with_marketplace"])
+        self.assertNotContains(page, "tidak ditampilkan")             # nothing is hidden, so no banner
+
+    def test_website_only_is_one_click_away_and_says_so(self):
+        names, page = self.names(sumber="web")
         self.assertEqual(names, {"Pembeli Web"})
         self.assertEqual(page.context["hidden_marketplace"], 2)
         self.assertContains(page, "2 pesanan marketplace tidak ditampilkan")
+        self.assertContains(page, "Tampilkan semua")
 
-    def test_tabs_and_counts_ignore_marketplace(self):
-        page = self.client.get(self.url, {"tab": "all"})
-        self.assertEqual(page.context["total"], 1)
+    def test_tab_counts_follow_the_filters_so_they_match_the_list(self):
+        self.assertEqual(self.client.get(self.url, {"tab": "all"}).context["total"], 3)
+        shopee = self.client.get(self.url, {"tab": "all", "channel": "shopee"})
+        self.assertEqual(shopee.context["total"], 1)                              # the "Semua" tab says 1
+        self.assertEqual(shopee.context["page_obj"].paginator.count, 1)            # and so does the list
 
-    def test_one_switch_shows_them(self):
-        names, _ = self.names(sumber="semua")
-        self.assertEqual(names, {"Pembeli Web", "Pembeli Shopee", "Impor File"})
 
-    def test_picking_a_marketplace_channel_shows_it_without_the_switch(self):
-        names, page = self.names(channel="shopee")
+    def test_the_work_queues_count_only_what_the_store_ships_itself(self):
+        Order.objects.filter(pk=self.shopee.pk).update(status="paid")        # a marketplace order in a paid state
+        Order.objects.filter(pk=self.web.pk).update(status="paid")
+        tabs = {tab["key"]: tab["count"] for tab in self.client.get(self.url, {"tab": "all"}).context["tabs"]}
+        self.assertEqual(tabs["pack"], 1)                                     # the website order, not the Shopee one
+        queue = self.client.get(self.url, {"tab": "pack"})
+        self.assertEqual({o.customer_name for o in queue.context["orders"]}, {"Pembeli Web"})
+
+    def test_picking_a_marketplace_channel_shows_it_even_in_the_website_view(self):
+        names, page = self.names(channel="shopee", sumber="web")
         self.assertEqual(names, {"Pembeli Shopee"})
         self.assertTrue(page.context["with_marketplace"])
+
+    def test_the_channel_row_has_a_semua_chip_that_is_on_without_a_channel(self):
+        html = self.client.get(self.url, {"tab": "all"}).content.decode()
+        chip = html.split("data-channel-all")[1].split(">")[0]
+        self.assertIn("checked", chip)
+        picked = self.client.get(self.url, {"tab": "all", "channel": "shopee"}).content.decode()
+        self.assertNotIn("checked", picked.split("data-channel-all")[1].split(">")[0])
 
     def test_marketplace_sales_still_in_the_invoice_list(self):
         page = self.client.get(reverse("merchant-sales-invoices"))
         found = {o.customer_name for o in page.context["orders"]}
         self.assertTrue({"Pembeli Shopee", "Impor File"} <= found)
 
-    def test_kpi_tiles_count_website_orders_only(self):
-        page = self.client.get(self.url, {"tab": "all"})
-        self.assertEqual(page.context["kpi"]["orders"], 1)
-        self.assertContains(page, "Penjualan hari ini")
+    def test_kpi_tiles_follow_the_view_but_the_work_numbers_stay_the_stores_own(self):
+        everything = self.client.get(self.url, {"tab": "all"})
+        self.assertEqual(everything.context["kpi"]["orders"], 3)                 # today's orders on screen
+        self.assertContains(everything, "Penjualan hari ini")
+        Order.objects.filter(pk=self.shopee.pk).update(status="paid")
+        Order.objects.filter(pk=self.web.pk).update(status="paid")
+        self.assertEqual(self.client.get(self.url, {"tab": "all"}).context["kpi"]["to_ship"], 1)   # not the Shopee order
+        self.assertEqual(self.client.get(self.url, {"tab": "all", "sumber": "web"}).context["kpi"]["orders"], 1)
 
 
 class CleanupTests(Base):

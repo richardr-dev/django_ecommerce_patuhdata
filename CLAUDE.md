@@ -195,6 +195,13 @@ Four test files failed before this work and still do: `test_digital_products`,
   never type the name into a template. The sign-in page (`registration/merchant_login.html`, `static/css/login.css`)
   is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.
   Domains (`lakuin.store`) and the `lakuin-*.svg` brand files are infrastructure and have not been renamed.
+- **Pesanan shows every order by default** (website, manual, cash register and marketplace). The Channel row starts
+  with a "Semua" chip; `?sumber=web` narrows to the store's own orders and says so in a banner. The stage tabs live in
+  `_orders_list.html` so they refresh with the list, and their counts follow the filters. The three work-queue tabs
+  (Perlu dicek, Perlu dikemas, Siap kirim) count only orders the store packs and ships itself
+  (`scope.marketplace_orders` excluded): a marketplace moves its own parcels, so a marketplace card has no pack or
+  ship buttons, only courier, resi (with copy), the marketplace status and the review flag (`ChannelOrder.attention`).
+  "Unggah label resi" (`orders/resi_labels.py`, `label_views.py`) reads PDF labels with pypdf, no OCR engine.
 - **The back office lives under `/books/`** (it was `/merchant/`, a word that suits a shop, not an accounting
   product). Old `/merchant/...` addresses redirect (`config/views.py:legacy_merchant`: 301 for GET, 308 for
   anything else, `/merchant/login/` goes to `/login/`), so bookmarks, invite emails and forms in flight keep
