@@ -46,6 +46,10 @@ class StockShortage(ChannelImportError):
     """The marketplace sold more of a SKU than the system holds."""
 
 
+class UnknownSku(ChannelImportError):
+    """A marketplace line whose SKU matches nothing in the catalog (or has no SKU at all)."""
+
+
 def _resolve_sku(store, sku):
     variant = ProductVariant.objects.select_related("product").filter(product__store=store,
         sku=sku, is_active=True).first()
@@ -53,7 +57,7 @@ def _resolve_sku(store, sku):
         return variant.product, variant
     product = Product.objects.filter(store=store, sku=sku).first()
     if not product:
-        raise ChannelImportError(f"SKU {sku} tidak ada di katalog Patuhdata.")
+        raise UnknownSku(f"SKU {sku} tidak ada di katalog Patuhdata.")
     if product.variants.filter(is_active=True).exists():
         raise ChannelImportError(f"SKU {sku} punya varian: gunakan SKU varian di marketplace.")
     return product, None
@@ -467,7 +471,7 @@ def import_orders(channel, orders, soft: bool = False,
     )
 
     summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],
-               "soft": soft, "not_finished": 0, "no_stock": 0,
+               "soft": soft, "not_finished": 0, "no_stock": 0, "new_products": 0,
                "batch_id": str(batch.id)}
     total_amount = Decimal(0)
     known = set()
@@ -483,9 +487,10 @@ def import_orders(channel, orders, soft: bool = False,
             continue
         try:
             order, outcome = import_order_outcome(channel, data, soft=soft, batch=batch)
-        except StockShortage as error:
+        except (StockShortage, UnknownSku) as error:
             # A finished order is a sale that already happened: refusing it only hides it. Record it
-            # without taking stock (as in historical mode) and flag it, so someone corrects the stock.
+            # without taking stock (as in historical mode) and flag it, so someone corrects the stock
+            # or maps the SKU (Pemetaan SKU).
             if not (finished_only and data.state == STATE_COMPLETED):
                 summary["errors"].append(f"{data.external_id}: {error}")
                 continue
@@ -494,9 +499,13 @@ def import_orders(channel, orders, soft: bool = False,
             except ChannelImportError as again:
                 summary["errors"].append(f"{data.external_id}: {again}")
                 continue
-            ChannelOrder.objects.filter(order=order).update(
-                attention=f"{error} Penjualan dicatat, stok belum dikurangi."[:300])
-            summary["no_stock"] += 1
+            if isinstance(error, UnknownSku):
+                note = f"{error} Produk dibuat otomatis: cocokkan di Pemetaan SKU. Stok belum dikurangi."
+                summary["new_products"] += 1
+            else:
+                note = f"{error} Penjualan dicatat, stok belum dikurangi."
+                summary["no_stock"] += 1
+            ChannelOrder.objects.filter(order=order).update(attention=note[:300])
         except ChannelImportError as error:
             summary["errors"].append(f"{data.external_id}: {error}")
             continue

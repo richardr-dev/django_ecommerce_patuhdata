@@ -387,3 +387,31 @@ class FinishedOnlyImportTests(TestCase):
         self.assertEqual((summary["created"], summary["errors"]), (1, []))
         customer, = Customer.objects.filter(store=self.store)
         self.assertEqual(customer.channel_buyer.external_id, "ani123")
+
+    def test_the_real_shopee_export_with_empty_skus_is_fully_imported(self):
+        """Order.all (Shopee): 3 Selesai and 2 Batal, no SKU anywhere, courier inside Opsi Pengiriman."""
+        from apps.channels.parsers.shopee import parse_shopee_xlsx
+        shopee = SalesChannel.objects.create(store=self.store, platform="shopee", name="Toko Shopee")
+        with open("docs/Order.all.20251201_20251231.xlsx", "rb") as sample:
+            orders, skipped = parse_shopee_xlsx(sample)
+        summary = import_orders(shopee, orders, skipped=skipped, finished_only=True)          # strict mode
+        self.assertEqual((summary["created"], summary["cancelled"], summary["not_finished"], summary["errors"]),
+            (3, 2, 0, []))
+        self.assertEqual(summary["new_products"] + summary["no_stock"], 3)
+        done = Order.objects.filter(store=self.store, channel="shopee", status="completed")
+        self.assertEqual(done.count(), 3)
+        self.assertEqual({o.external_order_id: (o.shipping_service, o.tracking_number, o.total) for o in done}, {
+            "251202A5J14X0H": ("JNE Reguler", "CM05459265352", Decimal(699000)),
+            "251202AEJPENKP": ("SiCepat REG", "004535364538", Decimal(599000)),
+            "2512101WKAXU23": ("JNE YES", "JY91008038038", Decimal(737000))})        # 699.000 + 38.000 shipping
+        gone = Order.objects.filter(store=self.store, channel="shopee", status="cancelled")
+        self.assertEqual({(o.shipping_service, o.tracking_number) for o in gone},
+            {("Ninja Xpress", "SHP3416253009"), ("Ninja Xpress", "SHP7367041320")})
+        self.assertTrue(all(o.channel_order.attention for o in done))                        # flagged for SKU mapping
+        self.assertEqual(sorted(set(done.values_list("marketplace_status", flat=True))), ["Selesai"])
+
+    def test_an_unknown_sku_still_fails_for_an_order_that_is_not_finished(self):
+        data = MarketplaceOrder(external_id="U1", buyer_name="Budi", phone="0812", address="Bandung",
+            status_text="Perlu dikirim", lines=[OrderLine(sku="ADA-TIDAK", quantity=1, unit_price=Decimal(1000))])
+        summary = import_orders(self.channel, [data])
+        self.assertEqual((summary["created"], len(summary["errors"])), (0, 1))
