@@ -199,6 +199,17 @@ class Order(models.Model):
         return self.channel == "abshop"
 
     @property
+    def is_marketplace(self):
+        """Sold on Shopee, Tokopedia / TikTok Shop or Lazada: the marketplace handles packing and
+        shipping, this system only follows the status and keeps the resi and the courier."""
+        return self.channel in {"shopee", "tokopedia", "tiktok_shop", "lazada"}
+
+    @property
+    def can_print_label(self):
+        """A shipping label is for a parcel still to be packed or sent by the store itself."""
+        return not self.is_marketplace and self.status in {"paid", "confirmed", "allocated", "picking", "packed"}
+
+    @property
     def is_sell_through(self):
         """True for informational downstream AB Shop sales (no store revenue)."""
         return self.order_type == "reseller_sell_through"

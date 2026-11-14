@@ -1192,10 +1192,10 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 /* Pick cards and the file drop area (impor pesanan): the whole card is the button, so it is easy to hit
    with a mouse or a thumb. Marketplace colours appear only as the small round mark. */
 .pick-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.pick { display: flex; align-items: center; gap: 16px; min-height: 92px; padding: 18px 20px; border-radius: 24px;
+.pick-card { display: flex; align-items: center; gap: 16px; min-height: 92px; padding: 18px 20px; border-radius: 24px;
   background: var(--ds-surface); border: var(--ds-hairline); box-shadow: var(--ds-shadow); color: var(--ds-ink);
   text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s; }
-.pick:hover, .pick:focus-visible { transform: translateY(-2px); box-shadow: var(--ds-shadow-lift); background: var(--ds-subcard);
+.pick-card:hover, .pick-card:focus-visible { transform: translateY(-2px); box-shadow: var(--ds-shadow-lift); background: var(--ds-subcard);
   outline: 2px solid var(--ds-primary); outline-offset: 2px; }
 .pick-mark { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: #fff;
   font-weight: 800; font-size: 22px; }
@@ -1204,7 +1204,7 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .pick-text small { display: block; margin-top: 2px; color: var(--ds-muted); font-size: 13px; }
 .pick-go { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 999px;
   background: var(--ds-nested); color: var(--ds-primary); font-weight: 700; font-size: 13.5px; }
-.pick:hover .pick-go { background: var(--ds-primary); color: #fff; }
+.pick-card:hover .pick-go { background: var(--ds-primary); color: #fff; }
 .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 190px;
   padding: 26px 20px; border-radius: 20px; border: 2px dashed rgba(0, 102, 255, .35); background: var(--ds-subcard);
   color: var(--ds-muted); text-align: center; cursor: pointer; transition: background .15s, border-color .15s; }
@@ -1216,4 +1216,4 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .drop input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .drop-wrap { position: relative; }
 .btn-lg { min-height: 52px; font-size: 15.5px !important; }
-@media (max-width: 480px) { .pick { padding: 16px; gap: 12px; } .pick-go span { display: none; } }
+@media (max-width: 480px) { .pick-card { padding: 16px; gap: 12px; } .pick-go span { display: none; } }

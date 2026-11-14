@@ -1,0 +1,76 @@
+{% extends "merchant/base.html" %}{% load icons %}{% load static %}
+{% block title %}Unggah label resi{% endblock %}
+{% block head_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pesanan</span><h1>Unggah label resi</h1>
+  <p>{% if rows %}Periksa hasil baca dari <b>{{ file_name }}</b>, lalu simpan resi ke pesanannya.{% else %}Unggah PDF label dari Shopee, Tokopedia, atau TikTok Shop. Nomor resi dan ekspedisi dipasang ke pesanan yang cocok.{% endif %}</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-orders' %}?tab=all&sumber=semua">Kembali ke pesanan</a></div></div>
+
+{% if not rows %}
+<div class="dp-grid">
+  <form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}<input type="hidden" name="action" value="read">
+    <header><div><h2>File label (PDF)</h2><p>Satu file boleh berisi banyak label, satu per halaman. Maksimal 20 MB.</p></div></header>
+    <div class="dp-card-body"><div class="drop-wrap"><label class="drop" id="drop" for="id_file">
+      {% icon "upload" %}
+      <strong id="drop-title">Klik untuk memilih file PDF</strong>
+      <span id="drop-help">atau seret file ke kotak ini</span>
+      <input type="file" name="file" id="id_file" accept="application/pdf,.pdf" required>
+    </label></div></div>
+    <footer><button class="btn-primary btn-block btn-lg">{% icon "upload" %} Baca label</button></footer>
+  </form>
+  <div>
+    <section class="panel"><header><h2>Cara kerjanya</h2></header>
+      <div class="dp-card-body"><ol style="margin:0;padding-left:22px;list-style:decimal;display:grid;gap:8px;color:var(--ds-ink)">
+        <li>Impor dulu pesanan marketplace-nya (menu <a href="{% url 'merchant-import' %}">Impor pesanan</a>), karena label dicocokkan lewat nomor pesanan.</li>
+        <li>Unggah PDF label. Sistem membaca nomor resi dan nomor pesanan di tiap halaman.</li>
+        <li>Anda memeriksa hasilnya. <b>Belum ada yang disimpan</b> sampai Anda menekan Simpan.</li>
+      </ol></div></section>
+    <div class="notice info">{% icon "check-circle" %}<span><b>Ekspedisi</b> diambil dari pesanan bila marketplace sudah memberi tahu. Bila tidak, dibaca dari label, atau ditebak dari bentuk nomor resi dan ditandai <b>tebakan</b> agar Anda periksa.</span></div>
+    <div class="notice">{% icon "alert" %}<span><b>Hanya PDF asli dari marketplace.</b> Foto atau hasil scan label tidak berisi teks dan tidak bisa dibaca di sini. Pesanan lama dengan resi berbeda tidak diganti kecuali Anda mencentangnya.</span></div>
+  </div>
+</div>
+<script>
+(function () {
+  var drop = document.getElementById("drop"), input = document.getElementById("id_file");
+  if (!drop || !input) return;
+  function show() {
+    var file = input.files && input.files[0];
+    drop.classList.toggle("has-file", !!file);
+    document.getElementById("drop-title").textContent = file ? file.name : "Klik untuk memilih file PDF";
+    document.getElementById("drop-help").textContent = file ? "Klik untuk mengganti file" : "atau seret file ke kotak ini";
+  }
+  input.addEventListener("change", show);
+  ["dragenter", "dragover"].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add("is-over"); }); });
+  ["dragleave", "drop"].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove("is-over"); }); });
+  drop.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); } });
+})();
+</script>
+
+{% else %}
+<div class="tiles">
+  <div class="tile accent"><small>Label terbaca</small><strong>{{ summary.total }}</strong><span>halaman di file</span></div>
+  <div class="tile"><small>Siap disimpan</small><strong style="color:var(--ds-ok)">{{ summary.ready }}</strong><span>cocok, belum punya resi</span></div>
+  {% if summary.check %}<div class="tile"><small>Perlu dicek</small><strong style="color:var(--ds-warn)">{{ summary.check }}</strong><span>pesanan sudah punya resi lain</span></div>{% endif %}
+  {% if summary.done %}<div class="tile"><small>Sudah ada</small><strong>{{ summary.done }}</strong><span>resi sama atau label ganda</span></div>{% endif %}
+  {% if summary.problems %}<div class="tile"><small>Tidak bisa diproses</small><strong style="color:var(--ds-bad)">{{ summary.problems }}</strong><span>lihat alasannya di tabel</span></div>{% endif %}
+</div>
+
+<form method="post" class="panel" id="resi-form">{% csrf_token %}<input type="hidden" name="action" value="save"><input type="hidden" name="n" value="{{ rows|length }}">
+  <header><div><h2>Hasil baca</h2><p>Hanya baris yang dicentang yang disimpan. Pilih ekspedisi yang benar untuk setiap baris.</p></div></header>
+  <div class="scroll-x"><table class="tbl resi-tbl"><thead><tr><th style="width:36px"></th><th>Hal.</th><th>No. resi</th><th>Pesanan</th><th>Ekspedisi</th><th>Status</th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td>{% if r.selectable %}<input type="checkbox" name="use_{{ r.index }}" value="1"{% if r.state == "ok" %} checked{% endif %} aria-label="Simpan resi halaman {{ r.page }}">{% endif %}</td>
+    <td>{{ r.page }}</td>
+    <td>{% if r.resi %}<code class="resi-code">{{ r.resi }}</code>{% else %}<span class="muted">—</span>{% endif %}<input type="hidden" name="resi_{{ r.index }}" value="{{ r.resi }}"></td>
+    <td>{% if r.order %}<b>{{ r.order.get_channel_display }}</b> · #{{ r.order.id|stringformat:"s"|slice:":8" }}<small>{{ r.order.customer_name }} · {% for it in r.order.items.all|slice:":2" %}{{ it.quantity }}× {{ it.name|truncatechars:34 }}{% if not forloop.last %}, {% endif %}{% endfor %}</small><input type="hidden" name="order_{{ r.index }}" value="{{ r.order.id }}">{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if r.selectable %}<select name="courier_{{ r.index }}" aria-label="Ekspedisi halaman {{ r.page }}"><option value="">Pilih…</option>{% for code, name in courier_choices %}<option value="{{ code }}"{% if code == r.courier_code %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>{% if r.courier_source == "tebakan" %}<small class="guess">tebakan: periksa dulu</small>{% elif r.courier_source %}<small>dari {{ r.courier_source }}</small>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td><span class="pill pill-{{ r.pill }}">{{ r.label }}</span>{% if r.note %}<small>{{ r.note }}</small>{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+  <footer style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    {% if summary.ready or summary.check %}<button class="btn-primary btn-lg">{% icon "check" %} Simpan resi terpilih</button>{% else %}<span class="muted">Tidak ada baris yang bisa disimpan.</span>{% endif %}
+    <a class="btn btn-lg" href="{% url 'merchant-resi-labels' %}">{% icon "upload" %} Unggah file lain</a>
+  </footer>
+</form>
+{% endif %}
+{% endblock %}

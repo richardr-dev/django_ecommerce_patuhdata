@@ -1184,7 +1184,7 @@ def merchant_orders(request):
     if group not in {tab["key"] for tab in tabs} | {"all"}:
         # Open where the work is: payments to check, then orders to pack, then to ship.
         group = next((tab["key"] for tab in tabs[:3] if tab["count"]), "all")
-    orders = all_orders.select_related("pickup_outlet").prefetch_related("items",
+    orders = all_orders.select_related("pickup_outlet", "channel_order").prefetch_related("items",
         "tracking_events").order_by("-created_at")
     if group != "all":
         orders = orders.filter(status__in={key: statuses for key, _, statuses in ORDER_GROUPS}[group])
@@ -1248,6 +1248,10 @@ def merchant_orders(request):
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         active_filters=active_filters, presets=PRESETS, sorts=SORTS, sort=sort or "newest",
         with_marketplace=with_marketplace, hidden_marketplace=hidden_marketplace,
+        marketplace_chosen=bool(chosen & MARKETPLACE_CHANNELS),
+        has_printable=any(order.can_print_label for order in page.object_list),
+        can_set_resi=store.owner_id == request.user.id or store.staff_members.filter(user=request.user,
+            role__in=FULFILMENT_ROLES).exists(),
         kpi=_order_kpis(all_orders),
         range_preset=request.GET.get("range", ""), channel_selected=channel_filter,
         filter_query=urlencode([(k, v) for k in (*KEYS, "sumber") if k not in {"inv", "status", "crm"}
@@ -1999,13 +2003,17 @@ def merchant_order_confirm_transfer(request, order_id):
 @login_required(login_url="/login/")
 def merchant_orders_csv(request):
     store = _staff_store(request)
+    _require_roles(request, store, roles("recap.view") | roles("books.view") | roles("sales.view"))
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="orders.csv"'
     writer = csv.writer(response)
-    writer.writerow(["order_id", "created_at", "customer", "phone", "status", "subtotal", "discount", "shipping", "tax", "total", "tracking"])
+    # The first eleven columns are the original ones; the rest are new, so an existing reader keeps working.
+    writer.writerow(["order_id", "created_at", "customer", "phone", "status", "subtotal", "discount", "shipping", "tax", "total", "tracking",
+        "channel", "marketplace_order_id", "marketplace_status", "courier"])
     for order in Order.objects.filter(store=store).order_by("-created_at"):
         writer.writerow([order.id, order.created_at.isoformat(), order.customer_name, order.phone, order.status,
-            order.subtotal, order.discount, order.shipping_cost, order.tax, order.total, order.tracking_number])
+            order.subtotal, order.discount, order.shipping_cost, order.tax, order.total, order.tracking_number,
+            order.channel, order.external_order_id, order.marketplace_status, order.shipping_service])
     return response
 
 

@@ -9,7 +9,7 @@
 {# ── Langkah 1: pilih marketplace. Seluruh kartu bisa diklik. ── #}
 <div class="pick-grid">
   {% for code, p in import_platforms.items %}
-  <a class="pick" href="?platform={{ code }}" aria-label="Impor pesanan dari {{ p.label }}">
+  <a class="pick-card" href="?platform={{ code }}" aria-label="Impor pesanan dari {{ p.label }}">
     <span class="pick-mark" style="background:{{ p.color }}" aria-hidden="true">{{ p.mark }}</span>
     <span class="pick-text"><strong>{{ p.label }}</strong><small>{{ p.tagline }} · {{ p.badge }}</small></span>
     <span class="pick-go"><span>Pilih</span> {% icon "chevron" %}</span>
@@ -50,13 +50,13 @@
 
   <div>
     <section class="panel"><header><h2>Cara ekspor dari {{ selected.label }}</h2></header>
-      <div class="dp-card-body"><ol style="margin:0;padding-left:20px;display:grid;gap:8px;color:var(--ds-ink)">
+      <div class="dp-card-body"><ol style="margin:0;padding-left:22px;list-style:decimal;display:grid;gap:8px;color:var(--ds-ink)">
         {% for step in selected.instructions %}<li>{{ step }}</li>{% endfor %}</ol>
         {% if selected.file_type == "csv" %}<p style="margin:14px 0 0"><a class="btn" href="{% url 'merchant-channel-template' %}" data-no-soft>{% icon "download" %} Unduh template CSV {{ platform_name }}</a></p>{% endif %}
       </div></section>
     {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Hanya pesanan selesai dan batal yang diimpor.</b> Pesanan <b>selesai / berhasil</b> menjadi penjualan, lengkap dengan nomor resi dan nama ekspedisinya. Pesanan <b>batal</b> dicatat dengan statusnya, bukan penjualan. Pesanan yang masih dikemas atau dalam pengiriman dilewati dan masuk saat Anda mengimpor file berikutnya. Pesanan yang sudah pernah diimpor selalu diperbarui: status, resi, dan ekspedisinya, termasuk bila kemudian diretur.</span></div>{% endif %}
     <section class="panel"><header><h2>Agar stok terpotong otomatis</h2></header>
-      <div class="dp-card-body"><ol style="margin:0;padding-left:20px;display:grid;gap:8px;color:var(--ds-ink)">
+      <div class="dp-card-body"><ol style="margin:0;padding-left:22px;list-style:decimal;display:grid;gap:8px;color:var(--ds-ink)">
         {% if platform == "shopee" %}<li>Di <b>Shopee Seller Center → Produk</b>, isi kolom <b>Nomor Referensi SKU</b> tiap produk.</li>
         {% elif platform == "tokopedia" %}<li>Di <b>Seller Center → Produk</b>, isi kolom <b>SKU</b> tiap produk.</li>
         {% else %}<li>Isi kolom <b>sku</b> di file dengan SKU yang ada di katalog.</li>{% endif %}
