@@ -409,6 +409,11 @@ class FinishedOnlyImportTests(TestCase):
             {("Ninja Xpress", "SHP3416253009"), ("Ninja Xpress", "SHP7367041320")})
         self.assertTrue(all(o.channel_order.attention for o in done))                        # flagged for SKU mapping
         self.assertEqual(sorted(set(done.values_list("marketplace_status", flat=True))), ["Selesai"])
+        # SQLite does not enforce string lengths, PostgreSQL does: the placeholder products must fit their columns.
+        placeholders = Product.objects.filter(store=self.store, sku__startswith="[Tanpa SKU")
+        self.assertGreaterEqual(placeholders.count(), 2)
+        for product in placeholders:
+            self.assertLessEqual((len(product.slug), len(product.name), len(product.sku)), (50, 160, 80), product.sku)
 
     def test_an_unknown_sku_still_fails_for_an_order_that_is_not_finished(self):
         data = MarketplaceOrder(external_id="U1", buyer_name="Budi", phone="0812", address="Bandung",

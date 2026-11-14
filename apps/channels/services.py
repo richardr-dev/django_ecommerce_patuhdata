@@ -256,7 +256,7 @@ def _resolve_sku_soft(store, line: "OrderLine"):
     sku = (line.sku or "").strip()
     base_name = (line.name or sku or "Produk Impor")[:140]
     # Slug: use SKU (guaranteed unique per store) or fallback to slugify(name)
-    candidate_slug = slugify(sku) if sku else slugify(base_name)[:50]
+    candidate_slug = (slugify(sku) if sku else slugify(base_name))[:44]  # slug is 50 characters: room for "-12"
     # Ensure slug uniqueness by appending a suffix when collisions exist
     slug = candidate_slug
     suffix = 1
@@ -264,7 +264,7 @@ def _resolve_sku_soft(store, line: "OrderLine"):
         slug = f"{candidate_slug}-{suffix}"
         suffix += 1
 
-    name = f"{base_name} [{sku}]" if sku else base_name[:160]
+    name = (f"{base_name} [{sku}]" if sku else base_name)[:160]
 
     if sku:
         product, _ = Product.objects.get_or_create(
