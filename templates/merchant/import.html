@@ -93,12 +93,14 @@
   <div class="tile accent"><small>Pesanan baru</small><strong>{{ summary.created }}</strong><span>dicatat sebagai penjualan</span></div>
   <div class="tile"><small>Sudah pernah diimpor</small><strong>{{ summary.duplicates }}</strong><span>dilewati, tidak dobel</span></div>
   {% if summary.not_finished %}<div class="tile"><small>Belum selesai</small><strong>{{ summary.not_finished }}</strong><span>dilewati: masih dikemas atau dalam pengiriman</span></div>{% endif %}
-  {% if summary.updated %}<div class="tile"><small>Status diperbarui</small><strong>{{ summary.updated }}</strong><span>pesanan lama</span></div>{% endif %}
+  {% if summary.no_stock %}<div class="tile"><small>Stok belum dikurangi</small><strong style="color:var(--ds-warn)">{{ summary.no_stock }}</strong><span>penjualan dicatat, tapi stok produknya kurang</span></div>
+  {% endif %}{% if summary.updated %}<div class="tile"><small>Status diperbarui</small><strong>{{ summary.updated }}</strong><span>pesanan lama</span></div>{% endif %}
   {% if summary.cancelled %}<div class="tile"><small>Batal / retur</small><strong>{{ summary.cancelled }}</strong><span>penjualannya ditarik kembali</span></div>{% endif %}
   {% if summary.skipped %}<div class="tile"><small>Belum dibayar</small><strong>{{ summary.skipped }}</strong><span>dilewati</span></div>{% endif %}
   {% if summary.errors %}<div class="tile"><small>Gagal</small><strong style="color:var(--ds-bad)">{{ summary.errors|length }}</strong><span>lihat rincian di bawah</span></div>{% endif %}
 </div>
 
+{% if summary.no_stock %}<div class="notice">{% icon "alert" %}<span><b>{{ summary.no_stock }} pesanan selesai dicatat tanpa memotong stok</b> karena stok produknya di sistem kurang. Penjualannya tetap masuk. Tambahkan stok atau terima barang di <a href="{% url 'merchant-entity-list' 'products' %}">katalog</a> agar stok sesuai.</span></div>{% endif %}
 {% if summary.soft %}<div class="notice">{% icon "alert" %}<span>Mode historis: stok <b>tidak</b> dikurangi. Periksa produk di <a href="{% url 'merchant-entity-list' 'products' %}">katalog</a> dan cocokkan SKU-nya.</span></div>{% endif %}
 
 {% if summary.errors %}<section class="panel"><header><h2>Pesanan yang gagal</h2></header><div class="dp-card-body">

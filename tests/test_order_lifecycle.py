@@ -353,3 +353,37 @@ class FinishedOnlyImportTests(TestCase):
         self.assertEqual(sorted(done.values_list("shipping_service", flat=True)), ["Grab", "J&T Express", "J&T Express"])
         self.assertTrue(all(done.values_list("tracking_number", flat=True)))
         self.assertEqual(Order.objects.get(store=self.store, status="cancelled").marketplace_status, "Dibatalkan")
+
+    def test_a_finished_order_is_recorded_even_when_the_stock_is_short(self):
+        short = Product.objects.create(store=self.store, name="Sepatu", slug="sepatu", sku="SEPATU", price=99000)
+        data = MarketplaceOrder(external_id="Z1", buyer_name="Budi", phone="0812", address="Bandung",
+            status_text="Selesai", courier="J&T Express", tracking_number="JY9",
+            lines=[OrderLine(sku="SEPATU", quantity=1, unit_price=Decimal(99000))])
+        summary = import_orders(self.channel, [data], finished_only=True)       # strict mode, no stock at all
+        self.assertEqual((summary["created"], summary["no_stock"], summary["errors"]), (1, 1, []))
+        order = Order.objects.get(external_order_id="Z1")
+        self.assertEqual((order.status, order.tracking_number, order.shipping_service), ("completed", "JY9", "J&T Express"))
+        self.assertIn("Stok SKU SEPATU kurang", order.channel_order.attention)
+        self.assertFalse(InventoryLevel.objects.filter(product=short).exists())      # no stock was taken
+
+    def test_a_short_order_that_is_not_finished_still_fails_in_strict_mode(self):
+        Product.objects.create(store=self.store, name="Sepatu", slug="sepatu", sku="SEPATU", price=99000)
+        data = MarketplaceOrder(external_id="Z2", buyer_name="Budi", phone="0812", address="Bandung",
+            status_text="Perlu dikirim", lines=[OrderLine(sku="SEPATU", quantity=1, unit_price=Decimal(99000))])
+        summary = import_orders(self.channel, [data])
+        self.assertEqual((summary["created"], len(summary["errors"])), (0, 1))
+
+    def test_a_rebuilt_buyer_profile_reuses_its_customer_instead_of_crashing(self):
+        from apps.channels.models import ChannelBuyer
+        from apps.shops.models import Customer
+        def sale(external_id):
+            return MarketplaceOrder(external_id=external_id, buyer_name="Ani", phone="0812", address="Bandung",
+                status_text="Selesai", raw={"tokopedia_username": "ani123"},
+                lines=[OrderLine(sku="KOPI", quantity=1, unit_price=Decimal(15000))])
+        import_orders(self.channel, [sale("R1")], finished_only=True)
+        self.assertEqual(Customer.objects.filter(store=self.store).count(), 1)
+        ChannelBuyer.objects.filter(store=self.store).delete()                 # the clean-up that used to break it
+        summary = import_orders(self.channel, [sale("R2")], finished_only=True)
+        self.assertEqual((summary["created"], summary["errors"]), (1, []))
+        customer, = Customer.objects.filter(store=self.store)
+        self.assertEqual(customer.channel_buyer.external_id, "ani123")

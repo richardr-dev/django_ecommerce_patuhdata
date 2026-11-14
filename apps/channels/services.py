@@ -42,6 +42,10 @@ class ChannelImportError(ValueError):
     pass
 
 
+class StockShortage(ChannelImportError):
+    """The marketplace sold more of a SKU than the system holds."""
+
+
 def _resolve_sku(store, sku):
     variant = ProductVariant.objects.select_related("product").filter(product__store=store,
         sku=sku, is_active=True).first()
@@ -344,6 +348,13 @@ def _ensure_pending_customer(store, buyer):
     if hasattr(buyer, "customer"):
         return  # already linked
     from apps.shops.models import Customer
+    # A buyer profile that was cleared and rebuilt finds the customer it had before: the code is unique.
+    code = f"{buyer.platform.upper()}-{buyer.external_id[:40]}"
+    orphan = Customer.objects.filter(store=store, customer_code=code, channel_buyer__isnull=True).first()
+    if orphan:
+        orphan.channel_buyer = buyer
+        orphan.save(update_fields=["channel_buyer"])
+        return
     display_name = buyer.name or buyer.external_id
     # Truncate display name for Customer.name (max 120)
     Customer.objects.get_or_create(
@@ -362,7 +373,7 @@ def _reserve(item, product, variant, quantity):
     if variant:
         variant = ProductVariant.objects.select_for_update().get(id=variant.id)
         if variant.available_stock < quantity:
-            raise ChannelImportError(_shortage(item.sku, quantity, variant.available_stock))
+            raise StockShortage(_shortage(item.sku, quantity, variant.available_stock))
         reserve_variant(item, variant, quantity)
         return
     levels = list(InventoryLevel.objects.select_for_update().filter(product=product,
@@ -373,7 +384,7 @@ def _reserve(item, product, variant, quantity):
         # The marketplace already sold it. A store that allows stok minus records the shortfall
         # instead of refusing the import; the next goods receipt covers it and corrects the cost.
         if not (levels and product.store.allow_negative_stock and product.cost_price is not None):
-            raise ChannelImportError(_shortage(item.sku, quantity, available))
+            raise StockShortage(_shortage(item.sku, quantity, available))
         from apps.orders.deficits import sell_short
         if available > 0:
             reserve_from_levels(item, levels, available, reason="marketplace_order")
@@ -456,7 +467,7 @@ def import_orders(channel, orders, soft: bool = False,
     )
 
     summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],
-               "soft": soft, "not_finished": 0,
+               "soft": soft, "not_finished": 0, "no_stock": 0,
                "batch_id": str(batch.id)}
     total_amount = Decimal(0)
     known = set()
@@ -472,6 +483,20 @@ def import_orders(channel, orders, soft: bool = False,
             continue
         try:
             order, outcome = import_order_outcome(channel, data, soft=soft, batch=batch)
+        except StockShortage as error:
+            # A finished order is a sale that already happened: refusing it only hides it. Record it
+            # without taking stock (as in historical mode) and flag it, so someone corrects the stock.
+            if not (finished_only and data.state == STATE_COMPLETED):
+                summary["errors"].append(f"{data.external_id}: {error}")
+                continue
+            try:
+                order, outcome = import_order_outcome(channel, data, soft=True, batch=batch)
+            except ChannelImportError as again:
+                summary["errors"].append(f"{data.external_id}: {again}")
+                continue
+            ChannelOrder.objects.filter(order=order).update(
+                attention=f"{error} Penjualan dicatat, stok belum dikurangi."[:300])
+            summary["no_stock"] += 1
         except ChannelImportError as error:
             summary["errors"].append(f"{data.external_id}: {error}")
             continue
