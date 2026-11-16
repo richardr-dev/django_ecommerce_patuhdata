@@ -249,6 +249,11 @@ class Customer(models.Model):
         null=True, blank=True, related_name="customer")
     # Seller's labels, comma separated, e.g. "reseller, vip". Used by segments.
     tags = models.CharField(max_length=300, blank=True)
+    # Selling terms: the invoice form fills the due date and prices the lines from these.
+    payment_terms_days = models.PositiveSmallIntegerField(null=True, blank=True,
+        help_text="Termin pembayaran (hari) untuk invoice kredit. Kosong: ditanyakan setiap kali.")
+    price_list = models.ForeignKey("catalog.PriceList", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="customers", help_text="Daftar harga yang dipakai untuk pelanggan ini.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

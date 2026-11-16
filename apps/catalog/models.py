@@ -440,3 +440,36 @@ class BundleItem(models.Model):
     def unit_price(self):
         return self.variant.price if self.variant_id and getattr(self.variant, "price", None) \
             else self.product.price
+
+
+class PriceList(models.Model):
+    """A customer group's prices (grosir, reseller, proyek). A product with its own row sells at that
+    price; any other product sells at retail less the list's discount. A customer carries one list
+    (``Customer.price_list``) and the invoice form prices its lines from it (``tax/pricing.py``)."""
+    store = models.ForeignKey("shops.Store", on_delete=models.CASCADE, related_name="price_lists")
+    name = models.CharField(max_length=120)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        help_text="Potongan dari harga jual untuk produk yang tidak punya harga khusus di daftar ini.")
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["store", "name"], name="unique_store_price_list")]
+
+    def __str__(self):
+        return self.name
+
+
+class PriceListItem(models.Model):
+    price_list = models.ForeignKey(PriceList, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="list_prices")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="list_prices")
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["product__name"]
+        constraints = [models.UniqueConstraint(fields=["price_list", "product", "variant"],
+            name="unique_price_list_product_variant")]

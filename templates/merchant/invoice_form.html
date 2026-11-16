@@ -37,7 +37,7 @@
 
 <form method="post" id="inv-form" data-unsaved class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
   {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
-  <input type="hidden" name="customer_id" id="customer-id" value="{{ initial.customer.id|default:'' }}">
+  <input type="hidden" name="customer_id" id="customer-id" value="{{ initial.customer.id|default:'' }}" data-list="{% if initial.customer and initial.customer.price_list_id %}{{ initial.customer.price_list_id }}{% endif %}" data-terms="{% if initial.customer and initial.customer.payment_terms_days != None %}{{ initial.customer.payment_terms_days }}{% endif %}">
 
   <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
     <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
@@ -189,7 +189,7 @@
   </form>
 </dialog>
 
-{{ catalog|json_script:"catalog-data" }}
+{{ catalog|json_script:"catalog-data" }}{{ price_lists|json_script:"price-lists" }}
 {{ initial.lines|json_script:"initial-lines" }}
 <script>
 (function () {
@@ -281,10 +281,28 @@
   }
   var partnerEl = document.getElementById("f-partner");
   var activePartner = function () { return partnerEl ? partnerEl.value : ""; };
-  function priceFor(p) {     // the mitra's own price, else the general mitra price, else retail
-    var id = activePartner(); if (!id) return p.price;
-    if (p.mitra && p.mitra[id] !== undefined) return parseFloat(p.mitra[id]);
-    return p.ab_price !== "" ? parseFloat(p.ab_price) : p.price;
+  var priceLists = JSON.parse(document.getElementById("price-lists").textContent || "{}");
+  var customerEl = document.getElementById("customer-id");
+  var activeList = customerEl.dataset.list || "";     // the customer's price list (tax/pricing.py)
+  function priceFor(p) {     // mitra price list, else the customer's price list, else retail
+    var id = activePartner();
+    if (id) {
+      if (p.mitra && p.mitra[id] !== undefined) return parseFloat(p.mitra[id]);
+      return p.ab_price !== "" ? parseFloat(p.ab_price) : p.price;
+    }
+    if (activeList) {
+      if (p.lists && p.lists[activeList] !== undefined) return parseFloat(p.lists[activeList]);
+      var off = priceLists[activeList] ? parseFloat(priceLists[activeList].discount) : 0;
+      if (off) return Math.round(p.price * (1 - off / 100));
+    }
+    return p.price;
+  }
+  function repriceAuto() {   // only the prices the system chose follow a change of list
+    rows.querySelectorAll("tr").forEach(function (tr) {
+      var price = tr.querySelector("[data-price]"), p = byId[tr.querySelector("[name='product[]']").value];
+      if (p && price && price.dataset.auto === "1") setAuto(price, p);
+    });
+    calc();
   }
   function setAuto(price, p) {          // a price the system filled in: it follows the channel
     price.value = Math.round(priceFor(p)).toLocaleString("id-ID"); price.dataset.auto = "1";
@@ -384,8 +402,20 @@
 
   /* ── customer picker and quick add ─────────────────────────────────────── */
   var q = document.getElementById("cust-q"), box = document.getElementById("cust-results"), timer;
+  function applyTerms(days) {   // the customer's payment terms: credit, due in N days
+    if (days === null || days === undefined || days === "" || {% if mode == 'edit' %}true{% else %}false{% endif %}) return;
+    var credit = document.querySelector("input[name='payment_status'][value='credit']");
+    if (credit) { credit.checked = true; credit.dispatchEvent(new Event("change", {bubbles: true})); }
+    if (![].some.call(terms.options, function (o) { return o.value === String(days); })) {
+      var opt = document.createElement("option"); opt.value = String(days); opt.textContent = days + " hari"; terms.appendChild(opt);
+    }
+    terms.value = String(days); setDue();
+  }
   function applyCustomer(c) {
     document.getElementById("customer-id").value = c.id;
+    activeList = c.price_list_id || ""; repriceAuto();
+    if (activeList && priceLists[activeList] && window.pdToast) window.pdToast("Daftar harga " + priceLists[activeList].name + " dipakai.", "success");
+    applyTerms(c.payment_terms_days);
     document.getElementById("f-name").value = c.name || "";
     document.getElementById("f-company").value = c.company_name || "";
     document.getElementById("f-npwp").value = c.npwp || "";
@@ -422,8 +452,10 @@
     }, 200);
   });
   q.addEventListener("blur", function () { setTimeout(function () { box.hidden = true; }, 180); });
+  if (customerEl.dataset.terms !== undefined && customerEl.dataset.terms !== "" && !document.getElementById("f-due").value) applyTerms(customerEl.dataset.terms);
   document.getElementById("cust-clear").addEventListener("click", function () {
     document.getElementById("customer-id").value = "";
+    activeList = ""; repriceAuto();
     document.getElementById("cust-chip").style.display = "none";
   });
   document.getElementById("customer-form").addEventListener("submit", function (e) {

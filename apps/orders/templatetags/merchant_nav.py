@@ -46,6 +46,7 @@ NAV = [
             Link("Invoice penjualan", "merchant-sales-invoices",
                 match=("/books/sales/invoices/",)),
             Link("Penawaran", "merchant-quotes"),
+            Link("Daftar harga", "merchant-price-lists", match=("/books/sales/price-lists/",)),
             Link("Retur & penukaran", "merchant-returns"),
             Link("Rekap produksi", "merchant-production-recap"),
         ]),
@@ -206,6 +207,7 @@ CREATE = [
         ("Terima pembayaran", "merchant-receive-payment", "cash", (), "", "sales.edit"),
         ("Nota kredit", "merchant-credit-notes", "undo", (), "", "sales.edit"),  # picks the invoice first
         ("Pelanggan", "merchant-customers", "users", (), "buka=customer-dialog", "customers.edit"),
+        ("Daftar harga", "merchant-price-lists", "tag", (), "buka=price-list-dialog", "sales.edit"),
     ]),
     ("Pembelian", [
         ("Pesanan pembelian", "merchant-purchase-order-new", "clipboard", (), "", "purchase.order"),

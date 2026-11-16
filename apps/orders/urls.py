@@ -122,6 +122,8 @@ urlpatterns = [
     path("books/customers/export/", segment_views.merchant_customers_export, name="merchant-customers-export"),
     path("books/customers/duplicates/", segment_views.merchant_customer_duplicates, name="merchant-customer-duplicates"),
     path("books/customers/search/", segment_views.merchant_customer_search, name="merchant-customer-search"),
+    path("books/customers/<uuid:customer_id>/terms/", segment_views.merchant_customer_terms,
+        name="merchant-customer-terms"),
     path("books/customers/<uuid:customer_id>/tags/", segment_views.merchant_customer_tags,
         name="merchant-customer-tags"),
     path("books/broadcasts/", segment_views.merchant_broadcasts, name="merchant-broadcasts"),

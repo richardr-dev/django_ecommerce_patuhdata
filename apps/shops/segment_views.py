@@ -95,7 +95,7 @@ def merchant_customers(request):
     tags = sorted({tag for value in Customer.objects.filter(store=store).exclude(tags="")
         .values_list("tags", flat=True) for tag in (t.strip() for t in value.split(",")) if tag})
     return render_partial(request, "merchant/customers.html", "merchant/_customers_list.html",
-        _merchant_context(request, store, channel_choices=channel_choices,
+        _merchant_context(request, store, price_lists=__import__("apps.catalog.models", fromlist=["PriceList"]).PriceList.objects.filter(store=store, is_active=True), channel_choices=channel_choices,
         segment_channels=segment.get("channel", "").split(","), provinces=location_facets(store),
         include_pending=include_pending,
         customers=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
@@ -129,7 +129,12 @@ def merchant_customer_new(request):
     if existing:
         messages.info(request, f"Nomor {phone} sudah terdaftar atas nama {existing.name}; profil itu yang dibuka.")
         return redirect("merchant-customer-detail", customer_id=existing.id)
+    from apps.catalog.models import PriceList
+    days = request.POST.get("payment_terms_days", "").strip()
+    list_id = request.POST.get("price_list", "").strip()
     customer = Customer.objects.create(store=store, name=name, phone=phone,
+        payment_terms_days=int(days) if days.isdigit() else None,
+        price_list=PriceList.objects.filter(store=store, pk=list_id).first() if list_id.isdigit() else None,
         email=request.POST.get("email", "").strip()[:254],
         company_name=request.POST.get("company_name", "").strip()[:160], npwp=npwp,
         address=request.POST.get("address", "").strip(), tags=request.POST.get("tags", "").strip()[:300],
@@ -137,6 +142,30 @@ def merchant_customer_new(request):
     AuditLog.objects.create(store=store, actor=request.user, action="customer.created",
         object_type="Customer", object_id=str(customer.pk), details={"name": name, "from": "pelanggan page"})
     messages.success(request, f"Pelanggan {customer.name} ditambahkan.")
+    return redirect("merchant-customer-detail", customer_id=customer.id)
+
+
+@login_required(login_url="/login/")
+def merchant_customer_terms(request, customer_id):
+    """Selling terms on a customer: payment terms (days) and the price list the invoice form applies."""
+    from apps.catalog.models import PriceList
+    from apps.orders.views import _require_roles, _staff_store
+
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, EDIT_ROLES)
+    customer = get_object_or_404(Customer, id=customer_id, store=store)
+    days = request.POST.get("payment_terms_days", "").strip()
+    customer.payment_terms_days = int(days) if days.isdigit() else None
+    list_id = request.POST.get("price_list", "").strip()
+    customer.price_list = PriceList.objects.filter(store=store, pk=list_id).first() if list_id.isdigit() else None
+    customer.save(update_fields=["payment_terms_days", "price_list"])
+    AuditLog.objects.create(store=store, actor=request.user, action="customer.terms_updated",
+        object_type="Customer", object_id=str(customer.pk), details={
+            "payment_terms_days": customer.payment_terms_days,
+            "price_list": customer.price_list.name if customer.price_list else ""})
+    messages.success(request, "Ketentuan penjualan disimpan.")
     return redirect("merchant-customer-detail", customer_id=customer.id)
 
 
@@ -247,6 +276,8 @@ def merchant_customer_search(request):
         results.append({
             "id": str(c.id),
             "name": c.name,
+            "price_list_id": str(c.price_list_id) if c.price_list_id else "",
+            "payment_terms_days": c.payment_terms_days,
             "company_name": c.company_name,
             "phone": c.phone,
             "email": c.email,

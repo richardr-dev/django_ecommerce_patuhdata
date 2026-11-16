@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}{{ price_list.name }} · Daftar harga{% endblock %}{% block content %}
+<nav class="dp-crumb" aria-label="Breadcrumb"><a href="{% url 'merchant-price-lists' %}">Daftar harga</a> › <span>{{ price_list.name }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">{{ price_list.name }} {% if not price_list.is_active %}<span class="pill pill-void">Nonaktif</span>{% endif %}</h1>
+  <p class="dp-sub">{% if price_list.discount_percent %}Produk tanpa harga khusus: harga jual dikurangi {{ price_list.discount_percent|floatformat:"-2" }}%.{% else %}Produk tanpa harga khusus dijual pada harga jual biasa.{% endif %} Dipakai oleh {{ customers|length }} pelanggan.</p></div></div>
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+<section class="panel !mb-0"><header><div><h2>Harga per produk</h2><p>Produk di sini dijual pada harga ini untuk pelanggan dengan daftar {{ price_list.name }}.</p></div></header>
+  {% if can_edit %}<form method="post" class="dp-card-body" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">{% csrf_token %}<input type="hidden" name="action" value="add">
+    <label class="field" style="flex:2;min-width:220px"><span>Produk</span><select name="product" required><option value="">Pilih produk…</option>{% for p in products %}<option value="{{ p.pk }}">{{ p.sku }} — {{ p.name }} (Rp{{ p.price|floatformat:"0g" }})</option>{% endfor %}</select></label>
+    <label class="field" style="flex:1;min-width:150px"><span>Harga di daftar ini</span><input name="price" data-rupiah required inputmode="numeric" placeholder="0"></label>
+    <button class="btn-primary">Tambah</button></form>{% endif %}
+  {% if items %}<table class="tbl"><thead><tr><th>Produk</th><th class="num">Harga jual</th><th class="num">Harga daftar</th><th class="num">Selisih</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>
+  {% for item in items %}<tr><td><b>{{ item.product.name }}</b><small style="display:block;color:var(--ds-muted)">{{ item.product.sku }}</small></td><td class="num">{{ item.product.price|rp }}</td><td class="num"><b>{{ item.price|rp }}</b></td>
+    <td class="num">{% if item.product.price %}{% widthratio item.price item.product.price 100 %}%{% else %}—{% endif %}</td>
+    {% if can_edit %}<td class="num" data-no-row><form method="post" data-confirm="Hapus harga khusus {{ item.product.name }} dari daftar ini?" data-confirm-ok="Hapus">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="item" value="{{ item.pk }}"><button class="btn btn-danger" style="height:30px;padding:0 12px">Hapus</button></form></td>{% endif %}</tr>{% endfor %}
+  </tbody></table>{% else %}<p class="px-5 py-8 text-center text-sm" style="color:var(--ds-muted)">Belum ada harga khusus. {% if price_list.discount_percent %}Diskon umum {{ price_list.discount_percent|floatformat:"-2" }}% tetap berlaku.{% endif %}</p>{% endif %}
+</section>
+<div class="grid gap-5 content-start">
+<section class="panel !mb-0"><header><h2>Pengaturan daftar</h2></header>
+  <form method="post" class="dp-card-body" style="display:grid;gap:12px" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="update">
+    <label class="field"><span>Nama</span><input name="name" value="{{ price_list.name }}" maxlength="120" required{% if not can_edit %} disabled{% endif %}></label>
+    <label class="field"><span>Diskon umum (%)</span><input name="discount_percent" type="number" min="0" max="100" step="0.01" value="{{ price_list.discount_percent|floatformat:'-2' }}"{% if not can_edit %} disabled{% endif %}></label>
+    <label class="field"><span>Catatan</span><textarea name="notes" rows="2"{% if not can_edit %} disabled{% endif %}>{{ price_list.notes }}</textarea></label>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" name="is_active" value="1"{% if price_list.is_active %} checked{% endif %}{% if not can_edit %} disabled{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> Aktif (bisa dipilih di pelanggan)</label>
+    {% if can_edit %}<div><button class="btn-primary">Simpan</button></div>{% endif %}
+  </form></section>
+<section class="panel !mb-0"><header><div><h2>Pelanggan dengan daftar ini</h2><p>Pasang daftar harga di halaman pelanggan.</p></div></header>
+  <div class="grid gap-1 p-3">{% for c in customers %}<a class="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" href="{% url 'merchant-customer-detail' c.id %}"><span class="bb-avatar !h-8 !w-8 !text-xs">{{ c.name|slice:":1"|upper }}</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ c.name }}{% if c.company_name %} <small style="color:var(--ds-muted)">· {{ c.company_name }}</small>{% endif %}</span></a>{% empty %}<p class="px-3 py-6 text-center text-sm" style="color:var(--ds-muted)">Belum ada pelanggan yang memakai daftar ini.</p>{% endfor %}</div></section>
+</div></div>
+{% endblock %}

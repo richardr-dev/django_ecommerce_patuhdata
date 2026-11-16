@@ -158,6 +158,18 @@
       <p class="text-sm text-gray-700">{{ customer.created_at|date:"d M Y" }}</p>
     </div>
 
+    <div class="pt-2 border-t border-gray-100">
+      <p class="text-xs text-gray-400 mb-1">Ketentuan penjualan</p>
+      <p class="text-sm text-gray-700">{% if customer.payment_terms_days != None %}Termin {{ customer.payment_terms_days }} hari{% else %}Termin ditanyakan tiap invoice{% endif %} · {% if customer.price_list %}Daftar harga <b>{{ customer.price_list.name }}</b>{% else %}Harga jual (retail){% endif %}</p>
+      {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
+      <form method="post" action="{% url 'merchant-customer-terms' customer.id %}" class="mt-2 grid gap-2">{% csrf_token %}
+        <label class="field"><span>Termin pembayaran (hari)</span><input name="payment_terms_days" type="number" min="0" max="365" value="{{ customer.payment_terms_days|default_if_none:'' }}" placeholder="kosong: ditanyakan"></label>
+        <label class="field"><span>Daftar harga</span><select name="price_list"><option value="">Harga jual (retail)</option>{% for pl in price_lists %}<option value="{{ pl.id }}"{% if customer.price_list_id == pl.id %} selected{% endif %}>{{ pl.name }}{% if pl.discount_percent %} (−{{ pl.discount_percent|floatformat:"-2" }}%){% endif %}</option>{% endfor %}</select></label>
+        <button class="btn">Simpan ketentuan</button>
+      </form>
+      {% endif %}
+    </div>
+
     {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
     <form method="post" action="{% url 'merchant-customer-tags' customer.id %}" class="pt-2 border-t border-gray-100">
       {% csrf_token %}

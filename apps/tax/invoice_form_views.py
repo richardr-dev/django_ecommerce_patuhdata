@@ -115,9 +115,11 @@ def _catalog(store):
     for product_id, partner_id, price in PartnerProductPrice.objects.filter(
             partner__store=store).values_list("product_id", "partner_id", "price"):
         mitra.setdefault(product_id, {})[str(partner_id)] = f"{price:.0f}"
+    from .pricing import price_map
+    lists = price_map(store)
     return [{"id": str(p.pk), "sku": p.sku, "name": p.name, "price": f"{p.price:.0f}",
         "ab_price": f"{p.ab_shop_price:.0f}" if p.ab_shop_price is not None else "",
-        "mitra": mitra.get(p.pk, {}),
+        "mitra": mitra.get(p.pk, {}), "lists": lists.get(p.pk, {}),
         "stock": getattr(p, "stock_available", None)} for p in products]
 
 
@@ -184,6 +186,9 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                 "customer": customer, "notes": post.get("notes", ""),
                 "issued_on": parse_date(post.get("issued_on", "")) or timezone.localdate()}
             due = parse_date(post.get("due_date", ""))
+            if due is None and post.get("payment_status") == "credit" and not editing:
+                from .pricing import due_date_for  # the customer's terms fill a due date left empty
+                due = due_date_for(customer, common["issued_on"])
             reference = post.get("reference", "")
             if editing:
                 invoice = update_sales_invoice(source, **common, buyer_address=post.get("address", ""),
@@ -233,6 +238,7 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
     vat_rate, _ = vat_for(store, Decimal(100), is_pkp=source.seller_is_pkp if editing else None)
     return render(request, "merchant/invoice_form.html", _merchant_context(request, store,
         mode=mode, source=source, locks=locks, initial=initial, terms=TERMS, vat_rate=vat_rate,
+        price_lists=__import__("apps.tax.pricing", fromlist=["lists_for_form"]).lists_for_form(store),
         channels=[c for c in Order.CHANNELS if c[0] not in {"pos", "abshop"}],
         catalog=_catalog(store), partners=_partners(store), idem_key=idempotency.new_key(),
         today=timezone.localdate().isoformat(), post=request.POST))

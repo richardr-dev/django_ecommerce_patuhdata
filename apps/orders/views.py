@@ -2412,7 +2412,7 @@ def merchant_customer_detail(request, customer_id):
     start, end, _label = date_range(request.GET, tz.localdate())
     spend = sold.aggregate(total=Sum("total"))["total"] or 0
     return render_partial(request, "merchant/customer_detail.html", "merchant/_customer_history.html",
-        _merchant_context(request, store,
+        _merchant_context(request, store, price_lists=__import__("apps.catalog.models", fromlist=["PriceList"]).PriceList.objects.filter(store=store, is_active=True),
         history=history, history_count=history.count(), history_spend=spend,
         history_units=sum(row["units"] or 0 for row in rows), purchased=rows,
         active_filters=active_filters, presets=PRESETS, range_preset=request.GET.get("range", ""),

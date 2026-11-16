@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import public_views, receivable_views, sales_views, views, views_annual
+from . import price_list_views, public_views, receivable_views, sales_views, views, views_annual
 
 urlpatterns = [
     path("i/<str:token>/", public_views.public_invoice, name="invoice-public"),
@@ -30,6 +30,8 @@ urlpatterns = [
         name="merchant-customer-credit"),
     path("books/sales/invoices/<uuid:invoice_id>/surat-jalan/", sales_views.merchant_delivery_note,
         name="merchant-delivery-note"),
+    path("books/sales/price-lists/", price_list_views.merchant_price_lists, name="merchant-price-lists"),
+    path("books/sales/price-lists/<int:list_id>/", price_list_views.merchant_price_list, name="merchant-price-list"),
     path("books/sales/quotes/", sales_views.merchant_quotes, name="merchant-quotes"),
     path("books/sales/quotes/new/", sales_views.merchant_quote_edit, name="merchant-quote-new"),
     path("books/sales/quotes/<uuid:quote_id>/", sales_views.merchant_quote_detail,

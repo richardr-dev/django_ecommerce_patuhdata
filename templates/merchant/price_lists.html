@@ -1,0 +1,22 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Daftar harga{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Daftar harga</h1><p>Harga per kelompok pelanggan: grosir, reseller, proyek. Pasang daftar pada pelanggan, dan invoice untuk pelanggan itu memakai harganya.</p></div>
+  {% if can_edit %}<div class="dp-actions"><button type="button" class="btn-primary" data-open="price-list-dialog">{% icon "plus" %} Daftar harga baru</button></div>{% endif %}</div>
+<section class="panel">
+  {% if lists %}<table class="tbl"><thead><tr><th>Nama</th><th class="num">Diskon umum</th><th class="num">Produk berharga khusus</th><th class="num">Pelanggan</th><th>Status</th></tr></thead>
+  <tbody>{% for row in lists %}<tr><td><a class="rowlink" href="{% url 'merchant-price-list' row.pk %}"><b>{{ row.name }}</b></a>{% if row.notes %}<small style="display:block;color:var(--ds-muted)">{{ row.notes|truncatechars:80 }}</small>{% endif %}</td>
+    <td class="num">{% if row.discount_percent %}{{ row.discount_percent|floatformat:"-2" }}%{% else %}—{% endif %}</td><td class="num">{{ row.items.all|length }}</td><td class="num">{{ row.customers.all|length }}</td>
+    <td>{% if row.is_active %}<span class="pill pill-ok">Aktif</span>{% else %}<span class="pill pill-void">Nonaktif</span>{% endif %}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<div class="empty-box"><span class="bb-bubble">{% icon "tag" %}</span><b>Belum ada daftar harga.</b><span>Buat satu, lalu isi harga per produk atau cukup pasang diskon umum.</span></div>{% endif %}
+</section>
+{% if can_edit %}<dialog id="price-list-dialog" class="pd-dialog" aria-labelledby="pl-title" style="max-width:520px">
+  <form method="post" data-unsaved>{% csrf_token %}
+    <header><h2 id="pl-title">Daftar harga baru</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <label class="field"><span>Nama</span><input name="name" maxlength="120" required autofocus placeholder="mis. Grosir, Reseller, Proyek"></label>
+      <label class="field"><span>Diskon umum (%)</span><input name="discount_percent" type="number" min="0" max="100" step="0.01" value="0"><small style="color:var(--ds-muted)">Berlaku untuk produk yang tidak diberi harga khusus di daftar ini.</small></label>
+      <label class="field"><span>Catatan</span><textarea name="notes" rows="2"></textarea></label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Buat daftar harga</button></footer>
+  </form>
+</dialog>{% include "merchant/_dialog_js.html" %}{% endif %}
+{% endblock %}
