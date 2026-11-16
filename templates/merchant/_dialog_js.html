@@ -5,4 +5,8 @@ document.querySelectorAll("[data-open]").forEach(function (el) {
 document.querySelectorAll("dialog [data-close]").forEach(function (el) {
   el.addEventListener("click", function () { el.closest("dialog").close(); });
 });
+(function () {  /* /page/?buka=<dialog id>: "Buat baru" lands on the list with its dialog already open */
+  var wanted = new URLSearchParams(window.location.search).get("buka"), box = wanted && document.getElementById(wanted);
+  if (box && box.tagName === "DIALOG" && !box.open) { box.showModal(); var first = box.querySelector("input:not([type=hidden]), select, textarea"); if (first) first.focus(); }
+})();
 </script>

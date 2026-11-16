@@ -1042,8 +1042,9 @@ def _merchant_context(request, store, **context):
 def _require_editor(request, store):
     if store.owner_id == request.user.id:
         return
+    from apps.shops.permissions import roles
     membership = store.staff_members.filter(user=request.user).first()
-    if not membership or membership.role not in {"admin", "manager", "ops"}:
+    if not membership or membership.role not in roles("catalog.edit"):
         raise Http404
 
 

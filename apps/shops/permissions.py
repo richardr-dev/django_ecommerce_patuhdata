@@ -38,6 +38,7 @@ MATRIX = {
     "giftcards.manage": ("Penjualan", "Mengelola kartu hadiah", {"admin", "manager", "customer_service"}),
     "settlement.manage": ("Mitra", "Settlement dan pembayaran mitra konsinyasi", {"admin", "manager", "finance"}),
     "settlement.view": ("Mitra", "Melihat settlement mitra", {"admin", "manager", "finance", "viewer", "bookkeeper"}),
+    "catalog.edit": ("Stok", "Menambah dan mengubah produk, kategori, gudang, dan impor produk", {"admin", "manager", "ops"}),
     "stock.fulfil": ("Stok", "Memproses pesanan dan stok keluar", {"admin", "manager", "ops", "warehouse"}),
     "purchase.order": ("Stok", "Membuat dan menutup pesanan pembelian ke supplier", {"admin", "manager", "finance", "ops", "bookkeeper", "ap_staff"}),
     "stock.count": ("Stok", "Membuat dan mengisi hasil stok opname", {"admin", "manager", "ops", "warehouse"}),

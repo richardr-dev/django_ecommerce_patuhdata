@@ -1,9 +1,9 @@
 {% load icons %}
 <details class="create-menu">
   <summary class="btn-primary">{% icon "plus" %}<span>Buat baru</span></summary>
-  <div class="menu-panel" role="menu">
-    {% for item in items %}
-    <a href="{{ item.href }}" role="menuitem">{% icon item.icon %}<span>{{ item.label }}</span></a>
-    {% endfor %}
+  <div class="menu-panel create-panel" role="menu">
+    {% for group in groups %}<div class="create-group"><p>{{ group.title }}</p>
+      {% for item in group.items %}<a href="{{ item.href }}" role="menuitem">{% icon item.icon %}<span>{{ item.label }}</span></a>{% endfor %}
+    </div>{% endfor %}
   </div>
 </details>

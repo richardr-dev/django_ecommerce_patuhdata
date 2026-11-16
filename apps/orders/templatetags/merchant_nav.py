@@ -195,16 +195,46 @@ NAV = [
     ]),
 ]
 
-# Shortcuts of the header "Buat baru" menu.
+# The header "Buat baru" menu: every document a person starts by hand, grouped like the sidebar.
+# ``query`` lands on a list page with its dialog open (``?buka=<dialog id>``, see _dialog_js.html).
+# A sale is always an invoice: there is no "Pesanan" here on purpose (tests pin it).
 CREATE = [
-    ("Invoice", "merchant-invoice-new", "file"),
-    ("Penawaran", "merchant-quote-new", "note"),
-    ("Terima pembayaran", "merchant-receive-payment", "cash"),
-    ("Tagihan supplier", "merchant-bill-new", "truck"),
-    ("Biaya operasional", "merchant-expenses", "wallet"),
-    ("Terima uang", "merchant-cash-new", "arrow-in"),
-    ("Jurnal umum", "merchant-journal-new", "book"),
-    ("Impor pesanan marketplace", "merchant-import", "upload"),
+    ("Penjualan", [
+        ("Invoice", "merchant-invoice-new", "file", (), "", "sales.edit"),
+        ("Penawaran", "merchant-quote-new", "note", (), "", "sales.edit"),
+        ("Invoice berulang", "merchant-recurring-new", "calendar", (), "", "sales.edit"),
+        ("Terima pembayaran", "merchant-receive-payment", "cash", (), "", "sales.edit"),
+        ("Nota kredit", "merchant-credit-notes", "undo", (), "", "sales.edit"),  # picks the invoice first
+        ("Pelanggan", "merchant-customers", "users", (), "buka=customer-dialog", "customers.edit"),
+    ]),
+    ("Pembelian", [
+        ("Pesanan pembelian", "merchant-purchase-order-new", "clipboard", (), "", "purchase.order"),
+        ("Penerimaan barang", "merchant-goods-receipt-new", "box", (), "", "stock.receive"),
+        ("Tagihan supplier", "merchant-bill-new", "truck", (), "", "books.edit"),
+        ("Nota debit", "merchant-debit-notes", "undo", (), "", "books.edit"),  # picks the bill first
+        ("Supplier", "merchant-suppliers", "handshake", (), "buka=add-supplier", "books.edit"),
+    ]),
+    ("Kas & bank", [
+        ("Biaya operasional", "merchant-expenses", "wallet", (), "buka=expense-dialog", "books.edit"),
+        ("Terima uang", "merchant-cash-new", "arrow-in", (), "kind=receive", "books.edit"),
+        ("Kirim uang", "merchant-cash-new", "arrow-out", (), "kind=spend", "books.edit"),
+        ("Transfer antar rekening", "merchant-cash-new", "swap", (), "kind=transfer", "books.edit"),
+        ("Pinjaman", "merchant-loans", "bank", (), "buka=loan-dialog", "books.edit"),
+    ]),
+    ("Persediaan", [
+        ("Produk", "merchant-entity-new", "tag", ("products",), "", "catalog.edit"),
+        ("Stok opname", "merchant-stock-counts", "layers", (), "", "stock.count"),
+        ("Permintaan stok", "merchant-stock-request-new", "truck", (), "", "stock.request"),
+        ("Transfer antar brand", "merchant-intercompany-new", "swap", (), "", "intercompany.create"),
+        ("Impor produk", "merchant-product-import", "upload", (), "", "catalog.edit"),
+        ("Impor pesanan marketplace", "merchant-import", "upload", (), "", "channels.manage"),
+    ]),
+    ("Akuntansi", [
+        ("Jurnal umum", "merchant-journal-new", "book", (), "", "books.edit"),
+        ("Jurnal penyesuaian", "merchant-adjustments", "book", (), "", "books.edit"),
+        ("Aset tetap", "merchant-assets", "bank", (), "buka=asset-dialog", "books.edit"),
+        ("Saldo awal", "merchant-opening-balances", "clipboard", (), "", "books.edit"),
+    ]),
 ]
 
 
@@ -290,7 +320,17 @@ def merchant_nav(context):
         "home_href": _url("merchant-dashboard")}
 
 
-@register.inclusion_tag("merchant/_create_menu.html")
-def merchant_create_menu():
-    return {"items": [{"label": label, "href": _url(name), "icon": icon}
-        for label, name, icon in CREATE if _url(name)]}
+@register.inclusion_tag("merchant/_create_menu.html", takes_context=True)
+def merchant_create_menu(context):
+    """Only what this person may start, by the permission key each entry names (the owner is an admin)."""
+    from apps.shops.permissions import holds
+    role = context.get("merchant_real_role", "")
+    role = "admin" if role == "owner" else role
+    groups = []
+    for title, entries in CREATE:
+        items = [{"label": label, "href": href + (f"?{query}" if query else ""), "icon": icon}
+            for label, name, icon, args, query, permission in entries
+            if holds(role, permission) and (href := _url(name, args))]
+        if items:
+            groups.append({"title": title, "items": items})
+    return {"groups": groups}

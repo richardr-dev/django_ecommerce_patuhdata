@@ -23,7 +23,7 @@ EXPECTED = {
     "sales.view": {"admin", "manager", "ops", "finance", "viewer", "bookkeeper", "ar_staff", "tax_staff"}, "sales.edit": {"admin", "manager", "ops", "finance", "bookkeeper", "ar_staff"},
     "orders.manage": {"admin", "manager", "ops", "customer_service"}, "giftcards.manage": {"admin", "manager", "customer_service"},
     "settlement.manage": {"admin", "manager", "finance"}, "settlement.view": {"admin", "manager", "finance", "viewer", "bookkeeper"},
-    "stock.fulfil": {"admin", "manager", "ops", "warehouse"}, "stock.receive": {"admin", "manager", "finance", "warehouse", "bookkeeper", "ap_staff"},
+    "catalog.edit": {"admin", "manager", "ops"}, "stock.fulfil": {"admin", "manager", "ops", "warehouse"}, "stock.receive": {"admin", "manager", "finance", "warehouse", "bookkeeper", "ap_staff"},
     "stock.oversell": {"admin", "manager"},
     "stock.request": {"admin", "manager", "ops", "warehouse"},
     "stock.request_approve": {"admin", "manager"},
