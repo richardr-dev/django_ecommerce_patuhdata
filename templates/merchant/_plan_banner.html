@@ -1,7 +1,7 @@
 {% load icons %}{% with sub=subscription_status %}
 <div class="mb-5 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm ring-1 {% if tone == 'bad' or sub.grace %}bg-rose-50 text-rose-900 ring-rose-100{% else %}bg-blue-50 text-blue-900 ring-blue-100{% endif %}">
   <span class="flex-1">
-  {% if tone == "bad" %}⏰ <b>{% if sub.trial %}Masa coba gratis{% else %}Paket {{ sub.plan.name }}{% endif %} sudah berakhir.</b> Toko dan produk tetap tampil, tetapi Anda belum bisa menambah produk.
+  {% if tone == "bad" %}⏰ <b>{% if sub.trial %}Masa coba gratis{% else %}Paket {{ sub.plan.name }}{% endif %} sudah berakhir.</b> Toko online dan produk tetap tampil, tetapi Anda belum bisa menambah produk.
   {% elif tone == "renewal" %}<b>Tagihan {{ sub.renewal.plan.name }} Rp{{ sub.renewal.amount|floatformat:"0g" }}</b> {% if sub.grace %}sudah lewat jatuh tempo; fitur tetap aktif beberapa hari lagi.{% else %}jatuh tempo {{ sub.renewal.due_at|date:"d M Y" }}.{% endif %}
   {% elif tone == "trial" %}<b>Masa coba gratis: {{ sub.days_left }} hari lagi</b> (sampai {{ sub.ends_at|date:"d M Y" }}). Semua fitur {{ sub.plan.name }} aktif.
   {% else %}Paket {{ sub.plan.name }} berakhir {{ sub.ends_at|date:"d M Y" }}.{% endif %}

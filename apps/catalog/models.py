@@ -27,7 +27,7 @@ def ensure_store_sku_available(store_id, sku, *, product_id=None, variant_id=Non
     if variant_id:
         variants = variants.exclude(id=variant_id)
     if products.exists() or variants.exists():
-        raise ValidationError({"sku": f"SKU {sku} sudah dipakai produk atau varian lain di toko ini."})
+        raise ValidationError({"sku": f"SKU {sku} sudah dipakai produk atau varian lain di perusahaan ini."})
 
 
 def _lock_store(store_id):

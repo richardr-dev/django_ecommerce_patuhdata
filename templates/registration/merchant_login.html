@@ -3,11 +3,11 @@
 <title>Masuk · {{ platform_name }}</title><meta name="robots" content="noindex">
 <link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
 <body class="ln"><main class="ln-wrap">
   <div class="ln-card">
-    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo.png' %}" alt="{{ platform_name }}" width="179" height="44"></div>
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"></div>
     <h1>Masuk</h1>
     <p class="ln-sub">Gunakan email atau nomor WhatsApp yang terdaftar.</p>
     {% if request.GET.keluar %}<p class="ln-msg ok" role="status">Anda sudah keluar.</p>{% endif %}
@@ -19,7 +19,7 @@
       <input type="hidden" name="next" value="{{ next|default:'/books/' }}">
       <button class="ln-btn" id="ln-submit">Masuk</button>
     </form>
-    <p class="ln-alt">Akun dibuat oleh partner yang memasang sistem ini.</p>
+    <p class="ln-alt">Belum punya akun? <a href="{% url 'register' %}">Hubungi tim sales</a></p>
   </div>
   <p class="ln-foot">{{ platform_company_name }}</p>
 </main>

@@ -1,8 +1,8 @@
 {% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Stok di mitra{% endblock %}
 {% block content %}
-<div class="pg-head"><div><span class="pg-kicker">Konsinyasi</span><h1>Stok di mitra</h1><p>Barang yang dititipkan ke mitra tetap milik toko sampai terjual. Mengirim barang ke mitra tidak dihitung sebagai penjualan; penjualan tercatat saat settlement ditagihkan.</p></div></div>
-<div class="tiles"><div class="tile accent"><small>Nilai stok di mitra</small><strong>{{ total_value|rp }}</strong><span>pada harga pokok, masuk persediaan toko</span></div><div class="tile"><small>Jenis barang</small><strong>{{ rows|length }}</strong><span>item yang masih dipegang mitra</span></div></div>
+<div class="pg-head"><div><span class="pg-kicker">Konsinyasi</span><h1>Stok di mitra</h1><p>Barang yang dititipkan ke mitra tetap milik perusahaan sampai terjual. Mengirim barang ke mitra tidak dihitung sebagai penjualan; penjualan tercatat saat settlement ditagihkan.</p></div></div>
+<div class="tiles"><div class="tile accent"><small>Nilai stok di mitra</small><strong>{{ total_value|rp }}</strong><span>pada harga pokok, masuk persediaan perusahaan</span></div><div class="tile"><small>Jenis barang</small><strong>{{ rows|length }}</strong><span>item yang masih dipegang mitra</span></div></div>
 {% if can_edit and partners %}<form method="post" class="panel" data-unsaved>{% csrf_token %}<header><h2>Kirim atau retur barang</h2></header><div class="dp-card-body">
   <div class="field-row"><label class="field"><span>Mitra</span><select name="partner" required>{% for partner in partners %}<option value="{{ partner.id }}">{{ partner.name }}</option>{% endfor %}</select></label><label class="field"><span>SKU</span><input name="sku" required></label><label class="field"><span>Jumlah</span><input type="number" name="quantity" min="1" value="1" required></label></div>
   <div class="field-row"><label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}"></label><label class="field"><span>Catatan</span><input name="note" maxlength="200" placeholder="No. surat jalan"></label></div></div>

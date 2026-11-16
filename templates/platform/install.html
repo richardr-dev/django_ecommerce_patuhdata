@@ -1,21 +1,21 @@
 {% load static %}<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Instalasi toko · {{ platform_name }}</title><meta name="robots" content="noindex">
+<title>Instalasi perusahaan · {{ platform_name }}</title><meta name="robots" content="noindex">
 <link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
 <body class="ln ln-wide"><main class="ln-wrap">
   <div class="ln-card">
-    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo.png' %}" alt="{{ platform_name }}" width="179" height="44"><div><span>Instalasi oleh partner</span></div></div>
-    <h1>Pasang toko untuk klien</h1>
-    <p class="ln-sub">Satu langkah membuat akun pemilik, organisasi, toko, gudang utama, bagan akun, dan profil pajak. Tidak ada pendaftaran publik.</p>
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Instalasi oleh partner</span></div></div>
+    <h1>Pasang perusahaan untuk klien</h1>
+    <p class="ln-sub">Satu langkah membuat akun pemilik, organisasi, perusahaan, gudang utama, bagan akun, dan profil pajak. Tidak ada pendaftaran publik.</p>
     {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
     {% if result %}<div class="ln-msg ok" role="status"><b>{{ result.store.name }}</b> terpasang. Pemilik masuk dengan <b>{{ result.owner.username }}</b>.
       {% if result.emailed %}<br>Link kata sandi sudah dikirim ke <b>{{ result.owner.email }}</b>.{% endif %}{% if result.invite_link %}<br>{% if result.emailed %}Salinan link{% else %}Berikan link sekali pakai ini{% endif %} agar pemilik membuat kata sandi:<br><input class="ln-copy" readonly value="{{ result.invite_link }}" onclick="this.select()" aria-label="Link kata sandi">{% else %}<br>Akun itu sudah punya kata sandi.{% endif %}</div>{% endif %}
     <form method="post">{% csrf_token %}
       <div class="ln-grid">
-        <label class="ln-field"><span>Nama toko / brand</span><span class="ln-input"><input name="store_name" value="{{ v.store_name }}" maxlength="120" required></span></label>
-        <label class="ln-field"><span>Kode toko</span><span class="ln-input"><input name="slug" value="{{ v.slug }}" maxlength="40" required autocapitalize="none" placeholder="toko-maju"></span></label>
+        <label class="ln-field"><span>Nama perusahaan / brand</span><span class="ln-input"><input name="store_name" value="{{ v.store_name }}" maxlength="120" required></span></label>
+        <label class="ln-field"><span>Kode perusahaan</span><span class="ln-input"><input name="slug" value="{{ v.slug }}" maxlength="40" required autocapitalize="none" placeholder="maju-jaya"></span></label>
         <label class="ln-field"><span>Nama pemilik</span><span class="ln-input"><input name="owner_name" value="{{ v.owner_name }}" maxlength="150" required></span></label>
         <label class="ln-field"><span>Email pemilik</span><span class="ln-input"><input type="email" name="owner_email" value="{{ v.owner_email }}" placeholder="untuk masuk"></span></label>
         <label class="ln-field"><span>WhatsApp pemilik</span><span class="ln-input"><input name="owner_phone" value="{{ v.owner_phone }}" placeholder="0812…"></span></label>
@@ -26,12 +26,12 @@
         <label class="ln-field"><span>Brand tambahan untuk klien</span><span class="ln-input"><select name="organization"><option value="">Klien baru</option>{% for o in organizations %}<option value="{{ o.pk }}"{% if v.organization == o.pk|stringformat:"s" %} selected{% endif %}>{{ o.name }} · {{ o.owner.username }}</option>{% endfor %}</select></span></label>
         <label class="ln-check"><input type="checkbox" name="is_pkp" value="1"{% if v.is_pkp %} checked{% endif %}> Pengusaha Kena Pajak (memungut PPN)</label>
       </div>
-      <button class="ln-btn">Pasang toko</button>
+      <button class="ln-btn">Pasang perusahaan</button>
     </form>
   </div>
-  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Toko terpasang</h2>
-    <table class="ln-table"><thead><tr><th>Toko</th><th>Organisasi</th><th>Pemilik</th><th>Dibuat</th></tr></thead><tbody>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Perusahaan terpasang</h2>
+    <table class="ln-table"><thead><tr><th>Perusahaan</th><th>Organisasi</th><th>Pemilik</th><th>Dibuat</th></tr></thead><tbody>
     {% for s in stores %}<tr><td><b>{{ s.name }}</b><small>{{ s.slug }}</small></td><td>{{ s.organization.name|default:"—" }}</td><td>{{ s.owner.username }}</td><td>{{ s.created_at|date:"d M Y" }}</td></tr>
-    {% empty %}<tr><td colspan="4">Belum ada toko.</td></tr>{% endfor %}</tbody></table></div>
+    {% empty %}<tr><td colspan="4">Belum ada perusahaan.</td></tr>{% endfor %}</tbody></table></div>
   <p class="ln-foot"><a href="{% url 'merchant-dashboard' %}">Ke back office</a> · {{ platform_company_name }}</p>
 </main></body></html>

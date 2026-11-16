@@ -31,7 +31,7 @@ def create_request(store, *, from_warehouse, to_warehouse, lines, notes="", acto
     if from_warehouse.pk == to_warehouse.pk:
         raise RequestError("Gudang asal dan tujuan sama.")
     if from_warehouse.store_id != store.pk or to_warehouse.store_id != store.pk:
-        raise RequestError("Gudang bukan milik toko ini.")
+        raise RequestError("Gudang bukan milik perusahaan ini.")
     picked = {}
     for line in lines:
         product, variant = _find_goods(store, line.get("sku", ""))

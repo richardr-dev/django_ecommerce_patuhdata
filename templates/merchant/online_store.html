@@ -1,0 +1,64 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Toko online{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Saluran penjualan</span><h1>Toko online</h1><p>Toko online adalah salah satu saluran penjualan {{ merchant_store.name }}. Pesanannya masuk ke Pesanan dan Invoice penjualan seperti saluran lain. Anda boleh menutupnya kapan saja tanpa memengaruhi pembukuan.</p></div>
+  <div class="dp-actions"><a class="btn" href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener">{% icon "external" %} Lihat toko online</a></div></div>
+
+{% if not storefront_enabled %}<div class="notice" style="margin-bottom:20px"><b>Toko online bawaan tidak diaktifkan di sistem ini.</b> Penjualan online berjalan lewat saluran yang terhubung (marketplace, Shopify). Halaman pembeli tidak ditampilkan; pesanan lama, link invoice, dan pembukuan tetap berjalan.</div>{% endif %}
+<div class="tiles">
+  <div class="tile accent"><small>Status</small><strong style="font-size:22px">{% if live_state == "open" %}Buka{% elif live_state == "setup" %}Belum siap{% else %}Tutup{% endif %}</strong><span>{% if live_state == "open" %}Pembeli bisa melihat dan memesan{% elif live_state == "setup" %}Pembeli belum bisa melihatnya{% else %}Pembeli tidak bisa memesan{% endif %}</span></div>
+  <div class="tile"><small>Langkah persiapan</small><strong style="font-size:22px">{{ setup_done }} / {{ setup|length }}</strong><span>selesai</span></div>
+  <div class="tile"><small>Pesanan dari toko sendiri</small><strong style="font-size:22px">{{ online_orders }}</strong><span>website, manual, dan kasir</span></div>
+</div>
+
+<section class="panel">
+  <header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble {% if live_state == 'open' %}ok{% elif live_state == 'setup' %}warn{% else %}bad{% endif %}">{% if live_state == "open" %}{% icon "check-circle" %}{% elif live_state == "setup" %}{% icon "eye" %}{% else %}{% icon "lock" %}{% endif %}</span>
+    <div>{% if not merchant_store.is_open %}<h2>Toko online ditutup sementara</h2><p>Pembeli masih bisa melihat katalog dan pesanan lama mereka, tetapi tidak bisa memesan. Invoice, pesanan marketplace, dan pembukuan tetap berjalan.</p>
+      {% elif live_state == "closed" %}<h2>Toko ditutup untuk pembeli</h2><p>Masa langganan berakhir, jadi pembeli melihat toko "tutup sementara" dan tidak bisa memesan.</p>
+      {% elif live_state == "setup" %}<h2>Toko belum tampil untuk pembeli</h2><p>Selesaikan langkah bertanda <em>Wajib</em> di bawah. Sementara itu hanya Anda yang bisa melihatnya lewat <a href="{{ merchant_preview_url }}" target="_blank" rel="noopener">pratinjau</a>.</p>
+      {% else %}<h2>Toko sudah tampil untuk pembeli</h2><p>Pembeli bisa melihat katalog dan memesan.</p>{% endif %}</div></div>
+    {% if merchant_role == "admin" or merchant_role == "manager" %}
+    <form method="post" action="{% url 'merchant-store-toggle' %}"{% if merchant_store.is_open %} data-confirm="Tutup toko online? Pembeli masih bisa melihat katalog, tetapi tidak bisa memesan sampai Anda membukanya lagi." data-confirm-ok="Tutup toko online"{% else %} data-confirm="Buka kembali toko online? Pembeli bisa langsung memesan." data-confirm-ok="Buka toko online" data-confirm-tone="neutral"{% endif %}>{% csrf_token %}
+      <button class="{% if merchant_store.is_open %}btn btn-danger{% else %}btn-primary{% endif %}">{% if merchant_store.is_open %}Tutup toko online{% else %}Buka toko online{% endif %}</button></form>
+    {% elif live_state == "closed" and merchant_store.is_open %}<a class="btn" href="{% url 'merchant-billing' %}">Perpanjang langganan</a>{% endif %}
+  </header>
+  <div class="dp-card-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between">
+    <div style="min-width:0"><small style="display:block;color:var(--ds-muted);font-size:12px;font-weight:600">Alamat toko online</small><a href="{{ merchant_store_url }}" target="_blank" rel="noopener" data-store-url style="font-weight:700;overflow-wrap:anywhere">{{ merchant_store_url }}</a></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn" data-copy-url data-no-loading>Salin tautan</button><a class="btn" href="https://wa.me/?text={{ merchant_store.name|urlencode }}%20{{ merchant_store_url|urlencode }}" target="_blank" rel="noopener">Bagikan ke WhatsApp</a></div>
+  </div>
+</section>
+
+{% if setup_done < setup|length %}
+<section class="panel">
+  <header><div><h2>Siapkan toko online</h2><p>{{ setup_done }} dari {{ setup|length }} langkah selesai. Langkah bertanda Wajib harus selesai sebelum pembeli bisa melihat toko.</p></div>
+    <span class="bb-pill">{% widthratio setup_done setup|length 100 %}%</span></header>
+  <ol class="close-steps">
+    {% for step in setup %}
+    <li><span class="bb-bubble {% if step.done %}ok{% else %}step{% endif %}">{% if step.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+      <div style="flex:1;min-width:0"><strong{% if step.done %} style="color:var(--ds-faint);text-decoration:line-through"{% endif %}>{{ step.title }}</strong>{% if step.required and not step.done %} <span class="pill pill-fail">Wajib</span>{% endif %}<small style="display:block;color:var(--ds-muted)">{{ step.hint }}</small></div>
+      {% if not step.done %}<a class="btn" href="{{ step.url }}"{% if forloop.last %} target="_blank" rel="noopener"{% endif %}>{{ step.action }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<section class="panel">
+  <header><div><h2>Atur toko online</h2><p>Semua pengaturan yang hanya berlaku untuk toko online.</p></div></header>
+  <div class="dp-card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+    <a class="nested os-link" href="{% url 'merchant-settings' %}"><span class="bb-bubble">{% icon "star" %}</span><span><b>Tampilan toko</b><small>Tema, logo, warna, dan banner</small></span></a>
+    <a class="nested os-link" href="{% url 'merchant-entity-list' 'pages' %}"><span class="bb-bubble">{% icon "note" %}</span><span><b>Halaman brand</b><small>Tentang kami dan halaman lain</small></span></a>
+    <a class="nested os-link" href="{% url 'merchant-entity-list' 'shipping' %}"><span class="bb-bubble">{% icon "truck" %}</span><span><b>Pengiriman</b><small>Kurir dan tarif untuk pembeli</small></span></a>
+    <a class="nested os-link" href="{% url 'merchant-delivery' %}"><span class="bb-bubble">{% icon "calendar" %}</span><span><b>Jadwal &amp; pre-order</b><small>Hari kirim dan slot pengantaran</small></span></a>
+    <a class="nested os-link" href="{% url 'merchant-payment-settings' %}"><span class="bb-bubble">{% icon "cash" %}</span><span><b>Pembayaran</b><small>Transfer bank dan payment gateway</small></span></a>
+    <a class="nested os-link" href="{% url 'merchant-entity-list' 'coupons' %}"><span class="bb-bubble">{% icon "percent" %}</span><span><b>Promosi</b><small>Voucher, flash sale, dan gift card</small></span></a>
+  </div>
+</section>
+<script>
+(function () {
+  var button = document.querySelector("[data-copy-url]"); if (!button) return;
+  button.addEventListener("click", function () {
+    var url = document.querySelector("[data-store-url]").href;
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(function () { pdToast("Tautan disalin", "success"); });
+  });
+})();
+</script>
+{% endblock %}

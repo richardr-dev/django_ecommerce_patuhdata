@@ -1,19 +1,19 @@
 {% load icons books %}{% if oob %}{% include "merchant/_sales_invoices_tabs.html" with oob=True %}{% endif %}
 {# ── KPI bubbles: they follow the filter, so they answer "how much for this view" ── #}
 <div class="grid grid-cols-2 gap-3 px-1 sm:px-4 lg:grid-cols-4">
-  <button type="button" data-set="inv:awaiting" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+  <button type="button" data-set="inv:awaiting" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
     <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "clock" %}</span>
       <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Belum dibayar</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ outstanding|rp }}</p></div></div>
   </button>
-  <button type="button" data-set="inv:overdue" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+  <button type="button" data-set="inv:overdue" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
     <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "alert" %}</span>
       <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Jatuh tempo</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal {% if overdue_total %}text-rose-600{% else %}text-slate-900{% endif %}">{{ overdue_total|rp }}</p></div></div>
   </button>
-  <button type="button" data-set="inv:paid" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
+  <button type="button" data-set="inv:paid" class="group text-left rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5 transition hover:-translate-y-0.5">
     <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "check-circle" %}</span>
       <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Lunas</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ paid_total|rp }}</p></div></div>
   </button>
-  <div class="rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+  <div class="rounded-2xl bg-white p-4 shadow-[0_8px_24px_-12px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
     <div class="flex items-center gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 [&>svg]:h-5 [&>svg]:w-5">{% icon "trend-down" %}</span>
       <div class="min-w-0"><p class="text-xs font-medium text-slate-500">Penjualan dibayar</p><p class="break-all text-base font-bold sm:truncate sm:text-lg sm:break-normal text-slate-900">{{ revenue|rp }}</p><p class="text-[11px] text-slate-400">{{ order_count }} pesanan</p></div></div>
   </div>
@@ -31,7 +31,7 @@
 {% endif %}
 
 {# ── Invoice table ──────────────────────────────────────────────────────── #}
-<div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_-16px_rgba(26,102,217,.3)] ring-1 ring-slate-900/5">
+<div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_-16px_rgba(11,111,184,.3)] ring-1 ring-slate-900/5">
   <div class="overflow-x-auto">
   <table class="w-full text-sm" data-rows-link>
     <thead class="sticky top-0 bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 backdrop-blur">
@@ -66,7 +66,7 @@
             <div class="min-w-0">
               {% if order.customer %}<a href="{% url 'merchant-customer-detail' order.customer.id %}" class="block max-w-[14rem] truncate font-semibold text-slate-800 hover:text-blue-700">{{ order.customer_name }}</a>
               {% else %}<span class="block max-w-[14rem] truncate font-semibold text-slate-800">{{ order.customer_name }}</span>{% endif %}
-              <span class="text-xs text-slate-400">{% if order.customer %}Di CRM{% else %}Tanpa data CRM{% endif %}</span>
+              <span class="text-xs text-slate-400">{% if order.customer %}Ada di Pelanggan{% else %}Belum di Pelanggan{% endif %}</span>
             </div>
           </div>
         </td>

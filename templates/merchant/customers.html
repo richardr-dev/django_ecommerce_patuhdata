@@ -77,7 +77,7 @@
 {% endif %}
 
 {# ── Existing active customers ────────────────────────────────────────── #}
-<div class="bo-heading"><div><span class="eyebrow">CRM</span><h1>Pelanggan</h1><p>Saring pelanggan menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div><div class="flex items-center gap-3">{% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="bo-button" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">Kirim email ke segmen ini ({{ audience }})</a>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<form method="post" class="inline" data-confirm="Sinkronkan semua pesanan ke profil pelanggan?">{% csrf_token %}<button type="submit" name="action" value="sync_customers" class="bo-button secondary">↻ Sinkron Pesanan</button></form><a class="bo-button secondary" href="{% url 'merchant-customer-duplicates' %}">{% icon "users" %} Pelanggan ganda</a>{% endif %}</div></div>
+<div class="bo-heading"><div><span class="eyebrow">Pelanggan</span><h1>Pelanggan</h1><p>Semua pelanggan perusahaan: dari invoice, pesanan, marketplace, atau ditambah sendiri. Saring menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div><div class="flex items-center gap-3">{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<button type="button" class="bo-button" data-open="customer-dialog">+ Tambah pelanggan</button>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="bo-button" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">Kirim email ke segmen ini ({{ audience }})</a>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<form method="post" class="inline" data-confirm="Sinkronkan semua pesanan ke profil pelanggan?">{% csrf_token %}<button type="submit" name="action" value="sync_customers" class="bo-button secondary">↻ Sinkron Pesanan</button></form><a class="bo-button secondary" href="{% url 'merchant-customer-duplicates' %}">{% icon "users" %} Pelanggan ganda</a>{% endif %}</div></div>
 <form id="cust-filter" method="get" class="bo-card segment-filters !p-5" style="display:grid;gap:14px"
   hx-get="{% url 'merchant-customers' %}" hx-target="#cust-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
   hx-trigger="input changed delay:350ms from:#cust-q, input changed delay:350ms from:#cust-loc, change">
@@ -132,4 +132,20 @@
   });
 })();
 </script>
+
+{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<dialog id="customer-dialog" class="pd-dialog" aria-labelledby="customer-title" style="max-width:640px">
+  <form method="post" action="{% url 'merchant-customer-new' %}" data-unsaved>{% csrf_token %}
+    <header><h2 id="customer-title">Tambah pelanggan</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <p class="dp-help">Pelanggan yang ditambahkan di sini langsung bisa dipilih di invoice dan penawaran. Nomor HP yang sudah terdaftar membuka profil yang ada, bukan membuat ganda.</p>
+      <label class="field"><span>Nama pelanggan</span><input name="name" maxlength="120" required autofocus placeholder="Nama orang atau PIC"></label>
+      <div class="field-row"><label class="field"><span>Nomor HP / WhatsApp</span><input name="phone" maxlength="30" inputmode="tel" placeholder="0812…"></label><label class="field"><span>Email</span><input name="email" type="email" maxlength="254" placeholder="nama@email.com"></label></div>
+      <div class="field-row"><label class="field"><span>Perusahaan (opsional)</span><input name="company_name" maxlength="160" placeholder="PT / CV"></label><label class="field"><span>NPWP (opsional)</span><input name="npwp" maxlength="20" placeholder="00.000.000.0-000.000"></label></div>
+      <label class="field"><span>Alamat</span><textarea name="address" rows="2" placeholder="Jalan, kota, provinsi"></textarea></label>
+      <div class="field-row"><label class="field"><span>Tag (pisahkan dengan koma)</span><input name="tags" maxlength="300" placeholder="grosir, reseller"></label><label class="field" style="justify-content:end"><span>&nbsp;</span><span style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" name="accepts_marketing" value="1" style="width:16px;height:16px;accent-color:var(--ds-primary)"> Boleh menerima promo</span></label></div>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan pelanggan</button></footer>
+  </form>
+</dialog>
+{% include "merchant/_dialog_js.html" %}{% endif %}
 {% endblock %}

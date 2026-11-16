@@ -13,9 +13,9 @@
   #lines input { border: 0; background: transparent; width: 100%; }
   #lines tbody tr { transition: background .12s; }
   #lines .cell { border-radius: 12px; background: #f8fafc; box-shadow: inset 0 0 0 1px #e2e8f0; height: 40px; padding: 0 12px; }
-  #lines .cell:focus-within { background: #fff; box-shadow: inset 0 0 0 2px #2563eb; }
+  #lines .cell:focus-within { background: #fff; box-shadow: inset 0 0 0 2px #0b6fb8; }
   #lines input:focus { outline: none; box-shadow: none; }
-  .bubble-radio:checked + span { background: #2563eb; color: #fff; box-shadow: 0 6px 14px -6px rgba(37, 99, 235, .7); }
+  .bubble-radio:checked + span { background: #0b6fb8; color: #fff; box-shadow: 0 6px 14px -6px rgba(11,111,184, .7); }
 </style>
 
 <nav class="mb-2 flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
@@ -40,10 +40,10 @@
   <input type="hidden" name="customer_id" id="customer-id" value="{{ initial.customer.id|default:'' }}">
 
   <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
-    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
       <header class="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
         <span class="grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/30">1</span>
-        <div><h2 class="font-bold text-slate-900">Pelanggan</h2><p class="text-xs text-slate-500">Pilih dari CRM atau tambah pelanggan baru; otomatis tersimpan di CRM.</p></div>
+        <div><h2 class="font-bold text-slate-900">Pelanggan</h2><p class="text-xs text-slate-500">Pilih pelanggan atau tambah yang baru; otomatis tersimpan di daftar Pelanggan.</p></div>
       </header>
       <div class="space-y-3 px-5 pt-4">
         <div class="flex flex-wrap items-stretch gap-2">
@@ -56,7 +56,7 @@
         </div>
         <div id="cust-chip" class="items-center gap-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-100" style="display:{% if initial.customer %}flex{% else %}none{% endif %}">
           <span id="cust-chip-av" class="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-400 text-sm font-bold text-white">{{ initial.customer.name|slice:":1"|upper }}</span>
-          <span class="flex-1">Terhubung ke pelanggan <b id="cust-chip-name">{{ initial.customer.name }}</b> di CRM</span>
+          <span class="flex-1">Terhubung ke pelanggan <b id="cust-chip-name">{{ initial.customer.name }}</b></span>
           <button type="button" id="cust-clear" class="rounded-full px-3 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100">Lepas</button>
         </div>
       </div>
@@ -69,7 +69,7 @@
       </div>
     </section>
 
-    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+    <section class="rounded-3xl bg-white shadow-[0_10px_30px_-18px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
       <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div class="flex items-center gap-3">
           <span class="grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/30">2</span>
@@ -131,7 +131,7 @@
       </div>
     </section>
 
-    <section class="rounded-3xl bg-white p-5 shadow-[0_10px_30px_-18px_rgba(26,102,217,.35)] ring-1 ring-slate-900/5">
+    <section class="rounded-3xl bg-white p-5 shadow-[0_10px_30px_-18px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
       <div class="grid gap-4">
         {% if partners %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Jual ke mitra <span class="font-normal text-slate-400">(opsional)</span></span>
@@ -183,7 +183,7 @@
       <div class="field-row"><label class="field"><span>Email <em>(opsional)</em></span><input type="email" name="email"></label><label class="field"><span>NPWP <em>(opsional)</em></span><input name="npwp" maxlength="20"></label></div>
       <label class="field"><span>Alamat</span><textarea name="address" rows="2"></textarea></label>
       <p class="dp-help" id="customer-error" style="color:#b42318;margin:0" hidden></p>
-      <p class="dp-help" style="margin:0">Pelanggan disimpan di CRM dan langsung dipakai untuk invoice ini. Bila nomor HP sudah terdaftar, pelanggan yang ada yang dipilih.</p>
+      <p class="dp-help" style="margin:0">Pelanggan disimpan di daftar Pelanggan dan langsung dipakai untuk invoice ini. Bila nomor HP sudah terdaftar, pelanggan yang ada yang dipilih.</p>
     </div>
     <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan pelanggan</button></footer>
   </form>
@@ -435,7 +435,7 @@
         if (!res.ok) { err.textContent = res.json.error || "Gagal menyimpan pelanggan."; err.hidden = false; return; }
         applyCustomer(res.json.customer);
         document.getElementById("customer-dialog").close(); form.reset();
-        window.pdToast(res.json.created ? "Pelanggan " + res.json.customer.name + " ditambahkan ke CRM." :
+        window.pdToast(res.json.created ? "Pelanggan " + res.json.customer.name + " ditambahkan." :
           "Nomor HP sudah terdaftar: memakai pelanggan " + res.json.customer.name + ".", "success");
       });
   });

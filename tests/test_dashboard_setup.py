@@ -24,10 +24,13 @@ class DashboardSetupTests(TestCase):
 
     def test_new_store_starts_with_nothing_ticked(self):
         self.assertEqual(self._done(), [False] * 6)
-        page = self.client.get("/books/")
+        page = self.client.get("/books/toko-online/")  # the checklist lives in the Toko online module
         self.assertContains(page, "0 dari 6 langkah selesai")
         self.assertContains(page, "Bagikan ke WhatsApp")
-        self.assertContains(page, "Semua beres")
+        home = self.client.get("/books/")
+        self.assertContains(home, "Semua beres")
+        self.assertNotContains(home, "langkah selesai")
+        self.assertContains(home, "Kas &amp; bank")
 
     def test_steps_tick_as_the_seller_sets_up(self):
         self.store.storefront_template = "promo"
@@ -52,7 +55,7 @@ class DashboardSetupTests(TestCase):
             payment_provider="bank_transfer", idempotency_key="first")
 
         page = self.client.get("/books/")
-        self.assertNotContains(page, "Siapkan toko Anda")
+        self.assertNotContains(self.client.get("/books/toko-online/"), "Siapkan toko online")
         self.assertContains(page, "1</b> transfer bank menunggu dicek")
 
     def test_sidebar_groups_open_on_the_current_section(self):

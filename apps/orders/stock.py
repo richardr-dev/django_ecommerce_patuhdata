@@ -157,7 +157,7 @@ def transfer_stock(*, store, product, quantity, source, target, reason="Transfer
     if source.pk == target.pk:
         raise StockError("Gudang asal dan tujuan sama.")
     if source.store_id != store.id or target.store_id != store.id:
-        raise StockError("Gudang bukan milik toko ini.")
+        raise StockError("Gudang bukan milik perusahaan ini.")
     level = InventoryLevel.objects.select_for_update().filter(warehouse=source,
         product=product).first()
     if not level or level.on_hand - level.reserved < quantity:

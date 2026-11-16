@@ -1,38 +1,46 @@
 {% extends "merchant/base.html" %}{% load icons %}{% load static %}{% block title %}Pesanan{% endblock %}{% block head_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}{% block content %}
-<div class="bo-heading"><div><span class="eyebrow">PESANAN</span><h1>Pesanan & pengiriman</h1><p>Cek pembayaran → kemas → kirim. Satu tombol untuk setiap langkah.</p></div><div class="bo-heading-actions"><a class="bo-link" href="{% url 'merchant-orders-csv' %}">Unduh CSV</a>{% if can_set_resi %}<a class="bo-button secondary" href="{% url 'merchant-resi-labels' %}">{% icon "upload" %} Unggah label resi</a>{% endif %}{% if merchant_role != "viewer" and merchant_role != "warehouse" and merchant_role != "finance" %}<a class="bo-button" href="{% url 'merchant-order-new' %}">+ Buat pesanan</a>{% endif %}<a class="bo-button" href="{% url 'merchant-order-labels' %}?tab={% if tab == 'all' %}pack{% else %}{{ tab }}{% endif %}&print=1" target="_blank" rel="noopener">{% icon "printer" %} Cetak semua label di tab ini</a></div></div>
-<div class="tiles">
-  <div class="tile accent"><small>Penjualan hari ini</small><strong>Rp{{ kpi.revenue|floatformat:"0g" }}</strong><span>{{ kpi.orders }} pesanan masuk</span></div>
-  <div class="tile {% if kpi.to_check %}warn{% endif %}"><small>Perlu dicek pembayarannya</small><strong>{{ kpi.to_check }}</strong><span>menunggu pembayaran / transfer</span></div>
-  <div class="tile"><small>Perlu dikemas &amp; dikirim</small><strong>{{ kpi.to_ship }}</strong><span>sudah dibayar, belum sampai</span></div>
+<section class="bb-hero ord-hero">
+  <div class="ord-hero-text"><span class="bb-pill ord-eyebrow">Pesanan</span><h1>Pesanan &amp; pengiriman</h1><p>Cek pembayaran, kemas, lalu kirim. Satu tombol untuk setiap langkah.</p></div>
+  <div class="ord-hero-actions">
+    <a class="btn" href="{% url 'merchant-order-labels' %}?tab={% if tab == 'all' %}pack{% else %}{{ tab }}{% endif %}&print=1" target="_blank" rel="noopener">{% icon "printer" %} Cetak label tab ini</a>
+    <details class="ord-more-menu"><summary class="btn">Lainnya <span aria-hidden="true">▾</span></summary><div class="ord-menu-panel">
+      <a href="{% url 'merchant-orders-csv' %}">{% icon "download" %} Unduh CSV</a>
+      {% if can_set_resi %}<a href="{% url 'merchant-resi-labels' %}">{% icon "upload" %} Unggah label resi</a>{% endif %}
+    </div></details>
+    {% if merchant_role != "viewer" and merchant_role != "warehouse" and merchant_role != "finance" %}<a class="btn-primary" href="{% url 'merchant-order-new' %}">+ Buat pesanan</a>{% endif %}
+  </div>
+</section>
+<div class="tiles ord-tiles">
+  <div class="tile accent"><span class="bb-bubble">{% icon "cash" %}</span><small>Penjualan hari ini</small><strong>Rp{{ kpi.revenue|floatformat:"0g" }}</strong><span class="sub">{{ kpi.orders }} pesanan masuk</span></div>
+  <div class="tile {% if kpi.to_check %}warn{% endif %}"><span class="bb-bubble {% if kpi.to_check %}warn{% endif %}">{% icon "clock" %}</span><small>Perlu dicek pembayarannya</small><strong>{{ kpi.to_check }}</strong><span class="sub">menunggu pembayaran / transfer</span></div>
+  <div class="tile"><span class="bb-bubble">{% icon "truck" %}</span><small>Perlu dikemas &amp; dikirim</small><strong>{{ kpi.to_ship }}</strong><span class="sub">sudah dibayar, belum sampai</span></div>
 </div>
-<form id="ord-filter" method="get" class="mb-4 grid gap-3"
+<form id="ord-filter" method="get" class="ord-filter bb-card"
   hx-get="{% url 'merchant-orders' %}" hx-target="#ord-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
   hx-trigger="input changed delay:350ms from:#ord-q, change">
   <input type="hidden" name="tab" value="{{ tab }}">
-  <div class="flex flex-wrap items-center gap-2">
-    <div class="relative min-w-[240px] flex-1">
-      <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "search" %}</span>
-      <input id="ord-q" type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Cari nama, no. HP, resi, produk / SKU, atau #pesanan…" aria-label="Cari pesanan"
-        class="w-full rounded-full border-0 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500"></div>
-    {% if outlets %}<label class="relative inline-flex items-center"><span class="pointer-events-none absolute left-3.5 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "store" %}</span>
-      <select name="outlet" aria-label="Outlet" class="rounded-full border-0 bg-white py-2.5 pl-10 pr-9 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Semua outlet</option>{% for outlet in outlets %}<option value="{{ outlet.id }}"{% if request.GET.outlet == outlet.id|stringformat:'s' %} selected{% endif %}>{{ outlet.name }}</option>{% endfor %}</select></label>{% endif %}
-    <label class="relative inline-flex items-center"><span class="pointer-events-none absolute left-3.5 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "box" %}</span>
-      <select name="order_type" aria-label="Tipe pesanan" class="rounded-full border-0 bg-white py-2.5 pl-10 pr-9 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Semua tipe</option>{% for code, label in order_types %}<option value="{{ code }}"{% if order_type_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <label class="relative inline-flex items-center"><span class="pointer-events-none absolute left-3.5 text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "swap" %}</span>
-      <select name="sort" aria-label="Urutkan" class="rounded-full border-0 bg-white py-2.5 pl-10 pr-9 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for code, label in sorts %}<option value="{{ code }}"{% if sort == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <div class="ord-row">
+    <label class="ord-search"><span class="ord-ico">{% icon "search" %}</span><input id="ord-q" type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Cari nama, no. HP, resi, produk / SKU, atau #pesanan…" aria-label="Cari pesanan"></label>
+    {% if outlets %}<label class="ord-select"><span class="ord-ico">{% icon "store" %}</span><select name="outlet" aria-label="Outlet"><option value="">Semua outlet</option>{% for outlet in outlets %}<option value="{{ outlet.id }}"{% if request.GET.outlet == outlet.id|stringformat:'s' %} selected{% endif %}>{{ outlet.name }}</option>{% endfor %}</select></label>{% endif %}
+    <label class="ord-select"><span class="ord-ico">{% icon "box" %}</span><select name="order_type" aria-label="Tipe pesanan"><option value="">Semua tipe</option>{% for code, label in order_types %}<option value="{{ code }}"{% if order_type_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="ord-select"><span class="ord-ico">{% icon "swap" %}</span><select name="sort" aria-label="Urutkan">{% for code, label in sorts %}<option value="{{ code }}"{% if sort == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <details class="ord-more-menu ord-cols" data-no-row><summary class="btn" data-no-loading>{% icon "sliders" %} Kolom</summary><div class="ord-menu-panel">
+      <label><input type="checkbox" data-col-toggle="tanggal" checked> Tanggal</label>
+      <label><input type="checkbox" data-col-toggle="channel" checked> Channel</label>
+      <label><input type="checkbox" data-col-toggle="produk" checked> Produk</label>
+      <label><input type="checkbox" data-col-toggle="kirim" checked> Kurir / resi</label>
+    </div></details>
   </div>
-  <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Periode">
-      <span class="mr-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><span class="[&>svg]:h-3.5 [&>svg]:w-3.5">{% icon "calendar" %}</span>Periode</span>
-      <label class="cursor-pointer"><input type="radio" name="range" value="" class="peer sr-only"{% if not range_preset %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">Semua tanggal</span></label>
-      {% for code, label in presets %}<label class="cursor-pointer"><input type="radio" name="range" value="{{ code }}" class="peer sr-only"{% if range_preset == code %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">{{ label }}</span></label>{% endfor %}
-      <span class="ml-1 inline-flex items-center gap-1 text-xs text-slate-400">atau
-        <input type="date" name="date_from" value="{{ date_from }}" aria-label="Dari tanggal" class="rounded-full border-0 px-2.5 py-1 text-xs ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">–
-        <input type="date" name="date_to" value="{{ date_to }}" aria-label="Sampai tanggal" class="rounded-full border-0 px-2.5 py-1 text-xs ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></span>
+  <div class="ord-row ord-chips">
+    <div class="ord-group" role="radiogroup" aria-label="Periode">
+      <span class="ord-label">{% icon "calendar" %}Periode</span>
+      <label class="chip"><input type="radio" name="range" value=""{% if not range_preset %} checked{% endif %}><span>Semua tanggal</span></label>
+      {% for code, label in presets %}<label class="chip"><input type="radio" name="range" value="{{ code }}"{% if range_preset == code %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+      <span class="ord-dates">atau <input type="date" name="date_from" value="{{ date_from }}" aria-label="Dari tanggal">–<input type="date" name="date_to" value="{{ date_to }}" aria-label="Sampai tanggal"></span>
     </div>
-    <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Channel">
-      <span class="mr-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><span class="[&>svg]:h-3.5 [&>svg]:w-3.5">{% icon "link" %}</span>Channel</span>
-      <label class="cursor-pointer"><input type="checkbox" data-channel-all class="peer sr-only"{% if not channel_selected %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">Semua</span></label>{% for code, label in channels %}<label class="cursor-pointer"><input type="checkbox" name="channel" value="{{ code }}" class="peer sr-only"{% if code in channel_selected %} checked{% endif %}><span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-white peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-blue-300">{{ label }}</span></label>{% endfor %}
+    <div class="ord-group" role="group" aria-label="Channel">
+      <span class="ord-label">{% icon "link" %}Channel</span>
+      <label class="chip"><input type="checkbox" data-channel-all{% if not channel_selected %} checked{% endif %}><span>Semua</span></label>{% for code, label in channels %}<label class="chip"><input type="checkbox" name="channel" value="{{ code }}"{% if code in channel_selected %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
     </div>
   </div>
 </form>
@@ -73,5 +81,29 @@
     if (e.target.matches(".pick, [data-select-all]")) refresh();
   });
   box.addEventListener("htmx:afterSwap", refresh);
+  /* expand a row: the full order (items, address, every form) opens under it */
+  box.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-ord-toggle]"); if (!btn) return;
+    var detail = document.getElementById("d-" + btn.dataset.ordToggle); if (!detail) return;
+    var open = detail.hidden; detail.hidden = !open;
+    var row = document.getElementById("o-" + btn.dataset.ordToggle); if (row) row.classList.toggle("is-open", open);
+    box.querySelectorAll('[data-ord-toggle="' + btn.dataset.ordToggle + '"][aria-expanded]').forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
+    if (open) { var first = detail.querySelector(".ship-form input:not([type=hidden]), .order-next button"); if (first && btn.classList.contains("ord-btn")) first.focus(); }
+  });
+  /* Kolom: hide columns, remembered on this device */
+  var KEY = "pd-ord-cols", hidden = [];
+  try { hidden = JSON.parse(window.localStorage.getItem(KEY) || "[]"); } catch (err) { hidden = []; }
+  function applyCols() { box.dataset.hide = hidden.join(" "); }
+  form.querySelectorAll("[data-col-toggle]").forEach(function (c) {
+    c.checked = hidden.indexOf(c.dataset.colToggle) < 0;
+    c.addEventListener("change", function (e) {
+      e.stopPropagation();
+      hidden = hidden.filter(function (k) { return k !== c.dataset.colToggle; });
+      if (!c.checked) hidden.push(c.dataset.colToggle);
+      try { window.localStorage.setItem(KEY, JSON.stringify(hidden)); } catch (err) { /* private mode */ }
+      applyCols();
+    });
+  });
+  applyCols();
 })();
 </script>{% endblock %}

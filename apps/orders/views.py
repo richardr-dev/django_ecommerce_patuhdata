@@ -781,6 +781,13 @@ def delivery_slots(request):
 
 
 def customer_register(request):
+    if not request.store or not settings.STOREFRONT_ENABLED:
+        # The platform host is the back office: accounts there are set up by the sales team,
+        # so there is no self sign-up. Shopper accounts only exist on a store's own address.
+        if request.user.is_authenticated:
+            return redirect("merchant-dashboard")
+        return render(request, "registration/platform_register.html", {
+            "sales_url": settings.PLATFORM_COMPANY_URL.rstrip("/") + "/contact"})
     next_url = request.POST.get("next") or request.GET.get("next") or ""
     if not url_has_allowed_host_and_scheme(
         next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
@@ -1134,6 +1141,7 @@ def merchant_dashboard(request):
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     from apps.accounting.todo import todo_items
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
+        books=_books_summary(request, store, today),
         finance_todo=todo_items(store, today, request.user), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
@@ -1153,6 +1161,23 @@ def merchant_dashboard(request):
         transfers_to_confirm=store.orders.filter(status="pending",
             payment_provider="bank_transfer").count(),
         month_revenue=sum((row["revenue"] for row in daily), Decimal(0))))
+
+def _books_summary(request, store, today):
+    """Beranda's first row: where the company's money stands, read from the ledger. Only for people
+    who may read the books; everyone else keeps the sales tiles."""
+    from apps.shops import permissions
+    role = "admin" if store.owner_id == request.user.id else (
+        store.staff_members.filter(user=request.user).values_list("role", flat=True).first() or "")
+    if role != "accountant" and not permissions.holds(role, "books.view"):
+        return None
+    from apps.accounting import bank, reports
+    from apps.accounting.payables import aging as payables_aging
+    from apps.tax.receivables import aging as receivables_aging
+    profit = reports.profit_and_loss(store, today.replace(day=1), today)
+    return {"cash": sum(bank.balances(store).values(), Decimal(0)),
+        "ar": receivables_aging(store, today)[1]["total"], "ap": payables_aging(store, today)[1]["total"],
+        "net": profit["totals"]["net"]["amount"], "revenue": profit["totals"]["revenue"]["amount"]}
+
 
 def _order_kpis(orders, own=None):
     """The numbers the page opens with: today's sales and orders (of the orders on screen) and what waits
@@ -2275,12 +2300,28 @@ def merchant_settings(request):
         form.save_uploads(store)
         AuditLog.objects.create(store=store, actor=request.user, action="store.settings_updated",
             object_type="Store", object_id=str(store.id), details={"fields": list(form.changed_data)})
-        messages.success(request, "Pengaturan toko berhasil disimpan.")
+        messages.success(request, "Tampilan toko online berhasil disimpan.")
         return redirect("merchant-settings")
     return render(request, "merchant/settings.html", _merchant_context(request, store,
-        title="Setup cepat", form=form, editing=True, section="settings",
+        title="Tampilan toko online", form=form, editing=True, section="settings",
         storefront_templates={key: {**preset, "font_stack": Store.FONT_STACKS[
             preset["values"]["font_family"]]} for key, preset in STOREFRONT_TEMPLATES.items()}))
+
+
+@login_required(login_url="/login/")
+def merchant_online_store(request):
+    """The online shop as one sales channel of the company: whether shoppers see it, its address,
+    the open/close switch and what is left to set up. None of this belongs on Beranda."""
+    store = _staff_store(request)
+    setup = setup_steps(store)
+    return render(request, "merchant/online_store.html", _merchant_context(request, store,
+        title="Toko online", live_state=store_state(store), setup=setup,
+        setup_done=sum(step.done for step in setup), online_orders=website_orders_count(store)))
+
+
+def website_orders_count(store):
+    from .scope import website_orders
+    return website_orders(store).count()
 
 
 @login_required(login_url="/login/")

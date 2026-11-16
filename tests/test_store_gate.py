@@ -91,13 +91,30 @@ class StoreGateTests(TestCase):
         seller.get(f"/?preview={preview_token(self.store)}")
         self.assertContains(seller.get("/"), "Langganan berakhir")
 
-    def test_the_dashboard_says_whether_shoppers_see_the_store(self):
+    def test_the_online_store_page_says_whether_shoppers_see_the_store(self):
         seller = Client()
         seller.force_login(self.owner)
-        page = seller.get("/books/")
+        self.assertNotContains(seller.get("/books/"), "Toko belum tampil untuk pembeli")  # not Beranda's job
+        page = seller.get("/books/toko-online/")
         self.assertContains(page, "Toko belum tampil untuk pembeli")
         self.assertContains(page, "Wajib")
         self.assertContains(page, "?preview=")
         self._finish_setup()
-        self.assertContains(seller.get("/books/"), "Toko sudah tampil untuk pembeli")
+        self.assertContains(seller.get("/books/toko-online/"), "Toko sudah tampil untuk pembeli")
+
+    def test_closing_the_online_store_stops_new_orders_and_reopening_restores_them(self):
+        self._finish_setup()
+        seller = Client()
+        seller.force_login(self.owner)
+        self.assertNotContains(seller.get("/books/"), "merchant-store-toggle")
+        reply = seller.post("/books/store/toggle-open/")
+        self.assertRedirects(reply, "/books/toko-online/", fetch_redirect_response=False)
+        self.store.refresh_from_db()
+        self.assertFalse(self.store.is_open)
+        self.assertEqual(store_state(self.store), "closed")
+        self.assertContains(seller.get("/books/toko-online/"), "Toko online ditutup sementara")
+        self.assertRedirects(Client().get("/checkout/"), "/", fetch_redirect_response=False)
+        seller.post("/books/store/toggle-open/")
+        self.store.refresh_from_db()
+        self.assertEqual(store_state(self.store), "open")
 

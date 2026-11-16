@@ -17,7 +17,7 @@
           <div class="min-w-0 flex-1">
             <label class="btn cursor-pointer" for="id_invoice_logo">{% icon "upload" %} {% if form.instance.invoice_logo %}Ganti logo{% else %}Unggah logo{% endif %}</label>
             <input id="id_invoice_logo" type="file" name="invoice_logo" accept="image/png,image/jpeg,image/webp" class="sr-only">
-            <p class="dp-help mt-2" id="logo-source">{% if form.instance.invoice_logo %}Logo khusus invoice.{% elif store_logo %}Memakai logo toko. Unggah di sini bila ingin logo yang berbeda di invoice.{% else %}Belum ada logo: invoice memakai huruf pertama nama usaha.{% endif %}</p>
+            <p class="dp-help mt-2" id="logo-source">{% if form.instance.invoice_logo %}Logo khusus invoice.{% elif store_logo %}Memakai logo perusahaan. Unggah di sini bila ingin logo yang berbeda di invoice.{% else %}Belum ada logo: invoice memakai huruf pertama nama usaha.{% endif %}</p>
             {% if form.instance.invoice_logo %}<label class="mt-1 inline-flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" name="invoice_logo-clear" id="logo-clear"> Hapus logo ini{% if store_logo %} (kembali ke logo toko){% endif %}</label>{% endif %}
           </div>
         </div>

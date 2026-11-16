@@ -1,0 +1,11 @@
+:root {
+  /* patuhdata — ice blue */
+  --pd-glacier: #0b6fb8;      /* primary: logo, buttons, links */
+  --pd-glacier-hover: #095f9e;
+  --pd-deep: #012441;         /* headings, body text, dark sections, footer */
+  --pd-ice: #bfe8fb;          /* highlights, tags, accents on dark */
+  --pd-frost: #eaf7fe;        /* section backgrounds, cards, hovers */
+  --pd-white: #ffffff;      /* page background */
+  --pd-muted: #5b7186;      /* secondary text, captions */
+  --pd-line: #d6e6f0;       /* borders, dividers, inputs */
+}

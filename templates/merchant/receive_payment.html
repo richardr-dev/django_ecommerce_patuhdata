@@ -6,7 +6,7 @@
   <div class="dp-actions"><a class="btn" href="{% url 'merchant-receipts' %}">Riwayat penerimaan</a></div></div>
 <form class="toolbar" method="get"><label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Pelanggan</span>
   <select name="customer" onchange="this.form.submit()"><option value="">— pilih pelanggan —</option>{% for c in customers %}<option value="{{ c.id }}" {% if customer and customer.id == c.id %}selected{% endif %}>{{ c.name }}{% if c.company_name and c.company_name != c.name %} · {{ c.company_name }}{% endif %}</option>{% endfor %}</select></label>
-  <span style="color:var(--pd-faint)">atau</span><input type="search" name="buyer" value="{% if not customer %}{{ buyer }}{% endif %}" placeholder="Nama pembeli (tanpa data CRM)"><button class="btn">Tampilkan</button></form>
+  <span style="color:var(--pd-faint)">atau</span><input type="search" name="buyer" value="{% if not customer %}{{ buyer }}{% endif %}" placeholder="Nama pembeli (belum ada di Pelanggan)"><button class="btn">Tampilkan</button></form>
 {% if customer or buyer %}
 {% if credit %}<div class="notice info">{% icon "wallet" %}<span>{{ buyer }} punya kredit <b>{{ credit|rp }}</b>. Pakai untuk invoice di <a href="{% url 'merchant-customer-credit' %}" style="text-decoration:underline">Kredit pelanggan</a>.</span></div>{% endif %}
 <form method="post" class="panel">{% csrf_token %}<input type="hidden" name="customer" value="{{ customer.id|default:'' }}"><input type="hidden" name="buyer" value="{% if not customer %}{{ buyer }}{% endif %}">

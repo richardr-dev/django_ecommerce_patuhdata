@@ -41,7 +41,7 @@
       <small>Total tagihan</small><strong id="total-display" style="display:block;font-size:32px;letter-spacing:-.02em">Rp0</strong>
       <dl style="margin:14px 0;display:grid;gap:8px;font-size:13px">
         <div style="display:flex;justify-content:space-between"><dt style="opacity:.85">Subtotal</dt><dd id="subtotal-display" style="margin:0">Rp0</dd></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><dt style="opacity:.85">PPN / pajak</dt><dd style="margin:0"><input type="text" name="tax" id="tax-input" data-rupiah inputmode="numeric" value="{{ post.tax|default:'0' }}" aria-label="PPN" style="width:120px;height:34px;border-radius:99px;border:0;padding:0 12px;text-align:right;background:rgba(255,255,255,.95);color:#0f1e36"></dd></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><dt style="opacity:.85">PPN / pajak</dt><dd style="margin:0"><input type="text" name="tax" id="tax-input" data-rupiah inputmode="numeric" value="{{ post.tax|default:'0' }}" aria-label="PPN" style="width:120px;height:34px;border-radius:99px;border:0;padding:0 12px;text-align:right;background:rgba(255,255,255,.95);color:#012441"></dd></div>
       </dl>
       <button class="btn-primary btn-block" style="background:#fff;color:var(--ds-primary)">{% icon "check" %} Simpan tagihan</button>
       <a class="btn btn-block" style="margin-top:8px;justify-content:center;background:rgba(255,255,255,.16);color:#fff;box-shadow:none" href="{% url 'merchant-bills' %}">Batal</a>

@@ -97,7 +97,7 @@ class InstallPageTests(TestCase):
             "owner_email": "a@x.co"}).status_code, 302)
         self.assertFalse(Store.objects.filter(slug="xx-toko").exists())
         self.client.force_login(self.partner)
-        self.assertContains(self.client.get("/registration/"), "Pasang toko untuk klien")
+        self.assertContains(self.client.get("/registration/"), "Pasang perusahaan untuk klien")
 
     def test_partner_installs_a_store_and_gets_the_link(self):
         self.client.force_login(self.partner)
@@ -125,7 +125,7 @@ class NoPublicRegistrationTests(TestCase):
     def test_the_login_page_offers_no_registration(self):
         page = self.client.get("/login/")
         self.assertNotContains(page, "Daftar")
-        self.assertContains(page, "partner")
+        self.assertContains(page, "Hubungi tim sales")
 
 
 class PartnerLandingTests(TestCase):

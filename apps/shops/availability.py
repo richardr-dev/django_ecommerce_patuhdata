@@ -2,7 +2,8 @@
 
 - "setup": the seller has not finished setting up (no way to pay, nothing to sell, or no way to
   get the order to the buyer). Shoppers see a "coming soon" page instead of a half-empty store.
-- "closed": the subscription lapsed. Shoppers can still browse and follow their orders, but the
+- "closed": the subscription lapsed, or the company switched its online shop off on the "Toko online"
+  page (``Store.is_open``). Shoppers can still browse and follow their orders, but the
   store says it is temporarily closed and takes no new orders. They are never told why.
 - "open": everything works.
 
@@ -21,6 +22,14 @@ ALWAYS_OPEN = ("/books/", "/login/", "/registration/", "/platform-admin/", "/int
     "/i/")  # a buyer paying an invoice must reach it even while the shop is in setup or closed
 # What a closed store cannot do: take new orders.
 ORDERING = ("/cart/add/", "/cart/update/", "/checkout/")
+
+
+# What disappears when the built-in online shop is switched off for the whole system
+# (settings.STOREFRONT_ENABLED = False): everything a shopper browses or buys through. Existing orders
+# (/orders/<id>/), invoice links (/i/), password reset and unsubscribe links are not here on purpose.
+SHOPPING = ("/products/", "/cart/", "/checkout/", "/wishlist/", "/account/wishlist/", "/account/addresses/",
+    "/account/orders/", "/orders/track/", "/pages/", "/feeds/", "/sitemap.xml", "/newsletter/subscribe/",
+    "/s/", "/api/")
 
 
 def setup_steps(store):
@@ -50,8 +59,8 @@ def is_lapsed(store):
 
 
 def store_state(store):
-    if is_lapsed(store):
-        return "closed"
+    if is_lapsed(store) or not store.is_open:
+        return "closed"  # lapsed subscription, or the company closed its online shop (Toko online page)
     if not all(step["done"] for step in setup_steps(store)):
         return "setup"
     return "open"

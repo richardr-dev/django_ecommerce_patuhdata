@@ -1,5 +1,48 @@
-{% extends "storefront/base.html" %}{% block title %}Daftar · {{ store.name }}{% endblock %}{% block content %}
-<section class="auth-card"><span class="eyebrow">AKUN PELANGGAN</span><h1>Buat akun</h1><p class="muted">Daftar agar pembelian tersimpan otomatis dan status pesanan dapat dipantau kapan saja.</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<p class="muted">Dengan mendaftar, Anda menyetujui <a href="{% url 'terms-of-service' %}">Syarat & Ketentuan</a> dan <a href="{% url 'privacy-policy' %}">Kebijakan Privasi</a>.</p><button>Daftar dan lanjutkan</button></form>
-<div class="auth-links"><span>Sudah punya akun?</span><a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Masuk</a></div></section>
-{% endblock %}
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daftar · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-glacier.png' %}" alt="{{ platform_name }}" width="180" height="44"></div>
+    <span class="ln-tag">Akun pelanggan{% if store %} · {{ store.name }}{% endif %}</span>
+    <h1>Buat akun</h1>
+    <p class="ln-sub">Daftar agar pembelian tersimpan otomatis dan status pesanan dapat dipantau kapan saja.</p>
+    {% if form.non_field_errors %}<p class="ln-msg bad" role="alert">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      {% for field in form %}
+      <label class="ln-field"><span>{{ field.label }}</span>
+        <span class="ln-input{% if field.name == 'password1' or field.name == 'password2' %} has-toggle{% endif %}{% if field.errors %} has-error{% endif %}">
+          <input type="{{ field.field.widget.input_type }}" name="{{ field.html_name }}" id="{{ field.id_for_label }}"{% if field.value and field.name != 'password1' and field.name != 'password2' %} value="{{ field.value }}"{% endif %}
+            {% if field.name == 'email' %}autocomplete="email" autocapitalize="none" autofocus placeholder="nama@email.com"{% elif field.name == 'first_name' %}autocomplete="name" placeholder="Nama Anda"{% else %}autocomplete="new-password" placeholder="{% if field.name == 'password1' %}Kata sandi{% else %}Ulangi kata sandi{% endif %}"{% endif %} required>
+          {% if field.name == 'password1' or field.name == 'password2' %}<button type="button" class="ln-toggle" data-toggle="{{ field.id_for_label }}" aria-pressed="false">Lihat</button>{% endif %}
+        </span>
+        {% for error in field.errors %}<small class="ln-err">{{ error }}</small>{% endfor %}
+        {% if field.name == 'password1' and field.help_text %}<span class="ln-help">{{ field.help_text|safe }}</span>{% endif %}
+      </label>
+      {% endfor %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <p class="ln-terms">Dengan mendaftar, Anda menyetujui <a href="{% url 'terms-of-service' %}">Syarat &amp; Ketentuan</a> dan <a href="{% url 'privacy-policy' %}">Kebijakan Privasi</a>.</p>
+      <button class="ln-btn" id="ln-submit">Daftar dan lanjutkan</button>
+    </form>
+    <p class="ln-alt">Sudah punya akun? <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Masuk</a></p>
+  </div>
+  <p class="ln-foot">{{ platform_company_name }}</p>
+</main>
+<script>
+(function () {
+  document.querySelectorAll("[data-toggle]").forEach(function (toggle) {
+    toggle.addEventListener("click", function () {
+      var field = document.getElementById(toggle.dataset.toggle), show = field.type === "password";
+      field.type = show ? "text" : "password"; toggle.textContent = show ? "Sembunyikan" : "Lihat";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+    });
+  });
+  document.querySelector("form").addEventListener("submit", function () {
+    var button = document.getElementById("ln-submit"); button.disabled = true; button.textContent = "Membuat akun…";
+  });
+})();
+</script></body></html>

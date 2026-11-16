@@ -60,7 +60,7 @@ def send_to_partner(partner, *, product, variant=None, quantity, date=None, note
     if variant and variant.product_id != product.id:
         raise ConsignmentError("Varian bukan milik produk ini.")
     if product.store_id != partner.store_id:
-        raise ConsignmentError("Produk bukan milik toko ini.")
+        raise ConsignmentError("Produk bukan milik perusahaan ini.")
     row = _stock_row(partner, product, variant)
     cost = _unit_cost(product, variant)
     try:

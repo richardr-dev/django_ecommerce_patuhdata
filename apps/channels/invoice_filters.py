@@ -143,7 +143,7 @@ def apply_filters(qs, params, today=None):
     crm = params.get("crm") or ""
     if crm in {"yes", "no"}:
         qs = qs.filter(customer__isnull=(crm == "no"))
-        active.append({"label": "Pelanggan di CRM" if crm == "yes" else "Belum di CRM", "keys": ["crm"]})
+        active.append({"label": "Ada di Pelanggan" if crm == "yes" else "Belum di Pelanggan", "keys": ["crm"]})
     status = params.get("status") or ""
     if status:
         qs = qs.filter(status=status)

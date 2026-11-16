@@ -37,7 +37,7 @@ def _email_owner(result):
 @login_required(login_url="/login/")
 def partner_install(request):
     if not request.user.is_superuser:
-        messages.error(request, "Instalasi toko hanya bisa dilakukan oleh akun partner platform. "
+        messages.error(request, "Instalasi perusahaan hanya bisa dilakukan oleh akun partner platform. "
             "Anda masuk sebagai akun toko.")
         return redirect("merchant-dashboard")
     result, error = None, ""

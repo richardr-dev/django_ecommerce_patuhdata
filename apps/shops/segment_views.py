@@ -105,6 +105,42 @@ def merchant_customers(request):
 
 
 @login_required(login_url="/login/")
+def merchant_customer_new(request):
+    """Add a customer by hand from the Pelanggan page (a dialog on that page). The same rule as the
+    invoice form's quick add: a phone number already on file is that customer, never a duplicate."""
+    from apps.orders.views import _require_roles, _staff_store
+    from apps.tax.services import normalize_npwp
+
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, EDIT_ROLES)
+    name = request.POST.get("name", "").strip()[:120]
+    if not name:
+        messages.error(request, "Nama pelanggan wajib diisi.")
+        return redirect("merchant-customers")
+    try:
+        npwp = normalize_npwp(request.POST.get("npwp", ""))
+    except ValueError as error:
+        messages.error(request, str(error))
+        return redirect("merchant-customers")
+    phone = request.POST.get("phone", "").strip()[:30]
+    existing = Customer.objects.filter(store=store, phone=phone).first() if phone else None
+    if existing:
+        messages.info(request, f"Nomor {phone} sudah terdaftar atas nama {existing.name}; profil itu yang dibuka.")
+        return redirect("merchant-customer-detail", customer_id=existing.id)
+    customer = Customer.objects.create(store=store, name=name, phone=phone,
+        email=request.POST.get("email", "").strip()[:254],
+        company_name=request.POST.get("company_name", "").strip()[:160], npwp=npwp,
+        address=request.POST.get("address", "").strip(), tags=request.POST.get("tags", "").strip()[:300],
+        accepts_marketing=bool(request.POST.get("accepts_marketing")), status=Customer.STATUS_ACTIVE)
+    AuditLog.objects.create(store=store, actor=request.user, action="customer.created",
+        object_type="Customer", object_id=str(customer.pk), details={"name": name, "from": "pelanggan page"})
+    messages.success(request, f"Pelanggan {customer.name} ditambahkan.")
+    return redirect("merchant-customer-detail", customer_id=customer.id)
+
+
+@login_required(login_url="/login/")
 def merchant_customer_tags(request, customer_id):
     from apps.orders.views import _require_roles, _staff_store
 
@@ -164,9 +200,11 @@ def merchant_store_toggle(request):
     _require_roles(request, store, {"admin", "manager"})
     store.is_open = not store.is_open
     store.save(update_fields=["is_open"])
-    status = "dibuka" if store.is_open else "ditutup"
-    messages.success(request, f"Toko {status}.")
-    return redirect(request.META.get("HTTP_REFERER", "/books/"))
+    from apps.shops.audit import log
+    log(store, request.user, "store.opened" if store.is_open else "store.closed", store)
+    messages.success(request, "Toko online dibuka kembali. Pembeli bisa memesan." if store.is_open
+        else "Toko online ditutup sementara. Pembeli masih bisa melihat katalog, tetapi tidak bisa memesan.")
+    return redirect("merchant-online-store")
 
 
 def customer_unsubscribe(request, token):

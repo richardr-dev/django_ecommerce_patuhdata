@@ -2,7 +2,7 @@
 {% block title %}Supplier{% endblock %}
 {% block content %}
 <div class="pg-head">
-  <div><span class="pg-kicker">Pembelian</span><h1>Supplier</h1><p>Vendor dan pemasok toko, dengan sisa utang ke masing-masing.</p></div>
+  <div><span class="pg-kicker">Pembelian</span><h1>Supplier</h1><p>Vendor dan pemasok perusahaan, dengan sisa utang ke masing-masing.</p></div>
   {% if can_edit %}<div class="dp-actions"><button type="button" class="btn-primary" data-open="add-supplier">{% icon "plus" %} Supplier baru</button></div>{% endif %}
 </div>
 <form class="toolbar" method="get" hx-get="{% url 'merchant-suppliers' %}" hx-target="#supplier-list" hx-trigger="input changed delay:250ms from:#q" hx-push-url="true">

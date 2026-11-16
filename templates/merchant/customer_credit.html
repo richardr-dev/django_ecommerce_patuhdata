@@ -1,7 +1,7 @@
 {% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Kredit Pelanggan{% endblock %}
 {% block content %}
-<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Kredit pelanggan</h1><p>Uang muka, kelebihan bayar, dan sisa nota kredit yang belum dipakai. Ini kewajiban toko kepada pelanggan, bukan pendapatan.</p></div>
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Kredit pelanggan</h1><p>Uang muka, kelebihan bayar, dan sisa nota kredit yang belum dipakai. Ini kewajiban perusahaan kepada pelanggan, bukan pendapatan.</p></div>
   {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "plus" %} Terima uang muka</a></div>{% endif %}</div>
 <div class="tiles"><div class="tile accent"><small>Total kredit pelanggan</small><strong>{{ total|rp }}</strong><span>{{ rows|length }} pelanggan</span></div></div>
 <section class="panel">{% if rows %}<div class="scroll-x"><table class="tbl"><thead><tr><th>Pelanggan</th><th class="num">Saldo kredit</th><th class="num">Invoice terbuka</th><th></th></tr></thead><tbody>

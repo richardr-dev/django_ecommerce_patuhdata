@@ -203,7 +203,7 @@ class OrdersPageTests(MarketplaceFixtures):
     def test_a_marketplace_card_shows_courier_resi_and_follows_the_marketplace_status(self):
         self.sale("MP1", courier="JNE YES", resi="JY91008038038")
         html = self.page("?tab=all").content.decode()
-        card = html.split("<article")[1].split("</article>")[0]
+        card = html.split('<tr class="ord-row')[1].split("</tbody>")[0]  # the row and its detail
         for expected in ("JNE YES", "JY91008038038", "Salin", "Status mengikuti Shopee", "Selesai, tidak ada langkah berikutnya"):
             self.assertIn(expected, card)
         for unwanted in ("Belum siap dikirim", "Cetak label", "Kemas pesanan", 'class="pick"'):
@@ -261,7 +261,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_a_cancelled_order_without_shipping_data_has_no_empty_shipping_panel(self):
         self.sale("MP10", status="Dibatalkan")
-        card = self.page("?tab=all").content.decode().split("<article")[1].split("</article>")[0]
+        card = self.page("?tab=all").content.decode().split('<tr class="ord-row')[1].split("</tbody>")[0]  # the row and its detail
         self.assertIn("Pesanan ini tidak menjadi penjualan", card)
         self.assertNotIn("mk-ship", card)
 

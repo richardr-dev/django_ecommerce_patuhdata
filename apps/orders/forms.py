@@ -96,7 +96,7 @@ class ProductSkuField(forms.CharField):
             sku = super().clean(value).strip()
             product = products.filter(sku=sku).first() if sku else None
         if product is None:
-            raise forms.ValidationError("Produk dengan SKU ini tidak ditemukan di toko ini.")
+            raise forms.ValidationError("Produk dengan SKU ini tidak ditemukan di perusahaan ini.")
         return product
 
 
@@ -488,7 +488,7 @@ class BaseProductVariantFormSet(forms.BaseInlineFormSet):
         taken |= set(ProductVariant.objects.filter(product__store=self.store, sku__in=seen)
             .exclude(pk__in=own_variants.values("pk")).values_list("sku", flat=True))
         for sku in taken:
-            seen[sku].add_error("sku", f"SKU {sku} sudah dipakai produk atau varian lain di toko ini.")
+            seen[sku].add_error("sku", f"SKU {sku} sudah dipakai produk atau varian lain di perusahaan ini.")
 
     def save_all(self, product, actor):
         """Save every row. Returns how many variants were deactivated instead of deleted."""

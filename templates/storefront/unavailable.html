@@ -1,0 +1,17 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Toko online tidak tersedia · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-glacier.png' %}" alt="{{ platform_name }}" width="180" height="44"></div>
+    <span class="ln-tag">Toko online</span>
+    <h1>Halaman ini sudah tidak tersedia</h1>
+    <p class="ln-sub">{% if store %}{{ store.name }} tidak lagi menerima pesanan lewat halaman ini.{% else %}Toko online di alamat ini sudah tidak aktif.{% endif %} Pesanan yang sudah dibuat tetap bisa dibuka dari tautan yang Anda terima, dan tagihan tetap bisa dibayar dari link invoice.</p>
+    <p class="ln-alt">Pengelola perusahaan? <a href="/login/">Masuk ke pembukuan</a></p>
+  </div>
+  <p class="ln-foot">{{ platform_company_name }}</p>
+</main></body></html>

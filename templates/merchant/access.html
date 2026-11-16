@@ -2,10 +2,10 @@
 {% block title %}Hak akses{% endblock %}
 {% block content %}
 <div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-staff' %}">Staf & akses</a></span><h1>Hak akses</h1>
-  <p>Siapa boleh melakukan apa. Tabel ini sama dengan yang dijalankan server, jadi yang Anda baca di sini berlaku. Pemilik toko selalu boleh; auditor hanya bisa melihat dan mengunduh.</p></div>
+  <p>Siapa boleh melakukan apa. Tabel ini sama dengan yang dijalankan server, jadi yang Anda baca di sini berlaku. Pemilik perusahaan selalu boleh; auditor hanya bisa melihat dan mengunduh.</p></div>
   <div class="dp-actions"><a class="btn" href="{% url 'merchant-staff' %}">{% icon "users" %} Kelola staf</a></div></div>
 
-<div class="notice">{% icon "check-circle" %}<span><b>Pemisahan tugas:</b> orang yang membuat tagihan tidak boleh membayarnya sendiri bila ada admin atau keuangan lain. Nilai besar juga memerlukan persetujuan orang kedua di menu Persetujuan. Toko dengan satu orang tidak pernah terkunci.</span></div>
+<div class="notice">{% icon "check-circle" %}<span><b>Pemisahan tugas:</b> orang yang membuat tagihan tidak boleh membayarnya sendiri bila ada admin atau keuangan lain. Nilai besar juga memerlukan persetujuan orang kedua di menu Persetujuan. Perusahaan dengan satu orang tidak pernah terkunci.</span></div>
 
 <section class="panel"><header><h2>Matriks peran</h2><p>Tanda centang berarti peran itu boleh melakukan tindakan tersebut.</p></header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Tindakan</th>{% for code, label in role_order %}<th class="num" style="text-align:center">{{ label }}</th>{% endfor %}</tr></thead><tbody>

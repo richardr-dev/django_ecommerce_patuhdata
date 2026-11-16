@@ -31,7 +31,7 @@ def next_number(store, count_date):
 def open_count(store, *, warehouse, count_date, notes="", actor=None):
     """Start counting a warehouse: one line per product held there, with today's system quantity frozen."""
     if warehouse.store_id != store.pk:
-        raise CountError("Gudang bukan milik toko ini.")
+        raise CountError("Gudang bukan milik perusahaan ini.")
     if StockCount.objects.filter(store=store, warehouse=warehouse, status=StockCount.DRAFT).exists():
         raise CountError("Gudang ini masih punya stok opname yang belum selesai.")
     levels = list(InventoryLevel.objects.filter(warehouse=warehouse, product__store=store).select_related("product"))

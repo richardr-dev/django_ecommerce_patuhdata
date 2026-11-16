@@ -13,10 +13,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   {# Page accents (indigo/brand in the page templates) follow the Patuhdata blue. #}
   <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Plus Jakarta Sans','Inter','ui-sans-serif','system-ui','sans-serif']},colors:{
-    blue:{'50':'#ebf3ff','100':'#dceaff','200':'#bcd6ff','500':'#1a7aff','600':'#0066ff','700':'#0052cc','800':'#0a44a8'},
-    sky:{'400':'#6ab2ff','500':'#3898ff','600':'#1a7aff'},
-    brand:{'50':'#eef4fe','100':'#dbe7fd','500':'#2f7cf0','600':'#1a66d9','700':'#1557bd','900':'#0b2d63'},
-    indigo:{'50':'#eef4fe','100':'#dbe7fd','200':'#bcd3fb','300':'#8fb5f7','400':'#5b93f2','500':'#2f7cf0','600':'#1a66d9','700':'#1557bd','800':'#134a9a','900':'#0b2d63'}}}}}</script>
+    blue:{'50':'#eaf7fe','100':'#bfe8fb','200':'#bfe8fb','500':'#1f84cc','600':'#0b6fb8','700':'#095f9e','800':'#07518a'},
+    sky:{'400':'#6cc0ee','500':'#3aa0e0','600':'#1f84cc'},
+    brand:{'50':'#eaf7fe','100':'#d6eefb','500':'#2c8ed0','600':'#0b6fb8','700':'#095f9e','900':'#012441'},
+    indigo:{'50':'#eaf7fe','100':'#d6eefb','200':'#bfe8fb','300':'#7cc4ee','400':'#4aaae3','500':'#2c8ed0','600':'#0b6fb8','700':'#095f9e','800':'#07518a','900':'#012441'}}}}}</script>
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
   <link rel="stylesheet" href="{% static 'css/merchant-shell.css' %}">
 </head>
@@ -30,21 +30,13 @@
     {% else %}
     <span class="pd-brand-mark">{{ merchant_store.name|slice:':1' }}</span>
     {% endif %}
-    <span class="pd-brand-text"><strong>{{ merchant_store.name }}</strong><small>Back office</small></span>
+    <span class="pd-brand-text"><strong>{{ merchant_store.name }}</strong><small>Pembukuan</small></span>
   </a>
 
   <nav class="pd-nav" id="pd-nav">{% merchant_nav %}</nav>
 
   <div class="pd-sidebar-foot">
-    <form method="post" action="{% url 'merchant-store-toggle' %}">
-      {% csrf_token %}
-      <button type="submit" class="store-status {% if merchant_store.is_open %}is-open{% endif %}"
-        title="{% if merchant_store.is_open %}Klik untuk tutup toko{% else %}Klik untuk buka toko{% endif %}">
-        <span class="dot"></span>{% if merchant_store.is_open %}Toko buka{% else %}Toko tutup{% endif %}
-        <small>{% if merchant_store.is_open %}Tutup{% else %}Buka{% endif %}</small>
-      </button>
-    </form>
-    <a href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener" class="view-store">{% icon "external" %}<span>Lihat toko</span></a>
+    {% if storefront_enabled %}<a href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener" class="view-store">{% icon "external" %}<span>Lihat toko online</span></a>{% endif %}
   </div>
 </aside>
 <div class="pd-scrim" data-nav-close></div>
@@ -77,7 +69,7 @@
         <div class="menu-panel">
           <div class="pd-user-head"><strong>{{ request.user.username }}</strong><small>{{ merchant_role_label|default:merchant_role|title }} · {{ merchant_store.name }}</small></div>
           <a href="{% url 'merchant-billing' %}">{% icon "wallet" %}<span>Paket langganan</span></a>
-          {% if request.user.is_superuser %}<a href="{% url 'partner-install' %}" data-no-soft>{% icon "store" %}<span>Instalasi toko (partner)</span></a>{% endif %}
+          {% if request.user.is_superuser %}<a href="{% url 'partner-install' %}" data-no-soft>{% icon "store" %}<span>Instalasi perusahaan (partner)</span></a>{% endif %}
           <button type="button" data-density-toggle>{% icon "layers" %}<span>Tampilan rapat / nyaman</span></button>
           <button type="button" data-open-keys>{% icon "command" %}<span>Pintasan keyboard <kbd>?</kbd></span></button>
           <form method="post" action="{% url 'merchant-logout' %}">{% csrf_token %}

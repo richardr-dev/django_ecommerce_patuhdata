@@ -6,7 +6,8 @@ double-entry ledger, and Indonesian tax. Django 5.2, server-rendered templates, 
 play CDN plus `static/css/merchant-shell.css`.
 
 
-Make sure this is SAP Grade, MYOB Accounting with Modern UI/UX with BLUE and WHITE Theme
+Make sure this is SAP Grade, MYOB Accounting with Modern UI/UX with the **Glacier** (ice blue and white) theme.
+Glacier tokens (from `logo/glacier-disc/colors.css`): primary `#0b6fb8`, hover `#095f9e`, deep ink `#012441`, ice `#bfe8fb`, frost `#eaf7fe`, muted `#5b7186`, line `#d6e6f0`. Logo and icons: `logo/glacier-disc/` (copied to `static/img/brand/`). The hex values below written as sapphire `#0066FF` etc. are now these glacier values (tokens live in `merchant-shell.css` `--ds-*`).
 
 All user-facing text is Indonesian. Code, comments and tests are English.
 
@@ -222,6 +223,27 @@ Four test files failed before this work and still do: `test_digital_products`,
   request moves stock out at *send* (in transit, counted by `inventory.reconciliation`) and in at *receive*;
   missing units are a loss in transit at cost. None of these edit or delete a posted document: correct with
   a new document.
+- **The product is the books; the online shop is one optional sales channel** (decided 2026-11-16). What a
+  partner installs is a *Perusahaan* (PT, CV, UD, distributor, personal trading business): say "perusahaan" on
+  screen wherever the business is meant, and "toko online" only for the storefront. Code keeps `Store`,
+  `merchant-*` and `store` on purpose. The sidebar follows an accounting product: Penjualan, Pembelian,
+  Kas & bank, Persediaan, Akuntansi (Buku besar, Tutup buku & kontrol, Laporan, Pajak), then Saluran penjualan
+  (Marketplace, Mitra, Toko online, Promosi), Pelanggan, Pengaturan. Beranda opens with the books
+  (`_books_summary`: kas & bank, piutang, utang, laba bulan ini) for roles holding `books.view`.
+- **Toko online is its own module** (`/books/toko-online/`, `orders/views.py:merchant_online_store`,
+  `templates/merchant/online_store.html`): status, address, the setup checklist and the open/close switch
+  live there, never on Beranda or in the sidebar foot. `Store.is_open` is enforced: off means
+  `store_state` is "closed" (shoppers browse, no new orders), same as a lapsed subscription. The switch is
+  admin/manager only and is logged (`store.opened` / `store.closed`).
+- **The built-in online shop is switched off by default** (`STOREFRONT_ENABLED`, default 0; decided 2026-11-16:
+  the system does not carry shopper traffic, online selling goes through connected channels such as
+  marketplaces and, planned, Shopify with stock sync from Patuhdata). Off means: shopping paths
+  (`availability.SHOPPING`: catalogue, cart, checkout, shopper account pages, sitemap, feed, `/api/`) answer
+  410 with `storefront/unavailable.html`; `/` and `/account/login/` go to `/login/`; shopper sign-up shows the
+  sales page; the sidebar hides the Toko online and Promosi groups (`Group.when="storefront"`). Still served:
+  `/books/`, buyers' existing orders (`/orders/<id>/`), invoice links (`/i/`), payment webhooks, password reset.
+  The code is kept, not deleted; tests run with it on (`tests/conftest.py`), `tests/test_no_storefront.py`
+  covers off. A new shopper-facing route must be added to `SHOPPING`.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live

@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daftar · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"></div>
+    <span class="ln-tag">Akun bisnis</span>
+    <h1>Daftar melalui tim sales</h1>
+    <p class="ln-sub">Akun {{ platform_name }} dibuat oleh tim sales kami. Kami bantu menyiapkan perusahaan, bagan akun, dan saldo awal Anda.</p>
+    <ol class="ln-steps">
+      <li><span>1</span>Hubungi tim sales dan ceritakan kebutuhan pembukuan Anda.</li>
+      <li><span>2</span>Kami menyiapkan akun dan data awal perusahaan Anda.</li>
+      <li><span>3</span>Anda menerima detail masuk dan langsung bisa mulai.</li>
+    </ol>
+    <a class="ln-btn" href="{{ sales_url }}">Hubungi tim sales</a>
+    <p class="ln-alt">Sudah punya akun? <a href="{% url 'merchant-login' %}">Masuk</a></p>
+  </div>
+  <p class="ln-foot">{{ platform_company_name }}</p>
+</main></body></html>

@@ -6,6 +6,7 @@ from .availability import (
     ALWAYS_OPEN,
     ORDERING,
     PREVIEW_SESSION_KEY,
+    SHOPPING,
     is_previewing,
     read_preview_token,
     store_state,
@@ -96,6 +97,10 @@ class StorefrontGateMiddleware:
     def __call__(self, request):
         store = getattr(request, "store", None)
         request.store_state, request.store_preview = "open", False
+        if not settings.STOREFRONT_ENABLED:
+            gone = self._without_storefront(request, store)
+            if gone is not None:
+                return gone
         if (not settings.STOREFRONT_GATE or store is None or getattr(request, "is_platform", False)
                 or request.path.startswith(ALWAYS_OPEN) or opens_on_login(request)):
             return self.get_response(request)
@@ -121,6 +126,20 @@ class StorefrontGateMiddleware:
                 "pesanan baru.")
             return redirect("/")
         return self.get_response(request)
+
+    @staticmethod
+    def _without_storefront(request, store):
+        """No public online shop (STOREFRONT_ENABLED=0): the home page is the sign-in, the shopper's
+        sign-in is the back-office one, and every shopping page says the shop is not here."""
+        path = request.path
+        own_address = bool(store) and not getattr(request, "is_platform", False) and bool(settings.PLATFORM_DOMAIN)
+        if path == "/" and not own_address:
+            return redirect("/books/" if request.user.is_authenticated else "/login/")
+        if path == "/account/login/":
+            return redirect("/login/")
+        if path == "/" or path.startswith(SHOPPING):
+            return render(request, "storefront/unavailable.html", {"store": store}, status=410)
+        return None
 
 
 class SellerShortcutMiddleware:

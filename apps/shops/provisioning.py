@@ -24,9 +24,9 @@ class InstallError(ValueError):
 def clean_slug(value):
     slug = (value or "").strip().lower()
     if not SLUG_PATTERN.fullmatch(slug) or "--" in slug:
-        raise InstallError("Kode toko: 3–40 huruf kecil, angka, atau tanda hubung (tidak di awal/akhir).")
+        raise InstallError("Kode perusahaan: 3–40 huruf kecil, angka, atau tanda hubung (tidak di awal/akhir).")
     if slug in RESERVED_SLUGS or Store.objects.filter(slug=slug).exists():
-        raise InstallError(f"Kode toko “{slug}” sudah dipakai.")
+        raise InstallError(f"Kode perusahaan “{slug}” sudah dipakai.")
     return slug
 
 
@@ -64,7 +64,7 @@ def install(*, store_name, slug, owner_name, owner_email="", owner_phone="", leg
 
     store_name, owner_name = (store_name or "").strip(), (owner_name or "").strip()
     if not store_name:
-        raise InstallError("Nama toko wajib diisi.")
+        raise InstallError("Nama perusahaan wajib diisi.")
     if not owner_name:
         raise InstallError("Nama pemilik wajib diisi.")
     owner_email = (owner_email or "").strip().lower()

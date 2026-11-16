@@ -61,7 +61,7 @@ def _tracking(store):
 
 
 def platform_context(request):
-    return {"platform_name": settings.PLATFORM_NAME,
+    return {"storefront_enabled": settings.STOREFRONT_ENABLED, "platform_name": settings.PLATFORM_NAME,
         "platform_tagline": settings.PLATFORM_TAGLINE, "platform_home_url": platform_url("/"),
         "platform_company_name": settings.PLATFORM_COMPANY_NAME,
         "platform_company_url": settings.PLATFORM_COMPANY_URL,

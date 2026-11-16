@@ -101,7 +101,7 @@ def merchant_staff(request):
             user.set_unusable_password()
             user.save()
         if user.id == store.owner_id:
-            messages.info(request, "Itu akun pemilik toko.")
+            messages.info(request, "Itu akun pemilik perusahaan.")
             return redirect("merchant-staff")
         StoreStaff.objects.update_or_create(store=store, user=user, defaults={"role": role})
         AuditLog.objects.create(store=store, actor=request.user, action="staff.invited",
@@ -130,7 +130,7 @@ def _email_invite(store, user, link):
     from django.conf import settings
     try:
         send_mail(f"Undangan staf {store.name} di {settings.PLATFORM_NAME}",
-            f"Halo {user.first_name or ''},\n\nAnda diundang mengelola toko {store.name}. Buat kata "
+            f"Halo {user.first_name or ''},\n\nAnda diundang mengelola pembukuan {store.name}. Buat kata "
             f"sandi Anda lewat link ini (sekali pakai):\n{link}\n\nSetelah itu masuk di "
             f"{platform_url('/login/')} dengan email ini.\n\n{settings.PLATFORM_NAME}",
             settings.DEFAULT_FROM_EMAIL, [user.email])
@@ -156,7 +156,7 @@ def merchant_staff_update(request, staff_id):
         member.delete()
         AuditLog.objects.create(store=store, actor=request.user, action="staff.removed",
             object_type="User", object_id=str(member.user_id), details={})
-        messages.success(request, "Staf dihapus dari toko ini.")
+        messages.success(request, "Staf dihapus dari perusahaan ini.")
     elif request.POST.get("action") == "link" and not member.user.has_usable_password():
         messages.success(request, f"Link baru untuk {member.user.get_full_name() or member.user.username}: "
             f"{invite_link(member.user)}")

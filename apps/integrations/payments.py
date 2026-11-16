@@ -310,7 +310,7 @@ def get_payment_provider(name, *, store=None, store_account=False):
         return PROVIDERS[name]()
     account = store_payment_settings(store)
     if not account or account.gateway != name:
-        raise ProviderError(f"Akun {name} milik toko belum terhubung.")
+        raise ProviderError(f"Akun {name} milik perusahaan belum terhubung.")
     if name == "doku":
         return DokuPaymentProvider(client_id=account.doku_client_id, secret_key=account.secret_key)
     return XenditPaymentProvider(secret_key=account.secret_key)

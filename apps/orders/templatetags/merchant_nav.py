@@ -1,7 +1,8 @@
 """The back-office sidebar, defined once.
 
-Sections group the work the way a seller thinks about it: selling (sales, marketplaces, mitra,
-purchasing), inventory, accounting (books, reports, tax), customers and marketing, and settings.
+Sections follow an accounting product (Jurnal, Accurate, Xero): sales, purchasing, cash and bank,
+inventory, accounting (ledger, closing, reports, tax), then the sales channels (marketplaces, mitra and
+the online shop, which is one optional channel of the company), customers and settings.
 Each link knows which paths belong to it; the most specific match is the active page and its
 group opens by itself, so the sidebar always shows where you are."""
 from dataclasses import dataclass, field
@@ -29,12 +30,13 @@ class Group:
     label: str
     icon: str
     links: list = field(default_factory=list)
+    when: str = ""  # context flag that must be truthy for the whole group
 
 
 ADMIN = frozenset({"admin"})
 
 NAV = [
-    ("Bisnis", [
+    ("Penjualan", [
         Group("Penjualan", "receipt", [
             Link("Ringkasan penjualan", "merchant-sales", match=("=/books/sales/",
                 "/books/sales/stats/")),
@@ -55,6 +57,89 @@ NAV = [
             Link("Nota kredit", "merchant-credit-notes"),
             Link("Invoice berulang", "merchant-recurring"),
         ]),
+    ]),
+    ("Pembelian", [
+        Group("Pembelian", "truck", [
+            Link("Supplier", "merchant-suppliers"),
+            Link("Pesanan pembelian", "merchant-purchase-orders", match=("/books/accounting/pesanan-pembelian/",)),
+            Link("Penerimaan barang", "merchant-goods-receipts", match=("/books/accounting/penerimaan/",)),
+            Link("Tagihan supplier", "merchant-bills"),
+            Link("Buat tagihan", "merchant-bill-new"),
+            Link("Nota debit", "merchant-debit-notes", match=("/books/accounting/nota-debit/",)),
+            Link("Umur utang", "merchant-payables"),
+            Link("Transfer antar brand", "merchant-intercompany", match=("/books/accounting/antar-brand/",)),
+        ]),
+    ]),
+    ("Kas & bank", [
+        Group("Kas & bank", "bank", [
+            Link("Kas & bank", "merchant-bank-accounts", match=("/books/accounting/cash/",)),
+            Link("Biaya operasional", "merchant-expenses"),
+            Link("Pencairan dana", "merchant-payouts"),
+            Link("Pinjaman", "merchant-loans", match=("/books/accounting/pinjaman/",)),
+            Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
+        ]),
+    ]),
+    ("Persediaan", [
+        Group("Stok & Produk", "box", [
+            Link("Semua produk", "merchant-entity-list", ("products",), match=("/books/products/",)),
+            Link("Kategori", "merchant-entity-list", ("categories",)),
+            Link("Paket (bundle)", "merchant-bundles"),
+            Link("Stok gudang", "merchant-stock"),
+            Link("Stok opname", "merchant-stock-counts", match=("/books/accounting/stok-opname/",)),
+            Link("Permintaan stok", "merchant-stock-requests", match=("/books/stock/permintaan/",)),
+            Link("Stok minus", "merchant-stock-minus"),
+            Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
+            Link("Lokasi stok", "merchant-entity-list", ("inventory",)),
+            Link("Impor produk", "merchant-product-import"),
+            Link("Foto produk", "merchant-entity-list", ("images",)),
+        ]),
+        Group("Laporan persediaan", "layers", [
+            Link("Nilai persediaan", "merchant-inventory-value"),
+            Link("Kartu stok", "merchant-stock-card"),
+            Link("Stok lambat bergerak", "merchant-slow-moving"),
+            Link("Penutupan persediaan", "merchant-inventory-close"),
+        ]),
+    ]),
+    ("Akuntansi", [
+        Group("Buku besar", "book", [
+            Link("Ringkasan", "merchant-accounting", match=("=/books/accounting/",)),
+            Link("Jurnal", "merchant-journal-list"),
+            Link("Jurnal umum", "merchant-journal-new"),
+            Link("Jurnal penyesuaian", "merchant-adjustments"),
+            Link("Bagan akun", "merchant-chart-of-accounts"),
+            Link("Saldo awal", "merchant-opening-balances"),
+            Link("Aset tetap", "merchant-assets"),
+            Link("Anggaran", "merchant-budget", match=("/books/accounting/budget/",)),
+            Link("Pusat biaya", "merchant-cost-centers"),
+        ]),
+        Group("Tutup buku & kontrol", "lock", [
+            Link("Pemeriksaan pembukuan", "merchant-books-checks"),
+            Link("Tutup buku", "merchant-year-close"),
+            Link("Persetujuan", "merchant-approvals", badge="approvals_pending"),
+        ]),
+        Group("Laporan Keuangan", "bar-chart", [
+            Link("Laba rugi", "merchant-profit-loss"),
+            Link("Neraca", "merchant-balance-sheet"),
+            Link("Arus kas", "merchant-cash-flow"),
+            Link("Neraca saldo", "merchant-trial-balance"),
+            Link("Buku besar & neraca saldo", "merchant-finance"),
+            Link("Laporan kuartal", "merchant-quarter-report"),
+            Link("Rekap invoice per channel", "merchant-channel-recap"),
+            Link("Ekspor data penjualan", "merchant-sales-export"),
+            Link("Penjualan semua channel", "merchant-sales-overview"),
+            Link("Penjualan bulanan", "merchant-sales-report"),
+        ]),
+        Group("Pajak", "percent", [
+            Link("PPN & PPh", "merchant-tax"),
+            Link("Kalender pajak", "merchant-tax-calendar"),
+            Link("SPT Masa PPN", "merchant-spt-ppn"),
+            Link("SPT Tahunan badan", "merchant-spt-tahunan"),
+            Link("PPh dipotong", "merchant-withholdings", match=("/books/tax/pph/",)),
+            Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
+        ]),
+    ]),
+    # Where the company sells. The online shop is one channel among these, not the product itself.
+    ("Saluran penjualan", [
         Group("Marketplace", "link", [
             Link("Toko marketplace", "merchant-channels"),
             Link("Impor pesanan", "merchant-import"),
@@ -70,85 +155,17 @@ NAV = [
             Link("Invoice mitra", "merchant-sales-invoices", query="channel=abshop"),
             Link("Settlement", "settlement-list"),
         ]),
-        Group("Pembelian", "truck", [
-            Link("Supplier", "merchant-suppliers"),
-            Link("Transfer antar brand", "merchant-intercompany", match=("/books/accounting/antar-brand/",)),
-            Link("Pesanan pembelian", "merchant-purchase-orders", match=("/books/accounting/pesanan-pembelian/",)),
-            Link("Penerimaan barang", "merchant-goods-receipts", match=("/books/accounting/penerimaan/",)),
-            Link("Tagihan supplier", "merchant-bills"),
-            Link("Nota debit", "merchant-debit-notes", match=("/books/accounting/nota-debit/",)),
-            Link("Buat tagihan", "merchant-bill-new"),
-            Link("Umur utang", "merchant-payables"),
-        ]),
-    ]),
-    ("Inventori", [
-        Group("Stok & Produk", "box", [
-            Link("Semua produk", "merchant-entity-list", ("products",), match=("/books/products/",)),
-            Link("Kategori", "merchant-entity-list", ("categories",)),
-            Link("Paket (bundle)", "merchant-bundles"),
-            Link("Stok gudang", "merchant-stock"),
-            Link("Stok opname", "merchant-stock-counts", match=("/books/accounting/stok-opname/",)),
-            Link("Permintaan stok", "merchant-stock-requests", match=("/books/stock/permintaan/",)),
-            Link("Stok minus", "merchant-stock-minus"),
-            Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
-            Link("Lokasi stok", "merchant-entity-list", ("inventory",)),
-            Link("Impor produk", "merchant-product-import"),
-            Link("Foto produk", "merchant-entity-list", ("images",)),
-        ]),
-    ]),
-    ("Akuntansi", [
-        Group("Akuntansi", "book", [
-            Link("Ringkasan", "merchant-accounting", match=("=/books/accounting/",)),
-            Link("Kas & bank", "merchant-bank-accounts", match=("/books/accounting/cash/",)),
-            Link("Jurnal", "merchant-journal-list"),
-            Link("Pemeriksaan pembukuan", "merchant-books-checks"),
-            Link("Tutup buku", "merchant-year-close"),
-            Link("Persetujuan", "merchant-approvals", badge="approvals_pending"),
-            Link("Anggaran", "merchant-budget", match=("/books/accounting/budget/",)),
-            Link("Pusat biaya", "merchant-cost-centers"),
-            Link("Saldo awal", "merchant-opening-balances"),
-            Link("Jurnal umum", "merchant-journal-new"),
-            Link("Jurnal penyesuaian", "merchant-adjustments"),
-            Link("Pinjaman", "merchant-loans", match=("/books/accounting/pinjaman/",)),
-            Link("Bagan akun", "merchant-chart-of-accounts"),
-            Link("Nilai persediaan", "merchant-inventory-value"),
-            Link("Penutupan persediaan", "merchant-inventory-close"),
-            Link("Kartu stok", "merchant-stock-card"),
-            Link("Stok lambat bergerak", "merchant-slow-moving"),
-            Link("Aset tetap", "merchant-assets"),
-            Link("Biaya operasional", "merchant-expenses"),
-            Link("Pencairan dana", "merchant-payouts"),
-            Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
-        ]),
-        Group("Laporan Keuangan", "bar-chart", [
-            Link("Laporan kuartal", "merchant-quarter-report"),
-            Link("Laba rugi", "merchant-profit-loss"),
-            Link("Arus kas", "merchant-cash-flow"),
-            Link("Buku besar & neraca saldo", "merchant-finance"),
-            Link("Neraca", "merchant-balance-sheet"),
-            Link("Neraca saldo", "merchant-trial-balance"),
-            Link("Rekap invoice per channel", "merchant-channel-recap"),
-            Link("Ekspor data penjualan", "merchant-sales-export"),
-            Link("Penjualan semua channel", "merchant-sales-overview"),
-            Link("Penjualan bulanan", "merchant-sales-report"),
-        ]),
-        Group("Pajak", "percent", [
-            Link("PPN & PPh", "merchant-tax"),
-            Link("Kalender pajak", "merchant-tax-calendar"),
-            Link("SPT Masa PPN", "merchant-spt-ppn"),
-            Link("SPT Tahunan badan", "merchant-spt-tahunan"),
-            Link("PPh dipotong", "merchant-withholdings", match=("/books/tax/pph/",)),
-            Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
-        ]),
-    ]),
-    ("Pelanggan & pemasaran", [
-        Group("Pelanggan", "users", [
-            Link("Semua pelanggan", "merchant-customers", badge="pending_customers_count"),
-            Link("Broadcast", "merchant-broadcasts"),
+        Group("Toko online", "store", when="storefront", links=[
+            Link("Status & alamat toko", "merchant-online-store"),
+            Link("Tampilan toko", "merchant-settings"),
+            Link("Atur banner", "merchant-entity-list", ("slides",)),
+            Link("Halaman brand", "merchant-entity-list", ("pages",)),
+            Link("Jadwal & pre-order", "merchant-delivery"),
+            Link("Pelacakan & pixel", "merchant-tracking"),
             Link("Keranjang tertinggal", "merchant-engagement"),
             Link("Ulasan", "merchant-entity-list", ("reviews",)),
         ]),
-        Group("Promosi", "megaphone", [
+        Group("Promosi", "megaphone", when="storefront", links=[
             Link("Flash sale & popup", "merchant-entity-list", ("campaigns",)),
             Link("Produk flash sale", "merchant-entity-list", ("flash-sales",)),
             Link("Voucher", "merchant-entity-list", ("coupons",)),
@@ -156,20 +173,20 @@ NAV = [
             Link("Link kampanye", "merchant-campaign-links"),
             Link("Feed & QR katalog", "merchant-feeds"),
         ]),
-        Group("Toko online", "store", [
-            Link("Tema, logo & banner", "merchant-settings"),
-            Link("Atur banner", "merchant-entity-list", ("slides",)),
-            Link("Halaman brand", "merchant-entity-list", ("pages",)),
+    ]),
+    ("Pelanggan", [
+        Group("Pelanggan", "users", [
+            Link("Semua pelanggan", "merchant-customers", badge="pending_customers_count"),
+            Link("Broadcast", "merchant-broadcasts"),
         ]),
     ]),
     ("", [
         Group("Pengaturan", "sliders", [
             Link("Pembayaran", "merchant-payment-settings"),
+            # Shipping methods serve manual orders and courier booking too, not only the online shop.
             Link("Pengiriman", "merchant-entity-list", ("shipping",), match=("/books/shipping-areas/",)),
-            Link("Jadwal & pre-order", "merchant-delivery"),
             Link("WhatsApp", "merchant-whatsapp", roles=ADMIN),
             Link("Integrasi", "merchant-integrations"),
-            Link("Pelacakan & pixel", "merchant-tracking"),
             Link("Staf & akses", "merchant-staff", roles=ADMIN, match=("/books/staff/",)),
             Link("Hak akses", "merchant-access", roles=ADMIN),
             Link("Log aktivitas", "merchant-activity", roles=ADMIN),
@@ -225,7 +242,8 @@ def build_nav(context):
     query = request.GET if request else {}
     role = context.get("merchant_role", "")
     store = context.get("merchant_store")
-    flags = {"uses_platform_gateway": bool(store and getattr(getattr(
+    from django.conf import settings
+    flags = {"storefront": settings.STOREFRONT_ENABLED, "uses_platform_gateway": bool(store and getattr(getattr(
         store, "payment_settings", None), "use_platform_gateway", False))}
     from apps.orders.nav_access import REFUSED
     refused = REFUSED.get(context.get("merchant_real_role", ""), frozenset())
@@ -234,6 +252,8 @@ def build_nav(context):
         built_groups = []
         for group in groups:
             links = []
+            if group.when and not flags.get(group.when):
+                continue
             for link in group.links:
                 if link.roles and role not in link.roles:
                     continue

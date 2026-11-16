@@ -201,6 +201,12 @@ if SENTRY_DSN:
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
         send_default_pii=False, max_request_body_size="never")
 
+# 0 (default) = no public online shop: the catalogue, cart, checkout, shopper accounts and the shopper API
+# are not served (see apps/shops/availability.py SHOPPING). The back office, buyers' existing order pages,
+# invoice links (/i/) and payment callbacks keep working. Selling online goes through connected channels
+# (marketplaces, Shopify) instead. 1 = each company may run the built-in storefront.
+STOREFRONT_ENABLED = os.getenv("STOREFRONT_ENABLED", "0") == "1"
+
 # 1 = the system's own address ("/") opens on the back-office login; a store's own subdomain or
 # custom domain (and ?store=slug) still shows the storefront. 0 = "/" is the storefront / platform page.
 HOME_IS_LOGIN = os.getenv("HOME_IS_LOGIN", "1") == "1"
