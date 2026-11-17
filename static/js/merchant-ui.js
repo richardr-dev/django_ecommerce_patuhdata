@@ -29,6 +29,11 @@
       input.setAttribute("inputmode", "numeric");
       input.setAttribute("autocomplete", "off");
       if (input.value && !input.hasAttribute("data-rupiah-ready")) input.value = group(input.value.split(/[.,]\d{1,2}$/)[0]);
+      if (!input.hasAttribute("data-rupiah-ready")) {
+        // A pre-filled suggested amount (a counted float, a balance) is meant to be typed over,
+        // not typed onto: select it so the first keystroke replaces it instead of appending.
+        input.addEventListener("focus", function () { input.select(); });
+      }
       input.setAttribute("data-rupiah-ready", "1");
     });
   }

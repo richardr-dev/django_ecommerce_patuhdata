@@ -385,3 +385,13 @@ class KioskTests(PosBase):
         self.client.force_login(self.owner)
         self.assertContains(self.client.get("/books/pos/"), "Register baru")
         self.assertEqual(self.client.get("/kasir/").status_code, 200)
+
+    def test_the_open_shift_dialogs_script_is_not_broken(self):
+        """Regression: a doubled backslash once turned the digit filter into "strip anything that
+        is not a literal backslash or the letter d", silently erasing every digit typed, and the
+        close button used querySelector so only the first of two [data-close] elements worked."""
+        self.client.force_login(self.owner)
+        page = self.client.get("/kasir/").content.decode()
+        self.assertIn("[^0-9]", page)                               # the fixed digit filter
+        self.assertIn('querySelectorAll("[data-close]")', page)      # every close button gets wired, not just the first
+        self.assertIn('el.select()', page)                           # a prefilled amount is selected on focus, not appended to

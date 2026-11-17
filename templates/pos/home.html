@@ -60,14 +60,25 @@ body{overflow:auto;height:auto;display:block}
   {% else %}<div class="ka-empty">{% icon "cash" %}<p><b>Belum ada register untuk Anda di outlet ini.</b><br>Minta admin membuat register di Penjualan › Kasir (POS).</p></div>{% endif %}
 </main>
 <script>
-document.querySelectorAll("dialog[id^=open-]").forEach(function (dialog) {
-  dialog.querySelector("[data-close]").addEventListener("click", function () { dialog.close(); });
-  document.querySelector('[data-open="' + dialog.id + '"]').addEventListener("click", function () { dialog.showModal(); });
-});
-(function () {
-  document.querySelectorAll('input[data-rupiah]').forEach(function (el) {
-    el.addEventListener("input", function () { var n = el.value.replace(/[^\\d]/g, ""); el.value = n ? n.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ".") : ""; });
+document.querySelectorAll("[data-open]").forEach(function (button) {
+  button.addEventListener("click", function () {
+    var dialog = document.getElementById(button.dataset.open);
+    if (dialog) dialog.showModal();
   });
-})();
+});
+document.querySelectorAll("[data-close]").forEach(function (button) {
+  button.addEventListener("click", function () {
+    var dialog = button.closest("dialog");
+    if (dialog) dialog.close();
+  });
+});
+document.querySelectorAll("input[data-rupiah]").forEach(function (el) {
+  el.addEventListener("input", function () {
+    var digits = el.value.replace(/[^0-9]/g, "");
+    el.value = digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+  });
+  // The prefilled balance is a suggestion to overwrite, not to type onto.
+  el.addEventListener("focus", function () { el.select(); });
+});
 </script>
 </body></html>
