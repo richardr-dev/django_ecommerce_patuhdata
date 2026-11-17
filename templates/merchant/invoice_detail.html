@@ -25,6 +25,7 @@
       <summary class="btn" aria-label="Kirim ke pembeli">{% icon "arrow-out" %} Kirim ▾</summary>
       <div class="menu-panel" style="min-width:300px">
         <a href="{{ wa_link }}" target="_blank" rel="noopener" data-no-soft data-mark-sent="{% url 'merchant-invoice-sent' invoice.id %}">{% icon "megaphone" %}<span>{% if reminder %}Kirim pengingat lewat WhatsApp{% else %}Kirim lewat WhatsApp{% endif %}</span></a>
+        {% if wa_account %}<form method="post" action="{% url 'merchant-invoice-whatsapp' invoice.id %}">{% csrf_token %}<button>{% icon "megaphone" %}<span>{% if reminder %}Kirim pengingat dari akun WhatsApp toko{% else %}Kirim dari akun WhatsApp toko{% endif %}</span></button></form>{% endif %}
         <button type="button" data-copy-link="{{ share_url }}">{% icon "link" %}<span>Salin tautan invoice</span></button>
         <a href="{{ share_url }}" target="_blank" rel="noopener" data-no-soft>{% icon "eye" %}<span>Lihat seperti pembeli</span></a>
         <hr>
@@ -60,6 +61,9 @@
 
 <div class="dp-grid">
   {# ── The invoice as the customer sees it ─────────────────────────────── #}
+  {% if invoice.transfer_claimed_at and amount_due > 0 and invoice.status != 'void' %}<div class="notice" style="margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px"><span class="bb-bubble warn">{% icon "cash" %}</span><span style="flex:1"><b>Pembeli menyatakan sudah transfer</b> pada {{ invoice.transfer_claimed_at|date:"d M Y H:i" }}{% if invoice.transfer_claim_note %}: {{ invoice.transfer_claim_note }}{% endif %}. Cek mutasi rekening, lalu catat pembayarannya.</span><button type="button" class="btn-primary" data-open="pay-dialog">Catat pembayaran</button></div>{% endif %}
+  {% if invoice.from_deliveries and invoice.sales_order %}<p class="dp-help" style="margin:0 0 12px">Dibuat dari surat jalan pesanan <a href="{% url 'merchant-sales-order-detail' invoice.sales_order.pk %}">{{ invoice.sales_order.number }}</a>: stok sudah keluar saat surat jalan, HPP dibukukan dari Barang terkirim belum ditagih.</p>{% endif %}
+  {% if reminder_rows %}<details class="panel" style="margin-bottom:16px"><summary style="padding:12px 18px;cursor:pointer;font-weight:600">Pengingat otomatis ({{ reminder_rows|length }})</summary><div class="dp-card-body" style="padding-top:0">{% for r in reminder_rows %}<p style="margin:4px 0;font-size:13px"><span class="pill {% if r.status == 'sent' %}pill-ok{% elif r.status == 'failed' %}pill-fail{% else %}pill-void{% endif %}">{{ r.get_channel_display|default:r.channel }}</span> {{ r.created_at|date:"d M Y H:i" }} · {% if r.kind == 'before' %}{{ r.offset }} hari sebelum jatuh tempo{% else %}{{ r.offset }} hari setelah jatuh tempo{% endif %} · ke {{ r.to }}{% if r.error %} · <span style="color:var(--ds-bad)">{{ r.error }}</span>{% endif %}</p>{% endfor %}</div></details>{% endif %}
   <article class="dp-paper" id="invoice-printable">
     {% brand merchant_store invoice as b %}
     <div class="dp-paper-head" style="background:{{ b.gradient }}">

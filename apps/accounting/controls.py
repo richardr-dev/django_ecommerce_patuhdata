@@ -409,6 +409,17 @@ def grni_tie(store, today, ledger):
     return check
 
 
+def delivered_tie(store, today, ledger):
+    """Barang terkirim belum ditagih equals the cost of surat jalan not yet on an invoice."""
+    from apps.tax.sales_orders import delivered_not_invoiced
+    waiting = delivered_not_invoiced(store)
+    return _tie("delivered", "Barang terkirim belum ditagih sama dengan surat jalan yang belum diinvoice",
+        ledger.get("1410", ZERO), waiting, "Surat jalan belum ditagih", url=reverse("merchant-deliveries"),
+        action="Buka surat jalan",
+        ok="Saldo 1410 sama dengan harga pokok surat jalan yang belum ditagih.",
+        off="Saldo 1410 berbeda dari surat jalan yang belum ditagih (jurnal manual ke akun itu, atau surat jalan belum terposting).")
+
+
 def year_close_tie(store, today, ledger):
     """A closed year's profit still equals what was moved to Laba ditahan (nothing slipped in
     after the closing)."""
@@ -538,7 +549,7 @@ CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_st
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, intercompany_tie, negative_stock, purchase_orders_late]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, delivered_tie, intercompany_tie, negative_stock, purchase_orders_late]
 
 
 def run_checks(store, today):

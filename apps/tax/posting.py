@@ -53,10 +53,12 @@ def post_invoice(invoice, *, actor=None):
     cost = cost_of_goods(invoice.order)
     # Sales is the residual, so the entry balances whatever the invoice was edited to.
     sales = invoice.total - invoice.shipping - invoice.tax + invoice.discount
+    from apps.accounting.ledger import DELIVERED
+    stock_account = DELIVERED if invoice.from_deliveries else INVENTORY  # goods that left on a surat jalan
     return post_entry(invoice.store, date=invoice.issued_on, actor=actor,
         source=("invoice", invoice.pk), memo=f"Invoice {invoice.number} · {invoice.buyer_name}",
         amounts={RECEIVABLE: invoice.total, DISCOUNTS: invoice.discount, SALES: -sales,
-            SHIPPING: -invoice.shipping, VAT: -invoice.tax, COGS: cost, INVENTORY: -cost})
+            SHIPPING: -invoice.shipping, VAT: -invoice.tax, COGS: cost, stock_account: -cost})
 
 
 def post_invoice_payment(payment, *, strict=False, actor=None):
@@ -149,8 +151,13 @@ def void_invoice(invoice, *, actor=None):
     if invoice.credit_notes.exclude(status="void").exists():
         raise LedgerError("Invoice ini punya nota kredit. Batalkan nota kreditnya lebih dulu.")
     memo = f"Pembatalan invoice {invoice.number}"
-    # The goods did not leave after all: return what the sale took off the shelf.
-    return_order_inventory(invoice.order, actor=actor, reason=memo)
+    if invoice.from_deliveries:
+        # The goods left on a surat jalan and stay with the buyer: the deliveries can be invoiced again.
+        from .sales_orders import release_invoice
+        release_invoice(invoice)
+    else:
+        # The goods did not leave after all: return what the sale took off the shelf.
+        return_order_inventory(invoice.order, actor=actor, reason=memo)
     reverse_source(invoice.store, "invoice", invoice.pk, actor=actor, memo=memo)
     for payment in invoice.payments.all():
         reverse_source(invoice.store, "invoice_payment", payment.pk, actor=actor, memo=memo)

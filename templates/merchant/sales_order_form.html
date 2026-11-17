@@ -1,0 +1,60 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Pesanan penjualan baru{% endblock %}{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-sales-orders' %}">Pesanan penjualan</a> › <span>Baru</span></nav>
+<div class="mb-5"><h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Pesanan penjualan baru</h1>
+  <p class="mt-1 max-w-2xl text-sm text-slate-500">Barang yang dipesan pelanggan pada harga yang disepakati. Stok belum berkurang dan belum ada jurnal; keduanya terjadi saat surat jalan dibuat.</p></div>
+<form method="post" id="doc-form" data-unsaved class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">{% csrf_token %}
+ <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
+ <section class="panel !mb-0">
+  <header><div class="flex items-center gap-3"><span class="bb-bubble step">1</span><div><h2>Pelanggan &amp; tanggal</h2><p>Pilih pelanggan, atau ketik data pembeli.</p></div></div></header>
+  <div class="form-grid">
+    <label class="field wide"><span>Pelanggan</span><select name="customer_id" id="cust"><option value="">— ketik manual —</option>{% for c in customers %}<option value="{{ c.id }}" data-name="{{ c.name }}" data-company="{{ c.company_name }}" data-npwp="{{ c.npwp }}" data-phone="{{ c.phone }}" data-address="{{ c.address }}"{% if prefill and prefill.id == c.id %} selected{% endif %}>{{ c.name }}{% if c.company_name %} · {{ c.company_name }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="field"><span>Nama pelanggan</span><input name="buyer_name" id="f-name" required maxlength="160" value="{{ post.buyer_name|default:prefill.name }}"></label>
+    <label class="field"><span>Perusahaan <em>(opsional)</em></span><input name="company_name" id="f-company" maxlength="160" value="{{ post.company_name|default:prefill.company_name }}"></label>
+    <label class="field"><span>NPWP <em>(opsional)</em></span><input name="buyer_npwp" id="f-npwp" maxlength="20" value="{{ post.buyer_npwp|default:prefill.npwp }}"></label>
+    <label class="field"><span>Telepon</span><input name="phone" id="f-phone" maxlength="30" value="{{ post.phone|default:prefill.phone }}"></label>
+    <label class="field wide"><span>Alamat kirim</span><input name="address" id="f-address" value="{{ post.address|default:prefill.address }}"></label>
+    <label class="field"><span>Tanggal pesanan</span><input type="date" name="issued_on" value="{{ post.issued_on|default:today }}"></label>
+    <label class="field"><span>Rencana kirim <em>(opsional)</em></span><input type="date" name="expected_on" value="{{ post.expected_on }}"></label>
+  </div>
+ </section>
+ <section class="panel !mb-0">
+  <header><div class="flex items-center gap-3"><span class="bb-bubble step">2</span><div><h2>Barang</h2><p>Hanya barang bisa dipesan di sini; jasa ditagih langsung lewat invoice.</p></div></div></header>
+  <div class="scroll-x"><table class="editor"><thead><tr><th>Produk</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:160px">Harga satuan</th><th class="num" style="width:150px">Jumlah</th><th class="x"></th></tr></thead>
+    <tbody id="rows"><tr>{% include "merchant/_quote_line.html" %}</tr></tbody></table></div>
+  <footer><button type="button" class="btn" id="add-line">+ Tambah baris</button><span></span></footer>
+ </section>
+ </div>
+ <aside class="grid gap-5 lg:sticky lg:top-20">
+  <section class="bb-summary relative overflow-hidden">
+    <p class="text-xs font-bold uppercase tracking-wider text-blue-100">Total sebelum PPN</p>
+    <p class="mt-1 text-3xl font-extrabold tracking-tight" id="grand">Rp0</p>
+    <div class="mt-4 grid gap-2 text-sm text-blue-50">
+      <div class="flex justify-between"><span>Subtotal</span><span id="sub" class="font-semibold">Rp0</span></div>
+      <div class="flex items-center justify-between gap-3"><span>Diskon</span><input name="discount" inputmode="decimal" data-rupiah placeholder="0" value="{{ post.discount }}" data-disc class="!h-8 !w-32 !rounded-full !border-0 !bg-white/15 !px-3 !text-right !text-sm !text-white placeholder:!text-blue-200"></div>
+      <div class="flex items-center justify-between gap-3"><span>Ongkir</span><input name="shipping" inputmode="decimal" data-rupiah placeholder="0" value="{{ post.shipping }}" data-ship class="!h-8 !w-32 !rounded-full !border-0 !bg-white/15 !px-3 !text-right !text-sm !text-white placeholder:!text-blue-200"></div>
+    </div>
+    <p class="mt-3 text-[11px] text-blue-100">PPN dihitung saat pesanan disimpan jika perusahaan PKP; ongkir ditagih pada invoice pertama.</p>
+  </section>
+  <section class="panel !mb-0 p-5">
+    <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="3" maxlength="500">{{ post.notes }}</textarea></label>
+    <div class="mt-5 grid gap-2"><button class="btn-primary justify-center !h-12">{% icon "check" %} Simpan pesanan</button>
+      <a class="grid h-10 place-items-center rounded-full text-sm font-semibold text-slate-500 hover:bg-slate-50" href="{% url 'merchant-sales-orders' %}">Batal</a></div>
+  </section>
+ </aside>
+</form>
+<script>
+(function(){
+  function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
+  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  var rows=document.getElementById("rows");
+  function calc(){var s=0;rows.querySelectorAll("tr").forEach(function(tr){var q=num(tr.querySelector("[data-qty]").value),p=num(tr.querySelector("[data-price]").value);tr.querySelector("[data-line]").textContent=q&&p?fmt(q*p):"";s+=q*p;});
+    document.getElementById("sub").textContent=fmt(s);document.getElementById("grand").textContent=fmt(Math.max(s-num(document.querySelector("[data-disc]").value),0)+num(document.querySelector("[data-ship]").value));}
+  rows.addEventListener("change",function(e){if(e.target.matches("select")){var o=e.target.selectedOptions[0],tr=e.target.closest("tr"),p=tr.querySelector("[data-price]");if(o&&o.dataset.price&&!p.value)p.value=o.dataset.price;var q=tr.querySelector("[data-qty]");if(!q.value)q.value=1;}calc();});
+  document.getElementById("doc-form").addEventListener("input",calc);
+  document.getElementById("add-line").addEventListener("click",function(){var t=rows.querySelector("tr").cloneNode(true);t.querySelectorAll("input").forEach(function(i){i.value="";});t.querySelector("select").selectedIndex=0;rows.appendChild(t);});
+  rows.addEventListener("click",function(e){if(e.target.matches("[data-remove]")&&rows.children.length>1){e.target.closest("tr").remove();calc();}});
+  document.getElementById("cust").addEventListener("change",function(){var o=this.selectedOptions[0];if(!o||!o.value)return;[["f-name","name"],["f-company","company"],["f-npwp","npwp"],["f-phone","phone"],["f-address","address"]].forEach(function(p){var el=document.getElementById(p[0]);if(el&&!el.value)el.value=o.dataset[p[1]]||"";});});
+  calc();
+})();
+</script>
+{% endblock %}

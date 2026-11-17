@@ -1,0 +1,42 @@
+{% load branding books %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Proforma {{ number }}</title>{% include "platform/favicon.html" %}
+{% brand store as b %}<style>
+  body { margin:0; background:#f3fafe; color:#012441; font:14px/1.5 Inter,system-ui,sans-serif; }
+  .bar { max-width:800px; margin:16px auto 0; padding:0 16px; display:flex; justify-content:flex-end; gap:8px; }
+  button { height:38px; padding:0 18px; border:0; border-radius:99px; background:{{ b.accent }}; color:#fff; font:650 13px Inter,system-ui,sans-serif; cursor:pointer; }
+  .sheet { max-width:800px; margin:12px auto 32px; background:#fff; padding:36px; border-radius:20px; box-shadow:0 10px 30px -18px rgba(11,111,184,.35),0 0 0 1px rgba(1,36,65,.05); }
+  header { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; border-bottom:3px solid {{ b.accent }}; padding-bottom:14px; }
+  h1 { margin:0; font-size:24px; letter-spacing:.06em; color:{{ b.accent }}; } header p { margin:2px 0 0; color:#5b7186; white-space:pre-line; font-size:13px; }
+  .stamp { display:inline-block; margin-top:6px; padding:3px 10px; border-radius:99px; background:#fff4e5; color:#b85d00; font-size:11px; font-weight:700; letter-spacing:.04em; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:20px 0; } h2 { margin:0 0 4px; color:#5b7186; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .grid p { margin:0; white-space:pre-line; } table { width:100%; border-collapse:collapse; margin-top:6px; }
+  th { background:{{ b.accent }}1a; color:{{ b.accent }}; font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 8px; text-align:left; }
+  td { padding:10px 8px; border-bottom:1px solid #d6e6f0; vertical-align:top; } .n { text-align:right; white-space:nowrap; } small { display:block; color:#5b7186; font-size:12px; }
+  .totals { margin-left:auto; width:min(100%,340px); margin-top:14px; } .totals div { display:flex; justify-content:space-between; padding:5px 0; } .totals .grand { border-top:2px solid #012441; font-weight:800; font-size:16px; }
+  .banks { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:6px; } .bank { padding:10px 12px; border-radius:12px; background:#f6fbfe; border:1px solid #d6e6f0; }
+  .note { margin-top:20px; color:#5b7186; font-size:12px; }
+  @media print { body { background:#fff; } .bar { display:none; } .sheet { box-shadow:none; margin:0; max-width:none; padding:0; border-radius:0; } }
+</style></head>
+<body>
+<div class="bar"><button onclick="window.print()">Cetak / simpan PDF</button></div>
+<main class="sheet">
+  <header><div><h1>PROFORMA INVOICE</h1><p>No. {{ number }} · {{ today|date:"d F Y" }}{% if quote.valid_until %}
+Berlaku sampai {{ quote.valid_until|date:"d F Y" }}{% endif %}</p><span class="stamp">Bukan faktur pajak · bukan bukti pembayaran</span></div>
+    <div style="text-align:right">{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:52px;max-width:150px;object-fit:contain;margin-bottom:4px">{% endif %}{% if b.show_name or not b.logo_url %}<p><b>{{ b.name }}</b></p>{% endif %}<p>{{ b.address }}</p></div></header>
+  <section class="grid">
+    <div><h2>Ditujukan kepada</h2><p><b>{% if quote.company_name and quote.company_name != quote.buyer_name %}{{ quote.company_name }} ({{ quote.buyer_name }}){% else %}{{ quote.buyer_name }}{% endif %}</b>{% if quote.address %}
+{{ quote.address }}{% endif %}{% if quote.phone %}
+Telp. {{ quote.phone }}{% endif %}{% if quote.buyer_npwp %}
+NPWP {{ quote.buyer_npwp }}{% endif %}</p></div>
+    <div><h2>Dasar</h2><p>Penawaran {{ quote.number }} tanggal {{ quote.issued_on|date:"d M Y" }}
+Invoice resmi diterbitkan setelah pembayaran atau persetujuan.</p></div>
+  </section>
+  <table><thead><tr><th>Produk / jasa</th><th class="n">Qty</th><th class="n">Harga satuan</th><th class="n">Jumlah</th></tr></thead><tbody>
+    {% for i in items %}<tr><td><b>{{ i.description }}</b>{% if i.sku %}<small>{{ i.sku }}</small>{% endif %}</td><td class="n">{{ i.quantity }}</td><td class="n">{{ i.unit_price|rp }}</td><td class="n"><b>{{ i.line_total|rp }}</b></td></tr>{% endfor %}
+  </tbody></table>
+  <div class="totals"><div><span>Subtotal</span><span>{{ quote.subtotal|rp }}</span></div>{% if quote.discount %}<div><span>Diskon</span><span>−{{ quote.discount|rp }}</span></div>{% endif %}{% if quote.tax %}<div><span>PPN</span><span>{{ quote.tax|rp }}</span></div>{% endif %}{% if quote.shipping %}<div><span>Ongkir</span><span>{{ quote.shipping|rp }}</span></div>{% endif %}<div class="grand"><span>Total</span><span>{{ quote.total|rp }}</span></div></div>
+  {% if banks %}<section style="margin-top:18px"><h2>Pembayaran</h2><div class="banks">{% for bk in banks %}<div class="bank">{{ bk.bank_name|default:bk.name }}<br><b>{{ bk.account_number }}</b><small>a.n. {{ bk.name }}</small></div>{% endfor %}</div></section>{% endif %}
+  {% if quote.notes %}<p class="note"><b>Catatan:</b> {{ quote.notes }}</p>{% endif %}
+  {% if b.footer %}<p class="note">{{ b.footer }}</p>{% endif %}
+</main></body></html>

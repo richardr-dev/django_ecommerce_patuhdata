@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 CASH, GATEWAY, RECEIVABLE, MARKETPLACE = "1100", "1200", "1250", "1300"
 INVENTORY, CONSIGNED, INPUT_VAT = "1400", "1450", "1500"
+DELIVERED = "1410"  # Barang terkirim belum ditagih: cost of goods that left on a surat jalan, invoice still to come
 VAT, UNIDENTIFIED, PAYABLE = "2100", "2200", "2300"
 INTERCO_RECEIVABLE, INTERCO_PAYABLE, INTERCO_SALES = "1260", "2360", "4150"
 GRNI = "2350"  # Barang diterima belum ditagih: goods on the shelf whose supplier bill has not arrived
@@ -55,6 +56,7 @@ CHART = [
     (ALLOWANCE, "Cadangan kerugian piutang", "asset"),
     (PREPAID, "Biaya dibayar di muka", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
+    (DELIVERED, "Barang terkirim belum ditagih", "asset"),
     (CONSIGNED, "Persediaan di mitra (konsinyasi)", "asset"),
     (INPUT_VAT, "PPN masukan", "asset"),
     (FIXED_ASSETS, "Aset tetap", "asset"),

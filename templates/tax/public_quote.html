@@ -1,0 +1,44 @@
+{% load branding books %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Penawaran {{ quote.number }} · {{ store.name }}</title>{% include "platform/favicon.html" %}
+{% brand store as b %}<style>
+  :root { --accent:{{ b.accent }}; --muted:#5b7186; }
+  body { margin:0; background:#f3fafe; color:#012441; font:14px/1.5 Inter,system-ui,sans-serif; }
+  .wrap { max-width:760px; margin:20px auto 40px; padding:0 14px; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .btn { height:40px; padding:0 18px; border:0; border-radius:99px; background:var(--accent); color:#fff; font:700 14px Inter,system-ui,sans-serif; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; }
+  .btn.soft { background:#fff; color:var(--accent); box-shadow:inset 0 0 0 1px rgba(11,111,184,.25); } .btn.bad { background:#fff; color:#c92a2a; box-shadow:inset 0 0 0 1px rgba(201,42,42,.3); }
+  .card { background:#fff; border-radius:22px; box-shadow:0 10px 30px -18px rgba(11,111,184,.35),0 0 0 1px rgba(1,36,65,.05); overflow:hidden; }
+  .head { padding:24px 28px; background:{{ b.gradient }}; color:#fff; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; } .head h1 { margin:0; font-size:22px; } .head p { margin:4px 0 0; opacity:.9; }
+  .pad { padding:20px 28px; } h2 { margin:0 0 6px; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+  table { width:100%; border-collapse:collapse; } th { background:#eaf7fe; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 8px; text-align:left; }
+  td { padding:10px 8px; border-bottom:1px solid #d6e6f0; vertical-align:top; } .n { text-align:right; white-space:nowrap; } small { display:block; color:var(--muted); font-size:12px; }
+  .totals { margin-left:auto; width:min(100%,320px); } .totals div { display:flex; justify-content:space-between; padding:5px 0; } .totals .grand { border-top:2px solid #012441; font-weight:800; font-size:17px; }
+  .state { margin:0 0 14px; padding:12px 16px; border-radius:14px; font-weight:600; } .ok { background:#e6f7ee; color:#0d7a3e; } .warn { background:#fff4e5; color:#b85d00; } .bad { background:#ffebeb; color:#c92a2a; }
+  .respond { display:flex; flex-wrap:wrap; gap:10px; align-items:center; } textarea { width:100%; min-height:60px; margin:8px 0; padding:10px 12px; border:1px solid #d6e6f0; border-radius:12px; font:inherit; }
+  @media print { body { background:#fff; } .top, .respond, form { display:none; } .card { box-shadow:none; } }
+</style></head>
+<body><div class="wrap">
+  <div class="top"><b>{{ b.name }}</b><div style="display:flex;gap:8px"><button class="btn soft" onclick="window.print()">Cetak / PDF</button></div></div>
+  {% if done == "accept" %}<p class="state ok">Terima kasih, penawaran ini sudah Anda setujui. {{ store.name }} akan menghubungi Anda.</p>
+  {% elif done == "decline" %}<p class="state bad">Penawaran ini Anda tolak. Terima kasih sudah memberi tahu.</p>
+  {% elif quote.status == "accepted" %}<p class="state ok">Penawaran ini sudah disetujui.</p>
+  {% elif quote.status == "invoiced" %}<p class="state ok">Penawaran ini sudah menjadi invoice.</p>
+  {% elif quote.status == "declined" %}<p class="state bad">Penawaran ini ditolak.</p>
+  {% elif expired %}<p class="state warn">Masa berlaku penawaran ini sudah lewat ({{ quote.valid_until|date:"d M Y" }}). Hubungi {{ store.name }} untuk penawaran baru.</p>{% endif %}
+  <article class="card">
+    <div class="head"><div><h1>Penawaran {{ quote.number }}</h1><p>{{ quote.issued_on|date:"d M Y" }}{% if quote.valid_until %} · berlaku sampai {{ quote.valid_until|date:"d M Y" }}{% endif %}</p></div>
+      <div style="text-align:right">{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:44px;max-width:140px;object-fit:contain;background:#fff;border-radius:10px;padding:4px 6px">{% endif %}</div></div>
+    <div class="pad"><h2>Untuk</h2><p style="margin:0"><b>{% if quote.company_name and quote.company_name != quote.buyer_name %}{{ quote.company_name }} ({{ quote.buyer_name }}){% else %}{{ quote.buyer_name }}{% endif %}</b>{% if quote.address %}<small>{{ quote.address }}</small>{% endif %}</p></div>
+    <div class="pad" style="padding-top:0"><table><thead><tr><th>Produk / jasa</th><th class="n">Qty</th><th class="n">Harga</th><th class="n">Jumlah</th></tr></thead><tbody>
+      {% for i in items %}<tr><td><b>{{ i.description }}</b>{% if i.sku %}<small>{{ i.sku }}</small>{% endif %}</td><td class="n">{{ i.quantity }}</td><td class="n">{{ i.unit_price|rp }}</td><td class="n"><b>{{ i.line_total|rp }}</b></td></tr>{% endfor %}
+    </tbody></table>
+    <div class="totals" style="margin-top:12px"><div><span>Subtotal</span><span>{{ quote.subtotal|rp }}</span></div>{% if quote.discount %}<div><span>Diskon</span><span>−{{ quote.discount|rp }}</span></div>{% endif %}{% if quote.tax %}<div><span>PPN</span><span>{{ quote.tax|rp }}</span></div>{% endif %}{% if quote.shipping %}<div><span>Ongkir</span><span>{{ quote.shipping|rp }}</span></div>{% endif %}<div class="grand"><span>Total</span><span>{{ quote.total|rp }}</span></div></div></div>
+    {% if quote.notes %}<div class="pad" style="padding-top:0"><h2>Catatan</h2><p style="margin:0;white-space:pre-line">{{ quote.notes }}</p></div>{% endif %}
+    {% if can_respond %}<div class="pad" style="border-top:1px solid #d6e6f0"><h2>Jawaban Anda</h2>
+      <form method="post" action="{{ request.path }}respond/"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        <textarea name="note" maxlength="300" placeholder="Pesan untuk {{ store.name }} (opsional)"></textarea>
+        <div class="respond"><button class="btn" name="action" value="accept">✓ Setujui penawaran</button><button class="btn bad" name="action" value="decline">Tolak</button></div></form></div>{% endif %}
+    {% if b.footer %}<div class="pad" style="padding-top:0;color:var(--muted);font-size:12px">{{ b.footer }}</div>{% endif %}
+  </article>
+</div></body></html>

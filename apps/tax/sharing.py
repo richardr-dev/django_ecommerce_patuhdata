@@ -11,7 +11,7 @@ from django.core.mail import EmailMessage
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Invoice
+from .models import Invoice, Quote
 
 
 class ShareError(ValueError):
@@ -48,6 +48,56 @@ def message_text(invoice, url, amount_due):
     due = f", jatuh tempo {invoice.due_date:%d %b %Y}" if invoice.due_date else ""
     return (f"Halo {name}, berikut invoice {invoice.number} dari {invoice.seller_name} sebesar "
         f"{_rupiah(amount_due)}{due}. Rincian dan cara pembayaran: {url} . Terima kasih.")
+
+
+def upcoming_text(invoice, url, amount_due, days):
+    """The reminder sent before the due date."""
+    return (f"Halo {invoice.buyer_name}, invoice {invoice.number} dari {invoice.seller_name} sebesar "
+        f"{_rupiah(amount_due)} jatuh tempo dalam {days} hari ({invoice.due_date:%d %b %Y}). Rincian dan "
+        f"cara pembayaran: {url} . Terima kasih.")
+
+
+# ── quotes: the same idea, a link the buyer answers on ───────────────────────
+
+def ensure_quote_token(quote):
+    if not quote.public_token:
+        quote.public_token = secrets.token_urlsafe(24)
+        quote.save(update_fields=["public_token"])
+    return quote.public_token
+
+
+def quote_public_url(request, quote):
+    return request.build_absolute_uri(reverse("quote-public", args=[ensure_quote_token(quote)]))
+
+
+def quote_message_text(quote, url):
+    until = f", berlaku sampai {quote.valid_until:%d %b %Y}" if quote.valid_until else ""
+    return (f"Halo {quote.buyer_name}, berikut penawaran {quote.number} dari {quote.store.name} sebesar "
+        f"{_rupiah(quote.total)}{until}. Lihat rincian dan setujui di: {url} . Terima kasih.")
+
+
+def mark_quote_sent(quote):
+    fields = {"sent_at": timezone.now()}
+    if quote.status == Quote.STATUS_DRAFT:
+        fields["status"] = Quote.STATUS_SENT
+    Quote.objects.filter(pk=quote.pk).update(**fields)
+
+
+def send_quote_email(quote, url, to, *, note=""):
+    address = (to or "").strip()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", address):
+        raise ShareError("Masukkan alamat email yang valid.")
+    body = quote_message_text(quote, url)
+    if note:
+        body = f"{note.strip()}\n\n{body}"
+    EmailMessage(subject=f"Penawaran {quote.number} dari {quote.store.name}", body=body,
+        to=[address]).send(fail_silently=False)
+    mark_quote_sent(quote)
+
+
+def record_quote_view(quote):
+    if quote.viewed_at is None:
+        Quote.objects.filter(pk=quote.pk, viewed_at__isnull=True).update(viewed_at=timezone.now())
 
 
 def whatsapp_link(phone, text):

@@ -383,9 +383,14 @@ def merchant_quote_detail(request, quote_id):
         except (quotes.QuoteError, ValueError) as error:
             messages.error(request, str(error))
         return redirect("merchant-quote-detail", quote.pk)
+    from . import sharing
+    from .share_views import _whatsapp_account
+    share_url = sharing.quote_public_url(request, quote)
     return render(request, "merchant/quote_detail.html", _merchant_context(request, store,
         quote=quote, items=quote.items.select_related("product"), audit=audit_trail(store, quote),
-        expired=quotes.is_expired(quote), can_edit=_can_edit(request, store)))
+        expired=quotes.is_expired(quote), can_edit=_can_edit(request, store), share_url=share_url,
+        wa_link=sharing.whatsapp_link(quote.phone, sharing.quote_message_text(quote, share_url)),
+        wa_account=_whatsapp_account(store) is not None, buyer_email=quote.customer.email if quote.customer_id else ""))
 
 
 # ---------------------------------------------------------------------------

@@ -97,6 +97,13 @@ class Invoice(models.Model):
     public_token = models.CharField(max_length=40, blank=True, db_index=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     viewed_at = models.DateTimeField(null=True, blank=True)
+    # The buyer pressed "Saya sudah transfer" on the public page: the seller checks the bank.
+    transfer_claimed_at = models.DateTimeField(null=True, blank=True)
+    transfer_claim_note = models.CharField(max_length=300, blank=True)
+    # Made from surat jalan of a sales order: stock already left and its cost sits in 1410, so this
+    # invoice books HPP against 1410, takes no stock, and returns none when voided.
+    from_deliveries = models.BooleanField(default=False)
+    sales_order = models.ForeignKey("SalesOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -378,6 +385,12 @@ class Quote(models.Model):
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # Sharing: the buyer's link (/q/<token>/), when it went out, was opened and answered.
+    public_token = models.CharField(max_length=40, blank=True, db_index=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    viewed_at = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    response_note = models.CharField(max_length=300, blank=True)
     invoice = models.OneToOneField(Invoice, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="quote")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True,
@@ -493,3 +506,152 @@ class TaxFiling(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_tax_filing")]
+
+
+class ReminderPolicy(models.Model):
+    """Automatic payment reminders for a store (tax/reminders.py): N days before the due date and on
+    chosen days after it, by email and through the store's own WhatsApp account."""
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="reminder_policy")
+    enabled = models.BooleanField(default=False)
+    days_before = models.PositiveSmallIntegerField(default=3, help_text="0: tidak ada pengingat sebelum jatuh tempo.")
+    days_after = models.CharField(max_length=60, default="1,7,14", help_text="Hari setelah jatuh tempo, dipisah koma.")
+    use_email = models.BooleanField(default=True)
+    use_whatsapp = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Pengingat {self.store_id}"
+
+
+class ReminderLog(models.Model):
+    """One row per reminder step actually attempted, so a step never goes out twice."""
+    BEFORE, AFTER = "before", "after"
+    EMAIL, WHATSAPP = "email", "whatsapp"
+    PENDING, SENT, FAILED = "pending", "sent", "failed"
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="reminders")
+    kind = models.CharField(max_length=10)
+    offset = models.PositiveSmallIntegerField()
+    channel = models.CharField(max_length=10)
+    to = models.CharField(max_length=254, blank=True)
+    status = models.CharField(max_length=10, default=PENDING)
+    error = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["invoice", "kind", "offset", "channel"],
+            name="unique_reminder_step")]
+
+
+class SalesOrder(models.Model):
+    """Pesanan penjualan: what the customer asked for, at agreed prices. Books nothing, holds no stock.
+    Delivered through ``Delivery`` (surat jalan), invoiced from deliveries (tax/sales_orders.py)."""
+    STATUS_OPEN, STATUS_PARTIAL, STATUS_FULFILLED = "open", "partial", "fulfilled"
+    STATUS_CLOSED, STATUS_CANCELLED = "closed", "cancelled"
+    STATUS_CHOICES = [(STATUS_OPEN, "Terbuka"), (STATUS_PARTIAL, "Sebagian terkirim"),
+        (STATUS_FULFILLED, "Terkirim semua"), (STATUS_CLOSED, "Ditutup"), (STATUS_CANCELLED, "Dibatalkan")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="sales_orders")
+    customer = models.ForeignKey("shops.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_orders")
+    number = models.CharField(max_length=40)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    issued_on = models.DateField()
+    expected_on = models.DateField(null=True, blank=True)
+    buyer_name = models.CharField(max_length=160)
+    company_name = models.CharField(max_length=160, blank=True)
+    buyer_npwp = models.CharField(max_length=16, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    address = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    shipping = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    quote = models.OneToOneField(Quote, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_order")
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-issued_on", "-number"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_store_sales_order_number")]
+
+    def __str__(self):
+        return self.number
+
+    @property
+    def ordered_units(self):
+        return sum(line.quantity for line in self.lines.all())
+
+    @property
+    def delivered_units(self):
+        return sum(line.delivered_quantity for line in self.lines.all())
+
+
+class SalesOrderLine(models.Model):
+    order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    description = models.CharField(max_length=200)
+    sku = models.CharField(max_length=80, blank=True)
+    quantity = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    unit = models.CharField(max_length=20, blank=True)
+    delivered_quantity = models.PositiveIntegerField(default=0)
+    invoiced_quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def remaining(self):
+        return max(0, self.quantity - self.delivered_quantity)
+
+    @property
+    def line_total(self):
+        return self.quantity * self.unit_price - self.discount
+
+
+class Delivery(models.Model):
+    """Surat jalan for a sales order: the stock document. Units leave the shelf when it is made."""
+    STATUS_SHIPPED, STATUS_CANCELLED = "shipped", "cancelled"
+    STATUS_CHOICES = [(STATUS_SHIPPED, "Terkirim"), (STATUS_CANCELLED, "Dibatalkan")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="deliveries")
+    sales_order = models.ForeignKey(SalesOrder, on_delete=models.PROTECT, related_name="deliveries")
+    number = models.CharField(max_length=40)
+    delivered_on = models.DateField()
+    courier = models.CharField(max_length=40, blank=True)
+    tracking_number = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_SHIPPED)
+    invoice = models.ForeignKey(Invoice, on_delete=models.SET_NULL, null=True, blank=True, related_name="deliveries")
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-delivered_on", "-number"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_store_delivery_number")]
+
+    def __str__(self):
+        return self.number
+
+    @property
+    def value(self):
+        return sum((line.unit_cost * line.quantity for line in self.lines.all()), Decimal(0))
+
+
+class DeliveryLine(models.Model):
+    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name="lines")
+    order_line = models.ForeignKey(SalesOrderLine, on_delete=models.PROTECT, related_name="deliveries")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def value(self):
+        return self.unit_cost * self.quantity

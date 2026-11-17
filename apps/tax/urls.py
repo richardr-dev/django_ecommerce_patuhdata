@@ -1,9 +1,21 @@
 from django.urls import path
 
-from . import price_list_views, public_views, receivable_views, sales_views, views, views_annual
+from . import (
+    price_list_views,
+    public_views,
+    receivable_views,
+    sales_order_views,
+    sales_views,
+    share_views,
+    views,
+    views_annual,
+)
 
 urlpatterns = [
     path("i/<str:token>/", public_views.public_invoice, name="invoice-public"),
+    path("i/<str:token>/konfirmasi/", share_views.public_invoice_confirm, name="invoice-public-confirm"),
+    path("q/<str:token>/", share_views.public_quote, name="quote-public"),
+    path("q/<str:token>/respond/", share_views.public_quote_respond, name="quote-public-respond"),
     path("books/tax/", views.merchant_tax, name="merchant-tax"),
     path("books/tax/spt-ppn/", views.merchant_spt_ppn, name="merchant-spt-ppn"),
     path("books/tax/spt-tahunan/", views_annual.merchant_spt_tahunan, name="merchant-spt-tahunan"),
@@ -32,12 +44,25 @@ urlpatterns = [
         name="merchant-delivery-note"),
     path("books/sales/price-lists/", price_list_views.merchant_price_lists, name="merchant-price-lists"),
     path("books/sales/price-lists/<int:list_id>/", price_list_views.merchant_price_list, name="merchant-price-list"),
+    path("books/sales/orders/", sales_order_views.merchant_sales_orders, name="merchant-sales-orders"),
+    path("books/sales/orders/new/", sales_order_views.merchant_sales_order_new, name="merchant-sales-order-new"),
+    path("books/sales/orders/<uuid:order_id>/", sales_order_views.merchant_sales_order_detail, name="merchant-sales-order-detail"),
+    path("books/sales/quotes/<uuid:quote_id>/to-order/", sales_order_views.merchant_sales_order_from_quote, name="merchant-sales-order-from-quote"),
+    path("books/sales/deliveries/", sales_order_views.merchant_deliveries, name="merchant-deliveries"),
+    path("books/sales/deliveries/<uuid:delivery_id>/", sales_order_views.merchant_delivery_detail, name="merchant-delivery-detail"),
+    path("books/sales/deliveries/<uuid:delivery_id>/print/", sales_order_views.merchant_delivery_print, name="merchant-delivery-print"),
     path("books/sales/quotes/", sales_views.merchant_quotes, name="merchant-quotes"),
     path("books/sales/quotes/new/", sales_views.merchant_quote_edit, name="merchant-quote-new"),
     path("books/sales/quotes/<uuid:quote_id>/", sales_views.merchant_quote_detail,
         name="merchant-quote-detail"),
     path("books/sales/quotes/<uuid:quote_id>/edit/", sales_views.merchant_quote_edit,
         name="merchant-quote-edit"),
+    path("books/sales/quotes/<uuid:quote_id>/proforma/", share_views.merchant_quote_proforma, name="merchant-quote-proforma"),
+    path("books/sales/quotes/<uuid:quote_id>/email/", share_views.merchant_quote_email, name="merchant-quote-email"),
+    path("books/sales/quotes/<uuid:quote_id>/sent/", share_views.merchant_quote_sent, name="merchant-quote-sent"),
+    path("books/sales/quotes/<uuid:quote_id>/whatsapp/", share_views.merchant_quote_whatsapp, name="merchant-quote-whatsapp"),
+    path("books/sales/invoices/<uuid:invoice_id>/whatsapp/", share_views.merchant_invoice_whatsapp, name="merchant-invoice-whatsapp"),
+    path("books/sales/receivables/reminders/", share_views.merchant_reminder_policy, name="merchant-reminder-policy"),
     path("books/sales/recurring/", sales_views.merchant_recurring, name="merchant-recurring"),
     path("books/sales/recurring/new/", sales_views.merchant_recurring_edit,
         name="merchant-recurring-new"),

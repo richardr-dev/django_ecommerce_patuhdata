@@ -1,0 +1,9 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Surat jalan{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Surat jalan</h1><p>Barang yang keluar untuk pesanan penjualan. Yang belum ditagih bernilai sebesar akun Barang terkirim belum ditagih (1410).</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-sales-orders' %}">{% icon "clipboard" %} Pesanan penjualan</a></div></div>
+<div class="tiles"><div class="tile accent"><small>Terkirim belum ditagih</small><strong>{{ waiting|rp }}</strong><span>harga pokok barang di jalan ke pelanggan</span></div></div>
+<section class="panel">{% if deliveries %}<table class="tbl"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Pesanan</th><th>Pelanggan</th><th>Kurir / resi</th><th>Invoice</th><th>Status</th></tr></thead><tbody>
+{% for d in deliveries %}<tr><td><a class="rowlink" href="{% url 'merchant-delivery-detail' d.pk %}"><b>{{ d.number }}</b></a></td><td>{{ d.delivered_on|date:"d M Y" }}</td><td>{{ d.sales_order.number }}</td><td>{{ d.sales_order.buyer_name }}</td><td>{{ d.courier|upper|default:"—" }}{% if d.tracking_number %}<small style="display:block;color:var(--ds-muted)">{{ d.tracking_number }}</small>{% endif %}</td>
+<td>{% if d.invoice %}{{ d.invoice.number }}{% elif d.status == 'shipped' %}<span class="pill pill-warn">Belum ditagih</span>{% endif %}</td><td><span class="pill {% if d.status == 'shipped' %}pill-shipped{% else %}pill-cancelled{% endif %}">{{ d.get_status_display }}</span></td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty-box"><span class="bb-bubble">{% icon "truck" %}</span><b>Belum ada surat jalan.</b><span>Buat dari halaman pesanan penjualan.</span></div>{% endif %}</section>
+{% endblock %}

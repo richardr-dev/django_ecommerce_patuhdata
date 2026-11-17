@@ -420,7 +420,7 @@ class InventoryMovement(models.Model):
         ("transfer_in", "Transfer masuk"), ("transfer_out", "Transfer keluar"),
         ("consign_out", "Kirim ke mitra"), ("consign_in", "Kembali dari mitra"),
         ("opname", "Stok opname"), ("deficit", "Jual melebihi stok"), ("purchase_return", "Retur ke supplier"),
-        ("deficit_cover", "Tutup stok minus")]
+        ("deficit_cover", "Tutup stok minus"), ("issue", "Barang keluar (surat jalan)")]
     store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="inventory_movements")
     order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="inventory_movements",
         null=True, blank=True)

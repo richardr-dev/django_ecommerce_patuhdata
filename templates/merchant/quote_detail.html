@@ -6,7 +6,17 @@
   <p class="dp-sub">Untuk <b>{{ quote.buyer_name }}</b> · berlaku sampai <b>{{ quote.valid_until|date:"d M Y" }}</b> · <b>{{ quote.total|rp }}</b></p></div>
   <div class="dp-actions">
     {% if can_edit and quote.status != 'invoiced' and quote.status != 'declined' %}<button type="button" class="btn-primary" data-open="inv-dialog">{% icon "file" %} Jadikan invoice</button>{% endif %}
+    {% if can_edit and quote.status != 'invoiced' and quote.status != 'declined' and not quote.sales_order %}<form method="post" action="{% url 'merchant-sales-order-from-quote' quote.id %}" data-confirm="Jadikan penawaran {{ quote.number }} pesanan penjualan? Barang dikirim lewat surat jalan, invoice menyusul." data-confirm-ok="Buat pesanan" data-confirm-tone="neutral">{% csrf_token %}<button class="btn">{% icon "clipboard" %} Jadikan pesanan penjualan</button></form>{% endif %}
+    {% if quote.sales_order %}<a class="btn" href="{% url 'merchant-sales-order-detail' quote.sales_order.pk %}">{% icon "clipboard" %} Pesanan {{ quote.sales_order.number }}</a>{% endif %}
     {% if quote.invoice %}<a class="btn-primary" href="{% url 'merchant-invoice-detail' quote.invoice.id %}">{% icon "file" %} Buka invoice {{ quote.invoice.number }}</a>{% endif %}
+    {% if can_edit and quote.status != 'invoiced' and quote.status != 'declined' %}<details class="dp-more"><summary class="btn" aria-label="Kirim ke pembeli">{% icon "arrow-out" %} Kirim ▾</summary><div class="menu-panel" style="min-width:300px">
+      <a href="{{ wa_link }}" target="_blank" rel="noopener" data-no-soft data-mark-sent="{% url 'merchant-quote-sent' quote.id %}">{% icon "megaphone" %}<span>Kirim lewat WhatsApp</span></a>
+      {% if wa_account %}<form method="post" action="{% url 'merchant-quote-whatsapp' quote.id %}">{% csrf_token %}<button>{% icon "megaphone" %}<span>Kirim dari akun WhatsApp toko</span></button></form>{% endif %}
+      <button type="button" data-copy-link="{{ share_url }}">{% icon "link" %}<span>Salin tautan penawaran</span></button>
+      <a href="{{ share_url }}" target="_blank" rel="noopener" data-no-soft>{% icon "eye" %}<span>Lihat seperti pembeli</span></a><hr>
+      <form method="post" action="{% url 'merchant-quote-email' quote.id %}" style="padding:6px 8px;display:grid;gap:6px">{% csrf_token %}<label class="field"><span>Kirim lewat email</span><input type="email" name="to" placeholder="email@pembeli.com" value="{{ buyer_email }}" required></label><button class="btn-primary justify-center" data-no-loading>{% icon "check" %} Kirim email</button></form>
+    </div></details>{% endif %}
+    <a class="btn" href="{% url 'merchant-quote-proforma' quote.id %}" target="_blank" rel="noopener" data-no-soft>{% icon "file" %} Proforma</a>
     <button class="btn" onclick="window.print()">{% icon "printer" %} Cetak / PDF</button>
     {% if can_edit and quote.status != 'invoiced' %}
     <details class="dp-more"><summary class="btn">Lainnya ▾</summary><div class="menu-panel">
@@ -16,6 +26,7 @@
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="declined"><button class="danger">{% icon "alert" %}<span>Tandai ditolak</span></button></form>
     </div></details>{% endif %}
   </div></div>
+{% if quote.responded_at %}<div class="notice" style="margin-bottom:16px"><b>Jawaban pembeli lewat tautan</b> ({{ quote.responded_at|date:"d M Y H:i" }}): {% if quote.status == 'accepted' or quote.status == 'invoiced' %}disetujui{% else %}ditolak{% endif %}{% if quote.response_note %} · “{{ quote.response_note }}”{% endif %}</div>{% elif quote.viewed_at %}<p class="dp-help" style="margin:0 0 12px">Dibuka pembeli {{ quote.viewed_at|date:"d M Y H:i" }}{% if quote.sent_at %} · dikirim {{ quote.sent_at|date:"d M Y H:i" }}{% endif %}.</p>{% elif quote.sent_at %}<p class="dp-help" style="margin:0 0 12px">Dikirim {{ quote.sent_at|date:"d M Y H:i" }}, belum dibuka pembeli.</p>{% endif %}
 <article class="dp-paper" style="max-width:900px">
   {% brand quote.store as b %}<div class="dp-paper-head" style="background:{{ b.gradient }}"><div class="dp-seller">{% if b.logo_url %}<span style="background:#fff;border-radius:12px;padding:6px 8px;display:grid;place-items:center"><img src="{{ b.logo_url }}" alt="" style="max-height:44px;width:auto;border-radius:0"></span>{% else %}<span class="mark">{{ b.initial }}</span>{% endif %}<div>{% if b.show_name or not b.logo_url %}<strong>{{ b.name }}</strong>{% endif %}</div></div><div class="dp-doc-type"><span>PENAWARAN</span><small>{{ quote.number }}</small></div></div>
   <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ quote.issued_on|date:"d M Y" }}</dd></div><div><dt>Berlaku sampai</dt><dd>{{ quote.valid_until|date:"d M Y"|default:"—" }}</dd></div><div><dt>Telepon</dt><dd>{{ quote.phone|default:"—" }}</dd></div><div><dt>Dibuat oleh</dt><dd>{{ quote.created_by.username|default:"—" }}</dd></div></dl>
@@ -34,5 +45,13 @@
   <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Buat invoice</button></footer></form></dialog>
 {% endif %}
 {% include "merchant/_dialog_js.html" %}
+<script>
+(function () {   /* copy the buyer link; remember the WhatsApp link was opened (same as the invoice page) */
+  document.querySelectorAll("[data-copy-link]").forEach(function (b) { b.addEventListener("click", function () {
+    if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copyLink).then(function () { if (window.pdToast) window.pdToast("Tautan penawaran disalin.", "success"); }); }); });
+  document.querySelectorAll("[data-mark-sent]").forEach(function (a) { a.addEventListener("click", function () {
+    fetch(a.dataset.markSent, {method: "POST", credentials: "same-origin", headers: {"X-CSRFToken": (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || ""}}); }); });
+})();
+</script>
 <div style="max-width:900px;margin-top:16px">{% include "merchant/_audit_card.html" %}</div>
 {% endblock %}

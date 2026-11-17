@@ -4,7 +4,7 @@
 <div class="pg-head">
   <div><span class="pg-kicker">Penjualan</span><h1>Piutang pelanggan</h1>
     <p>Siapa yang belum membayar dan sudah berapa lama, dihitung dari tanggal jatuh tempo invoice. Angka ini sama dengan akun Piutang usaha di pembukuan.</p></div>
-  <div class="dp-actions"><a class="btn" href="{% url 'merchant-customer-credit' %}">{% icon "wallet" %} Kredit pelanggan</a><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "cash" %} Terima pembayaran</a></div>
+  <div class="dp-actions"><button type="button" class="btn" data-open="reminder-dialog">{% icon "clock" %} Pengingat otomatis{% if reminder_policy.enabled %} · aktif{% endif %}</button><a class="btn" href="{% url 'merchant-customer-credit' %}">{% icon "wallet" %} Kredit pelanggan</a><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "cash" %} Terima pembayaran</a></div>
 </div>
 <form class="toolbar" method="get"><label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label><button class="btn">Terapkan</button></form>
 {% if unitemised > 1 or unitemised < -1 %}
@@ -47,4 +47,20 @@
   </table></div>
   {% else %}<div class="empty-box"><strong>Tidak ada piutang</strong>Semua invoice sudah lunas.</div>{% endif %}
 </section>
+
+<dialog id="reminder-dialog" class="pd-dialog" aria-labelledby="rem-title" style="max-width:560px">
+  <form method="post" action="{% url 'merchant-reminder-policy' %}">{% csrf_token %}
+    <header><h2 id="rem-title">Pengingat pembayaran otomatis</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <p class="dp-help" style="margin:0">Dikirim setiap hari oleh sistem ke pelanggan yang invoicenya belum lunas: lewat email (alamat di data pelanggan) dan lewat akun WhatsApp toko bila terhubung. Setiap tahap hanya dikirim sekali per invoice.</p>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="enabled" value="1"{% if reminder_policy.enabled %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> Aktifkan pengingat otomatis</label>
+      <div class="field-row"><label class="field"><span>Hari sebelum jatuh tempo</span><input type="number" name="days_before" min="0" max="60" value="{{ reminder_policy.days_before }}"><small style="color:var(--ds-muted)">0 = tidak ada</small></label>
+        <label class="field"><span>Hari setelah jatuh tempo</span><input name="days_after" value="{{ reminder_policy.days_after }}" placeholder="1,7,14"><small style="color:var(--ds-muted)">Dipisah koma</small></label></div>
+      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="use_email" value="1"{% if reminder_policy.use_email %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> Email</label>
+      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="use_whatsapp" value="1"{% if reminder_policy.use_whatsapp %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> WhatsApp (akun toko di Pengaturan › WhatsApp)</label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan</button></footer>
+  </form>
+</dialog>
+{% include "merchant/_dialog_js.html" %}
 {% endblock %}

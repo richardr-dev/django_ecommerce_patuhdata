@@ -157,12 +157,16 @@ def _write_items(invoice, lines):
 def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="manual",
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
         external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
-        courier="", tracking_number="", partner=None):
+        courier="", tracking_number="", partner=None, delivered_costs=None, sales_order=None):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
-    disagree; a shortage refuses the invoice (``StockShortage``)."""
+    disagree; a shortage refuses the invoice (``StockShortage``).
+
+    ``delivered_costs`` (``{product id: unit cost}``) means the goods already left on a surat jalan
+    (tax/sales_orders.py): no stock is taken, the costs given are the HPP, and the invoice is marked
+    ``from_deliveries`` so posting credits 1410 instead of Persediaan."""
     lines = clean_lines(lines)
-    short = _check_stock(store, lines, actor)
+    short = False if delivered_costs is not None else _check_stock(store, lines, actor)
     issued_on = issued_on or timezone.localdate()
     discount, shipping = Decimal(discount or 0), Decimal(shipping or 0)
     subtotal, tax, total = price_lines(lines, discount, shipping, store=store)
@@ -171,16 +175,26 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         external_order_id=external_order_id, discount=discount, shipping=shipping,
         status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total,
         courier=courier, tracking_number=tracking_number, partner=partner)
-    _deduct(order, allow_negative=short, actor=actor)
+    if delivered_costs is None:
+        _deduct(order, allow_negative=short, actor=actor)
+    else:
+        for item in order.items.all():
+            item.unit_cost = delivered_costs.get(item.product_id)
+            item.save(update_fields=["unit_cost"])
     invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods
     patch = {"buyer_name": _buyer_label(buyer_name, company_name)}
+    if delivered_costs is not None:
+        patch.update(from_deliveries=True, sales_order=sales_order)
     if buyer_npwp:
         patch["buyer_npwp"] = buyer_npwp[:16]
     if on_credit and due_date:
         patch["due_date"] = due_date
     Invoice.objects.filter(pk=invoice.pk).update(**patch)
     invoice.refresh_from_db()
+    if delivered_costs is not None:
+        from .posting import repost_invoice
+        repost_invoice(invoice, actor=actor)  # it was booked before it was flagged: book it against 1410
     return invoice
 
 
@@ -205,6 +219,8 @@ def invoice_locks(invoice):
         reasons.append("diimpor dari marketplace")
     if order.order_type != "direct":
         reasons.append("pesanan mitra")
+    if invoice.from_deliveries:
+        reasons.append("dibuat dari surat jalan")
     return reasons
 
 

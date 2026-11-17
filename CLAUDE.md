@@ -244,6 +244,33 @@ Four test files failed before this work and still do: `test_digital_products`,
   `/books/`, buyers' existing orders (`/orders/<id>/`), invoice links (`/i/`), payment webhooks, password reset.
   The code is kept, not deleted; tests run with it on (`tests/conftest.py`), `tests/test_no_storefront.py`
   covers off. A new shopper-facing route must be added to `SHOPPING`.
+- **Price lists and payment terms** (`catalog.PriceList`/`PriceListItem`, `Customer.price_list`,
+  `Customer.payment_terms_days`; service `tax/pricing.py`; pages Penjualan › Daftar harga): a customer's list prices
+  the invoice form's lines in the browser (`_catalog` sends `lists` per product, `price_lists` the discounts; the
+  mitra price list still wins when "Jual ke mitra" is chosen) and a credit invoice posted without a due date takes
+  the customer's terms on the server (`due_date_for`). A product without a row sells at retail less the list's
+  discount. Quotes do not apply price lists yet.
+- **Sending documents** (`tax/sharing.py`, `tax/share_views.py`): invoices and quotes have a buyer link
+  (`/i/<token>/`, `/q/<token>/`, both in `ALWAYS_OPEN`), a WhatsApp link, email, and, when the store connected its
+  own WhatsApp account (`StoreWhatsAppSettings.ready`), a direct send (kinds `invoice`, `invoice_reminder`,
+  `quote` in `integrations/whatsapp.KINDS`). The buyer answers a quote on its link (accept/decline → status,
+  `responded_at`, `response_note`) and presses "Saya sudah transfer" on an invoice (`transfer_claimed_at`,
+  Beranda row "konfirmasi transfer dari pembeli"). **Automatic reminders** (`tax/reminders.py`, `ReminderPolicy`
+  per store from Piutang pelanggan › Pengingat otomatis, `ReminderLog` one row per invoice/step/channel): run by
+  `run_books`; email to the customer's address, WhatsApp through the store's account; never twice.
+- **Proforma** (`merchant-quote-proforma`, `tax/proforma.html`): printed from a quote, numbered `PRO-<quote>`,
+  says it is neither a faktur pajak nor a receipt, shows the bank accounts. Books nothing. Surat jalan prints from
+  an invoice (`merchant-delivery-note`); a goods-issue document of its own is still missing (architecture item 2).
+- **Sales order → surat jalan → invoice** (`tax/sales_orders.py`, `SalesOrder`/`Delivery`; pages Penjualan › Pesanan
+  penjualan and Surat jalan): an order books nothing and holds no stock (goods only; services are invoiced
+  directly). A delivery takes the units off the shelf (`stock_out`, movement kind `issue`) and posts
+  1410 Barang terkirim belum ditagih / Persediaan at the product's cost. An invoice made from deliveries
+  (`invoice_deliveries` → `create_sales_invoice(delivered_costs=…)`, `Invoice.from_deliveries`) books the sale and HPP
+  against **1410**, takes no stock, locks its amounts, and when voided only releases its deliveries (the goods
+  stay with the buyer). Cancelling a delivery needs it uninvoiced; it returns the stock and reverses the entry.
+  Partial deliveries leave a backorder (`backorder()`), "Tutup pesanan" drops it. `controls.delivered_tie`
+  checks 1410 against uninvoiced deliveries. A quote becomes an order with "Jadikan pesanan penjualan".
+  Not built: reserving stock on an order, delivering from a chosen warehouse, variants on an order.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live

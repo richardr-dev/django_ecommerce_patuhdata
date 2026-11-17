@@ -31,6 +31,6 @@ def merchant_receivables(request):
     rows, totals = aging(store, as_of)
     from apps.accounting.ledger import RECEIVABLE, account_balances
     book = {a.code: a.balance for a in account_balances(store, end=as_of)}.get(RECEIVABLE, 0)
-    return render(request, "merchant/receivables.html", _merchant_context(request, store,
+    return render(request, "merchant/receivables.html", _merchant_context(request, store, reminder_policy=__import__("apps.tax.reminders", fromlist=["policy_for"]).policy_for(store),
         book_balance=book, unitemised=book - totals["total"], rows=rows, totals=totals, buckets=BUCKETS, as_of=as_of, customer=customer, lines=lines,
         owed=owed))

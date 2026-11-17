@@ -20,6 +20,9 @@ KINDS = {
     "delivered": "Pesanan sampai",
     "cancelled": "Pesanan dibatalkan",
     "seller_new_order": "Notifikasi penjual",
+    "invoice": "Invoice",
+    "invoice_reminder": "Pengingat invoice",
+    "quote": "Penawaran",
     "test": "Tes",
 }
 

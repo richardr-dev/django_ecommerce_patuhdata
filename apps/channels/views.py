@@ -737,6 +737,8 @@ def merchant_invoice_detail(request, invoice_id):
         text = sharing.message_text(invoice, share_url, amount_due)
     return render(request, "merchant/invoice_detail.html", _merchant_context(request, store,
         share_url=share_url, wa_link=sharing.whatsapp_link(order.phone, text) if text else "",
+        wa_account=__import__("apps.tax.share_views", fromlist=["_whatsapp_account"])._whatsapp_account(store) is not None,
+        reminder_rows=__import__("apps.tax.share_views", fromlist=["reminder_rows"]).reminder_rows(invoice),
         reminder=bool(invoice.due_date and invoice.due_date < _date.today() and amount_due > 0),
         buyer_email=(order.customer.email if order.customer_id else ""),
         marketplace=marketplace_summary(store, order), audit=audit_trail(store, invoice),

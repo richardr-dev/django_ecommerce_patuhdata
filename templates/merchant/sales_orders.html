@@ -1,0 +1,14 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Pesanan penjualan{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Pesanan penjualan</h1><p>Apa yang dipesan pelanggan sebelum dikirim. Kirim sebagian lewat surat jalan, sisanya menjadi backorder; invoice dibuat dari surat jalan yang sudah terkirim.</p></div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn" href="{% url 'merchant-deliveries' %}">{% icon "truck" %} Surat jalan</a><a class="btn-primary" href="{% url 'merchant-sales-order-new' %}">{% icon "plus" %} Pesanan penjualan baru</a></div>{% endif %}</div>
+<div class="tiles">
+  <div class="tile accent"><small>Backorder</small><strong>{{ backorder_units }}</strong><span>unit di {{ backorder_lines }} baris belum terkirim</span></div>
+  {% for key, label, count in tabs %}<div class="tile"><small>{{ label }}</small><strong>{{ count }}</strong><span>pesanan</span></div>{% endfor %}
+</div>
+<form method="get" class="toolbar"><input type="hidden" name="tab" value="{{ tab }}"><input type="search" name="q" value="{{ query }}" placeholder="Cari nomor atau pelanggan…" aria-label="Cari"><button class="btn">Cari</button></form>
+<nav class="tabs">{% for key, label, count in tabs %}<a class="{% if tab == key %}on{% endif %}" href="?tab={{ key }}{% if query %}&q={{ query|urlencode }}{% endif %}">{{ label }}<span class="count">{{ count }}</span></a>{% endfor %}</nav>
+<section class="panel">{% if orders %}<table class="tbl"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Pelanggan</th><th class="num">Dipesan</th><th class="num">Terkirim</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+{% for o in orders %}<tr><td><a class="rowlink" href="{% url 'merchant-sales-order-detail' o.pk %}"><b>{{ o.number }}</b></a></td><td>{{ o.issued_on|date:"d M Y" }}{% if o.expected_on %}<small style="display:block;color:var(--ds-muted)">kirim {{ o.expected_on|date:"d M" }}</small>{% endif %}</td><td>{{ o.buyer_name }}{% if o.company_name %}<small style="display:block;color:var(--ds-muted)">{{ o.company_name }}</small>{% endif %}</td>
+<td class="num">{{ o.ordered_units }}</td><td class="num">{{ o.delivered_units }}</td><td class="num">{{ o.total|rp }}</td><td><span class="pill pill-{{ o.status }}">{{ o.get_status_display }}</span></td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty-box"><span class="bb-bubble">{% icon "clipboard" %}</span><b>Belum ada pesanan penjualan di tab ini.</b><span>Buat dari penawaran yang disetujui, atau langsung.</span></div>{% endif %}</section>
+{% endblock %}

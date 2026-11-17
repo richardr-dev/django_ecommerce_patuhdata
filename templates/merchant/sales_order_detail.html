@@ -1,0 +1,53 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}{{ order.number }}{% endblock %}{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-sales-orders' %}">Pesanan penjualan</a> › <span>{{ order.number }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">{{ order.number }} <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span></h1>
+  <p class="dp-sub">Untuk <b>{{ order.buyer_name }}</b>{% if order.company_name %} · {{ order.company_name }}{% endif %} · {{ order.issued_on|date:"d M Y" }}{% if order.expected_on %} · rencana kirim {{ order.expected_on|date:"d M Y" }}{% endif %} · <b>{{ order.total|rp }}</b>{% if order.quote %} · dari penawaran <a href="{% url 'merchant-quote-detail' order.quote.pk %}">{{ order.quote.number }}</a>{% endif %}</p></div>
+  <div class="dp-actions">
+    {% if can_deliver and open_for_delivery %}<button type="button" class="btn-primary" data-open="deliver-dialog">{% icon "truck" %} Buat surat jalan</button>{% endif %}
+    {% if can_edit and uninvoiced %}<button type="button" class="btn" data-open="invoice-dialog">{% icon "file" %} Buat invoice ({{ uninvoiced|length }} surat jalan)</button>{% endif %}
+    {% if can_edit and open_for_delivery %}<form method="post" data-confirm="Tutup pesanan {{ order.number }}? Sisa yang belum dikirim (backorder) dihapus; yang sudah dikirim tetap." data-confirm-ok="Tutup pesanan">{% csrf_token %}<input type="hidden" name="action" value="close"><button class="btn">Tutup pesanan</button></form>{% endif %}
+  </div></div>
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+<div class="grid gap-5 content-start">
+<section class="panel !mb-0"><header><div><h2>Barang dipesan</h2><p>Dipesan, terkirim (surat jalan), ditagih (invoice), dan sisa yang masih ditunggu.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Produk</th><th class="num">Dipesan</th><th class="num">Terkirim</th><th class="num">Ditagih</th><th class="num">Sisa</th><th class="num">Stok rak</th><th class="num">Harga</th><th class="num">Jumlah</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><b>{{ r.line.description }}</b><small style="display:block;color:var(--ds-muted)">{{ r.line.sku }}</small></td><td class="num">{{ r.line.quantity }}</td><td class="num">{{ r.line.delivered_quantity }}</td><td class="num">{{ r.line.invoiced_quantity }}</td>
+    <td class="num">{% if r.remaining %}<span class="pill {% if r.shelf >= r.remaining %}pill-warn{% else %}pill-fail{% endif %}">{{ r.remaining }}</span>{% else %}<span class="pill pill-ok">0</span>{% endif %}</td><td class="num">{{ r.shelf }}</td><td class="num">{{ r.line.unit_price|rp }}</td><td class="num">{{ r.line.line_total|rp }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="dp-card-body" style="display:flex;justify-content:flex-end"><div class="dp-totals" style="min-width:280px"><div><span>Subtotal</span><span>{{ order.subtotal|rp }}</span></div>{% if order.discount %}<div><span>Diskon</span><span>−{{ order.discount|rp }}</span></div>{% endif %}{% if order.tax %}<div><span>PPN</span><span>{{ order.tax|rp }}</span></div>{% endif %}{% if order.shipping %}<div><span>Ongkir</span><span>{{ order.shipping|rp }}</span></div>{% endif %}<div class="grand"><span>Total</span><span>{{ order.total|rp }}</span></div></div></div>
+</section>
+<section class="panel !mb-0"><header><div><h2>Surat jalan</h2><p>Setiap surat jalan mengeluarkan stok dan memindahkan harga pokoknya ke Barang terkirim belum ditagih (1410).</p></div></header>
+  {% if deliveries %}<table class="tbl"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Isi</th><th>Kurir / resi</th><th>Invoice</th><th>Status</th></tr></thead><tbody>
+  {% for d in deliveries %}<tr><td><a class="rowlink" href="{% url 'merchant-delivery-detail' d.pk %}"><b>{{ d.number }}</b></a></td><td>{{ d.delivered_on|date:"d M Y" }}</td><td>{% for l in d.lines.all %}{{ l.quantity }}× {{ l.product.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td><td>{{ d.courier|upper|default:"—" }}{% if d.tracking_number %}<small style="display:block;color:var(--ds-muted)">{{ d.tracking_number }}</small>{% endif %}</td>
+    <td>{% if d.invoice %}<a href="{% url 'merchant-invoice-detail' d.invoice.pk %}">{{ d.invoice.number }}</a>{% elif d.status == 'shipped' %}<span class="pill pill-warn">Belum ditagih</span>{% endif %}</td><td><span class="pill {% if d.status == 'shipped' %}pill-shipped{% else %}pill-cancelled{% endif %}">{{ d.get_status_display }}</span></td></tr>{% endfor %}
+  </tbody></table>{% else %}<p class="px-5 py-8 text-center text-sm" style="color:var(--ds-muted)">Belum ada surat jalan. Buat satu untuk mengirim sebagian atau seluruh pesanan.</p>{% endif %}
+</section>
+</div>
+<div class="grid gap-5 content-start">
+<section class="panel !mb-0"><header><h2>Invoice</h2></header><div class="grid gap-1 p-3">{% for inv in invoices %}<a class="flex items-center gap-3 rounded-2xl px-3 py-2 hover:bg-blue-50/60" href="{% url 'merchant-invoice-detail' inv.pk %}"><span class="bb-bubble {% if inv.status == 'paid' %}ok{% elif inv.status == 'void' %}bad{% endif %}">{% icon "file" %}</span><span class="min-w-0 flex-1 text-sm"><b>{{ inv.number }}</b><small style="display:block;color:var(--ds-muted)">{{ inv.issued_on|date:"d M Y" }} · {{ inv.get_status_display }}</small></span><b>{{ inv.total|rp }}</b></a>{% empty %}<p class="px-3 py-6 text-center text-sm" style="color:var(--ds-muted)">Belum ada invoice. Invoice dibuat dari surat jalan yang sudah terkirim.</p>{% endfor %}</div></section>
+<section class="panel !mb-0"><header><h2>Pengiriman ke</h2></header><div class="dp-card-body" style="white-space:pre-line">{{ order.buyer_name }}{% if order.company_name %}
+{{ order.company_name }}{% endif %}{% if order.address %}
+{{ order.address }}{% endif %}{% if order.phone %}
+Telp. {{ order.phone }}{% endif %}{% if order.notes %}
+
+Catatan: {{ order.notes }}{% endif %}</div></section>
+{% include "merchant/_audit_card.html" %}
+</div></div>
+{% if can_deliver and open_for_delivery %}<dialog id="deliver-dialog" class="pd-dialog" style="max-width:640px"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="deliver">
+  <header><h2>Buat surat jalan</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><p class="dp-help" style="margin:0">Isi jumlah yang dikirim sekarang. Sisanya tetap menunggu (backorder). Stok keluar dan harga pokoknya dibukukan saat Anda menyimpan.</p>
+    <table class="tbl"><thead><tr><th>Produk</th><th class="num">Sisa</th><th class="num">Stok</th><th class="num" style="width:110px">Kirim</th></tr></thead><tbody>
+    {% for r in rows %}{% if r.remaining %}<tr><td>{{ r.line.description }}</td><td class="num">{{ r.remaining }}</td><td class="num">{{ r.shelf }}</td><td class="num"><input name="qty_{{ r.line.pk }}" type="number" min="0" max="{{ r.remaining }}" value="{% if r.shelf >= r.remaining %}{{ r.remaining }}{% else %}{{ r.shelf }}{% endif %}" aria-label="Kirim {{ r.line.description }}" style="width:90px;text-align:right"></td></tr>{% endif %}{% endfor %}
+    </tbody></table>
+    <div class="field-row"><label class="field"><span>Tanggal kirim</span><input type="date" name="delivered_on" value="{{ today|date:'Y-m-d' }}"></label><label class="field"><span>Kurir</span><input name="courier" list="courier-codes" placeholder="jne, sicepat…"></label><label class="field"><span>No. resi</span><input name="tracking_number" placeholder="opsional"></label></div>
+    <label class="field"><span>Catatan surat jalan</span><input name="notes" maxlength="300"></label>
+    <datalist id="courier-codes"><option value="jne"><option value="jnt"><option value="sicepat"><option value="anteraja"><option value="ninja"><option value="tiki"><option value="pos"><option value="gosend"><option value="grab"><option value="sendiri"></datalist></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan &amp; keluarkan stok</button></footer></form></dialog>{% endif %}
+{% if can_edit and uninvoiced %}<dialog id="invoice-dialog" class="pd-dialog" style="max-width:560px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="invoice">
+  <header><h2>Buat invoice dari surat jalan</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><p class="dp-help" style="margin:0">Invoice menagih barang yang sudah terkirim pada harga pesanan. HPP-nya dibukukan dari akun Barang terkirim belum ditagih.</p>
+    {% for d in uninvoiced %}<label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="delivery" value="{{ d.pk }}" checked style="width:16px;height:16px;accent-color:var(--ds-primary)"><span><b>{{ d.number }}</b> · {{ d.delivered_on|date:"d M Y" }} · {% for l in d.lines.all %}{{ l.quantity }}× {{ l.product.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></label>{% endfor %}
+    <div class="field-row"><label class="field"><span>Jatuh tempo (hari)</span><input type="number" name="due_days" value="{{ order.customer.payment_terms_days|default_if_none:14 }}" min="0"></label><label style="display:flex;align-items:center;gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" name="paid" value="1" style="width:16px;height:16px;accent-color:var(--ds-primary)"> Sudah dibayar lunas</label></div></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Buat invoice</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

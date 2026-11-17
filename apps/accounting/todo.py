@@ -50,6 +50,10 @@ def todo_items(store, today, user=None):
     overdue = Invoice.objects.filter(store=store, due_date__lt=today,
         status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_OVERDUE]).count()
     add(overdue, "invoice lewat jatuh tempo", reverse("merchant-receivables"), "Tagih →", "clock", "danger")
+    claimed = Invoice.objects.filter(store=store, transfer_claimed_at__isnull=False).exclude(
+        status__in=[Invoice.STATUS_PAID, Invoice.STATUS_VOID]).count()
+    add(claimed, "konfirmasi transfer dari pembeli menunggu dicek", reverse("merchant-sales-invoices") + "?crm=&tab=unpaid",
+        "Cek mutasi →", "cash", "warn")
     bills = due_soon(store, today)
     add(len(bills), "tagihan supplier jatuh tempo dalam 7 hari", reverse("merchant-payables"),
         "Bayar →", "truck")

@@ -8,6 +8,7 @@ from apps.accounting.assets import depreciate
 from apps.accounting.ledger import post_everything
 from apps.accounting.models import FixedAsset
 from apps.shops.models import Store
+from apps.tax import reminders
 from apps.tax.recurring import run_due
 
 
@@ -28,6 +29,8 @@ class Command(BaseCommand):
         for store in Store.objects.all():
             adjusted += len(adjustments.amortize(store, through=last_month_end))
             adjusted += len(adjustments.run_templates(store, today=today))
+        reminded = reminders.run_all(today)
+        self.stdout.write(f"{reminded} pengingat pembayaran otomatis dikirim.")
         self.stdout.write(f"{adjusted} jurnal penyesuaian (biaya dibayar di muka, akrual, berulang) dicatat.")
         self.stdout.write(f"{posted} jurnal diposting, {issued} invoice berulang diterbitkan, "
             f"{depreciated} jurnal penyusutan dicatat.")
