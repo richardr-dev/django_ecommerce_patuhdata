@@ -214,3 +214,11 @@ html[data-density="compact"] .pd-main .ord-tbl td{height:36px;padding:3px 8px}
 .ord-tbl .c-id{white-space:nowrap}.ord-tbl .order-id.mk{height:auto;padding:2px 9px;font-size:12.5px}
 .ord-tbl .c-id small{margin-top:2px}
 .ord-tbl .c-id .copy{margin-left:6px;vertical-align:middle}
+
+/* The order number is data, not a status: plain dark text (no pill), the copy button is a quiet grey chip. */
+.pd-main .ord-tbl .order-id,.pd-main .ord-tbl .order-id.mk{display:inline;height:auto;padding:0;border-radius:0;background:none;color:#012441;font-size:13px;font-weight:700;letter-spacing:0;text-decoration:none}
+.pd-main .ord-tbl .order-id:hover{background:none;color:#0b6fb8;text-decoration:underline}
+.ord-tbl .c-id .copy{background:#f1f5f9;color:#526685;font-weight:600}.ord-tbl .c-id .copy:hover{background:#e2e8f0;color:#012441}.ord-tbl .c-id .copy.done{background:#e6f7ee;color:#0d7a3e}
+.ord-tbl .c-id{min-width:150px}
+.ord-tbl .c-id small{color:#526685;margin-top:3px}
+.ord-printed{margin-left:8px}
