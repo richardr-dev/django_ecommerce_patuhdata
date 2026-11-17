@@ -74,3 +74,52 @@ class SaleFromWarehouseTests(Base):
         with self.assertRaises(StockError):
             stock_out(store=self.store, product=self.kabel, quantity=26, kind="adjust", reason="rusak",
                 warehouse=self.outlet)
+
+
+class PosGroundworkTests(Base):
+    """Phase 0 of the POS (docs/pos-architecture.md): its own number series, PPN backed out of a
+    shelf price, the register accounts in every chart, and the cashier role."""
+
+    def test_a_pos_series_numbers_receipts_apart_from_the_office_invoices(self):
+        office = self.invoice()
+        receipt = create_sales_invoice(self.store, buyer_name="Walk-in", channel="pos", number_series="POS",
+            lines=[{"product": self.kabel, "qty": 1, "unit_price": Decimal(100_000)}])
+        second = create_sales_invoice(self.store, buyer_name="Walk-in", channel="pos", number_series="POS",
+            lines=[{"product": self.kabel, "qty": 1, "unit_price": Decimal(100_000)}])
+        self.assertTrue(office.number.startswith("INV/"))
+        self.assertEqual(receipt.number, f"POS/{self.today.year}/000001")
+        self.assertEqual(second.number, f"POS/{self.today.year}/000002")
+        self.assertTrue(self.invoice().number.endswith("000002"))          # the INV series was not consumed
+
+    def test_a_shelf_price_with_ppn_is_backed_out_for_the_books(self):
+        from apps.tax.services import exclusive_price
+        self.assertEqual(exclusive_price(self.store, 11_100), Decimal("10000.00"))   # PKP at 11%
+        self.assertEqual(exclusive_price(self.store, 10_000), Decimal("9009.01"))
+        self.assertEqual(exclusive_price(self.store, 10_000, is_pkp=False), Decimal("10000.00"))
+
+    def test_every_chart_carries_the_register_accounts(self):
+        from apps.accounting.ledger import (
+            CASH_OVER,
+            CASH_SHORT,
+            EDC_CLEARING,
+            MDR_FEES,
+            ROUNDING,
+            chart_of_accounts,
+        )
+        chart = chart_of_accounts(self.store)
+        self.assertEqual([chart[c].type for c in (EDC_CLEARING, ROUNDING, MDR_FEES, CASH_SHORT, CASH_OVER)],
+            ["asset", "revenue", "expense", "expense", "revenue"])
+
+    def test_a_cashier_is_pinned_to_an_outlet_and_sells_there_only(self):
+        from django.contrib.auth.models import User
+
+        from apps.shops import permissions
+        from apps.shops.models import StoreStaff
+        outlet = Warehouse.objects.create(store=self.store, code="OUT1", name="Outlet Kemang", is_outlet=True)
+        kasir = User.objects.create_user("kasir", password="x")
+        StoreStaff.objects.create(store=self.store, user=kasir, role="cashier", outlet=outlet)
+        self.assertTrue(permissions.can(kasir, self.store, "pos.sell"))
+        self.assertTrue(permissions.can(kasir, self.store, "pos.shift"))
+        for denied in ("pos.refund", "pos.shift_approve", "books.view", "sales.edit", "stock.fulfil"):
+            self.assertFalse(permissions.can(kasir, self.store, denied), denied)
+        self.assertEqual(permissions.screen_role("cashier"), "viewer")   # no edit buttons in the back office

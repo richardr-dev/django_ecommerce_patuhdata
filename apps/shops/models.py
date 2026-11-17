@@ -210,7 +210,12 @@ class StoreStaff(models.Model):
         ("manager", "Brand Manager"), ("warehouse", "Warehouse"), ("finance", "Finance"),
         ("customer_service", "Customer Service"), ("ops", "Operations"), ("viewer", "Viewer"),
         ("bookkeeper", "Akuntan"), ("ar_staff", "Staf Piutang (AR)"), ("ap_staff", "Staf Utang (AP)"),
-        ("tax_staff", "Staf Pajak"), ("accountant", "Auditor (hanya lihat)")])
+        ("tax_staff", "Staf Pajak"), ("cashier", "Kasir"), ("accountant", "Auditor (hanya lihat)")])
+    # A cashier is pinned to one outlet: the register screen shows that outlet's registers only. Back-office
+    # roles leave it empty and see every outlet.
+    outlet = models.ForeignKey("catalog.Warehouse", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="pinned_staff", verbose_name="Outlet",
+        help_text="Kasir hanya melayani register di outlet ini.")
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "user"], name="unique_store_staff")]
 

@@ -11,15 +11,15 @@ creating and paying a bill, unless nobody else could (a one-person store is neve
 ROLE_LABELS = {"admin": "Admin", "manager": "Manajer", "finance": "Keuangan", "ops": "Operasional",
     "warehouse": "Gudang", "customer_service": "Layanan pelanggan", "viewer": "Pelihat",
     "bookkeeper": "Akuntan", "ar_staff": "Staf piutang (AR)", "ap_staff": "Staf utang (AP)",
-    "tax_staff": "Staf pajak", "accountant": "Auditor"}
+    "tax_staff": "Staf pajak", "cashier": "Kasir", "accountant": "Auditor"}
 ROLE_ORDER = ["admin", "manager", "finance", "bookkeeper", "ar_staff", "ap_staff", "tax_staff", "ops", "warehouse",
-    "customer_service", "viewer", "accountant"]
+    "cashier", "customer_service", "viewer", "accountant"]
 
 # The accounting roles were added after the screens were written, and the screens decide which buttons to
 # show from a handful of older role names. Each accounting role therefore *looks* like one of those on
 # screen, while the server checks its own row of MATRIX: a button it may not use answers 404.
 SCREEN_ROLE = {"bookkeeper": "finance", "ar_staff": "finance", "ap_staff": "finance", "tax_staff": "finance",
-    "accountant": "viewer"}
+    "accountant": "viewer", "cashier": "viewer"}  # a cashier works on the register screen, not the back office
 
 # permission -> (group, label, roles). Reading financial pages by `accountant` is granted in
 # `_require_roles` for anything `viewer` or `finance` can read; it never writes.
@@ -48,6 +48,16 @@ MATRIX = {
     "stock.send": ("Stok", "Mengirim barang untuk permintaan stok yang disetujui", {"admin", "manager", "ops", "warehouse"}),
     "stock.oversell": ("Stok", "Menjual melebihi stok (stok minus), bila toko mengizinkannya", {"admin", "manager"}),
     "stock.receive": ("Stok", "Menerima barang dari supplier", {"admin", "manager", "finance", "warehouse", "bookkeeper", "ap_staff"}),
+    # Kasir (POS): the register sells through the one invoice service; see docs/pos-architecture.md. A cashier
+    # may void only their own receipt while the shift is open (the service checks it); after the close a
+    # mistake is a credit note, which needs pos.refund.
+    "pos.sell": ("Kasir", "Menjual di kasir (POS) outlet tempatnya bertugas", {"admin", "manager", "ops", "cashier"}),
+    "pos.shift": ("Kasir", "Membuka dan menutup shift kasir dengan hitung kas", {"admin", "manager", "cashier"}),
+    "pos.shift_approve": ("Kasir", "Menyetujui selisih kas penutupan shift", {"admin", "manager", "finance"}),
+    "pos.void": ("Kasir", "Membatalkan struk dalam shift yang masih terbuka", {"admin", "manager", "cashier"}),
+    "pos.refund": ("Kasir", "Retur dan refund di kasir (nota kredit dari laci)", {"admin", "manager"}),
+    "pos.discount_override": ("Kasir", "Memberi diskon di atas batas outlet atau mengubah harga", {"admin", "manager"}),
+    "pos.settings": ("Kasir", "Mengatur outlet, register, dan struk", {"admin", "manager"}),
     "customers.view": ("Pelanggan", "Melihat pelanggan dan segmen", {"admin", "manager", "ops", "customer_service", "viewer", "ar_staff"}),
     "customers.edit": ("Pelanggan", "Mengubah pelanggan", {"admin", "manager", "customer_service"}),
     "customers.broadcast": ("Pelanggan", "Mengirim siaran ke pelanggan", {"admin", "manager"}),

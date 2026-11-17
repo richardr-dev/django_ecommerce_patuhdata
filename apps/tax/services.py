@@ -49,6 +49,18 @@ def vat_for(store, tax_base, *, is_pkp=None):
     return store.tax_rate, money(tax_base * store.tax_rate / 100)
 
 
+def exclusive_price(store, inclusive_price, *, is_pkp=None):
+    """The unit price before PPN of a shelf price that includes it (retail shows Rp11.000, the books
+    need Rp10.000 + Rp1.100). A non-PKP seller charges no PPN, so the price is returned unchanged.
+    Rounded to the rupiah cent; the register books any remaining difference to Pembulatan (4950)."""
+    inclusive_price = Decimal(inclusive_price)
+    if is_pkp is None:
+        is_pkp = tax_profile(store).is_pkp
+    if not is_pkp or not store.tax_rate or inclusive_price <= 0:
+        return money(inclusive_price)
+    return money(inclusive_price * 100 / (100 + store.tax_rate))
+
+
 def _tax_rate(store, tax_base, tax):
     """The rate the order was charged: the store's current rate if it reproduces the tax,
     otherwise the rate implied by the amounts (the store changed its rate since)."""
@@ -121,9 +133,13 @@ def issue_invoice(order):
     return invoice, True
 
 
-def issue_invoice_for_order(order, issued_on=None, notes=""):
+def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None):
     """Issue an invoice for any order regardless of payment gateway status.
-    Used for manual orders, marketplace imports, and mitra sell-through."""
+    Used for manual orders, marketplace imports, and mitra sell-through.
+
+    ``number_series`` ("POS") numbers the invoice from its own gapless sequence
+    (``POS/2026/000001``, see ``numbering.next_number``) instead of the store's INV series, so register
+    receipts never interleave with the invoices the office sends."""
     existing = Invoice.objects.filter(order=order).first()
     if existing:
         return existing, False
@@ -132,6 +148,11 @@ def issue_invoice_for_order(order, issued_on=None, notes=""):
     profile = tax_profile(store)
     if issued_on is None:
         issued_on = timezone.localdate()
+    if number_series:
+        from .numbering import next_number
+        number = next_number(store, number_series, issued_on)
+    else:
+        number = _next_invoice_number(store, issued_on, profile)
     tax_base = max(Decimal(0), order.subtotal - order.discount)
 
     # Determine status from order status
@@ -141,8 +162,7 @@ def issue_invoice_for_order(order, issued_on=None, notes=""):
     try:
         with transaction.atomic():
             invoice = Invoice.objects.create(
-                store=store, order=order,
-                number=_next_invoice_number(store, issued_on, profile),
+                store=store, order=order, number=number,
                 issued_on=issued_on, status=inv_status,
                 seller_name=profile.legal_name or store.name,
                 seller_npwp=profile.npwp, seller_address=profile.address,

@@ -65,7 +65,7 @@ CostCenter ← Warehouse.cost_center (nullable)
 - **StoreStaff.outlet** nullable FK Warehouse: a cashier sees only that outlet's registers; back-office
   roles (admin, manager, finance…) see all outlets.
 
-New accounts (added by the chart migration, constants in `ledger.py`):
+New accounts (in `ledger.CHART` since 2026-11-17, so every store gets them on its next posting; constants in `ledger.py`):
 
 | Code | Name | Use |
 |---|---|---|
@@ -144,15 +144,20 @@ POST /pos/<register>/sale/  {idem, lines[], tenders[], customer?, discount, note
 3. **Stok minus at the register**: POS refuses a sale beyond the outlet's shelf by default (the goods are
    physically handed over, so a shortage means the count is wrong, not the sale). With the store switch on,
    a user holding `stock.oversell` may confirm it; the deficit is recorded on the outlet's level.
-4. **Number series**: `next_number(store, "pos", date)` with prefix from the register, kept apart from
-   `INV` so the invoice list and Coretax worksheet can tell them apart (the channel filter already can).
-5. **Roles**: role `cashier` in `StoreStaff` and in `MATRIX`; keys `pos.sell` (cashier, ops, manager,
-   admin), `pos.refund` and `pos.void` (manager, admin; cashier only for own ticket in the open shift),
-   `pos.discount_override`, `pos.shift` (open/close: cashier, manager, admin), `pos.shift_approve`
-   (manager, admin, finance), `pos.settings` (admin, manager). `tests/test_permissions.py` pins them.
-   Segregation: the cashier who closed a shift cannot approve its variance (`maker_may_not_check`).
-6. **Price list on the outlet** and `prices_include_tax`: retail prices are PPN-inclusive on the shelf;
-   `price_lines` must be able to back the tax out of an inclusive price (today it adds PPN on top).
+4. **Number series** ✅ done 2026-11-17: `create_sales_invoice(number_series="POS")` →
+   `issue_invoice_for_order(number_series=)` → `numbering.next_number(store, "POS", date)` gives
+   `POS/2026/000001`, apart from `INV`. The per-register receipt number (`BDG-K1-20261117-0042`) lives on
+   `PosSale` in phase 1.
+5. **Roles** ✅ done 2026-11-17: role `cashier` (screen role `viewer`, `StoreStaff.outlet` pins it to one
+   outlet) and keys `pos.sell` (cashier, ops, manager, admin), `pos.shift` (cashier, manager, admin),
+   `pos.void` (cashier for own open-shift receipt, manager, admin), `pos.refund`, `pos.discount_override`,
+   `pos.settings` (manager, admin), `pos.shift_approve` (manager, admin, finance); pinned in
+   `tests/test_permissions.py`. Still to apply in phase 1: the cashier who closed a shift cannot approve its
+   variance (`maker_may_not_check`).
+6. **Price list on the outlet** and `prices_include_tax`: retail prices are PPN-inclusive on the shelf.
+   ✅ `tax/services.py:exclusive_price(store, inclusive)` (2026-11-17) backs PPN out of a shelf price; the
+   register sends exclusive unit prices to `create_sales_invoice` and books the leftover cents to 4950.
+   The outlet's own price list and the `prices_include_tax` switch come with the outlet settings in phase 1.
 7. **Controls** (`accounting/controls.py`): `pos_cash_tie` (each register account vs its open shift's
    expected cash), `pos_unposted` (PosSale without a live invoice entry or with tenders ≠ total),
    `edc_clearing_aging` (1210 older than 3 days), `shift_variance_trend` (fraud: repeated shortages per
@@ -212,7 +217,7 @@ a cost centre of PT A. Group consolidation stays unbuilt (architecture item 6).
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| 0 | `stock_out(warehouse=)`, `create_sales_invoice(warehouse=, number_series=)`, accounts 1210/4950/6980/7250/6155, cost centre on outlet, role `cashier`, `pos.*` keys, tax-inclusive pricing | nothing |
+| 0 ✅ | `stock_out(warehouse=)`, `create_sales_invoice(warehouse=, number_series=)`, accounts 1210/4950/6980/7250/6155, `Warehouse.cost_center`, role `cashier` + `StoreStaff.outlet`, `pos.*` keys, `exclusive_price` | done 2026-11-17 |
 | 1 | Register + cash account, open/close shift with variance entry, selling screen (cash/QRIS/EDC/transfer, split tender, line and ticket discount, rounding), receipt print, e-receipt link, Z report, per-outlet sales report, controls `pos_cash_tie` / `pos_unposted` | phase 0 |
 | 2 | Refund and exchange at the register, void in open shift, paid-in/paid-out, deposit to bank, approvals on variance, fraud checks, todo rows, month-end step, SPT digunggung and XML exclusion | phase 1 |
 | 3 | Variant stock per warehouse (then variants at the register), customer on ticket with loyalty and customer credit, gift cards, promotions, outlet price lists, WhatsApp e-receipt, outbox stock push | phase 2 |

@@ -40,6 +40,12 @@ DEPRECIATION, OTHER_INCOME, ASSET_GAIN, BANK_CHARGES = "6950", "7100", "7200", "
 PREPAID, ALLOWANCE, ACCRUED = "1550", "1255", "2310"  # Biaya dibayar di muka, Cadangan kerugian piutang, Utang biaya
 BAD_DEBT, INTEREST = "6970", "8200"  # Beban piutang tak tertagih, Beban bunga
 STOCK_DIFFERENCE = "6960"  # Selisih persediaan: what a stok opname found missing (debit) or extra (credit)
+# Point of sale (docs/pos-architecture.md). Card and QRIS tenders wait in EDC_CLEARING until the acquirer
+# settles to the bank; the drawer's shortage or surplus at shift close goes to CASH_SHORT / CASH_OVER.
+EDC_CLEARING = "1210"  # Piutang EDC / QRIS
+ROUNDING = "4950"  # Pembulatan penjualan: rounding given or taken at the register
+MDR_FEES = "6155"  # Biaya MDR EDC / QRIS found at settlement
+CASH_SHORT, CASH_OVER = "6980", "7250"  # Selisih kas kasir (kurang) / Lebih kas kasir
 # What a marketplace keeps from a sale, one account each so the profit and loss shows where the
 # money goes. Anything the marketplace does not itemise stays in FEES (6100).
 FEE_ACCOUNTS = {"commission": "6110", "service_fee": "6120", "admin_fee": "6120",
@@ -50,6 +56,7 @@ FEE_ACCOUNTS = {"commission": "6110", "service_fee": "6120", "admin_fee": "6120"
 CHART = [
     (CASH, "Kas & bank", "asset"),
     (GATEWAY, "Piutang payment gateway", "asset"),
+    (EDC_CLEARING, "Piutang EDC / QRIS", "asset"),
     (RECEIVABLE, "Piutang usaha", "asset"),
     (MARKETPLACE, "Piutang marketplace", "asset"),
     (INTERCO_RECEIVABLE, "Piutang antar perusahaan", "asset"),
@@ -78,6 +85,7 @@ CHART = [
     (INTERCO_SALES, "Penjualan antar perusahaan", "revenue"),
     (REFUNDS, "Retur & refund penjualan", "revenue"),
     (DISCOUNTS, "Potongan penjualan", "revenue"),
+    (ROUNDING, "Pembulatan penjualan", "revenue"),
     (COGS, "Harga pokok penjualan", "expense"),
     (PURCHASE_VARIANCE, "Selisih harga pembelian", "expense"),
     (FEES, "Biaya payment gateway & marketplace lainnya", "expense"),
@@ -86,13 +94,16 @@ CHART = [
     ("6130", "Selisih ongkos kirim marketplace", "expense"),
     ("6140", "Voucher & promo ditanggung penjual", "expense"),
     ("6150", "Komisi afiliasi marketplace", "expense"),
+    (MDR_FEES, "Biaya MDR EDC / QRIS", "expense"),
 ] + [(code, name, "expense") for code, name in EXPENSE_CATEGORIES] + [
     (DEPRECIATION, "Beban penyusutan", "expense"),
     (STOCK_DIFFERENCE, "Selisih persediaan (stok opname)", "expense"),
+    (CASH_SHORT, "Selisih kas kasir", "expense"),
     (BAD_DEBT, "Beban piutang tak tertagih", "expense"),
     (INTEREST, "Beban bunga", "expense"),
     (OTHER_INCOME, "Pendapatan lain-lain (bunga, dll.)", "revenue"),
     (ASSET_GAIN, "Laba (rugi) pelepasan aset", "revenue"),
+    (CASH_OVER, "Lebih kas kasir", "revenue"),
     (BANK_CHARGES, "Biaya administrasi bank", "expense"),
 ]
 

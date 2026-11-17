@@ -79,7 +79,13 @@ Four test files failed before this work and still do: `test_digital_products`,
   warehouse's shelf only, what another branch holds does not count, a tracked product with no row there is short
   (0 available, not untracked), and stok minus, when allowed, is recorded on that location's level. Without
   `warehouse` the store's locations are drawn in priority order as before. Variants still have one stock figure
-  for the whole store, so the parameter does not apply to them yet. This is POS phase 0 (`docs/pos-architecture.md`).
+  for the whole store, so the parameter does not apply to them yet. This is POS phase 0 (`docs/pos-architecture.md`),
+  together with: `create_sales_invoice(number_series="POS")` (own gapless `POS/<year>/000001` series through
+  `numbering.next_number`, never the INV series), `tax/services.py:exclusive_price` (PPN backed out of a shelf price
+  that includes it), the register accounts 1210 / 4950 / 6155 / 6980 / 7250 in every chart, role `cashier`
+  (screen role `viewer`; `pos.sell`, `pos.shift`, `pos.void`; refunds, variance approval, discount override and
+  settings need manager or above) pinned to one outlet by `StoreStaff.outlet`, and `Warehouse.cost_center` so POS
+  postings land in the outlet's cost centre.
 - **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
   one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
   journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,
@@ -338,8 +344,9 @@ Four test files failed before this work and still do: `test_digital_products`,
 1300 marketplace, 1400 persediaan, 1450 persediaan di mitra, 1500 PPN masukan, 1600/1690 aset
 tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang usaha,
 2400 kredit pelanggan, 2500 pinjaman, 3100 modal, 3200 prive, 4100 penjualan, 4200 ongkir,
-4800 retur, 4900 potongan, 5100 HPP, 6100 biaya gateway, 62xx–69xx biaya operasional,
-6950 penyusutan, 7100/7200 pendapatan lain, 8100 biaya bank.
+4800 retur, 4900 potongan, 4950 pembulatan kasir, 5100 HPP, 6100 biaya gateway, 6155 MDR EDC/QRIS,
+62xx–69xx biaya operasional, 6950 penyusutan, 6980 selisih kas kasir, 7100/7200 pendapatan lain,
+7250 lebih kas kasir, 8100 biaya bank, 1210 piutang EDC/QRIS (POS, `docs/pos-architecture.md`).
 
 ## UI conventions
 

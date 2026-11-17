@@ -228,6 +228,10 @@ class Warehouse(models.Model):
         help_text="Mis. Setiap hari 08.00–20.00")
     pickup_enabled = models.BooleanField(default=False, verbose_name="Bisa ambil di outlet",
         help_text="Pembeli bisa memilih ambil sendiri di outlet ini saat checkout.")
+    # Where this location's sales and costs are tracked in the books (POS postings pass it), so the
+    # cost-centre P&L shows each outlet while the company keeps one ledger.
+    cost_center = models.ForeignKey("accounting.CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="warehouses", verbose_name="Pusat biaya")
     class Meta:
         ordering = ["priority", "id"]
         constraints = [models.UniqueConstraint(fields=["store", "code"], name="unique_warehouse_code")]

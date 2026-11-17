@@ -32,6 +32,7 @@ ROLE_HELP = {
     "ar_staff": "Piutang: membuat invoice dan penawaran, menerima pembayaran pelanggan, melihat laporan.",
     "ap_staff": "Utang: pesanan pembelian, penerimaan barang, tagihan supplier dan pembayarannya.",
     "tax_staff": "Pajak: PPN, PPh, SPT, dan profil pajak; melihat pembukuan dan invoice.",
+    "cashier": "Kasir: menjual di layar kasir outletnya, membuka dan menutup shift. Tidak membuka menu pembukuan.",
     "accountant": "Auditor eksternal: melihat dan mengunduh semua laporan, buku besar, "
         "pajak, dan paket audit, tanpa bisa mengubah data.",
 }
