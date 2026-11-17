@@ -41,6 +41,20 @@ class LoginFirstTests(TestCase):
         self.assertEqual(self.client.get("/login/").status_code, 200)
         self.assertNotEqual(self.client.get("/cart/").get("Location"), "/login/")
 
+    def test_a_signed_in_owner_never_sees_the_login_form_again(self):
+        self.client.force_login(self.owner)
+        self.assertRedirects(self.client.get("/login/"), "/books/", fetch_redirect_response=False)
+
+    def test_a_signed_in_owner_follows_a_safe_next_link(self):
+        self.client.force_login(self.owner)
+        response = self.client.get("/login/?next=/books/sales/invoices/")
+        self.assertRedirects(response, "/books/sales/invoices/", fetch_redirect_response=False)
+
+    def test_a_signed_in_shopper_goes_to_their_account_not_the_books(self):
+        shopper = User.objects.create_user("buyer", password="pw")
+        self.client.force_login(shopper)
+        self.assertRedirects(self.client.get("/login/"), "/account/orders/", fetch_redirect_response=False)
+
 
 class LoginPageTests(TestCase):
     def test_the_sign_in_page_is_a_plain_card_named_for_the_system(self):

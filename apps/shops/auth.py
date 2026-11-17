@@ -3,9 +3,11 @@ so an account opened without one uses the WhatsApp number as its login name, and
 accounts can also sign in with the WhatsApp number of the store they own."""
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth.views import LoginView
 from django.core import signing
 
 from apps.orders.services import normalize_indonesian_phone
+from apps.shops.models import Store, StoreStaff
 
 SELLER_COOKIE = "lakuin_seller"
 SELLER_COOKIE_SALT = "lakuin.seller-stores"
@@ -126,3 +128,23 @@ def customer_logout(request):
         return redirect("/") if request.method == "GET" else HttpResponseNotAllowed(["POST"])
     # Not "cookies": that would also clear other stores' carts on this browser.
     return sign_out(request, "/", clear_site_cookies=False)
+
+
+class MerchantLoginView(LoginView):
+    """The back-office sign-in. Someone already signed in never sees the form again: they go to
+    the dashboard (staff) or their shopper account (a storefront buyer who wandered here)."""
+    template_name = "registration/merchant_login.html"
+    redirect_authenticated_user = True
+
+    def get_default_redirect_url(self):
+        user = self.request.user
+        if user.is_superuser or Store.objects.filter(owner=user).exists() \
+                or StoreStaff.objects.filter(user=user).exists():
+            return "/books/"
+        return super().get_default_redirect_url()
+
+
+class CustomerLoginView(LoginView):
+    """The storefront sign-in; a signed-in shopper goes straight to their orders."""
+    template_name = "registration/login.html"
+    redirect_authenticated_user = True

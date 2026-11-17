@@ -3,7 +3,7 @@ from django.urls import path, reverse_lazy
 
 from apps.integrations import whatsapp_views
 from apps.shops import segment_views
-from apps.shops.auth import customer_logout, merchant_logout
+from apps.shops.auth import CustomerLoginView, MerchantLoginView, customer_logout, merchant_logout
 from config.ratelimit import rate_limit
 
 from . import (
@@ -26,8 +26,8 @@ urlpatterns = [
     path("books/quick-defaults/", setup_views.merchant_quick_defaults, name="merchant-quick-defaults"),
     path("books/products/import/", setup_views.merchant_product_import, name="merchant-product-import"),
     path("books/products/import/template/", setup_views.merchant_product_import_template, name="merchant-product-import-template"),
-    path("account/login/", login_limit(auth_views.LoginView.as_view(
-        template_name="registration/login.html", authentication_form=CustomerLoginForm)), name="login"),
+    path("account/login/", login_limit(CustomerLoginView.as_view(authentication_form=CustomerLoginForm)),
+        name="login"),
     path("account/logout/", customer_logout, name="logout"),
     path("account/register/", rate_limit("register", limit=5, window=3600)(views.customer_register),
         name="register"),
@@ -49,8 +49,7 @@ urlpatterns = [
         success_url=reverse_lazy("password-reset-complete")), name="password-reset-confirm"),
     path("account/reset/complete/", auth_views.PasswordResetCompleteView.as_view(
         template_name="registration/password_reset_complete.html"), name="password-reset-complete"),
-    path("login/", login_limit(auth_views.LoginView.as_view(
-        template_name="registration/merchant_login.html", authentication_form=MerchantLoginForm)),
+    path("login/", login_limit(MerchantLoginView.as_view(authentication_form=MerchantLoginForm)),
         name="merchant-login"),
     path("books/logout/", merchant_logout, name="merchant-logout"),
     path("checkout/shipping-rates/", views.shipping_rates, name="shipping-rates"),
