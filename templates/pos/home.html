@@ -1,0 +1,73 @@
+{% load icons books static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kasir · {{ merchant_store.name }}</title>
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="{% static 'css/pos.css' %}">
+<style>
+body{overflow:auto;height:auto;display:block}
+.ka-top{display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--surface);border-bottom:var(--line)}
+.ka-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}.ka-brand img{height:32px;width:auto;display:block}
+.ka-brand b{font-size:15px}.ka-brand span{color:var(--muted);font-size:12px;display:block}
+.ka-who{color:var(--muted);font-size:13px;white-space:nowrap}
+.ka-out{border:0;background:var(--nested);color:var(--primary);font-weight:700;border-radius:999px;padding:10px 16px;cursor:pointer;white-space:nowrap}
+.ka-main{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+.ka-main h1{font-size:22px;margin:0 0 4px}.ka-main>p{color:var(--muted);margin:0 0 24px}
+.ka-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.ka-card{background:var(--surface);border:var(--line);border-radius:24px;box-shadow:var(--shadow);padding:22px;display:flex;flex-direction:column;gap:14px}
+.ka-card header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ka-card h2{font-size:17px;margin:2px 0 0}.ka-card small{color:var(--muted)}
+.ka-pill{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:var(--ok-bg);color:var(--ok)}
+.ka-pill.off{background:var(--sub);color:var(--muted)}
+.ka-fact{display:flex;justify-content:space-between;color:var(--muted);font-size:13.5px}.ka-fact b{color:var(--ink);font-weight:700}
+.ka-empty{text-align:center;color:var(--muted);padding:60px 20px}
+.ka-field{display:block;margin-bottom:16px}
+.ka-field span{display:block;margin-bottom:6px;font-weight:600;font-size:13px;color:var(--ink)}
+.ka-field input,.ka-field select{width:100%;height:44px;border-radius:12px;border:var(--line);background:var(--sub);padding:0 14px;outline:none;font:inherit;text-align:left}
+.ka-field input:focus,.ka-field select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(11,111,184,.16)}
+</style></head>
+<body>
+<header class="ka-top">
+  <div class="ka-brand"><img src="{% static 'img/brand/logo-accounting.png' %}" alt=""><div><b>{{ merchant_store.name }}</b><span>Kasir (POS)</span></div></div>
+  <span class="ka-who">{{ request.user.get_full_name|default:request.user.username }}</span>
+  <form method="post" action="{% url 'pos-logout' %}">{% csrf_token %}<button class="ka-out">Keluar</button></form>
+</header>
+<main class="ka-main">
+  <h1>Pilih register</h1><p>Buka shift dengan menghitung uang di laci, lalu mulai menjual.</p>
+  {% if rows %}<div class="ka-grid">
+  {% for row in rows %}<div class="ka-card">
+    <header><div><small>{{ row.register.outlet.name }}</small><h2>{{ row.register.name }}</h2></div>
+      {% if row.shift %}<span class="ka-pill">Shift buka</span>{% else %}<span class="ka-pill off">Tutup</span>{% endif %}</header>
+    {% if row.shift %}<div class="ka-fact"><span>Dibuka</span><b>{{ row.shift.opened_at|date:"H.i" }} oleh {{ row.shift.opened_by.get_full_name|default:row.shift.opened_by.username }}</b></div>
+      <a class="pos-pay" data-no-soft style="text-decoration:none;display:flex;align-items:center;justify-content:center" href="{% url 'merchant-pos-sell' row.register.pk %}">Mulai jualan</a>
+      <a class="pos-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;height:44px" href="{% url 'merchant-pos-shift' row.shift.pk %}">Lihat &amp; tutup shift</a>
+    {% elif can_shift %}<div class="ka-fact"><span>Laci menurut buku</span><b>{{ row.balance|rp }}</b></div>
+      <button type="button" class="pos-pay" data-open="open-{{ row.register.pk }}">Buka shift</button>
+    {% else %}<p class="ka-fact">Belum ada shift. Minta admin atau manajer membuka shift ini.</p>{% endif %}
+  </div>
+  {% if can_shift and not row.shift %}<dialog id="open-{{ row.register.pk }}" class="pos-dialog" aria-labelledby="open-title-{{ row.register.pk }}">
+    <form method="post" action="{% url 'merchant-pos-open' row.register.pk %}">{% csrf_token %}
+      <header><h2 id="open-title-{{ row.register.pk }}">Buka shift · {{ row.register.name }}</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+      <p style="margin:0;color:var(--muted)">Hitung uang di laci. Menurut buku laci berisi <b>{{ row.balance|rp }}</b>.</p>
+      <label class="ka-field"><span>Modal kasir sekarang</span><input name="opening_float" data-rupiah inputmode="numeric" required value="{{ row.balance|floatformat:'0' }}"></label>
+      <label class="ka-field"><span>Rekening asal modal (bila berbeda dari buku)</span>
+        <select name="fund_from"><option value="">— tidak ada tambahan modal —</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.name }}</option>{% endfor %}</select></label>
+      <footer><button type="button" class="pos-btn" data-close>Batal</button><button class="pos-pay">Buka &amp; mulai jualan</button></footer>
+    </form>
+  </dialog>{% endif %}
+  {% endfor %}</div>
+  {% else %}<div class="ka-empty">{% icon "cash" %}<p><b>Belum ada register untuk Anda di outlet ini.</b><br>Minta admin membuat register di Penjualan › Kasir (POS).</p></div>{% endif %}
+</main>
+<script>
+document.querySelectorAll("dialog[id^=open-]").forEach(function (dialog) {
+  dialog.querySelector("[data-close]").addEventListener("click", function () { dialog.close(); });
+  document.querySelector('[data-open="' + dialog.id + '"]').addEventListener("click", function () { dialog.showModal(); });
+});
+(function () {
+  document.querySelectorAll('input[data-rupiah]').forEach(function (el) {
+    el.addEventListener("input", function () { var n = el.value.replace(/[^\\d]/g, ""); el.value = n ? n.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ".") : ""; });
+  });
+})();
+</script>
+</body></html>

@@ -251,7 +251,7 @@ class PageTests(PosBase):
             content_type="application/json")
 
     def test_a_cashier_opens_a_shift_sells_prints_and_closes(self):
-        page = self.client.get("/books/pos/")
+        page = self.client.get("/kasir/")
         self.assertContains(page, "Buka shift")
         self.assertNotContains(page, "Register baru")                         # settings are the manager's
         opened = self.client.post(f"/books/pos/{self.register.pk}/open/", {"opening_float": "500.000",
@@ -294,11 +294,12 @@ class PageTests(PosBase):
         self.assertEqual(self.client.post(f"/books/pos/{elsewhere.pk}/open/", {"opening_float": "0"}).status_code, 404)
         self.assertEqual(self.client.get(f"/books/pos/{elsewhere.pk}/sell/").status_code, 404)
         self.assertEqual(self.client.post("/books/pos/register/new/", {"outlet": other.id, "code": "B2"}).status_code, 404)
+        self.assertEqual(self.client.get("/books/pos/").status_code, 404)     # the admin panel is not theirs
         self.assertEqual(self.client.get("/books/accounting/").status_code, 404)
-        self.assertRedirects(self.client.get("/books/"), "/books/pos/", fetch_redirect_response=False)
-        page = self.client.get("/books/pos/")
+        self.assertRedirects(self.client.get("/books/"), "/kasir/", fetch_redirect_response=False)
+        page = self.client.get("/kasir/")
         self.assertContains(page, "Kasir (POS)")
-        self.assertNotContains(page, "Bagan akun")                            # the sidebar is the register only
+        self.assertNotContains(page, "Bagan akun")                            # no back-office sidebar at all
         self.assertNotContains(page, "Semua produk")
 
     def test_a_manager_sets_how_the_outlet_sells(self):
@@ -323,3 +324,64 @@ class PageTests(PosBase):
         self.assertContains(self.client.get("/books/pos/"), "Register baru")
         self.client.post("/books/pos/register/new/", {"outlet": self.outlet.id, "code": "k2", "name": "Kasir belakang"})
         self.assertTrue(self.store.pos_registers.filter(code="K2", name="Kasir belakang").exists())
+
+
+class KioskTests(PosBase):
+    """The outlet's own app: /kasir/ with its own sign-in, never the back office."""
+
+    def test_the_kiosk_has_its_own_login_separate_from_the_back_office(self):
+        page = self.client.get("/kasir/")
+        self.assertRedirects(page, "/kasir/login/?next=/kasir/", fetch_redirect_response=False)
+        login = self.client.get("/kasir/login/")
+        self.assertContains(login, "Masuk kasir")
+        self.assertNotContains(login, "pd-nav")                               # no back-office chrome at all
+        posted = self.client.post("/kasir/login/", {"username": "kasir", "password": "x"})
+        self.assertRedirects(posted, "/kasir/", fetch_redirect_response=False)
+
+    def test_a_signed_in_cashier_on_the_kiosk_login_goes_straight_in_ignoring_next(self):
+        self.client.force_login(self.kasir)
+        page = self.client.get("/kasir/login/?next=/books/accounting/")
+        self.assertRedirects(page, "/kasir/", fetch_redirect_response=False)
+
+    def test_the_back_office_login_also_sends_a_cashier_to_the_kiosk(self):
+        page = self.client.post("/login/", {"username": "kasir", "password": "x"})
+        self.assertRedirects(page, "/books/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/books/"), "/kasir/", fetch_redirect_response=False)
+
+    def test_the_kiosk_home_lists_only_this_cashiers_outlet_and_has_no_sidebar(self):
+        self.client.force_login(self.kasir)
+        page = self.client.get("/kasir/")
+        self.assertContains(page, self.register.name)
+        self.assertContains(page, "Keluar")
+        self.assertNotContains(page, "pd-nav")
+        self.assertNotContains(page, "Register baru")                        # no admin actions in the kiosk
+
+    def test_a_cashier_cannot_open_the_admin_panel_but_can_still_use_shift_and_sell(self):
+        self.client.force_login(self.kasir)
+        self.assertEqual(self.client.get("/books/pos/").status_code, 404)
+        self.open()
+        shift = self.register.shifts.get()
+        page = self.client.get(f"/books/pos/shift/{shift.pk}/")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "pd-nav")                                # chrome-free wherever it is opened
+        self.assertContains(page, "← Kasir")
+
+    def test_opening_a_shift_from_the_kiosk_lands_on_the_selling_screen_and_back_returns_to_the_kiosk(self):
+        self.client.force_login(self.kasir)
+        opened = self.client.post(f"/books/pos/{self.register.pk}/open/", {"opening_float": "500.000",
+            "fund_from": self.main.id})
+        self.assertRedirects(opened, f"/books/pos/{self.register.pk}/sell/", fetch_redirect_response=False)
+        sell = self.client.get(f"/books/pos/{self.register.pk}/sell/")
+        self.assertContains(sell, "/kasir/")                                  # the back arrow and Keluar both lead home
+
+    def test_keluar_signs_the_cashier_out_back_to_the_kiosk_login(self):
+        self.client.force_login(self.kasir)
+        self.assertEqual(self.client.get("/kasir/keluar/").status_code, 405)  # a link or prefetch must not sign anyone out
+        out = self.client.post("/kasir/keluar/")
+        self.assertRedirects(out, "/kasir/login/", fetch_redirect_response=False)
+        self.assertRedirects(self.client.get("/kasir/"), "/kasir/login/?next=/kasir/", fetch_redirect_response=False)
+
+    def test_a_manager_still_uses_the_admin_panel_and_can_reach_the_kiosk_too(self):
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get("/books/pos/"), "Register baru")
+        self.assertEqual(self.client.get("/kasir/").status_code, 200)

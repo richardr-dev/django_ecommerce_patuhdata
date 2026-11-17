@@ -180,7 +180,7 @@ class SellerShortcutMiddleware:
 
 
 PRIVATE_PREFIXES = ("/books/", "/account/", "/platform-admin/", "/cart/", "/checkout/",
-    "/dashboard")
+    "/dashboard", "/kasir/")  # the outlet's POS app (apps/pos): sign-in and sale data, never cached
 
 
 class PrivatePagesMiddleware:

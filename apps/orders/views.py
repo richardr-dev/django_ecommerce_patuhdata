@@ -1076,7 +1076,7 @@ def merchant_dashboard(request):
         return redirect("partner-install")  # the platform partner has no store of their own: install one
     store = _staff_store(request)
     if store.owner_id != request.user.id and store.staff_members.filter(user=request.user, role="cashier").exists():
-        return redirect("merchant-pos")  # a cashier's home is the register, not the company's figures
+        return redirect("pos-app")  # a cashier's home is the kiosk, not the back office
     revenue_statuses = {"paid", "confirmed", "allocated", "picking", "packed", "shipped",
         "delivered", "completed", "refund_requested", "partially_refunded", "refunded"}
     realized = Order.objects.filter(store=store, status__in=revenue_statuses)

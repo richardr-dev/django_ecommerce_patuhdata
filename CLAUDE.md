@@ -115,10 +115,19 @@ Four test files failed before this work and still do: `test_digital_products`,
   - Controls `pos_receipts` (every receipt is a paid, posted invoice; 1210 older than 3 days is an info row) and
     `pos_shifts` (a shift left open overnight). `apps/orders/nav_access.py` is generated: after adding a role or a
     sidebar link run `WRITE_NAV_ACCESS=1 pytest tests/test_nav_access.py`.
+  - **`/kasir/` is the outlet's own app, separate from the back office** (decided 2026-11-17): its own sign-in
+    (`PosLoginView`, `pos/login.html`, the same email-or-WhatsApp account), its own register picker
+    (`kasir_home`, `pos/home.html`), and the shift report (`merchant_pos_shift`, now a standalone page, not
+    `merchant/base.html`) — no sidebar or topbar at any step, so a tablet bookmarked to `/kasir/` never shows
+    the books. It posts to the same endpoints as the admin panel (`merchant_pos_open`, `merchant_pos_sell`,
+    `merchant_pos_shift`), so there is one set of business logic, not two apps that could drift. Signing in at
+    `/login/` still sends a cashier to `/kasir/` too; `pos-login` ignores `?next=` on purpose. `/books/pos/`
+    (the register list) is now admin-only (`pos.settings` or `pos.shift_approve`: admin, manager, finance) for
+    creating registers and outlet settings; a plain cashier or `ops` hand gets 404 there and uses `/kasir/`.
   - Not built (phases 2 to 4): void and refund at the register, paid-in/paid-out, approval of a shift variance,
     variants at the register, outlet price lists, customer picker and loyalty, SPT digunggung and leaving POS
-    invoices out of the Coretax XML, offline queue, printer agent, outlet settings screen (the settings row exists,
-    edited in Django admin only).
+    invoices out of the Coretax XML, offline queue, printer agent, device pairing (today it is account login,
+    not a paired tablet), kiosk mode (disabling the browser chrome itself).
 - **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
   one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
   journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,

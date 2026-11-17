@@ -1,17 +1,28 @@
-"""Kasir (POS) pages. Logic lives in pos/services.py."""
+"""Kasir (POS) pages. Logic lives in pos/services.py.
+
+Two front doors reach the same registers and shifts. ``/books/pos/`` is the owner's control panel
+(inside the back office: create registers, outlet settings, see every shift) and stays restricted to
+roles that manage the store. ``/kasir/`` is the outlet's own app: its own sign-in, no back-office
+chrome at any step, so a tablet left open at the counter never shows the books. Both post to the same
+endpoints (``merchant_pos_open``, ``merchant_pos_sell``, ``merchant_pos_shift``), which is what keeps
+them one system rather than two."""
 import json
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.accounting import bank
 from apps.catalog.models import Product, Warehouse
+from apps.orders.forms import MerchantLoginForm
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops import permissions
 from apps.shops.audit import trail as audit_trail
+from apps.shops.auth import sign_out
 from apps.shops.models import Customer
 from apps.shops.permissions import roles
 from apps.tax.services import tax_profile
@@ -23,7 +34,11 @@ LOGIN = "/login/"
 SELL_ROLES = roles("pos.sell")
 SHIFT_ROLES = roles("pos.shift")
 SETTINGS_ROLES = roles("pos.settings")
-VIEW_ROLES = SELL_ROLES | SHIFT_ROLES | SETTINGS_ROLES | roles("pos.shift_approve")
+APPROVE_ROLES = roles("pos.shift_approve")
+VIEW_ROLES = SELL_ROLES | SHIFT_ROLES | SETTINGS_ROLES | APPROVE_ROLES
+# Who may open the admin control panel (/books/pos/): the roles that manage registers, not a plain
+# cashier or ops hand whose job is only to sell. They reach everything through /kasir/ instead.
+ADMIN_ROLES = SETTINGS_ROLES | APPROVE_ROLES
 
 
 def _register(request, store, register_id):
@@ -41,7 +56,7 @@ def _account(store, value):
 @login_required(login_url=LOGIN)
 def merchant_pos(request):
     store = _staff_store(request)
-    _require_roles(request, store, VIEW_ROLES)
+    _require_roles(request, store, ADMIN_ROLES)
     registers = list(pos.registers_for(store, request.user))
     open_shifts = {shift.register_id: shift for shift in PosShift.objects.filter(register__in=registers,
         status=PosShift.OPEN).select_related("opened_by")}
@@ -201,6 +216,46 @@ def merchant_pos_receipt(request, sale_id):
         store=store)
     _register(request, store, sale.register_id)
     return render(request, "pos/receipt.html", {**_receipt_context(store, sale), "auto_print": "print" in request.GET})
+
+
+# ---------------------------------------------------------------------------
+# /kasir/: the outlet's own app. Its own sign-in, its own look, no back-office chrome.
+# ---------------------------------------------------------------------------
+
+class PosLoginView(LoginView):
+    """The kiosk's sign-in: the same email-or-WhatsApp-number account as the back office, a
+    different page, and always landing in the kiosk, never wherever ``?next=`` points (a tablet
+    bookmarked to this URL must never be walked into the back office by a stray link)."""
+    template_name = "pos/login.html"
+    authentication_form = MerchantLoginForm
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        return reverse("pos-app")
+
+    def get_default_redirect_url(self):
+        return reverse("pos-app")
+
+
+@login_required(login_url="pos-login")
+def kasir_home(request):
+    """Pick a register, open or resume its shift, or go straight to selling if one is already open."""
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    registers = list(pos.registers_for(store, request.user))
+    open_shifts = {shift.register_id: shift for shift in PosShift.objects.filter(register__in=registers,
+        status=PosShift.OPEN)}
+    rows = [{"register": register, "shift": open_shifts.get(register.id),
+        "balance": pos.drawer_balance(register)} for register in registers]
+    drawers = {register.cash_account_id for register in registers}
+    return render(request, "pos/home.html", {"merchant_store": store, "request": request, "rows": rows,
+        "can_shift": permissions.can(request.user, store, "pos.shift"),
+        "accounts": [a for a in bank.bank_accounts(store) if a.id not in drawers]})
+
+
+@require_POST
+def pos_logout(request):
+    return sign_out(request, reverse("pos-login"), clear_site_cookies=True)
 
 
 def public_receipt(request, token):

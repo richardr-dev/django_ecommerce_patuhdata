@@ -250,3 +250,20 @@ Estimate: phase 0+1 about 3 weeks, phase 2 about 2 weeks, phase 3 depends mostly
 - The e-receipt is `/struk/<token>/`: `/s/` was already the campaign short link.
 - Outlet settings (`PosOutletSettings`: PPN-inclusive prices, rounding step, cashier discount limit, receipt header
   and footer) have a model and defaults but no screen yet.
+
+
+## 11. The kiosk (`/kasir/`), added 2026-11-17
+
+Phase 1 put the register screen behind the back office's own login and sidebar (trimmed to one link for a
+cashier). That still showed back-office chrome on the way in and on the shift report, and relied on hiding
+rather than a real separation. `/kasir/` fixes this: its own sign-in page, its own register picker, and the
+shift report converted to a standalone page, all without `merchant/base.html`. The back office's
+`/books/pos/` becomes purely the admin control panel (create a register, set outlet options, browse every
+shift) and is no longer reachable by a cashier or `ops` hand.
+
+Both doors call the same views and the same `pos/services.py` functions for opening a shift, selling and
+closing: `/kasir/` is a second front end, not a second system. A manager can still use either door.
+
+Still open for a real outlet rollout: device pairing (a tablet kept signed in as "Register K1" rather than a
+person typing a password each shift), a kiosk-mode shell that blocks the browser's own back button and
+address bar, and a lock screen between customers that does not need a full sign-out.

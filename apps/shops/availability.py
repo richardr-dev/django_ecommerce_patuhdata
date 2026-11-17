@@ -20,7 +20,8 @@ ALWAYS_OPEN = ("/books/", "/login/", "/registration/", "/platform-admin/", "/int
     "/media/", "/healthz/", "/orders/", "/account/", "/api/", "/robots.txt", "/favicon.ico",
     "/pages/", "/privacy/", "/terms/", "/newsletter/unsubscribe/", "/cart/recover/",
     "/i/", "/q/",  # a buyer paying an invoice or answering a quote must reach it whatever the shop's state
-    "/struk/")  # the e-receipt of a register sale (apps/pos)
+    "/struk/",  # the e-receipt of a register sale (apps/pos)
+    "/kasir/")  # the outlet's own POS app: its own sign-in, reachable whatever the shop's state (apps/pos)
 # What a closed store cannot do: take new orders.
 ORDERING = ("/cart/add/", "/cart/update/", "/checkout/")
 

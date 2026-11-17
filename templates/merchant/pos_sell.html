@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="{% static 'css/pos.css' %}">
 </head><body>
 <header class="pos-top">
-  <a class="pos-back" href="{% url 'merchant-pos' %}" aria-label="Kembali ke daftar register">←</a>
+  <a class="pos-back" href="{% url 'pos-app' %}" aria-label="Kembali ke daftar register">←</a>
   <div class="pos-where"><b>{{ register.outlet.name }}</b><span>{{ register.name }} · {{ request.user.get_full_name|default:request.user.username }}</span></div>
   <label class="pos-search"><span class="sr">Cari produk</span><input id="q" type="search" autocomplete="off" placeholder="Cari nama atau scan SKU, lalu Enter…" autofocus></label>
   <div class="pos-shift"><span>Shift ini</span><b id="shift-total">{{ summary.total|rp }}</b><small id="shift-count">{{ summary.count }} struk</small></div>
