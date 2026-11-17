@@ -1207,6 +1207,12 @@ def merchant_orders(request):
     with_marketplace = not web_only
     hidden_marketplace = marketplace_orders(store).count() if web_only else 0
     all_orders = website_orders(store) if web_only else Order.objects.filter(store=store)
+    # Old clean-ups renamed superseded copies of an order to "<id>~dibersihkan": cancelled leftovers that were
+    # never sales. They stay in the data but are hidden here unless asked for (?arsip=1).
+    show_archive = request.GET.get("arsip") == "1"
+    archived_count = all_orders.filter(external_order_id__endswith="~dibersihkan").count()
+    if not show_archive:
+        all_orders = all_orders.exclude(external_order_id__endswith="~dibersihkan")
     orders = all_orders.select_related("pickup_outlet", "channel_order").prefetch_related("items",
         "tracking_events").order_by("-created_at")
     try:
@@ -1287,13 +1293,14 @@ def merchant_orders(request):
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         active_filters=active_filters, presets=PRESETS, sorts=SORTS, sort=sort or "newest",
         with_marketplace=with_marketplace, hidden_marketplace=hidden_marketplace,
+        archived_count=archived_count, show_archive=show_archive,
         marketplace_chosen=bool(chosen & MARKETPLACE_CHANNELS),
         has_printable=any(order.can_print_label for order in page.object_list),
         can_set_resi=store.owner_id == request.user.id or store.staff_members.filter(user=request.user,
             role__in=FULFILMENT_ROLES).exists(),
         kpi=_order_kpis(all_orders, own=website_orders(store)),
         range_preset=request.GET.get("range", ""), channel_selected=channel_filter,
-        filter_query=urlencode([(k, v) for k in (*KEYS, "sumber") if k not in {"inv", "status", "crm"}
+        filter_query=urlencode([(k, v) for k in (*KEYS, "sumber", "arsip") if k not in {"inv", "status", "crm"}
             for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),
         filter_query_all=urlencode([(k, v) for k in KEYS if k not in {"inv", "status", "crm"}
             for v in (values(request.GET, k) if k == "channel" else [request.GET.get(k, "")]) if v]),

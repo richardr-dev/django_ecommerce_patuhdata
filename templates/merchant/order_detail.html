@@ -1,13 +1,13 @@
-{% extends "merchant/base.html" %}{% load icons %}{% load order_text %}{% block title %}Pesanan #{{ order.id|stringformat:"s"|slice:":8" }}{% endblock %}
+{% extends "merchant/base.html" %}{% load icons %}{% load order_text %}{% block title %}Pesanan {{ order|order_ref }}{% endblock %}
 {% block content %}
 
 <nav class="dp-crumb" aria-label="Breadcrumb">
-  <a href="{% url 'merchant-sales' %}">Penjualan</a> › <a href="{% url 'merchant-orders' %}">Pesanan</a> › <span>{{ order.invoice_number|default:"Pesanan" }}</span>
+  <a href="{% url 'merchant-sales' %}">Penjualan</a> › <a href="{% url 'merchant-orders' %}">Pesanan</a> › <span>{{ order|order_ref }}</span>
 </nav>
 <div class="dp-head">
   <div>
-    <h1 class="dp-title">{{ order.invoice_number|default:"Pesanan" }} <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span></h1>
-    <p class="dp-sub"><b>{{ order.customer_name }}</b> · {{ order.created_at|date:"d M Y, H:i" }} · {{ order.get_channel_display }}{% if order.external_order_id %} · Ref {{ order.external_order_id }}{% endif %} · Total <b>Rp{{ order.total|floatformat:"0g" }}</b></p>
+    <h1 class="dp-title"><span title="Nomor pesanan">{{ order|order_ref }}</span> <button type="button" class="btn" data-copy-order="{{ order|order_copy }}" style="height:30px;padding:0 12px;font-size:12px;vertical-align:middle">Salin</button> <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span>{% if order|is_archived %} <span class="pill pill-void" title="Salinan lama dari impor sebelumnya; bukan penjualan">arsip</span>{% endif %}</h1>
+    <p class="dp-sub">{% if order.invoice_number %}Invoice <b>{{ order.invoice_number }}</b> · {% endif %}<b>{{ order.customer_name }}</b> · {{ order.created_at|date:"d M Y, H:i" }} · {{ order.get_channel_display }} · Total <b>Rp{{ order.total|floatformat:"0g" }}</b></p>
   </div>
   <div class="dp-actions">
     {% if invoice %}
@@ -239,5 +239,16 @@ document.addEventListener("click", function (e) {
   var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta);
   ta.select(); try { document.execCommand("copy"); done(); } catch (err) {} document.body.removeChild(ta);
 });
+</script>
+<script>
+(function () {  /* copy the order number */
+  var b = document.querySelector("[data-copy-order]"); if (!b) return;
+  b.addEventListener("click", function () {
+    var text = b.dataset.copyOrder, done = function () { if (window.pdToast) window.pdToast("Nomor pesanan disalin.", "success"); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(ta);
+  });
+})();
 </script>
 {% endblock %}

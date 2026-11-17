@@ -8,7 +8,7 @@ from django.test import Client, TestCase
 
 from apps.catalog.models import InventoryLevel, Product, Warehouse
 from apps.channels.adapters import MarketplaceOrder, OrderLine
-from apps.channels.models import SalesChannel
+from apps.channels.models import ChannelOrder, SalesChannel
 from apps.channels.services import import_orders
 from apps.orders import resi_labels
 from apps.orders.models import Order
@@ -303,3 +303,36 @@ class OrdersPageTests(MarketplaceFixtures):
         self.assertIn("•••, Jakarta", html)
         self.assertNotIn("*****", html)
 
+
+
+class ArchivedOrderTests(MarketplaceFixtures):
+    """Old clean-ups renamed superseded copies to "<id>~dibersihkan": the suffix is never shown, those copies are
+    hidden unless asked for, and the detail page leads with the order number."""
+
+    def page(self, query=""):
+        return self.client.get("/books/orders/" + query)
+
+    def test_the_suffix_is_never_shown_and_archive_copies_are_hidden_until_asked_for(self):
+        from apps.orders.models import Order
+        self.sale("MPA1")
+        ghost = Order.objects.get(external_order_id="MPA1")
+        ChannelOrder.objects.filter(order=ghost).delete()                  # the leftovers on the server have no link
+        Order.objects.filter(pk=ghost.pk).update(external_order_id="MPA1~dibersihkan", idempotency_key="old-MPA1", status="cancelled")
+        self.sale("MPA1")                                                   # the real order, imported again
+        html = self.page("?tab=all").content.decode()
+        self.assertNotIn("dibersihkan", html.split("<tbody>")[1].split("</tbody>")[0])
+        self.assertIn("1 pesanan arsip", html)
+        self.assertEqual(html.count(">MPA1</a>"), 1)                        # one row for the number
+        shown = self.page("?tab=all&arsip=1").content.decode()
+        self.assertEqual(shown.count(">MPA1</a>"), 2)
+        self.assertNotIn("~dibersihkan", shown.split("<tbody>")[1].split("</tbody>")[0])
+        self.assertIn(">arsip<", shown)
+
+    def test_the_detail_page_leads_with_the_order_number_and_can_copy_it(self):
+        from apps.orders.models import Order
+        order = self.sale("MPD7")
+        detail = self.client.get(f"/books/orders/{order.id}/").content.decode()
+        head = detail.split('<h1 class="dp-title">')[1].split("</h1>")[0]
+        self.assertIn(">MPD7<", head)
+        self.assertIn('data-copy-order="MPD7"', head)
+        self.assertIsNotNone(Order.objects.get(pk=order.pk))

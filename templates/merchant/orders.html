@@ -18,7 +18,7 @@
 <form id="ord-filter" method="get" class="ord-filter bb-card"
   hx-get="{% url 'merchant-orders' %}" hx-target="#ord-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
   hx-trigger="input changed delay:350ms from:#ord-q, change">
-  <input type="hidden" name="tab" value="{{ tab }}">
+  <input type="hidden" name="tab" value="{{ tab }}">{% if show_archive %}<input type="hidden" name="arsip" value="1">{% endif %}
   <div class="ord-row">
     <label class="ord-search"><span class="ord-ico">{% icon "search" %}</span><input id="ord-q" type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Cari nama, no. HP, resi, produk / SKU, atau #pesanan…" aria-label="Cari pesanan"></label>
     {% if outlets %}<label class="ord-select"><span class="ord-ico">{% icon "store" %}</span><select name="outlet" aria-label="Outlet"><option value="">Semua outlet</option>{% for outlet in outlets %}<option value="{{ outlet.id }}"{% if request.GET.outlet == outlet.id|stringformat:'s' %} selected{% endif %}>{{ outlet.name }}</option>{% endfor %}</select></label>{% endif %}
