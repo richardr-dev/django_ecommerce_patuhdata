@@ -213,3 +213,4 @@ html[data-density="compact"] .pd-main .ord-tbl td{height:36px;padding:3px 8px}
 /* the order number: a marketplace order shows its marketplace number (the one the buyer and the seller centre use) */
 .ord-tbl .c-id{white-space:nowrap}.ord-tbl .order-id.mk{height:auto;padding:2px 9px;font-size:12.5px}
 .ord-tbl .c-id small{margin-top:2px}
+.ord-tbl .c-id .copy{margin-left:6px;vertical-align:middle}

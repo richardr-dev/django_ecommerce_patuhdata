@@ -206,8 +206,9 @@ class OrdersPageTests(MarketplaceFixtures):
         card = html.split('<tr class="ord-tr')[1].split("</tbody>")[0]  # the row and its detail
         for expected in ("JNE YES", "JY91008038038", "Salin", "Status mengikuti Shopee", "Selesai, tidak ada langkah berikutnya"):
             self.assertIn(expected, card)
+        self.assertIn('data-copy="MP1" aria-label="Salin nomor pesanan"', card)   # the order number can be copied
         self.assertIn(">MP1</a>", card)                              # the marketplace's own order number leads the row
-        self.assertEqual(card.count("MP1"), card.count(">MP1</a>") + card.count("MP1\""), card)  # shown once, not repeated
+        self.assertEqual(card.count(">MP1</a>"), 1, card)  # shown once as text, not repeated
         self.assertNotIn(">#", card.split("</td>")[1])
         for unwanted in ("Belum siap dikirim", "Cetak label", "Kemas pesanan", 'class="pick"'):
             self.assertNotIn(unwanted, card)
