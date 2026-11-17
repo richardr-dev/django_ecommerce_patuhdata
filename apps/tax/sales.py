@@ -72,15 +72,17 @@ def _wants(lines):
     return [(line["product"], int(line["qty"])) for line in lines if line.get("product")]
 
 
-def _check_stock(store, lines, actor=None):
+def _check_stock(store, lines, actor=None, warehouse=None):
     """Refuse an invoice the shelf cannot cover, unless the store allows stok minus and ``actor`` may
-    use it. Returns True when the invoice will sell short."""
+    use it. Returns True when the invoice will sell short. With ``warehouse`` only that location's
+    shelf is looked at."""
     from apps.orders.deficits import may_sell_short
     from apps.orders.inventory import stock_shortages
-    short = stock_shortages(store, _wants(lines))
+    short = stock_shortages(store, _wants(lines), warehouse)
     if not short:
         return False
-    detail = "; ".join(f"{product.name} ({product.sku}) butuh {wanted}, tersedia {available}"
+    where = f" di {warehouse.name}" if warehouse is not None else ""
+    detail = "; ".join(f"{product.name} ({product.sku}) butuh {wanted}, tersedia {available}{where}"
         for product, wanted, available in short)
     if not store.allow_negative_stock:
         raise StockShortage("Stok tidak cukup: " + detail
@@ -128,9 +130,9 @@ def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phon
     return order
 
 
-def _deduct(order, *, allow_negative=False, actor=None):
+def _deduct(order, *, allow_negative=False, actor=None, warehouse=None):
     from apps.orders.inventory import deduct_invoice_stock
-    if deduct_invoice_stock(order, allow_negative=allow_negative, actor=actor):  # someone else took the stock since the check
+    if deduct_invoice_stock(order, allow_negative=allow_negative, actor=actor, warehouse=warehouse):  # someone else took the stock since the check
         raise StockShortage("Stok baru saja berkurang karena penjualan lain. Coba lagi.")
 
 
@@ -157,16 +159,26 @@ def _write_items(invoice, lines):
 def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="manual",
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
         external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
-        courier="", tracking_number="", partner=None, delivered_costs=None, sales_order=None):
+        courier="", tracking_number="", partner=None, delivered_costs=None, sales_order=None,
+        warehouse=None):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``).
+
+    ``warehouse`` sells from that location only (an outlet or the register's branch): what another
+    branch holds does not count, and stok minus, when allowed, is recorded at that location.
+    Without it the store's locations are drawn in priority order, as before.
 
     ``delivered_costs`` (``{product id: unit cost}``) means the goods already left on a surat jalan
     (tax/sales_orders.py): no stock is taken, the costs given are the HPP, and the invoice is marked
     ``from_deliveries`` so posting credits 1410 instead of Persediaan."""
     lines = clean_lines(lines)
-    short = False if delivered_costs is not None else _check_stock(store, lines, actor)
+    from apps.orders.stock import StockError, check_warehouse
+    try:
+        check_warehouse(store, warehouse)
+    except StockError as exc:
+        raise InvoiceError(str(exc)) from exc
+    short = False if delivered_costs is not None else _check_stock(store, lines, actor, warehouse)
     issued_on = issued_on or timezone.localdate()
     discount, shipping = Decimal(discount or 0), Decimal(shipping or 0)
     subtotal, tax, total = price_lines(lines, discount, shipping, store=store)
@@ -176,7 +188,7 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         status="pending" if on_credit else "paid", subtotal=subtotal, tax=tax, total=total,
         courier=courier, tracking_number=tracking_number, partner=partner)
     if delivered_costs is None:
-        _deduct(order, allow_negative=short, actor=actor)
+        _deduct(order, allow_negative=short, actor=actor, warehouse=warehouse)
     else:
         for item in order.items.all():
             item.unit_cost = delivered_costs.get(item.product_id)

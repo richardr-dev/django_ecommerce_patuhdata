@@ -116,30 +116,46 @@ def commit_order_inventory(order, *, actor=None):
             previous_reserved=previous_reserved, new_reserved=variant.reserved)
 
 
-def stock_shortages(store, wants):
+def _tracked_levels(store, product, warehouse=None, *, lock=False):
+    """``(tracked, levels)``: whether the product has stock levels anywhere in the store, and the
+    levels a sale may take from: all of them in priority order, or only the one in ``warehouse``.
+    A tracked product with no row at that warehouse is short there (0 available), not untracked."""
+    from apps.catalog.models import InventoryLevel
+    rows = InventoryLevel.objects.filter(product=product, warehouse__store=store,
+        warehouse__is_active=True).order_by("warehouse__priority", "warehouse_id")
+    if lock:
+        rows = rows.select_for_update()
+    levels = list(rows)
+    if warehouse is None or not levels:
+        return bool(levels), levels
+    return True, [level for level in levels if level.warehouse_id == warehouse.id]
+
+
+def stock_shortages(store, wants, warehouse=None):
     """``wants`` is ``[(product, quantity)]``. Returns ``[(product, wanted, available)]`` for the
     stock-tracked products (those with an inventory level) the shelf cannot cover. Products with
-    no inventory level (services, digital goods) are not tracked and never short."""
-    from apps.catalog.models import InventoryLevel
+    no inventory level (services, digital goods) are not tracked and never short. With
+    ``warehouse`` only that location's shelf counts."""
     need = {}
     for product, quantity in wants:
         held = need.setdefault(product.pk, [product, 0])
         held[1] += int(quantity)
     short = []
     for product, quantity in need.values():
-        levels = list(InventoryLevel.objects.filter(product=product, warehouse__store=store,
-            warehouse__is_active=True))
-        if levels and sum(level.available for level in levels) < quantity:
-            short.append((product, quantity, sum(level.available for level in levels)))
+        tracked, levels = _tracked_levels(store, product, warehouse)
+        available = sum(level.available for level in levels)
+        if tracked and available < quantity:
+            short.append((product, quantity, available))
     return short
 
 
-def deduct_invoice_stock(order, *, allow_negative=False, actor=None):
+def deduct_invoice_stock(order, *, allow_negative=False, actor=None, warehouse=None):
     """Reserve then immediately commit stock for all items on a manual paid invoice.
     Net effect: on_hand decreases by quantity sold.
     Silently skips items without inventory levels (services, digital products).
     Returns list of (sku, wanted, available) shortages for display. With ``allow_negative`` a
-    warehouse-tracked product gives what it has and the rest becomes stok minus (``deficits``)."""
+    warehouse-tracked product gives what it has and the rest becomes stok minus (``deficits``).
+    With ``warehouse`` the units leave that location only (and a deficit is recorded there)."""
     from apps.catalog.models import InventoryLevel
     from apps.catalog.models import ProductVariant as _PV
     shortages = []
@@ -159,12 +175,8 @@ def deduct_invoice_stock(order, *, allow_negative=False, actor=None):
                 except _PV.DoesNotExist:
                     continue
             else:
-                levels = list(InventoryLevel.objects.select_for_update().filter(
-                    product=item.product,
-                    warehouse__store=order.store,
-                    warehouse__is_active=True,
-                ).order_by("warehouse__priority", "warehouse_id"))
-                if not levels:
+                tracked, levels = _tracked_levels(order.store, item.product, warehouse, lock=True)
+                if not tracked:
                     continue  # product not tracked in inventory
                 available = sum(level.available for level in levels)
                 if available < qty:
@@ -174,6 +186,9 @@ def deduct_invoice_stock(order, *, allow_negative=False, actor=None):
                     from .deficits import sell_short
                     if available > 0:
                         reserve_from_levels(item, levels, available, reason="manual_invoice")
+                    if not levels:  # the outlet has no row for this product yet: the minus lives there
+                        levels = [InventoryLevel.objects.select_for_update().get_or_create(
+                            warehouse=warehouse, product=item.product)[0]]
                     sell_short(item, levels[0], qty - available, actor=actor)
                     continue
                 reserve_from_levels(item, levels, qty, reason="manual_invoice")

@@ -19,10 +19,20 @@ class StockError(ValueError):
     pass
 
 
-def _levels(product, *, lock=True):
+def _levels(product, *, lock=True, warehouse=None):
+    """The product's levels in priority order; only the one in ``warehouse`` when given."""
     queryset = InventoryLevel.objects.filter(product=product, warehouse__store=product.store,
         warehouse__is_active=True).order_by("warehouse__priority", "warehouse_id")
+    if warehouse is not None:
+        queryset = queryset.filter(warehouse=warehouse)
     return list(queryset.select_for_update() if lock else queryset)
+
+
+def check_warehouse(store, warehouse):
+    """``warehouse`` must be one of the store's own active locations (None passes)."""
+    if warehouse is not None and (warehouse.store_id != store.id or not warehouse.is_active):
+        raise StockError(f"Gudang {warehouse.name} bukan gudang aktif perusahaan ini.")
+    return warehouse
 
 
 def default_warehouse(store):
@@ -47,11 +57,15 @@ def with_mitra(product, variant=None):
 
 @transaction.atomic
 def stock_out(*, store, product, variant=None, quantity, kind, reason, source=("", ""),
-        unit_cost=None, actor=None):
+        unit_cost=None, actor=None, warehouse=None):
     """Take ``quantity`` units off the shelf (never reserved ones). Returns the units taken per
-    location as ``[(level or variant, quantity)]``."""
+    location as ``[(level or variant, quantity)]``. Without ``warehouse`` the units come from the
+    store's locations in priority order; with it, from that location only (an outlet sells what is
+    on its own shelf, never what another branch holds). Variants have one stock figure for the whole
+    store, so ``warehouse`` does not apply to them yet."""
     if quantity <= 0:
         raise StockError("Jumlah harus lebih dari nol.")
+    check_warehouse(store, warehouse)
     taken = []
     if variant:
         variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
@@ -67,10 +81,11 @@ def stock_out(*, store, product, variant=None, quantity, kind, reason, source=("
             new_reserved=variant.reserved, actor=actor, source_type=source[0],
             source_id=source[1], unit_cost=unit_cost)
         return [(variant, quantity)]
-    levels = _levels(product)
+    levels = _levels(product, warehouse=warehouse)
     free = sum(level.on_hand - level.reserved for level in levels)
     if free < quantity:
-        raise StockError(f"Stok {product.sku or product.name} kurang: butuh {quantity}, "
+        where = f" di {warehouse.name}" if warehouse is not None else ""
+        raise StockError(f"Stok {product.sku or product.name}{where} kurang: butuh {quantity}, "
             f"tersedia {free}.")
     remaining = quantity
     for level in levels:

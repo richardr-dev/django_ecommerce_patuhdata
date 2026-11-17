@@ -133,9 +133,10 @@ POST /pos/<register>/sale/  {idem, lines[], tenders[], customer?, discount, note
 
 ## 4. Changes to existing code (prerequisites)
 
-1. **`stock_out(warehouse=…)`**: today it allocates across warehouses by `priority`; POS must take from the
-   outlet only and refuse when that outlet lacks the units (even if another outlet has them). Same for
-   `create_sales_invoice(warehouse=…)` and `_check_stock`.
+1. **`stock_out(warehouse=…)`** ✅ done 2026-11-17: `stock_out`, `stock_shortages`, `deduct_invoice_stock` and
+   `create_sales_invoice` take `warehouse=`; the sale comes from that outlet only, refuses when the outlet
+   lacks the units even if another branch has them, and records stok minus at the outlet
+   (`tests/test_sale_from_warehouse.py`). Variants are still excluded (one stock figure per store).
 2. **Variant stock per warehouse** (architecture item 4): `ProductVariant.stock` is one number per
    variant. A fashion outlet selling size M cannot be counted per outlet until variants have levels per
    warehouse. Build this before POS, or limit POS v1 to products without variants (a real limitation for

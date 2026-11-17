@@ -74,6 +74,12 @@ Four test files failed before this work and still do: `test_digital_products`,
     storefront never sells short. A marketplace import does (the sale already happened) when the switch
     is on. Voiding or editing the sale releases its deficit; units a receipt already gave it return to
     the shelf and the correction is reversed. A manual stock edit on Kelola stok does not cover a deficit.
+- **A sale can be made from one chosen location** (`create_sales_invoice(warehouse=)`, `stock_out(warehouse=)`,
+  `stock_shortages(store, wants, warehouse)`; tests `tests/test_sale_from_warehouse.py`): the units come from that
+  warehouse's shelf only, what another branch holds does not count, a tracked product with no row there is short
+  (0 available, not untracked), and stok minus, when allowed, is recorded on that location's level. Without
+  `warehouse` the store's locations are drawn in priority order as before. Variants still have one stock figure
+  for the whole store, so the parameter does not apply to them yet. This is POS phase 0 (`docs/pos-architecture.md`).
 - **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
   one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
   journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,
