@@ -14,7 +14,7 @@ from apps.accounting.ledger import (
 )
 from apps.catalog.models import InventoryLevel, Product, ProductVariant, Warehouse
 from apps.channels.adapters import MarketplaceOrder, OrderLine, normalize_state
-from apps.channels.models import ImportBatch, SalesChannel
+from apps.channels.models import ChannelOrder, ImportBatch, SalesChannel
 from apps.channels.services import import_order, import_order_outcome, import_orders
 from apps.orders.models import InventoryMovement, Order
 from apps.shops.models import Store
@@ -295,6 +295,18 @@ class FinishedOnlyImportTests(TestCase):
         return MarketplaceOrder(external_id=external_id, buyer_name="Budi", phone="0812",
             address="Bandung", status_text=status, courier=courier, tracking_number=resi,
             lines=[OrderLine(sku="KOPI", quantity=2, unit_price=Decimal(15000))])
+
+    def test_cancelled_orders_can_be_left_out_but_known_ones_still_update(self):
+        first = import_orders(self.channel, [self.order("Selesai", "K1")], finished_only=True)
+        self.assertEqual(first["created"], 1)
+        summary = import_orders(self.channel, [self.order("Dibatalkan", "N1"), self.order("Selesai", "N2"),
+            self.order("Dibatalkan", "K1")], finished_only=True, include_cancelled=False)
+        self.assertEqual((summary["cancelled_skipped"], summary["created"]), (1, 1))   # N1 never recorded, N2 a sale
+        self.assertFalse(ChannelOrder.objects.filter(external_order_id="N1").exists())
+        self.assertEqual(summary["cancelled"], 1)                                      # K1 was known: still taken back
+        self.assertEqual(ChannelOrder.objects.get(external_order_id="K1").order.status, "cancelled")
+        default = import_orders(self.channel, [self.order("Dibatalkan", "N1")], finished_only=True)
+        self.assertEqual((default["cancelled"], default["cancelled_skipped"]), (1, 0))  # the default records it
 
     def test_finished_and_berhasil_are_sales_cancelled_is_recorded_the_rest_waits(self):
         summary = self.run_import(self.order("Selesai", "A"), self.order("Sedang dikirim", "B"),

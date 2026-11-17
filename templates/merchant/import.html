@@ -42,6 +42,8 @@
           <option value="consignment">Konsinyasi</option>
         </select><small style="color:var(--ds-muted)">Untuk pengelompokan dan laporan di Invoice penjualan.</small></label>
 
+      {% if platform != "manual" %}<div class="ds-check-wrap" style="margin-top:18px"><label class="ds-check"><input type="checkbox" name="include_cancelled" value="1" checked> Ikut impor pesanan <b>dibatalkan / diretur</b></label>
+        <small>Dicentang: pesanan batal dicatat dengan statusnya (tidak menjadi penjualan) agar riwayat lengkap. Dikosongkan: pesanan batal yang belum pernah diimpor dilewati. Pesanan yang sudah ada tetap diperbarui bila kemudian dibatalkan, supaya penjualannya ditarik kembali.</small></div>{% endif %}
       <div class="ds-check-wrap" style="margin-top:14px"><label class="ds-check"><input type="checkbox" name="soft" value="1"> Impor data historis (tanpa potong stok)</label>
         <small>Centang bila produk belum ada di katalog. Pesanan tetap masuk, stok tidak dikurangi. Cocok untuk data lama.</small></div>
     </div>
@@ -97,6 +99,7 @@
   {% endif %}{% if summary.no_stock %}<div class="tile"><small>Stok belum dikurangi</small><strong style="color:var(--ds-warn)">{{ summary.no_stock }}</strong><span>penjualan dicatat, tapi stok produknya kurang</span></div>
   {% endif %}{% if summary.updated %}<div class="tile"><small>Status diperbarui</small><strong>{{ summary.updated }}</strong><span>pesanan lama</span></div>{% endif %}
   {% if summary.cancelled %}<div class="tile"><small>Batal / retur</small><strong>{{ summary.cancelled }}</strong><span>penjualannya ditarik kembali</span></div>{% endif %}
+  {% if summary.cancelled_skipped %}<div class="tile"><small>Batal dilewati</small><strong>{{ summary.cancelled_skipped }}</strong><span>tidak diimpor sesuai pilihan Anda</span></div>{% endif %}
   {% if summary.skipped %}<div class="tile"><small>Belum dibayar</small><strong>{{ summary.skipped }}</strong><span>dilewati</span></div>{% endif %}
   {% if summary.errors %}<div class="tile"><small>Gagal</small><strong style="color:var(--ds-bad)">{{ summary.errors|length }}</strong><span>lihat rincian di bawah</span></div>{% endif %}
 </div>

@@ -175,9 +175,9 @@
 .pd-main .ord-tbl th{position:sticky;top:0;z-index:1;height:34px;padding:0 10px;text-align:left;white-space:nowrap;font-size:11.5px}
 .pd-main .ord-tbl th.num{text-align:right}
 .pd-main .ord-tbl td{height:44px;padding:6px 10px;vertical-align:middle;border-bottom:1px solid rgba(11,111,184,.07);border-radius:0;color:#012441}
-.pd-main .ord-tbl tbody tr.ord-row{cursor:pointer}
-.pd-main .ord-tbl tbody tr.ord-row:hover td,.pd-main .ord-tbl tbody tr.ord-row.is-open td{background:#f3fafe}
-.pd-main .ord-tbl tr.ord-row.is-open td{border-bottom-color:transparent}
+.pd-main .ord-tbl tbody tr.ord-tr{cursor:pointer}
+.pd-main .ord-tbl tbody tr.ord-tr:hover td,.pd-main .ord-tbl tbody tr.ord-tr.is-open td{background:#f3fafe}
+.pd-main .ord-tbl tr.ord-tr.is-open td{border-bottom-color:transparent}
 .ord-tbl td small{display:block;color:#5b7186;font-size:11.5px;line-height:1.3}
 .ord-tbl .c-pick{width:34px;padding-right:0!important}
 .ord-tbl .pick{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;padding:0!important;box-shadow:none!important;accent-color:#0b6fb8;cursor:pointer}
@@ -209,3 +209,7 @@
 #ord-list[data-hide~="produk"] [data-col="produk"],#ord-list[data-hide~="kirim"] [data-col="kirim"]{display:none}
 html[data-density="compact"] .pd-main .ord-tbl td{height:36px;padding:3px 8px}
 @media(max-width:700px){.ord-sheet-head .label-bar{justify-content:flex-start}.ord-detail-in{padding:12px}}
+
+/* the order number: a marketplace order shows its marketplace number (the one the buyer and the seller centre use) */
+.ord-tbl .c-id{white-space:nowrap}.ord-tbl .order-id.mk{height:auto;padding:2px 9px;font-size:12.5px}
+.ord-tbl .c-id small{margin-top:2px}

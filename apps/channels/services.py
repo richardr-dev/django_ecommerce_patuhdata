@@ -456,13 +456,17 @@ IMPORT_FINISHED = {STATE_COMPLETED} | REVERSING
 
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
-                  category: str = "regular", finished_only: bool = False):
+                  category: str = "regular", finished_only: bool = False, include_cancelled: bool = True):
     """Import each order, create an ImportBatch record, return summary.
 
     ``finished_only``: a marketplace file lists orders at every stage. An order the marketplace calls
     finished (Selesai, Berhasil) becomes a sale, and a cancelled or returned one is recorded with its
     status but is never a sale. One still being packed or shipped is left for a later file. An order
-    imported earlier is always brought up to date, so a return after completion takes the sale back."""
+    imported earlier is always brought up to date, so a return after completion takes the sale back.
+
+    ``include_cancelled=False``: a cancelled or returned order that was never imported is skipped (counted in
+    ``cancelled_skipped``) instead of being recorded. One already imported is still updated, whatever the
+    option says, because a cancellation after the sale must take the sale back."""
     from decimal import Decimal
     batch = ImportBatch.objects.create(
         store=channel.store, channel=channel, imported_by=imported_by,
@@ -471,17 +475,20 @@ def import_orders(channel, orders, soft: bool = False,
     )
 
     summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],
-               "soft": soft, "not_finished": 0, "no_stock": 0, "new_products": 0,
+               "soft": soft, "not_finished": 0, "no_stock": 0, "new_products": 0, "cancelled_skipped": 0,
                "batch_id": str(batch.id)}
     total_amount = Decimal(0)
     known = set()
-    if finished_only:
+    if finished_only or not include_cancelled:
         ids = [data.external_id for data in orders]
         for start in range(0, len(ids), 500):
             known.update(ChannelOrder.objects.filter(channel=channel,
                 external_order_id__in=ids[start:start + 500]).values_list("external_order_id", flat=True))
 
     for data in orders:
+        if not include_cancelled and data.state in REVERSING and data.external_id not in known:
+            summary["cancelled_skipped"] += 1
+            continue
         if finished_only and data.state not in IMPORT_FINISHED and data.external_id not in known:
             summary["not_finished"] += 1
             continue
@@ -526,7 +533,7 @@ def import_orders(channel, orders, soft: bool = False,
     batch.duplicate_count = summary["duplicates"]
     batch.updated_count = summary["updated"]
     batch.cancelled_count = summary["cancelled"]
-    batch.skipped_count = skipped + summary["not_finished"]
+    batch.skipped_count = skipped + summary["not_finished"] + summary["cancelled_skipped"]
     batch.error_count = len(summary["errors"])
     batch.total_amount = total_amount
     batch.save(update_fields=["order_count", "duplicate_count", "updated_count", "cancelled_count",

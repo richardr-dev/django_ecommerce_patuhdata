@@ -187,7 +187,8 @@ def merchant_import(request):
                 category = request.POST.get("category", "regular")
                 summary = import_orders(channel, orders, soft=soft,
                     file_name=upload.name, imported_by=request.user, skipped=skipped,
-                    category=category, finished_only=platform != "manual")
+                    category=category, finished_only=platform != "manual",
+                    include_cancelled=request.POST.get("include_cancelled") == "1")
                 summary["skipped"] = skipped
                 summary["platform_label"] = selected["label"]
 
@@ -199,6 +200,7 @@ def merchant_import(request):
                              "duplicates": summary["duplicates"],
                              "updated": summary["updated"], "cancelled": summary["cancelled"],
                              "skipped": skipped, "not_finished": summary["not_finished"],
+                             "cancelled_skipped": summary["cancelled_skipped"],
                              "soft": soft, "errors": len(summary["errors"])})
                 if summary["created"] or summary["updated"]:
                     messages.success(request,

@@ -203,9 +203,12 @@ class OrdersPageTests(MarketplaceFixtures):
     def test_a_marketplace_card_shows_courier_resi_and_follows_the_marketplace_status(self):
         self.sale("MP1", courier="JNE YES", resi="JY91008038038")
         html = self.page("?tab=all").content.decode()
-        card = html.split('<tr class="ord-row')[1].split("</tbody>")[0]  # the row and its detail
+        card = html.split('<tr class="ord-tr')[1].split("</tbody>")[0]  # the row and its detail
         for expected in ("JNE YES", "JY91008038038", "Salin", "Status mengikuti Shopee", "Selesai, tidak ada langkah berikutnya"):
             self.assertIn(expected, card)
+        self.assertIn(">MP1</a>", card)                              # the marketplace's own order number leads the row
+        self.assertEqual(card.count("MP1"), card.count(">MP1</a>") + card.count("MP1\""), card)  # shown once, not repeated
+        self.assertNotIn(">#", card.split("</td>")[1])
         for unwanted in ("Belum siap dikirim", "Cetak label", "Kemas pesanan", 'class="pick"'):
             self.assertNotIn(unwanted, card)
         self.assertNotIn("· 0812", card)                              # a username is not a phone number
@@ -261,7 +264,7 @@ class OrdersPageTests(MarketplaceFixtures):
 
     def test_a_cancelled_order_without_shipping_data_has_no_empty_shipping_panel(self):
         self.sale("MP10", status="Dibatalkan")
-        card = self.page("?tab=all").content.decode().split('<tr class="ord-row')[1].split("</tbody>")[0]  # the row and its detail
+        card = self.page("?tab=all").content.decode().split('<tr class="ord-tr')[1].split("</tbody>")[0]  # the row and its detail
         self.assertIn("Pesanan ini tidak menjadi penjualan", card)
         self.assertNotIn("mk-ship", card)
 
