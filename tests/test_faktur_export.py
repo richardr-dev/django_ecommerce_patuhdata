@@ -42,3 +42,65 @@ class FakturTests(Base):
         self.assertEqual(sum(r["ppn"] for r in mine), invoice.tax)
         self.assertEqual(sum(r["dpp"] for r in mine), invoice.tax_base)
         self.assertIn((invoice.number, "NPWP/NIK pembeli kosong"), data["problems"])
+
+
+class FakturXmlTests(Base):
+    """The Coretax XML follows the structure in faktur.xml_document; it is NOT import-tested against Coretax."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.tax.models import TaxProfile
+        TaxProfile.objects.update_or_create(store=self.store, defaults={"npwp": "0123456789012345", "is_pkp": True})
+        self.client.force_login(self.owner)
+
+    def make(self, npwp="0987654321098765", unit="UM.0021"):
+        from apps.tax.models import Invoice
+        invoice = self.invoice(kabel=2, lampu=1)
+        Invoice.objects.filter(pk=invoice.pk).update(buyer_npwp=npwp)
+        invoice.items.update(unit=unit)
+        return invoice
+
+    def test_a_complete_invoice_becomes_the_documented_structure(self):
+        from xml.etree import ElementTree as ET
+        invoice = self.make()
+        xml, skipped, _warnings = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
+        self.assertEqual(skipped, [])
+        root = ET.fromstring(xml)
+        self.assertEqual((root.tag, root.find("TIN").text), ("TaxInvoiceBulk", "0123456789012345"))
+        node = root.find("ListOfTaxInvoice/TaxInvoice")
+        self.assertEqual([c.tag for c in node][:6], ["TaxInvoiceDate", "TaxInvoiceOpt", "TrxCode", "AddInfo", "CustomDoc", "CustomDocMonthYear"])
+        self.assertEqual((node.find("SellerIDTKU").text, node.find("BuyerIDTKU").text),
+            ("0123456789012345000000", "0987654321098765000000"))
+        self.assertEqual((node.find("BuyerCountry").text, node.find("RefDesc").text), ("IDN", invoice.number))
+        lines = node.findall("ListOfGoodService/GoodService")
+        self.assertEqual(len(lines), 2)
+        self.assertEqual([c.tag for c in lines[0]], ["Opt", "Code", "Name", "Unit", "Price", "Qty", "TotalDiscount",
+            "TaxBase", "OtherTaxBase", "VATRate", "VAT", "STLGRate", "STLG"])
+        self.assertEqual(sum(Decimal(line.find("TaxBase").text) for line in lines), invoice.tax_base)
+
+    def test_eleven_percent_uses_dpp_nilai_lain(self):
+        from xml.etree import ElementTree as ET
+        invoice = self.make()
+        node = ET.fromstring(faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)[0]
+            ).find("ListOfTaxInvoice/TaxInvoice")
+        if invoice.tax_rate == Decimal(11):
+            self.assertEqual(node.find("TrxCode").text, "04")
+            line = node.find("ListOfGoodService/GoodService")
+            base, other = Decimal(line.find("TaxBase").text), Decimal(line.find("OtherTaxBase").text)
+            self.assertEqual((line.find("VATRate").text, other), ("12", (base * 11 / 12).quantize(Decimal(1))))
+            self.assertEqual(Decimal(line.find("VAT").text), (other * 12 / 100).quantize(Decimal(1)))
+
+    def test_what_cannot_be_written_is_listed_not_dropped(self):
+        invoice = self.make(npwp="", unit="")
+        xml, skipped, _ = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
+        self.assertIsNone(xml)
+        self.assertIn("NPWP/NIK pembeli", skipped[0][1])
+        self.assertIn("kode UM", skipped[0][1])
+
+    def test_download_and_the_page_link(self):
+        invoice = self.make()
+        reply = self.client.get(reverse("merchant-faktur-xml"), {"month": f"{invoice.issued_on:%Y-%m}"})
+        self.assertEqual(reply.status_code, 200)
+        self.assertTrue(reply["Content-Disposition"].endswith('.xml"'))
+        self.assertTrue(reply.content.startswith(b'<?xml version="1.0" encoding="utf-8" ?>'))
+        self.assertContains(self.client.get(reverse("merchant-spt-ppn")), reverse("merchant-faktur-xml"))

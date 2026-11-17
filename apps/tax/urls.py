@@ -21,6 +21,7 @@ urlpatterns = [
     path("books/tax/spt-tahunan/", views_annual.merchant_spt_tahunan, name="merchant-spt-tahunan"),
     path("books/tax/kalender/", views_annual.merchant_tax_calendar, name="merchant-tax-calendar"),
     path("books/tax/faktur-keluaran/", views.merchant_faktur_export, name="merchant-faktur-export"),
+    path("books/tax/faktur-keluaran/xml/", views.merchant_faktur_xml, name="merchant-faktur-xml"),
     path("books/tax/tampilan-invoice/", sales_views.merchant_invoice_style,
         name="merchant-invoice-style"),
     path("books/tax/invoices.csv", views.merchant_invoice_register,

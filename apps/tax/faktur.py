@@ -122,3 +122,99 @@ def workbook(store, year, month):
             r["qty"], r["price"], r["dpp"], r["ppn"])
     retur.finish("A5")
     return wb, data
+
+
+# ── Coretax XML (ImporFK.xml) ────────────────────────────────────────────────
+# Structure from the published "Sample Faktur PK Template v1.4" / converter v1.6 as described by a
+# third-party guide (Sipajak, updated 12 Nov 2026). The DJP sample and its XSD (TaxInvoice.xsd) were NOT
+# read from pajak.go.id, and an import into Coretax has NOT been tested: a person must upload the file
+# once on the Coretax import screen (or compare it with DJP's sample) before relying on it.
+XML_NOTE = ("File XML ini disusun mengikuti contoh template Faktur Pajak Keluaran DJP (v1.4) dan BELUM diuji "
+    "impor di Coretax. Coba impor satu bulan kecil dulu, atau bandingkan dengan sample resmi di pajak.go.id "
+    "(Coretax, Template XML dan Converter Excel ke XML). Nomor Faktur Pajak resmi tetap diterbitkan Coretax.")
+UNIT_CODE = __import__("re").compile(r"^UM\.\d{4}$")
+TRX_DPP_LAIN, TRX_NORMAL = "04", "01"
+
+
+def _tin16(value):
+    """NPWP as Coretax wants it: 16 digits (a 15-digit NPWP gets a leading 0); None when it cannot be one."""
+    digits = _digits(value)
+    if len(digits) == 15:
+        digits = "0" + digits
+    return digits if len(digits) == 16 else None
+
+
+def _rupiah(value):
+    return f"{Decimal(value).quantize(Decimal('0.01'), ROUND_HALF_UP):f}".rstrip("0").rstrip(".") or "0"
+
+
+def xml_document(store, year, month):
+    """``(xml bytes or None, skipped [(number, reason)], warnings [text])``. Only invoices that pass every
+    check are written; the rest are listed so nothing disappears silently."""
+    from xml.etree import ElementTree as ET
+
+    from apps.tax.services import tax_profile
+
+    seller = _tin16(tax_profile(store).npwp)
+    first, last = month_range(year, month)
+    invoices = Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
+        ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).select_related("order__customer"
+        ).prefetch_related("items").order_by("issued_on", "number")
+    skipped, warnings, written = [], [], 0
+    if seller is None:
+        return None, [("—", "NPWP penjual (profil pajak) harus 16 digit")], warnings
+    root = ET.Element("TaxInvoiceBulk", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+        "xsi:noNamespaceSchemaLocation": "TaxInvoice.xsd"})
+    ET.SubElement(root, "TIN").text = seller
+    listing = ET.SubElement(root, "ListOfTaxInvoice")
+    for invoice in invoices:
+        items = list(invoice.items.all())
+        buyer = _tin16(invoice.buyer_npwp)
+        reasons = []
+        if buyer is None:
+            reasons.append("NPWP/NIK pembeli harus 15 atau 16 digit")
+        if not items:
+            reasons.append("tanpa baris barang/jasa")
+        for item in items:
+            if not UNIT_CODE.match((item.unit or "").strip()):
+                reasons.append(f"satuan “{item.unit or 'kosong'}” harus kode UM Coretax (UM.0001–UM.0039)")
+                break
+        rate = invoice.tax_rate
+        if rate not in (Decimal(11), Decimal(12)):
+            reasons.append(f"tarif PPN {rate}% belum didukung pembuat XML (hanya 11% dan 12%)")
+        if reasons:
+            skipped.append((invoice.number, "; ".join(reasons)))
+            continue
+        other_base_mode = rate == Decimal(11)  # 11% is charged as 12% on 11/12 of the price (TrxCode 04)
+        node = ET.SubElement(listing, "TaxInvoice")
+        for tag, text in (("TaxInvoiceDate", invoice.issued_on.isoformat()), ("TaxInvoiceOpt", "Normal"),
+                ("TrxCode", TRX_DPP_LAIN if other_base_mode else TRX_NORMAL), ("AddInfo", ""), ("CustomDoc", ""),
+                ("CustomDocMonthYear", ""), ("RefDesc", invoice.number), ("FacilityStamp", ""),
+                ("SellerIDTKU", seller + "000000"), ("BuyerTin", buyer), ("BuyerDocument", "TIN"),
+                ("BuyerCountry", "IDN"), ("BuyerDocumentNumber", "-"), ("BuyerName", invoice.buyer_name),
+                ("BuyerAdress", invoice.buyer_address if invoice.buyer_address not in ("", "-") else invoice.buyer_name),
+                ("BuyerEmail", invoice.order.customer.email if invoice.order.customer_id else ""),
+                ("BuyerIDTKU", buyer + "000000")):
+            ET.SubElement(node, tag).text = text
+        goods = ET.SubElement(node, "ListOfGoodService")
+        dpp = _spread(invoice.tax_base, [item.line_total for item in items])
+        booked_vat = ZERO
+        for item, line_dpp in zip(items, dpp, strict=True):
+            other = (line_dpp * Decimal(11) / Decimal(12)).quantize(Decimal(1), ROUND_HALF_UP) if other_base_mode else line_dpp
+            vat = (other * (Decimal(12) if other_base_mode else rate) / Decimal(100)).quantize(Decimal(1), ROUND_HALF_UP)
+            booked_vat += vat
+            line = ET.SubElement(goods, "GoodService")
+            for tag, text in (("Opt", "A" if item.product_id else "B"), ("Code", "000000"), ("Name", item.description),
+                    ("Unit", item.unit.strip()), ("Price", _rupiah(item.unit_price)), ("Qty", _rupiah(item.quantity)),
+                    ("TotalDiscount", _rupiah(item.discount)), ("TaxBase", _rupiah(line_dpp)),
+                    ("OtherTaxBase", _rupiah(other)), ("VATRate", "12" if other_base_mode else _rupiah(rate)),
+                    ("VAT", _rupiah(vat)), ("STLGRate", "0"), ("STLG", "0")):
+                ET.SubElement(line, tag).text = text
+        if abs(booked_vat - invoice.tax) > 1:
+            warnings.append(f"{invoice.number}: PPN di XML Rp{booked_vat:,.0f} berbeda dari invoice Rp{invoice.tax:,.0f} "
+                "karena pembulatan per baris; samakan sebelum lapor.".replace(",", "."))
+        written += 1
+    if not written:
+        return None, skipped, warnings
+    ET.indent(root)
+    return b'<?xml version="1.0" encoding="utf-8" ?>\n' + ET.tostring(root, encoding="utf-8"), skipped, warnings

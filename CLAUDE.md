@@ -154,7 +154,12 @@ Four test files failed before this work and still do: `test_digital_products`,
   over a range must do the same. `controls.year_close_tie` fails when a closed year's profit changes.
 - **Excel exports** (`accounting/exports.py`): a workbook uses the same service as its screen (never a
   second query) and writes real numbers with a rupiah format. A new report gets an entry in `REPORTS`.
-- **Coretax**: the official import is a DJP Excel template converted to XML by DJP's converter, and its
+- **Coretax XML** (`tax/faktur.py:xml_document`, button "XML Coretax (uji dulu)" on SPT Masa PPN): `TaxInvoiceBulk` with the
+  elements of DJP's Sample Faktur PK Template v1.4 as described by a third-party guide; **not import-tested** and the DJP
+  sample/XSD were not read. 11% is written as TrxCode 04 (12% on 11/12 of the base), buyer NPWP/NIK 16 digits, NITKU = id +
+  `000000`, line unit must be a Coretax `UM.xxxx` code; invoices that fail are listed, never dropped silently. Retur
+  (nota retur) XML is not built.
+- **Coretax** (older note): the official import is a DJP Excel template converted to XML by DJP's converter, and its
   field layout is not confirmed in this repo. `tax/faktur.py` therefore produces a checked worksheet (per
   line, buyer NPWP/NIK flagged) and says so; do not claim it is an importable XML until the current DJP
   template (pajak.go.id, Coretax, Template XML dan Converter) has been read and the format tested.

@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.orders.access import get_customer_order_or_404
@@ -161,6 +162,31 @@ def merchant_spt_ppn(request):
         return response
     return render(request, "merchant/spt_ppn.html", _merchant_context(request, store, w=data, profile=profile,
         month=f"{year}-{month:02d}", month_label=data["start"]))
+
+
+@login_required(login_url="/login/")
+def merchant_faktur_xml(request):
+    """Faktur Pajak Keluaran as ImporFK.xml for the Coretax import screen (not import-tested; see faktur.XML_NOTE)."""
+    from django.http import HttpResponse
+
+    from . import faktur
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    year, month = _month(request)
+    xml, skipped, warnings = faktur.xml_document(store, year, month)
+    if xml is None:
+        messages.error(request, "Tidak ada faktur yang bisa dibuat XML-nya bulan ini."
+            + ("".join(f" {number}: {why}." for number, why in skipped[:5]) or " Tidak ada invoice ber-PPN."))
+        return redirect(f"{reverse('merchant-spt-ppn')}?month={year}-{month:02d}")
+    if skipped:
+        messages.warning(request, f"{len(skipped)} faktur tidak dimasukkan ke XML: "
+            + "; ".join(f"{number} ({why})" for number, why in skipped[:5]))
+    for text in warnings[:3]:
+        messages.warning(request, text)
+    response = HttpResponse(xml, content_type="application/xml; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="ImporFK-{year}-{month:02d}.xml"'
+    return response
 
 
 @login_required(login_url="/login/")
