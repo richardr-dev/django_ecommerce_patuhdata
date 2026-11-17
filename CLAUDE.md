@@ -609,7 +609,7 @@ Accounting:
 - [ ] Simple payroll posting to gaji and PPh 21.
 - [ ] Multi-currency for sellers who buy in USD/CNY.
 - [x] Excel export for every financial report, auditor pack and SAK EMKM PDF. (Other lists still CSV only.)
-- [ ] POS module (planned; `channel="pos"` is reserved).
+- [ ] POS module (planned; `channel="pos"` is reserved). Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980, one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.
 
 Access:
 - [x] Accountant role (read-only plus export), an audit-log viewer per document.
