@@ -1,0 +1,64 @@
+{% load static books %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kasir {{ register.code }} · {{ merchant_store.name }}</title>{% include "platform/favicon.html" %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="{% static 'css/pos.css' %}">
+</head><body>
+<header class="pos-top">
+  <a class="pos-back" href="{% url 'merchant-pos' %}" aria-label="Kembali ke daftar register">←</a>
+  <div class="pos-where"><b>{{ register.outlet.name }}</b><span>{{ register.name }} · {{ request.user.get_full_name|default:request.user.username }}</span></div>
+  <label class="pos-search"><span class="sr">Cari produk</span><input id="q" type="search" autocomplete="off" placeholder="Cari nama atau scan SKU, lalu Enter…" autofocus></label>
+  <div class="pos-shift"><span>Shift ini</span><b id="shift-total">{{ summary.total|rp }}</b><small id="shift-count">{{ summary.count }} struk</small></div>
+  <a class="pos-link" href="{% url 'merchant-pos-shift' shift.pk %}">Tutup shift</a>
+</header>
+<main class="pos-main">
+  <section class="pos-catalog" aria-label="Produk">
+    <div id="cats" class="pos-cats" role="tablist"></div>
+    <div id="grid" class="pos-grid"></div>
+    <p id="none" class="pos-empty" hidden>Tidak ada produk yang cocok.</p>
+  </section>
+  <aside class="pos-cart" aria-label="Keranjang">
+    <div class="pos-cart-head"><h1>Keranjang</h1><button type="button" id="clear" class="pos-text">Kosongkan</button></div>
+    <div id="lines" class="pos-lines"><p class="pos-empty">Pilih produk di kiri atau scan SKU.</p></div>
+    <div class="pos-sum">
+      <label class="pos-disc"><span>Diskon struk (Rp)</span><input id="disc" inputmode="numeric" placeholder="0"></label>
+      <div class="pos-row"><span>Subtotal</span><b id="sub">Rp0</b></div>
+      <div class="pos-row" id="tax-row" hidden><span id="tax-label">PPN</span><b id="tax">Rp0</b></div>
+      <div class="pos-row" id="round-row" hidden><span>Pembulatan</span><b id="round">Rp0</b></div>
+      <div class="pos-row pos-total"><span>Total</span><b id="total">Rp0</b></div>
+      <button type="button" id="pay" class="pos-pay" disabled>Bayar <kbd>F2</kbd></button>
+    </div>
+  </aside>
+</main>
+
+<dialog id="pay-dialog" class="pos-dialog" aria-labelledby="pay-title">
+  <form method="dialog" id="pay-form">
+    <header><h2 id="pay-title">Pembayaran</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div class="pos-due"><span>Total belanja</span><b id="due">Rp0</b></div>
+    <div class="pos-tenders">
+      <label><span>Tunai</span><input data-tender="cash" inputmode="numeric" placeholder="0"></label>
+      <div class="pos-quick" id="quick"></div>
+      <label><span>QRIS</span><input data-tender="qris" inputmode="numeric" placeholder="0"></label>
+      <label><span>Kartu debit/kredit (EDC)</span><input data-tender="edc" inputmode="numeric" placeholder="0"></label>
+      <label class="pos-ref"><span>No. referensi / approval</span><input id="ref" maxlength="120" placeholder="opsional"></label>
+      <label><span>Transfer bank</span><input data-tender="transfer" inputmode="numeric" placeholder="0"></label>
+      <label class="pos-ref" id="acct-wrap" hidden><span>Rekening penerima</span><select id="acct"></select></label>
+      <label class="pos-ref"><span>Nama pembeli</span><input id="buyer" maxlength="120" placeholder="Pelanggan umum"></label>
+    </div>
+    <div class="pos-change"><span id="change-label">Kurang</span><b id="change">Rp0</b></div>
+    <p id="pay-error" class="pos-error" role="alert" hidden></p>
+    <footer><button type="button" class="pos-btn" data-close>Batal</button><button type="submit" id="finish" class="pos-pay" disabled>Selesaikan</button></footer>
+  </form>
+</dialog>
+
+<dialog id="done-dialog" class="pos-dialog" aria-labelledby="done-title">
+  <div class="pos-done"><div class="pos-check" aria-hidden="true">✓</div><h2 id="done-title">Transaksi selesai</h2>
+    <p id="done-number"></p><div class="pos-due"><span>Kembalian</span><b id="done-change">Rp0</b></div>
+    <footer><a id="done-print" class="pos-btn" target="_blank" rel="noopener" href="#">Cetak struk</a><button type="button" id="done-next" class="pos-pay">Transaksi baru <kbd>Enter</kbd></button></footer></div>
+</dialog>
+<div id="toast" class="pos-toast" role="status" hidden></div>
+<form hidden>{% csrf_token %}</form>
+{{ setup|json_script:"pos-setup" }}
+<script src="{% static 'js/pos.js' %}"></script>
+</body></html>

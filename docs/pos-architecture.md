@@ -1,4 +1,4 @@
-# POS module: architecture (decided 2026-11-17, nothing built yet)
+# POS module: architecture (decided 2026-11-17; phases 0 and 1 built the same day, see §8)
 
 Point of sale for physical retail: one company (`Store`) runs several outlets, each outlet runs one or
 more registers (kasir), and every sale lands in the same books as the online, marketplace and B2B sales.
@@ -174,7 +174,7 @@ POST /pos/<register>/sale/  {idem, lines[], tenders[], customer?, discount, note
   categories and search, cart on the right, pay sheet with tender buttons and the change figure, numeric
   keypad for cash tendered. Keyboard: scan (Enter), `F2` pay, `F4` discount, `Esc` clear.
 - Receipt: 58/80 mm thermal through the browser print dialog (`@page` CSS), QR with the e-receipt link
-  (`/r/<token>/`, public, in `ALWAYS_OPEN`, branded through `tax/branding.py`), WhatsApp send through the
+  (`/struk/<token>/`, public, in `ALWAYS_OPEN`, branded through `tax/branding.py`; `/s/` is the campaign short link and `/r/` the retired referral link), WhatsApp send through the
   store's account (`integrations/whatsapp.KINDS` + `receipt`). ESC/POS drivers, cash-drawer kick and
   customer displays are phase 4 (a small local print agent, not WebUSB).
 - Connectivity: v1 is online-only with the idempotency key, so a retried submit never duplicates a sale.
@@ -218,7 +218,7 @@ a cost centre of PT A. Group consolidation stays unbuilt (architecture item 6).
 | Phase | Scope | Depends on |
 |---|---|---|
 | 0 ✅ | `stock_out(warehouse=)`, `create_sales_invoice(warehouse=, number_series=)`, accounts 1210/4950/6980/7250/6155, `Warehouse.cost_center`, role `cashier` + `StoreStaff.outlet`, `pos.*` keys, `exclusive_price` | done 2026-11-17 |
-| 1 | Register + cash account, open/close shift with variance entry, selling screen (cash/QRIS/EDC/transfer, split tender, line and ticket discount, rounding), receipt print, e-receipt link, Z report, per-outlet sales report, controls `pos_cash_tie` / `pos_unposted` | phase 0 |
+| 1 ✅ | Register + cash account, open/close shift with variance entry and deposit, selling screen (cash/QRIS/EDC/transfer, split tender, line and ticket discount, rounding), receipt print, e-receipt link, shift (Z) report, controls `pos_receipts` / `pos_shifts`, cashier home and sidebar | done 2026-11-17; a per-outlet sales report beyond the shift report is still open |
 | 2 | Refund and exchange at the register, void in open shift, paid-in/paid-out, deposit to bank, approvals on variance, fraud checks, todo rows, month-end step, SPT digunggung and XML exclusion | phase 1 |
 | 3 | Variant stock per warehouse (then variants at the register), customer on ticket with loyalty and customer credit, gift cards, promotions, outlet price lists, WhatsApp e-receipt, outbox stock push | phase 2 |
 | 4 | Offline queue (IndexedDB replay), local print agent (ESC/POS, drawer kick), EDC integration, multi-register per outlet dashboard | phase 3 |
@@ -236,3 +236,17 @@ Estimate: phase 0+1 about 3 weeks, phase 2 about 2 weeks, phase 3 depends mostly
    the books still split 4100 and 2100.
 5. **Online-only in v1**; the offline queue is phase 4.
 6. **Void only in the open shift**; afterwards a credit note.
+
+## 10. What phase 1 changed from this plan
+
+- The drawer's expected cash is **the ledger balance of the register's cash account**, not a formula over the
+  shift's sales. Paid-in, paid-out and deposits (phase 2) will therefore need no change to the close.
+- `PosCashMovement` was not needed for phase 1: the float and the deposit are ordinary bank transfers
+  (`CashTransaction`), visible in Kas & bank.
+- Rounding and the outlet's cost centre live on the invoice (`Invoice.rounding`, `Invoice.cost_center`), so a
+  repost from the backlog books the same entry.
+- Card and QRIS use two payment methods of their own (`edc`, `qris_pos`); the existing `qris` method on office
+  invoices still goes to the bank account named.
+- The e-receipt is `/struk/<token>/`: `/s/` was already the campaign short link.
+- Outlet settings (`PosOutletSettings`: PPN-inclusive prices, rounding step, cashier discount limit, receipt header
+  and footer) have a model and defaults but no screen yet.

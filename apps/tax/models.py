@@ -103,6 +103,12 @@ class Invoice(models.Model):
     # Made from surat jalan of a sales order: stock already left and its cost sits in 1410, so this
     # invoice books HPP against 1410, takes no stock, and returns none when voided.
     from_deliveries = models.BooleanField(default=False)
+    # Cash rounding given (negative) or taken (positive) at the register; part of ``total`` and booked
+    # to Pembulatan penjualan (4950), never to Penjualan.
+    rounding = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # The outlet or branch this sale counts for; its journal entries carry it.
+    cost_center = models.ForeignKey("accounting.CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="invoices")
     sales_order = models.ForeignKey("SalesOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -160,6 +166,11 @@ class InvoicePayment(models.Model):
     METHOD_MARKETPLACE = "marketplace"
     METHOD_CREDIT     = "credit"
     METHOD_OTHER      = "other"
+    # Taken at a register: the acquirer holds the money until it settles to the bank, so these wait in
+    # Piutang EDC / QRIS (1210) whatever bank account is named.
+    METHOD_EDC        = "edc"
+    METHOD_QRIS_POS   = "qris_pos"
+    CLEARING_METHODS  = {METHOD_EDC, METHOD_QRIS_POS}
     METHOD_CHOICES = [
         (METHOD_CASH,        "Tunai"),
         (METHOD_TRANSFER,    "Transfer Bank"),
@@ -168,6 +179,8 @@ class InvoicePayment(models.Model):
         (METHOD_MARKETPLACE, "Marketplace"),
         (METHOD_CREDIT,      "Kredit pelanggan"),
         (METHOD_OTHER,       "Lainnya"),
+        (METHOD_EDC,         "Kartu debit/kredit (EDC)"),
+        (METHOD_QRIS_POS,    "QRIS kasir"),
     ]
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments")

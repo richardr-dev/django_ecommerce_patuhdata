@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 from django.urls import reverse
+from django.utils import timezone
 
 from .ledger import (
     CUSTOMER_CREDIT,
@@ -545,11 +546,57 @@ def voids_after_payment(store, today, ledger):
     return check
 
 
+def pos_receipts(store, today, ledger):
+    """Every register receipt is a paid invoice with a live entry, and card and QRIS money does not
+    sit with the acquirer for days."""
+    from apps.pos.models import PosSale
+    from apps.tax.models import Invoice, InvoicePayment
+
+    from .ledger import EDC_CLEARING, unposted
+    sales = PosSale.objects.filter(store=store, status=PosSale.PAID)
+    if not sales.exists():
+        return Check("pos_receipts", "Struk kasir sama dengan invoice lunas", OK, "Belum ada penjualan kasir.")
+    url = reverse("merchant-pos")
+    open_ones = list(sales.exclude(invoice__status=Invoice.STATUS_PAID).values_list("number", flat=True)[:10])
+    missing = [invoice.number for invoice in unposted(Invoice.objects.filter(pos_sale__in=sales), "invoice")][:10]
+    if open_ones or missing:
+        check = Check("pos_receipts", "Struk kasir sama dengan invoice lunas", FAIL,
+            f"{len(open_ones)} struk belum lunas di buku dan {len(missing)} belum terjurnal. "
+            "Jalankan posting ulang; bila tetap ada, periksa struknya.", url=url, action="Buka kasir")
+        check.items = open_ones + missing
+        return check
+    waiting = ledger.get(EDC_CLEARING, ZERO)
+    old = InvoicePayment.objects.filter(invoice__store=store, method__in=InvoicePayment.CLEARING_METHODS,
+        paid_on__lt=today - timedelta(days=3)).exists()
+    if waiting > TOLERANCE and old:
+        return Check("pos_receipts", "Struk kasir sama dengan invoice lunas", INFO,
+            "Semua struk lunas dan terjurnal. Piutang EDC / QRIS masih bersaldo dari transaksi lebih dari "
+            "3 hari lalu: cocokkan pencairannya di rekening bank.", waiting, None, "",
+            reverse("merchant-bank-accounts"), "Buka kas & bank")
+    return Check("pos_receipts", "Struk kasir sama dengan invoice lunas", OK,
+        "Semua struk kasir sudah menjadi invoice lunas dan terjurnal.")
+
+
+def pos_shifts(store, today, ledger):
+    """No shift is left open overnight: an open drawer is cash nobody has counted."""
+    from apps.pos.models import PosShift
+    stale = [shift for shift in PosShift.objects.filter(register__store=store, status=PosShift.OPEN
+        ).select_related("register__outlet") if timezone.localdate(shift.opened_at) < today]
+    if not stale:
+        return Check("pos_shifts", "Shift kasir ditutup setiap hari", OK, "Tidak ada shift kasir yang terbuka dari hari sebelumnya.")
+    check = Check("pos_shifts", "Shift kasir ditutup setiap hari", WARN,
+        f"{len(stale)} shift masih terbuka sejak hari sebelumnya. Hitung laci dan tutup shiftnya.",
+        url=reverse("merchant-pos"), action="Buka kasir")
+    check.items = [f"{shift.register.outlet.name} {shift.register.code} · dibuka {timezone.localtime(shift.opened_at):%d/%m %H.%M}"
+        for shift in stale[:10]]
+    return check
+
+
 CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_status, receivable, payable,
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, delivered_tie, intercompany_tie, negative_stock, purchase_orders_late]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, delivered_tie, intercompany_tie, negative_stock, purchase_orders_late, pos_receipts, pos_shifts]
 
 
 def run_checks(store, today):

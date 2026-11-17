@@ -133,13 +133,15 @@ def issue_invoice(order):
     return invoice, True
 
 
-def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None):
+def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None, rounding=0,
+        cost_center=None):
     """Issue an invoice for any order regardless of payment gateway status.
     Used for manual orders, marketplace imports, and mitra sell-through.
 
     ``number_series`` ("POS") numbers the invoice from its own gapless sequence
     (``POS/2026/000001``, see ``numbering.next_number``) instead of the store's INV series, so register
-    receipts never interleave with the invoices the office sends."""
+    receipts never interleave with the invoices the office sends. ``rounding`` (signed, already inside
+    ``order.total``) is the cash rounding of a register sale; ``cost_center`` is the outlet it counts for."""
     existing = Invoice.objects.filter(order=order).first()
     if existing:
         return existing, False
@@ -174,8 +176,8 @@ def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None)
                 tax_rate=_tax_rate(store, tax_base, order.tax),
                 tax=order.tax, shipping=order.shipping_cost,
                 other_charges=max(Decimal(0),
-                    order.total - tax_base - order.tax - order.shipping_cost),
-                total=order.total, notes=notes,
+                    order.total - tax_base - order.tax - order.shipping_cost - Decimal(rounding or 0)),
+                total=order.total, notes=notes, rounding=Decimal(rounding or 0), cost_center=cost_center,
             )
             _create_invoice_items(invoice, order)
     except IntegrityError:

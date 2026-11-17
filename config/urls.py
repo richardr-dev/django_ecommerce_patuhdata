@@ -22,6 +22,7 @@ urlpatterns = [
     path("", include("apps.accounting.urls")),
     path("", include("apps.catalog.urls")),
     path("", include("apps.settlements.urls")),
+    path("", include("apps.pos.urls")),
     # Last: the back office moved from /merchant/ to /books/, and the old addresses keep working.
     re_path(r"^merchant/(?P<rest>.*)$", legacy_merchant),
 ]

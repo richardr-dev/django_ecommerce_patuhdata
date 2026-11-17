@@ -1,0 +1,42 @@
+{% load books branding static %}{% brand merchant_store invoice as b %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Struk {{ sale.number }}</title><meta name="robots" content="noindex">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3fafe;font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;color:#012441}
+.r{width:302px;max-width:100%;margin:16px auto;background:#fff;padding:16px 14px;border-radius:16px;box-shadow:0 8px 24px -4px rgba(1,36,65,.08);font-size:12.5px;line-height:1.45;font-variant-numeric:tabular-nums}
+.c{text-align:center}.r h1{font-size:15px;margin:4px 0 2px}.m{color:#5b7186}.logo{max-height:44px;max-width:150px}
+hr{border:0;border-top:1px dashed #9db4c6;margin:9px 0}
+.row{display:flex;justify-content:space-between;gap:10px}.row b:last-child,.row span:last-child{text-align:right;white-space:nowrap}
+.item{margin-bottom:5px}.total{font-size:15px;font-weight:800}
+.bar{display:flex;gap:8px;justify-content:center;margin:14px auto;width:302px;max-width:100%}
+.bar button,.bar a{border:0;border-radius:999px;padding:9px 18px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;background:#0b6fb8;color:#fff;text-decoration:none}
+.bar a{background:#eaf7fe;color:#0b6fb8}
+@media print{body{background:#fff}.r{box-shadow:none;border-radius:0;margin:0;width:100%;padding:0 2mm}.bar{display:none}@page{size:80mm auto;margin:3mm}}
+</style></head><body>
+<div class="r">
+  <div class="c">{% if b.logo_url %}<img class="logo" src="{{ b.logo_url }}" alt="">{% endif %}<h1>{{ b.name }}</h1>
+    <div class="m">{{ register.outlet.name }}{% if register.outlet.address %}<br>{{ register.outlet.address }}{% endif %}{% if register.outlet.phone %}<br>{{ register.outlet.phone }}{% endif %}</div>
+    {% if invoice.seller_is_pkp and invoice.seller_npwp %}<div class="m">NPWP {{ invoice.seller_npwp }}</div>{% endif %}
+    {% if config.receipt_header %}<div>{{ config.receipt_header }}</div>{% endif %}</div>
+  <hr>
+  <div class="row"><span>{{ sale.number }}</span><span>{{ sale.sold_at|date:"d/m/Y H.i" }}</span></div>
+  <div class="row m"><span>Kasir: {{ sale.cashier.get_full_name|default:sale.cashier.username }}</span><span>{{ register.code }}</span></div>
+  {% if sale.customer %}<div class="m">Pelanggan: {{ sale.customer.name }}</div>{% endif %}
+  {% if sale.status == 'void' %}<div class="c" style="color:#c92a2a;font-weight:800;margin-top:6px">DIBATALKAN</div>{% endif %}
+  <hr>
+  {% for line in sale.cart %}<div class="item"><div>{{ line.name }}</div>
+    <div class="row m"><span>{{ line.qty }} × {{ line.price|rp }}{% if line.discount != "0.00" %} − {{ line.discount|rp }}{% endif %}</span><span>{{ line.total|rp }}</span></div></div>{% endfor %}
+  <hr>
+  {% if sale.discount %}<div class="row"><span>Diskon</span><span>− {{ sale.discount|rp }}</span></div>{% endif %}
+  {% if invoice.rounding >= 1 or invoice.rounding <= -1 %}<div class="row"><span>Pembulatan</span><span>{{ invoice.rounding|signed_rp }}</span></div>{% endif %}
+  <div class="row total"><span>TOTAL</span><span>{{ sale.total|rp }}</span></div>
+  {% if invoice.tax %}<div class="row m"><span>DPP</span><span>{{ invoice.tax_base|rp }}</span></div><div class="row m"><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span>{{ invoice.tax|rp }}</span></div>{% endif %}
+  <hr>
+  {% for label, tender in tenders %}<div class="row"><span>{{ label }}{% if tender.reference %} <span class="m">{{ tender.reference }}</span>{% endif %}</span><span>{{ tender.tendered|rp }}</span></div>{% endfor %}
+  {% if sale.change %}<div class="row"><b>Kembali</b><b>{{ sale.change|rp }}</b></div>{% endif %}
+  <hr>
+  <div class="c m">{{ config.receipt_footer|default:"Terima kasih atas kunjungan Anda." }}<br>No. invoice {{ invoice.number }}</div>
+</div>
+{% if not public %}<div class="bar"><button type="button" onclick="window.print()">Cetak struk</button><a href="{% url 'pos-receipt-public' sale.token %}" target="_blank" rel="noopener">Link struk pembeli</a></div>
+{% if auto_print %}<script>window.addEventListener("load",function(){window.print();});</script>{% endif %}{% endif %}
+</body></html>

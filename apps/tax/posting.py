@@ -12,9 +12,11 @@ from apps.accounting.ledger import (
     COGS,
     CUSTOMER_CREDIT,
     DISCOUNTS,
+    EDC_CLEARING,
     INVENTORY,
     MARKETPLACE,
     RECEIVABLE,
+    ROUNDING,
     SALES,
     SHIPPING,
     VAT,
@@ -52,13 +54,14 @@ def booked_by_invoice(invoice):
 def post_invoice(invoice, *, actor=None):
     cost = cost_of_goods(invoice.order)
     # Sales is the residual, so the entry balances whatever the invoice was edited to.
-    sales = invoice.total - invoice.shipping - invoice.tax + invoice.discount
+    sales = invoice.total - invoice.shipping - invoice.tax + invoice.discount - invoice.rounding
     from apps.accounting.ledger import DELIVERED
     stock_account = DELIVERED if invoice.from_deliveries else INVENTORY  # goods that left on a surat jalan
-    return post_entry(invoice.store, date=invoice.issued_on, actor=actor,
+    return post_entry(invoice.store, date=invoice.issued_on, actor=actor, cost_center=invoice.cost_center,
         source=("invoice", invoice.pk), memo=f"Invoice {invoice.number} · {invoice.buyer_name}",
         amounts={RECEIVABLE: invoice.total, DISCOUNTS: invoice.discount, SALES: -sales,
-            SHIPPING: -invoice.shipping, VAT: -invoice.tax, COGS: cost, stock_account: -cost})
+            ROUNDING: -invoice.rounding, SHIPPING: -invoice.shipping, VAT: -invoice.tax, COGS: cost,
+            stock_account: -cost})
 
 
 def post_invoice_payment(payment, *, strict=False, actor=None):
@@ -67,12 +70,14 @@ def post_invoice_payment(payment, *, strict=False, actor=None):
         received = CUSTOMER_CREDIT  # settled from the buyer's advance, not new money
     elif payment.method == InvoicePayment.METHOD_MARKETPLACE:
         received = MARKETPLACE
+    elif payment.method in InvoicePayment.CLEARING_METHODS:
+        received = EDC_CLEARING  # card or QRIS at the register: with the acquirer until it settles
     elif payment.bank_account_id:
         received = payment.bank_account.account.code
     else:
         received = CASH
     return post_entry(invoice.store, date=payment.paid_on, strict=strict, actor=actor,
-        source=("invoice_payment", payment.pk),
+        cost_center=invoice.cost_center, source=("invoice_payment", payment.pk),
         memo=f"Pembayaran invoice {invoice.number} · {payment.get_method_display()}",
         amounts={received: payment.amount, RECEIVABLE: -payment.amount})
 

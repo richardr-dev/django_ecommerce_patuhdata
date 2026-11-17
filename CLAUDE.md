@@ -86,6 +86,39 @@ Four test files failed before this work and still do: `test_digital_products`,
   (screen role `viewer`; `pos.sell`, `pos.shift`, `pos.void`; refunds, variance approval, discount override and
   settings need manager or above) pinned to one outlet by `StoreStaff.outlet`, and `Warehouse.cost_center` so POS
   postings land in the outlet's cost centre.
+- **Kasir (POS)** (`apps/pos/`: `services.py`, `views.py`; pages Penjualan › Kasir (POS) at `/books/pos/`; design and
+  phases in `docs/pos-architecture.md`; tests `tests/test_pos.py`). Phase 0 and phase 1 are built.
+  - An outlet is a `Warehouse` with `is_outlet`. A **register** (`PosRegister`) is a cash drawer, not a device, and
+    owns a cash account ("Kas kasir <outlet> <code>", created by `create_register`). One open **shift** per register.
+  - A **receipt** (`PosSale`) is one ordinary invoice: `pos.sell` calls `create_sales_invoice(channel="pos",
+    warehouse=outlet, number_series="POS", rounding=, cost_center=outlet.cost_center, on_credit=True)` and then
+    `record_payment` once per tender. POS never writes journal lines and has no lines of its own: the invoice's
+    lines are the lines; `PosSale.cart` is only the shelf-price snapshot the receipt prints.
+  - Tenders: cash → the register's cash account; `edc` and `qris_pos` (`InvoicePayment.CLEARING_METHODS`) → 1210
+    Piutang EDC / QRIS whatever bank account is named, settled later in bank reconciliation; transfer → the bank
+    account named. Change comes off the cash tender; non-cash can never exceed the total.
+  - **The drawer's expected cash is the ledger balance of the register's account** (`drawer_balance`), never a
+    separate tally. Opening a shift with a count that differs from the books needs `fund_from` (the difference is a
+    transfer) or is refused. Closing posts counted − expected as `("pos_shift", shift.id)`: short to 6980, over to
+    7250, with the outlet's cost centre, then transfers everything above `keep_float` to `deposit_to`.
+  - Shelf prices include PPN when `PosOutletSettings.prices_include_tax` and the store is PKP: `pos.quote` backs
+    PPN out per line (`exclusive_price`) and the cents left over, plus any Rp100/Rp500 rounding, go to
+    `Invoice.rounding` → 4950 (`post_invoice` takes it out of Penjualan). `Invoice.cost_center` is passed to the
+    invoice and payment entries.
+  - A cashier sells at the shelf price and discounts up to `max_discount_pct`; more needs `pos.discount_override`.
+    A cashier (`StoreStaff.outlet`) reaches only that outlet's registers (`registers_for`), lands on `/books/pos/`
+    instead of Beranda, and sees only the Kasir link in the sidebar (`merchant_nav.CASHIER_LINKS`).
+  - The selling screen (`templates/merchant/pos_sell.html`, `static/js/pos.js`, `static/css/pos.css`) is standalone
+    (no sidebar, no Tailwind, no htmx). It posts JSON with a client `idem` key; the same key returns the first
+    receipt. The server is the authority on price, stock and total; the script only mirrors the arithmetic.
+  - The buyer's e-receipt is `/struk/<token>/` (in `ALWAYS_OPEN`; `/s/` is the campaign short link).
+  - Controls `pos_receipts` (every receipt is a paid, posted invoice; 1210 older than 3 days is an info row) and
+    `pos_shifts` (a shift left open overnight). `apps/orders/nav_access.py` is generated: after adding a role or a
+    sidebar link run `WRITE_NAV_ACCESS=1 pytest tests/test_nav_access.py`.
+  - Not built (phases 2 to 4): void and refund at the register, paid-in/paid-out, approval of a shift variance,
+    variants at the register, outlet price lists, customer picker and loyalty, SPT digunggung and leaving POS
+    invoices out of the Coretax XML, offline queue, printer agent, outlet settings screen (the settings row exists,
+    edited in Django admin only).
 - **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
   one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
   journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,
@@ -336,6 +369,7 @@ Four test files failed before this work and still do: `test_digital_products`,
 | Invoice recap per channel (Shopee, Tokopedia…) | `channels/invoice_recap.py` | `channels/report_views.py` |
 | Order-based margin per channel | `channels/reporting.py` | `channels/report_views.py` |
 | Marketplace import, SKU map, income | `channels/services.py`, `mapping.py`, `income.py` | `channels/` |
+| Kasir (POS): registers, shifts, receipts, Z report, e-receipt | `pos/services.py` | `pos/views.py`, `templates/merchant/pos*.html`, `templates/pos/receipt.html` |
 | Consignment (mitra) | `settlements/consignment.py` | `settlements/views.py` |
 
 ### Account codes
@@ -622,7 +656,7 @@ Accounting:
 - [ ] Simple payroll posting to gaji and PPh 21.
 - [ ] Multi-currency for sellers who buy in USD/CNY.
 - [x] Excel export for every financial report, auditor pack and SAK EMKM PDF. (Other lists still CSV only.)
-- [ ] POS module (planned; `channel="pos"` is reserved). Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980, one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.
+- [~] POS module: phases 0 and 1 built 2026-11-17 (`apps/pos/`); phases 2 to 4 open, see the Kasir (POS) rule above. Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980, one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.
 
 Access:
 - [x] Accountant role (read-only plus export), an audit-log viewer per document.

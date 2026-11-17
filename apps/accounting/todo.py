@@ -33,6 +33,13 @@ def todo_items(store, today, user=None):
             items.append({"count": count, "label": label, "url": url, "action": action,
                 "icon": icon, "tone": tone})
 
+    from django.utils import timezone
+
+    from apps.pos.models import PosShift
+    stale = sum(1 for shift in PosShift.objects.filter(register__store=store, status=PosShift.OPEN)
+        if timezone.localdate(shift.opened_at) < today)
+    add(stale, "shift kasir belum ditutup sejak kemarin", reverse("merchant-pos"), "Hitung & tutup →", "cash", "warn")
+
     from apps.tax import tax_calendar
     due = tax_calendar.attention(store, today)
     late = [r for r in due if r["status"] == "overdue"]

@@ -48,6 +48,7 @@ NAV = [
             Link("Penawaran", "merchant-quotes"),
             Link("Pesanan penjualan", "merchant-sales-orders", match=("/books/sales/orders/",)),
             Link("Surat jalan", "merchant-deliveries", match=("/books/sales/deliveries/",)),
+            Link("Kasir (POS)", "merchant-pos", match=("/books/pos/",)),
             Link("Daftar harga", "merchant-price-lists", match=("/books/sales/price-lists/",)),
             Link("Retur & penukaran", "merchant-returns"),
             Link("Rekap produksi", "merchant-production-recap"),
@@ -266,6 +267,9 @@ def _score(link, path, href, query):
     return best + (500 if best and link.query else 0)
 
 
+CASHIER_LINKS = frozenset({"merchant-pos"})
+
+
 def link_key(link):
     """How ``nav_access.REFUSED`` names a link."""
     return link.url + ("/" + "/".join(map(str, link.args)) if link.args else "") + (f"?{link.query}" if link.query else "")
@@ -281,7 +285,11 @@ def build_nav(context):
     flags = {"storefront": settings.STOREFRONT_ENABLED, "uses_platform_gateway": bool(store and getattr(getattr(
         store, "payment_settings", None), "use_platform_gateway", False))}
     from apps.orders.nav_access import REFUSED
-    refused = REFUSED.get(context.get("merchant_real_role", ""), frozenset())
+    real_role = context.get("merchant_real_role", "")
+    refused = REFUSED.get(real_role, frozenset())
+    # A cashier works on the register: the sidebar shows that one page, not the catalogue lists any
+    # staff member may read.
+    only = CASHIER_LINKS if real_role == "cashier" else None
     sections, best, active = [], 0, None
     for title, groups in NAV:
         built_groups = []
@@ -292,7 +300,7 @@ def build_nav(context):
             for link in group.links:
                 if link.roles and role not in link.roles:
                     continue
-                if link_key(link) in refused:
+                if link_key(link) in refused or (only is not None and link.url not in only):
                     continue
                 if link.when and not flags.get(link.when):
                     continue

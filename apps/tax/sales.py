@@ -160,7 +160,7 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
         external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
         courier="", tracking_number="", partner=None, delivered_costs=None, sales_order=None,
-        warehouse=None, number_series=None):
+        warehouse=None, number_series=None, rounding=0, cost_center=None):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``).
@@ -168,7 +168,9 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     ``warehouse`` sells from that location only (an outlet or the register's branch): what another
     branch holds does not count, and stok minus, when allowed, is recorded at that location.
     Without it the store's locations are drawn in priority order, as before. ``number_series``
-    ("POS") numbers the invoice from its own sequence instead of the INV series.
+    ("POS") numbers the invoice from its own sequence instead of the INV series. ``rounding``
+    (signed) is added to the total and booked to Pembulatan penjualan (4950): a register rounds what
+    the buyer pays to whole rupiah. ``cost_center`` is the outlet the sale counts for.
 
     ``delivered_costs`` (``{product id: unit cost}``) means the goods already left on a surat jalan
     (tax/sales_orders.py): no stock is taken, the costs given are the HPP, and the invoice is marked
@@ -183,6 +185,10 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     issued_on = issued_on or timezone.localdate()
     discount, shipping = Decimal(discount or 0), Decimal(shipping or 0)
     subtotal, tax, total = price_lines(lines, discount, shipping, store=store)
+    rounding = Decimal(rounding or 0)
+    if abs(rounding) >= 1000:
+        raise InvoiceError("Pembulatan terlalu besar.")
+    total += rounding
     order = _build_order(store, lines=lines, buyer_name=buyer_name, issued_on=issued_on,
         channel=channel, customer=customer, phone=phone, address=address, notes=notes,
         external_order_id=external_order_id, discount=discount, shipping=shipping,
@@ -194,7 +200,8 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         for item in order.items.all():
             item.unit_cost = delivered_costs.get(item.product_id)
             item.save(update_fields=["unit_cost"])
-    invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes, number_series=number_series)
+    invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes, number_series=number_series,
+        rounding=rounding, cost_center=cost_center)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods
     patch = {"buyer_name": _buyer_label(buyer_name, company_name)}
     if delivered_costs is not None:
