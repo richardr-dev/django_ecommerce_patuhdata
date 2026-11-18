@@ -532,7 +532,7 @@ class ApprovalPolicy(models.Model):
     """From what amount an action needs a second person to approve it (maker and checker)."""
     KINDS = [("bill_payment", "Pembayaran tagihan supplier"), ("expense", "Biaya operasional"),
         ("journal", "Jurnal manual"), ("invoice_void", "Pembatalan invoice"),
-        ("bill_void", "Pembatalan tagihan supplier")]
+        ("bill_void", "Pembatalan tagihan supplier"), ("pos_shift_variance", "Selisih kas tutup shift kasir")]
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="approval_policies")
     kind = models.CharField(max_length=20, choices=KINDS)
     threshold = models.DecimalField(max_digits=16, decimal_places=2, default=0,

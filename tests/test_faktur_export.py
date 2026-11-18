@@ -63,7 +63,7 @@ class FakturXmlTests(Base):
     def test_a_complete_invoice_becomes_the_documented_structure(self):
         from xml.etree import ElementTree as ET
         invoice = self.make()
-        xml, skipped, _warnings = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
+        xml, skipped, _warnings, _digunggung = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
         self.assertEqual(skipped, [])
         root = ET.fromstring(xml)
         self.assertEqual((root.tag, root.find("TIN").text), ("TaxInvoiceBulk", "0123456789012345"))
@@ -92,7 +92,7 @@ class FakturXmlTests(Base):
 
     def test_what_cannot_be_written_is_listed_not_dropped(self):
         invoice = self.make(npwp="", unit="")
-        xml, skipped, _ = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
+        xml, skipped, _warnings, _digunggung = faktur.xml_document(self.store, invoice.issued_on.year, invoice.issued_on.month)
         self.assertIsNone(xml)
         self.assertIn("NPWP/NIK pembeli", skipped[0][1])
         self.assertIn("kode UM", skipped[0][1])

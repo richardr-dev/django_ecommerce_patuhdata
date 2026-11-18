@@ -12,20 +12,23 @@ from django.db import transaction
 from django.db.models import Count, Sum
 from django.utils import timezone
 
-from apps.accounting import bank
+from apps.accounting import approvals, bank
 from apps.accounting.ledger import (
     CASH_OVER,
     CASH_SHORT,
     LedgerError,
     post_entry,
+    post_expense,
     register_backlog,
     unposted,
 )
-from apps.accounting.models import CashTransaction
+from apps.accounting.models import EXPENSE_CATEGORIES, CashTransaction, Expense
 from apps.orders.models import Order, OrderStatusEvent
 from apps.shops import permissions
 from apps.shops.audit import log as audit_log
-from apps.tax.models import InvoicePayment
+from apps.tax.credit_notes import CreditNoteError, create_credit_note
+from apps.tax.models import CreditNote, InvoicePayment
+from apps.tax.posting import void_invoice
 from apps.tax.sales import create_sales_invoice, line_net, price_lines
 from apps.tax.services import InvoiceError, exclusive_price, record_payment, tax_profile
 
@@ -199,29 +202,151 @@ def close_shift(shift, *, counted_cash, actor, deposit_to=None, keep_float=0, no
     shift.note = (note or "").strip()[:300]
     deposit = counted - keep_float if deposit_to is not None else ZERO
     shift.deposited = deposit
-    shift.save()
-    try:
-        post_shift_variance(shift, strict=True, actor=actor)
-    except LedgerError as exc:
-        raise PosError(str(exc)) from exc
+    if shift.variance and approvals.required(register.store, "pos_shift_variance", abs(shift.variance), actor):
+        shift.variance_pending_approval = True
+        shift.save()
+        shift.variance_request = approvals.submit(register.store, "pos_shift_variance", abs(shift.variance),
+            summary=f"Selisih kas {rp(abs(shift.variance))} tutup shift {register.outlet.name} {register.code}",
+            payload={"shift_id": shift.pk}, requester=actor, subject=shift)
+        shift.save(update_fields=["variance_request"])
+    else:
+        shift.save()
+        try:
+            post_shift_variance(shift, strict=True, actor=actor)
+        except LedgerError as exc:
+            raise PosError(str(exc)) from exc
     if deposit > 0:
         if deposit_to.pk == register.cash_account_id or deposit_to.store_id != register.store_id:
             raise PosError("Pilih rekening lain sebagai tujuan setoran.")
         _transfer(register.store, register.cash_account, deposit_to, deposit,
             f"Setoran kas {register.name}", actor)
     audit_log(register.store, actor, "pos.shift_closed", shift, register=register.code, dihitung=counted,
-        menurut_buku=expected, selisih=shift.variance, disetor=deposit)
+        menurut_buku=expected, selisih=shift.variance, disetor=deposit,
+        menunggu_persetujuan=shift.variance_pending_approval)
     return shift
 
 
 @register_backlog
 def post_unposted_shift_variances():
     posted = 0
-    shifts = PosShift.objects.filter(status=PosShift.CLOSED).exclude(variance=0)
+    shifts = PosShift.objects.filter(status=PosShift.CLOSED, variance_pending_approval=False).exclude(variance=0)
     for shift in unposted(shifts, "pos_shift"):
         post_shift_variance(shift)
         posted += 1
     return posted
+
+
+# ---------------------------------------------------------------------------
+# Paid-in / paid-out: cash moved to or from the open drawer outside a sale
+# ---------------------------------------------------------------------------
+
+def record_paid_out(shift, *, amount, reason, category="6900", actor):
+    """Petty cash out of the till (parking, ice, a small errand): an ordinary ``Expense`` paid from
+    the register's cash account, posted immediately like any other expense."""
+    shift = PosShift.objects.select_related("register__store", "register__outlet", "register__cash_account"
+        ).get(pk=shift.pk)
+    if not shift.is_open:
+        raise PosError("Shift ini sudah ditutup.")
+    register = shift.register
+    if not permissions.can(actor, register.store, "pos.shift"):
+        raise PosError("Anda tidak berhak mencatat kas keluar kasir.")
+    amount = _money(amount)
+    if amount <= 0:
+        raise PosError("Jumlah harus lebih dari nol.")
+    if category not in dict(EXPENSE_CATEGORIES):
+        category = "6900"
+    reason = (reason or "").strip()[:200] or "Kas keluar kasir"
+    expense = Expense.objects.create(store=register.store, date=timezone.localdate(), category=category,
+        description=reason, amount=amount, bank_account=register.cash_account,
+        cost_center=register.outlet.cost_center, created_by=actor)
+    try:
+        post_expense(expense)
+    except LedgerError as exc:
+        expense.delete()
+        raise PosError(str(exc)) from exc
+    audit_log(register.store, actor, "pos.paid_out", shift, register=register.code, jumlah=amount, alasan=reason)
+    return expense
+
+
+def record_paid_in(shift, *, amount, fund_from, reason, actor):
+    """A manager tops up the float mid-shift: a bank transfer from ``fund_from`` into the
+    register's cash account, exactly like the float at shift open."""
+    shift = PosShift.objects.select_related("register__store", "register__cash_account").get(pk=shift.pk)
+    if not shift.is_open:
+        raise PosError("Shift ini sudah ditutup.")
+    register = shift.register
+    if not permissions.can(actor, register.store, "pos.refund"):
+        raise PosError("Hanya manajer yang bisa menambah modal kasir saat shift berjalan.")
+    amount = _money(amount)
+    if amount <= 0:
+        raise PosError("Jumlah harus lebih dari nol.")
+    if fund_from is None or fund_from.pk == register.cash_account_id or fund_from.store_id != register.store_id:
+        raise PosError("Pilih rekening asal kas masuk.")
+    reason = (reason or "").strip()[:200] or "Kas masuk kasir"
+    transaction_row = _transfer(register.store, fund_from, register.cash_account, amount, reason, actor)
+    audit_log(register.store, actor, "pos.paid_in", shift, register=register.code, jumlah=amount, alasan=reason)
+    return transaction_row
+
+
+# ---------------------------------------------------------------------------
+# Void and refund: undoing a receipt
+# ---------------------------------------------------------------------------
+
+@transaction.atomic
+def void_sale(sale, *, actor, reason=""):
+    """Cancel a receipt while its shift is still open: the invoice reverses (stock back on the
+    outlet's shelf, the entry and its tender reversed). A cashier may only void their own receipt;
+    a manager or admin (``pos.refund``) may void anyone's. After the shift closes a mistake is a
+    refund, never a void (decision 6, ``docs/pos-architecture.md``)."""
+    sale = PosSale.objects.select_for_update().select_related("register__store", "shift", "invoice").get(pk=sale.pk)
+    store = sale.register.store
+    if sale.status == PosSale.VOID:
+        raise PosError("Struk ini sudah dibatalkan.")
+    if not permissions.can(actor, store, "pos.void"):
+        raise PosError("Anda tidak berhak membatalkan struk.")
+    if not sale.shift.is_open:
+        raise PosError("Shift struk ini sudah ditutup. Gunakan retur/refund untuk membatalkannya.")
+    if sale.cashier_id != actor.id and not permissions.can(actor, store, "pos.refund"):
+        raise PosError("Anda hanya bisa membatalkan struk Anda sendiri. Minta manajer untuk struk lain.")
+    try:
+        void_invoice(sale.invoice, actor=actor)
+    except LedgerError as exc:
+        raise PosError(str(exc)) from exc
+    sale.status, sale.voided_by, sale.voided_at = PosSale.VOID, actor, timezone.now()
+    sale.void_reason = (reason or "").strip()[:300]
+    sale.save(update_fields=["status", "voided_by", "voided_at", "void_reason"])
+    audit_log(store, actor, "pos.sale_voided", sale.shift, struk=sale.number, alasan=sale.void_reason)
+    return sale
+
+
+@transaction.atomic
+def refund_sale(sale, *, actor, lines, reason=""):
+    """Return goods from a paid receipt and refund the register's drawer. ``lines`` is
+    ``[{"item": InvoiceItem pk, "quantity", "restock": bool}]``. Good goods go back to the
+    outlet's own shelf (``create_credit_note(warehouse=)``); damaged ones stay out. An exchange at
+    the register waits for variant stock per warehouse (phase 3)."""
+    sale = PosSale.objects.select_related("register__store", "register__outlet", "invoice").get(pk=sale.pk)
+    store = sale.register.store
+    if not permissions.can(actor, store, "pos.refund"):
+        raise PosError("Anda tidak berhak melakukan retur/refund di kasir.")
+    if sale.status != PosSale.PAID:
+        raise PosError("Struk ini sudah dibatalkan.")
+    items = {item.pk: item for item in sale.invoice.items.all()}
+    rows = []
+    for line in lines:
+        item = items.get(int(line.get("item") or 0))
+        if item is None:
+            raise PosError("Baris retur tidak ditemukan pada struk ini.")
+        rows.append({"item": item, "description": item.description, "quantity": line.get("quantity"),
+            "unit_price": item.unit_price, "restock": bool(line.get("restock", True))})
+    try:
+        note = create_credit_note(sale.invoice, lines=rows, issued_on=timezone.localdate(), reason="pos_refund",
+            notes=(reason or "")[:500], excess_action=CreditNote.EXCESS_REFUND,
+            bank_account=sale.register.cash_account, warehouse=sale.register.outlet, actor=actor)
+    except CreditNoteError as exc:
+        raise PosError(str(exc)) from exc
+    audit_log(store, actor, "pos.refund", sale.shift, struk=sale.number, nota=note.number, total=note.total)
+    return note
 
 
 def catalog(store, outlet):

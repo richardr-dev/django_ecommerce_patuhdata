@@ -69,6 +69,13 @@ class PosShift(models.Model):
     deposited = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     closed_on = models.DateField(null=True, blank=True)
     note = models.CharField(max_length=300, blank=True)
+    # True while a variance above the store's threshold has no live entry yet: waiting for a
+    # different person to decide (``accounting.approvals``, kind ``pos_shift_variance``), or
+    # already rejected. Only an approval flips it back to false and posts the entry; the backlog
+    # poster skips every shift here on purpose, so a rejection is never auto-posted later.
+    variance_pending_approval = models.BooleanField(default=False)
+    variance_request = models.ForeignKey("accounting.ApprovalRequest", on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="+")
 
     class Meta:
         ordering = ["-opened_at"]
@@ -108,6 +115,10 @@ class PosSale(models.Model):
     token = models.CharField(max_length=40, blank=True, db_index=True)  # e-receipt link
     # The browser's key for this receipt: a double tap or a retried request returns the first sale.
     idem_key = models.CharField(max_length=64, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.CharField(max_length=300, blank=True)
 
     class Meta:
         ordering = ["-sold_at"]

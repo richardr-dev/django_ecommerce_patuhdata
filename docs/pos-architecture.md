@@ -219,7 +219,7 @@ a cost centre of PT A. Group consolidation stays unbuilt (architecture item 6).
 |---|---|---|
 | 0 ✅ | `stock_out(warehouse=)`, `create_sales_invoice(warehouse=, number_series=)`, accounts 1210/4950/6980/7250/6155, `Warehouse.cost_center`, role `cashier` + `StoreStaff.outlet`, `pos.*` keys, `exclusive_price` | done 2026-11-17 |
 | 1 ✅ | Register + cash account, open/close shift with variance entry and deposit, selling screen (cash/QRIS/EDC/transfer, split tender, line and ticket discount, rounding), receipt print, e-receipt link, shift (Z) report, controls `pos_receipts` / `pos_shifts`, cashier home and sidebar | done 2026-11-17; a per-outlet sales report beyond the shift report is still open |
-| 2 | Refund and exchange at the register, void in open shift, paid-in/paid-out, deposit to bank, approvals on variance, fraud checks, todo rows, month-end step, SPT digunggung and XML exclusion | phase 1 |
+| 2 ✅ | Refund and exchange at the register, void in open shift, paid-in/paid-out, deposit to bank, approvals on variance, fraud checks, todo rows, month-end step, SPT digunggung and XML exclusion | phase 1 |
 | 3 | Variant stock per warehouse (then variants at the register), customer on ticket with loyalty and customer credit, gift cards, promotions, outlet price lists, WhatsApp e-receipt, outbox stock push | phase 2 |
 | 4 | Offline queue (IndexedDB replay), local print agent (ESC/POS, drawer kick), EDC integration, multi-register per outlet dashboard | phase 3 |
 
@@ -267,3 +267,37 @@ closing: `/kasir/` is a second front end, not a second system. A manager can sti
 Still open for a real outlet rollout: device pairing (a tablet kept signed in as "Register K1" rather than a
 person typing a password each shift), a kiosk-mode shell that blocks the browser's own back button and
 address bar, and a lock screen between customers that does not need a full sign-out.
+
+## 12. What phase 2 changed from this plan (built 2026-11-18)
+
+- **No `PosCashMovement` model, same decision as phase 1**: paid-out is an ordinary `Expense`
+  (`bank_account=register.cash_account`, category defaults to 6900 Biaya lain-lain) and paid-in is
+  the same named-account transfer `open_shift`'s float already uses. Both show up in Kas & bank and
+  in the shift's own audit trail (`pos.paid_out` / `pos.paid_in`), not a new ledger.
+- **Refund, not exchange**: `pos.refund_sale` is `tax/credit_notes.create_credit_note(excess_action=
+  EXCESS_REFUND, bank_account=register.cash_account)`, extended with a `warehouse=` parameter (also
+  usable by `tax/returns.py`) so restocked units land on the outlet's own shelf, not the store's
+  default warehouse. An exchange still waits for variant stock per warehouse (phase 3), exactly as
+  §8 always said; swapping a non-variant product is just a refund plus a new sale today.
+- **Void** (`pos.void_sale`) is `tax/posting.void_invoice` plus marking the `PosSale`
+  (`voided_by/at/reason`, new fields): it already reversed the entry, the payments and the stock, so
+  nothing POS-specific was needed there. A cashier may void only their own ticket; `pos.refund`
+  (manager/admin) may void anyone's; both only while the shift is still open.
+- **Shift variance approval reuses the generic maker/checker system**
+  (`accounting/approvals.py`), not a POS-only flow: a new `ApprovalPolicy`/`ApprovalRequest` kind
+  `pos_shift_variance`. Above the store's threshold, `close_shift` parks the variance
+  (`PosShift.variance_pending_approval`, `variance_request`) instead of posting it; the backlog
+  poster skips every pending (or rejected) shift on purpose, so nothing auto-books a shortage a
+  manager hasn't signed off, or one they rejected. Approving runs `post_shift_variance` as the
+  person who closed the shift, same as every other approved action in that module.
+- **Fraud checks**: `controls.pos_voids` (3+ voided struk by one cashier in a day) and
+  `controls.pos_variance_trend` (3+ shortage shifts by one cashier in 30 days). `edc_clearing_aging`
+  was already folded into `pos_receipts` in phase 1, so it was not built separately.
+- **Todo rows**: a pending shift-variance approval and stale EDC/QRIS clearing lines were added to
+  `accounting/todo.py` (the open-overnight shift row already existed). The month-close checklist
+  gained one step, "Semua shift kasir sudah ditutup", reusing the `pos_shifts` control.
+- **SPT digunggung and XML exclusion**: `tax/faktur.is_pos_digunggung(invoice)` (POS order, no buyer
+  NPWP) is the one test both `tax/spt.py`'s worksheet and `tax/faktur.xml_document` use. Those
+  invoices are summed into one digunggung total instead of being listed per line or flagged as a
+  missing-NPWP problem; a POS sale **with** a buyer NPWP is unaffected and still goes through as an
+  ordinary faktur, as §9 always said.

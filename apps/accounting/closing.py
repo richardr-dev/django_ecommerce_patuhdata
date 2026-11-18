@@ -173,6 +173,10 @@ def month_checklist(store, year, month, today):
     step("Tidak ada stok minus (harga pokok sementara)", not minus or minus.status == controls.OK,
         "Tidak ada stok minus." if not minus or minus.status == controls.OK else minus.summary,
         reverse("merchant-stock-minus"), "Lihat stok minus")
+    shifts = results.get("pos_shifts")
+    step("Semua shift kasir sudah ditutup", not shifts or shifts.status == controls.OK,
+        "Tidak ada shift kasir yang terbuka." if not shifts or shifts.status == controls.OK else shifts.summary,
+        reverse("merchant-pos"), "Buka kasir")
     step("SPT Masa PPN bulan ini sudah diperiksa", False,
         "Cocokkan PPN keluaran dan masukan sebelum periode dikunci.",
         reverse("merchant-spt-ppn") + f"?month={year}-{month:02d}", "Buka SPT")

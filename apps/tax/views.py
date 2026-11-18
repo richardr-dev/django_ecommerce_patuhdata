@@ -148,6 +148,9 @@ def merchant_spt_ppn(request):
             writer.writerow([label, value])
         writer.writerow([])
         writer.writerow(["PPN KELUARAN", "Nomor invoice", "Tanggal", "Pembeli", "NPWP", "DPP", "PPN"])
+        if data["digunggung"]["count"]:
+            writer.writerow(["", f"{data['digunggung']['count']} struk kasir (digunggung)", "", "", "",
+                data["digunggung"]["dpp"], data["digunggung"]["tax"]])
         for invoice in data["sales"]:
             writer.writerow(["", invoice.number, invoice.issued_on.isoformat(), invoice.buyer_name,
                 invoice.buyer_npwp, invoice.tax_base, invoice.tax])
@@ -174,7 +177,7 @@ def merchant_faktur_xml(request):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES)
     year, month = _month(request)
-    xml, skipped, warnings = faktur.xml_document(store, year, month)
+    xml, skipped, warnings, digunggung = faktur.xml_document(store, year, month)
     if xml is None:
         messages.error(request, "Tidak ada faktur yang bisa dibuat XML-nya bulan ini."
             + ("".join(f" {number}: {why}." for number, why in skipped[:5]) or " Tidak ada invoice ber-PPN."))
@@ -182,6 +185,9 @@ def merchant_faktur_xml(request):
     if skipped:
         messages.warning(request, f"{len(skipped)} faktur tidak dimasukkan ke XML: "
             + "; ".join(f"{number} ({why})" for number, why in skipped[:5]))
+    if digunggung:
+        messages.info(request, f"{digunggung} struk kasir tanpa NPWP/NIK dilaporkan sebagai digunggung, "
+            "tidak dimasukkan ke XML ini.")
     for text in warnings[:3]:
         messages.warning(request, text)
     response = HttpResponse(xml, content_type="application/xml; charset=utf-8")

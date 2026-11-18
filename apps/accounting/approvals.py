@@ -103,8 +103,19 @@ def _expense(store, p, actor):
     audit_log(store, actor, "expense.created", expense, amount=expense.amount, approved=True)
 
 
+def _pos_shift_variance(store, p, actor):
+    from apps.pos.models import PosShift
+    from apps.pos.services import post_shift_variance
+    shift = PosShift.objects.select_for_update().select_related("register__outlet", "register__cash_account__account",
+        "register__store").get(pk=p["shift_id"], register__store=store)
+    shift.variance_pending_approval = False
+    shift.save(update_fields=["variance_pending_approval"])
+    post_shift_variance(shift, strict=True, actor=actor)
+    audit_log(store, actor, "pos.shift_variance_approved", shift, selisih=shift.variance, register=shift.register.code)
+
+
 EXECUTORS = {"bill_payment": _bill_payment, "bill_void": _bill_void, "invoice_void": _invoice_void,
-    "journal": _journal, "expense": _expense}
+    "journal": _journal, "expense": _expense, "pos_shift_variance": _pos_shift_variance}
 
 
 @transaction.atomic
@@ -145,6 +156,9 @@ def reject(request, user, note=""):
         from .models import Expense
         Expense.objects.filter(pk=request.payload.get("expense_id"), store=request.store,
             approval_pending=True).delete()
+    # A rejected shift variance stays unposted and out of the backlog (``variance_pending_approval``
+    # stays true): nothing here auto-books a shortage a manager just said not to book. It is
+    # resolved by hand (a recount, or a manual journal), never by the backlog poster.
     audit_log(request.store, user, "approval.rejected", request, kind=request.kind, note=note)
     return request
 

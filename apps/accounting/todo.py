@@ -39,6 +39,13 @@ def todo_items(store, today, user=None):
     stale = sum(1 for shift in PosShift.objects.filter(register__store=store, status=PosShift.OPEN)
         if timezone.localdate(shift.opened_at) < today)
     add(stale, "shift kasir belum ditutup sejak kemarin", reverse("merchant-pos"), "Hitung & tutup →", "cash", "warn")
+    add(PosShift.objects.filter(register__store=store, status=PosShift.CLOSED, variance_pending_approval=True).count(),
+        "selisih kas shift kasir menunggu persetujuan", reverse("merchant-approvals"), "Periksa →", "cash", "warn")
+    from apps.tax.models import InvoicePayment
+    stale_clearing = InvoicePayment.objects.filter(invoice__store=store, method__in=InvoicePayment.CLEARING_METHODS,
+        paid_on__lt=today - timedelta(days=3)).count()
+    add(stale_clearing, "pembayaran EDC/QRIS belum dicocokkan ke rekening", reverse("merchant-bank-accounts"),
+        "Cocokkan →", "cash", "warn")
 
     from apps.tax import tax_calendar
     due = tax_calendar.attention(store, today)

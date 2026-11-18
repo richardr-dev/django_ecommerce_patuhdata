@@ -7,6 +7,7 @@ chrome at any step, so a tablet left open at the counter never shows the books. 
 endpoints (``merchant_pos_open``, ``merchant_pos_sell``, ``merchant_pos_shift``), which is what keeps
 them one system rather than two."""
 import json
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -198,7 +199,44 @@ def merchant_pos_shift(request, shift_id):
     return render(request, "merchant/pos_shift.html", _merchant_context(request, store, shift=shift, register=register,
         summary=pos.shift_summary(shift), sales=shift.sales.select_related("cashier", "invoice").prefetch_related("tenders"),
         accounts=[a for a in bank.bank_accounts(store) if a.id not in drawers],
-        can_shift=permissions.can(request.user, store, "pos.shift"), history=audit_trail(store, shift)))
+        can_shift=permissions.can(request.user, store, "pos.shift"),
+        can_void=permissions.can(request.user, store, "pos.void"),
+        can_refund=permissions.can(request.user, store, "pos.refund"),
+        history=audit_trail(store, shift)))
+
+
+@login_required(login_url=LOGIN)
+@require_POST
+def merchant_pos_paid_out(request, shift_id):
+    store = _staff_store(request)
+    _require_roles(request, store, SHIFT_ROLES)
+    shift = get_object_or_404(PosShift, pk=shift_id, register__store=store)
+    try:
+        pos.record_paid_out(shift, amount=bank.parse_amount(request.POST.get("amount") or "0") or 0,
+            reason=request.POST.get("reason", ""), category=request.POST.get("category", "6900"),
+            actor=request.user)
+    except pos.PosError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Kas keluar dicatat.")
+    return redirect("merchant-pos-shift", shift.pk)
+
+
+@login_required(login_url=LOGIN)
+@require_POST
+def merchant_pos_paid_in(request, shift_id):
+    store = _staff_store(request)
+    _require_roles(request, store, roles("pos.refund"))
+    shift = get_object_or_404(PosShift, pk=shift_id, register__store=store)
+    try:
+        pos.record_paid_in(shift, amount=bank.parse_amount(request.POST.get("amount") or "0") or 0,
+            fund_from=_account(store, request.POST.get("fund_from")), reason=request.POST.get("reason", ""),
+            actor=request.user)
+    except pos.PosError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Kas masuk dicatat.")
+    return redirect("merchant-pos-shift", shift.pk)
 
 
 def _receipt_context(store, sale):
@@ -215,7 +253,59 @@ def merchant_pos_receipt(request, sale_id):
     sale = get_object_or_404(PosSale.objects.select_related("invoice", "register__outlet", "cashier"), pk=sale_id,
         store=store)
     _register(request, store, sale.register_id)
-    return render(request, "pos/receipt.html", {**_receipt_context(store, sale), "auto_print": "print" in request.GET})
+    return render(request, "pos/receipt.html", {**_receipt_context(store, sale),
+        "auto_print": "print" in request.GET,
+        "can_void": permissions.can(request.user, store, "pos.void"),
+        "can_refund": permissions.can(request.user, store, "pos.refund")})
+
+
+@login_required(login_url=LOGIN)
+@require_POST
+def merchant_pos_void(request, sale_id):
+    store = _staff_store(request)
+    _require_roles(request, store, roles("pos.void"))
+    sale = get_object_or_404(PosSale, pk=sale_id, store=store)
+    _register(request, store, sale.register_id)
+    try:
+        pos.void_sale(sale, actor=request.user, reason=request.POST.get("reason", ""))
+    except pos.PosError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"Struk {sale.number} dibatalkan.")
+    return redirect("merchant-pos-shift", sale.shift_id)
+
+
+@login_required(login_url=LOGIN)
+def merchant_pos_refund(request, sale_id):
+    """Retur/refund of a paid receipt: pick quantities off its invoice lines, refunded from the
+    register's own drawer."""
+    from apps.tax.credit_notes import creditable
+
+    store = _staff_store(request)
+    _require_roles(request, store, roles("pos.refund"))
+    sale = get_object_or_404(PosSale.objects.select_related("invoice", "register__outlet", "register__cash_account"),
+        pk=sale_id, store=store)
+    _register(request, store, sale.register_id)
+    if request.method == "POST":
+        lines = []
+        for row in creditable(sale.invoice):
+            item = row["item"]
+            try:
+                quantity = Decimal(request.POST.get(f"qty_{item.pk}") or "0")
+            except ArithmeticError:
+                quantity = Decimal(0)
+            if quantity > 0:
+                lines.append({"item": item, "quantity": quantity,
+                    "restock": request.POST.get(f"restock_{item.pk}") == "1"})
+        try:
+            note = pos.refund_sale(sale, actor=request.user, lines=lines, reason=request.POST.get("reason", ""))
+        except pos.PosError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"Nota kredit {note.number} dibuat, Rp{note.total:,.0f} dikembalikan dari laci.".replace(",", "."))
+            return redirect("merchant-pos-shift", sale.shift_id)
+    rows = creditable(sale.invoice)
+    return render(request, "merchant/pos_refund.html", _merchant_context(request, store, sale=sale, rows=rows))
 
 
 # ---------------------------------------------------------------------------

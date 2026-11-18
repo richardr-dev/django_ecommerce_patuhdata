@@ -92,9 +92,10 @@ def _post(note, *, strict=False, actor=None):
 
 @transaction.atomic
 def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
-        excess_action=CreditNote.EXCESS_CREDIT, bank_account=None, actor=None):
+        excess_action=CreditNote.EXCESS_CREDIT, bank_account=None, warehouse=None, actor=None):
     """``lines`` is ``[{"item": InvoiceItem or None, "description", "quantity", "unit_price",
-    "restock": bool}]``. Raises CreditNoteError when the note is not allowed."""
+    "restock": bool}]``. Raises CreditNoteError when the note is not allowed. Restocked units go to
+    ``warehouse`` (the store's default when not given, e.g. a register refund names its own outlet)."""
     invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status in {Invoice.STATUS_DRAFT, Invoice.STATUS_VOID}:
         raise CreditNoteError("Invoice ini tidak bisa dibuatkan nota kredit.")
@@ -156,7 +157,7 @@ def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
         for line in note.items.filter(restock=True).select_related("product", "variant"):
             stock_in(store=invoice.store, product=line.product, variant=line.variant,
                 quantity=int(line.quantity), kind="return", actor=actor,
-                reason=f"Retur dari nota kredit {note.number}",
+                reason=f"Retur dari nota kredit {note.number}", warehouse=warehouse,
                 source=("credit_note", note.pk), unit_cost=line.restocked_cost)
     except (LedgerError, StockError) as error:
         raise CreditNoteError(str(error)) from error

@@ -1,0 +1,25 @@
+{% extends "merchant/base.html" %}{% load books %}
+{% block title %}Retur struk {{ sale.number }}{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Kasir (POS) › {{ sale.register.outlet.name }}</span><h1>Retur & refund struk {{ sale.number }}</h1>
+  <p>Barang yang baik kembali ke rak {{ sale.register.outlet.name }}; uangnya dikembalikan dari laci {{ sale.register.name }}.</p></div></div>
+
+<section class="panel"><header class="panel-head"><h2>Baris yang bisa diretur</h2></header>
+{% if rows %}
+<form method="post" data-unsaved>{% csrf_token %}
+<div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Sudah dibeli</th><th class="num">Sisa bisa diretur</th><th class="num">Jumlah diretur</th><th>Kembalikan ke rak</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+  <td>{{ row.item.description }}{% if row.item.sku %} <small class="muted">({{ row.item.sku }})</small>{% endif %}</td>
+  <td class="num">{{ row.item.quantity|floatformat:"-2" }}</td>
+  <td class="num">{{ row.left|floatformat:"-2" }}</td>
+  <td class="num"><input type="number" name="qty_{{ row.item.pk }}" min="0" max="{{ row.left|floatformat:'-2' }}" step="any" style="width:90px;text-align:right"></td>
+  <td>{% if row.item.product_id %}<input type="checkbox" name="restock_{{ row.item.pk }}" value="1" checked>{% else %}<span class="muted">jasa</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
+<label class="field" style="margin-top:14px"><span>Alasan</span><input name="reason" maxlength="300" placeholder="mis. ukuran tidak cocok, rusak"></label>
+<p class="shift-note" style="color:var(--ds-muted);font-size:12.5px;margin:10px 0">Barang yang dicentang masuk kembali ke rak {{ sale.register.outlet.name }} pada harga belinya; yang tidak dicentang (rusak) tetap keluar dari stok. Uang kembali tunai dari laci {{ sale.register.name }}, langsung mengurangi kas yang diharapkan.</p>
+<button class="btn-primary" data-confirm="Buat nota kredit dan kembalikan uang dari laci? Tindakan ini tidak bisa dibatalkan, hanya dikoreksi dengan nota kredit baru." data-confirm-ok="Proses retur">Proses retur & refund</button>
+</form>
+{% else %}<div class="empty-box"><b>Semua baris struk ini sudah habis diretur.</b></div>{% endif %}
+</section>
+{% endblock %}

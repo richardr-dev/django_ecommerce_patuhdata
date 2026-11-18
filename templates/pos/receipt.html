@@ -37,6 +37,7 @@ hr{border:0;border-top:1px dashed #9db4c6;margin:9px 0}
   <hr>
   <div class="c m">{{ config.receipt_footer|default:"Terima kasih atas kunjungan Anda." }}<br>No. invoice {{ invoice.number }}</div>
 </div>
-{% if not public %}<div class="bar"><button type="button" onclick="window.print()">Cetak struk</button><a href="{% url 'pos-receipt-public' sale.token %}" target="_blank" rel="noopener">Link struk pembeli</a></div>
+{% if not public %}<div class="bar"><button type="button" onclick="window.print()">Cetak struk</button><a href="{% url 'pos-receipt-public' sale.token %}" target="_blank" rel="noopener">Link struk pembeli</a>
+{% if sale.status == 'paid' and can_refund %}<a href="{% url 'merchant-pos-refund' sale.pk %}">Retur/refund</a>{% endif %}</div>
 {% if auto_print %}<script>window.addEventListener("load",function(){window.print();});</script>{% endif %}{% endif %}
 </body></html>

@@ -51,16 +51,28 @@ def month_range(year, month):
     return first, (first.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
 
 
+def is_pos_digunggung(invoice):
+    """A walk-in register sale with no buyer NPWP/NIK: reported to DJP as one digunggung total for
+    the month, never as its own faktur line (``CLAUDE.md``, Kasir (POS) §9)."""
+    return bool(invoice.order_id) and invoice.order.channel == "pos" and not _digits(invoice.buyer_npwp)
+
+
 def rows(store, year, month):
-    """``{"invoices": [...], "notes": [...], "problems": [...]}``; each row is a dict per line."""
+    """``{"invoices": [...], "notes": [...], "problems": [...], "digunggung": {...}}``; each row of
+    ``invoices``/``notes`` is a dict per line. POS walk-in sales are summed into ``digunggung``
+    instead of being listed (or flagged as a missing-NPWP problem)."""
     first, last = month_range(year, month)
-    invoices = Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
-        ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).prefetch_related("items").order_by(
-        "issued_on", "number")
+    all_invoices = list(Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
+        ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).select_related("order"
+        ).prefetch_related("items").order_by("issued_on", "number"))
+    digunggung_invoices = [invoice for invoice in all_invoices if is_pos_digunggung(invoice)]
+    invoices = [invoice for invoice in all_invoices if invoice not in digunggung_invoices]
     notes = CreditNote.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0,
         status=CreditNote.STATUS_ISSUED).select_related("invoice").prefetch_related("items").order_by(
         "issued_on", "number")
-    out = {"invoices": [], "notes": [], "problems": []}
+    out = {"invoices": [], "notes": [], "problems": [], "digunggung": {"count": len(digunggung_invoices),
+        "dpp": sum((invoice.tax_base for invoice in digunggung_invoices), ZERO),
+        "tax": sum((invoice.tax for invoice in digunggung_invoices), ZERO)}}
     for invoice in invoices:
         items = list(invoice.items.all())
         issue = buyer_problem(invoice.buyer_npwp)
@@ -104,6 +116,11 @@ def workbook(store, year, month):
         notes_sheet.add(number, issue)
     if not data["problems"]:
         notes_sheet.add("—", "Tidak ada masalah ditemukan.")
+    if data["digunggung"]["count"]:
+        notes_sheet.blank()
+        notes_sheet.line(f"{data['digunggung']['count']} struk kasir tanpa NPWP/NIK pembeli (DPP "
+            f"Rp{data['digunggung']['dpp']:,.0f}, PPN Rp{data['digunggung']['tax']:,.0f}) dilaporkan sebagai "
+            "satu angka digunggung, bukan per struk.".replace(",", "."))
     notes_sheet.finish()
 
     sheet = Sheet(wb, "Faktur keluaran", store, f"{month:02d}/{year}")
@@ -149,20 +166,24 @@ def _rupiah(value):
 
 
 def xml_document(store, year, month):
-    """``(xml bytes or None, skipped [(number, reason)], warnings [text])``. Only invoices that pass every
-    check are written; the rest are listed so nothing disappears silently."""
+    """``(xml bytes or None, skipped [(number, reason)], warnings [text], digunggung_count)``. Only
+    invoices that pass every check are written; the rest are listed so nothing disappears silently.
+    POS walk-in sales (no buyer NPWP) are left out on purpose, not counted as a problem: they are
+    reported to DJP as one digunggung total instead (``tax/spt.py``)."""
     from xml.etree import ElementTree as ET
 
     from apps.tax.services import tax_profile
 
     seller = _tin16(tax_profile(store).npwp)
     first, last = month_range(year, month)
-    invoices = Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
+    all_invoices = Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
         ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).select_related("order__customer"
         ).prefetch_related("items").order_by("issued_on", "number")
+    digunggung = sum(1 for invoice in all_invoices if is_pos_digunggung(invoice))
+    invoices = [invoice for invoice in all_invoices if not is_pos_digunggung(invoice)]
     skipped, warnings, written = [], [], 0
     if seller is None:
-        return None, [("—", "NPWP penjual (profil pajak) harus 16 digit")], warnings
+        return None, [("—", "NPWP penjual (profil pajak) harus 16 digit")], warnings, digunggung
     root = ET.Element("TaxInvoiceBulk", {"xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
         "xsi:noNamespaceSchemaLocation": "TaxInvoice.xsd"})
     ET.SubElement(root, "TIN").text = seller
@@ -215,6 +236,7 @@ def xml_document(store, year, month):
                 "karena pembulatan per baris; samakan sebelum lapor.".replace(",", "."))
         written += 1
     if not written:
-        return None, skipped, warnings
+        return None, skipped, warnings, digunggung
     ET.indent(root)
-    return b'<?xml version="1.0" encoding="utf-8" ?>\n' + ET.tostring(root, encoding="utf-8"), skipped, warnings
+    return (b'<?xml version="1.0" encoding="utf-8" ?>\n' + ET.tostring(root, encoding="utf-8"),
+        skipped, warnings, digunggung)

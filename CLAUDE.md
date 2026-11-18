@@ -112,9 +112,10 @@ Four test files failed before this work and still do: `test_digital_products`,
     (no sidebar, no Tailwind, no htmx). It posts JSON with a client `idem` key; the same key returns the first
     receipt. The server is the authority on price, stock and total; the script only mirrors the arithmetic.
   - The buyer's e-receipt is `/struk/<token>/` (in `ALWAYS_OPEN`; `/s/` is the campaign short link).
-  - Controls `pos_receipts` (every receipt is a paid, posted invoice; 1210 older than 3 days is an info row) and
-    `pos_shifts` (a shift left open overnight). `apps/orders/nav_access.py` is generated: after adding a role or a
-    sidebar link run `WRITE_NAV_ACCESS=1 pytest tests/test_nav_access.py`.
+  - Controls `pos_receipts` (every receipt is a paid, posted invoice; 1210 older than 3 days is an info row),
+    `pos_shifts` (a shift left open overnight), `pos_voids` (3+ struk voided by one cashier in a day) and
+    `pos_variance_trend` (3+ shortage shifts by one cashier in 30 days). `apps/orders/nav_access.py` is generated:
+    after adding a role or a sidebar link run `WRITE_NAV_ACCESS=1 pytest tests/test_nav_access.py`.
   - **`/kasir/` is the outlet's own app, separate from the back office** (decided 2026-11-17): its own sign-in
     (`PosLoginView`, `pos/login.html`, the same email-or-WhatsApp account), its own register picker
     (`kasir_home`, `pos/home.html`), and the shift report (`merchant_pos_shift`, now a standalone page, not
@@ -124,10 +125,18 @@ Four test files failed before this work and still do: `test_digital_products`,
     `/login/` still sends a cashier to `/kasir/` too; `pos-login` ignores `?next=` on purpose. `/books/pos/`
     (the register list) is now admin-only (`pos.settings` or `pos.shift_approve`: admin, manager, finance) for
     creating registers and outlet settings; a plain cashier or `ops` hand gets 404 there and uses `/kasir/`.
-  - Not built (phases 2 to 4): void and refund at the register, paid-in/paid-out, approval of a shift variance,
-    variants at the register, outlet price lists, customer picker and loyalty, SPT digunggung and leaving POS
-    invoices out of the Coretax XML, offline queue, printer agent, device pairing (today it is account login,
-    not a paired tablet), kiosk mode (disabling the browser chrome itself).
+  - **Phase 2 built 2026-11-18**: void in the open shift (`pos.void_sale`, reverses the invoice via
+    `tax/posting.void_invoice`; a cashier only their own ticket, `pos.refund` any), refund at the register
+    (`pos.refund_sale`, a credit note paid from `register.cash_account`, restocking to the outlet via
+    `create_credit_note(warehouse=)`), paid-out (`pos.record_paid_out`, an `Expense` off the register's cash
+    account) and paid-in (`pos.record_paid_in`, a named-account transfer), approval of a shift variance above
+    the store's threshold (`accounting.approvals`, kind `pos_shift_variance`: `PosShift.variance_pending_approval`
+    / `variance_request`; the backlog never auto-posts a pending or rejected one), and SPT digunggung with POS
+    invoices left out of the Coretax XML (`tax/faktur.is_pos_digunggung`, used by both `tax/spt.py` and
+    `tax/faktur.xml_document`).
+  - Not built (phases 3 to 4): exchange at the register (waits for variant stock per warehouse), variants at the
+    register, outlet price lists, customer picker and loyalty, offline queue, printer agent, device pairing
+    (today it is account login, not a paired tablet), kiosk mode (disabling the browser chrome itself).
 - **An outlet asking the warehouse for goods is a transfer, not a sale** (`orders/stock.py:transfer_stock`):
   one `transfer_out` movement at the warehouse and one `transfer_in` at the outlet, same quantity. No
   journal entry: the goods stay the same company's Persediaan at the same average cost, so total stock,
@@ -665,7 +674,7 @@ Accounting:
 - [ ] Simple payroll posting to gaji and PPh 21.
 - [ ] Multi-currency for sellers who buy in USD/CNY.
 - [x] Excel export for every financial report, auditor pack and SAK EMKM PDF. (Other lists still CSV only.)
-- [~] POS module: phases 0 and 1 built 2026-11-17 (`apps/pos/`); phases 2 to 4 open, see the Kasir (POS) rule above. Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980, one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.
+- [~] POS module: phases 0, 1 and 2 built 2026-11-17/18 (`apps/pos/`); phases 3 to 4 open, see the Kasir (POS) rule above. Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980 (now with approval above threshold, §12), one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.
 
 Access:
 - [x] Accountant role (read-only plus export), an audit-log viewer per document.

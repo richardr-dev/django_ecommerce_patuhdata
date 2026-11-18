@@ -592,11 +592,58 @@ def pos_shifts(store, today, ledger):
     return check
 
 
+def pos_voids(store, today, ledger):
+    """A cashier who voids several struk in a day is worth a closer look (till scam, pressure
+    sales reversed, or a training gap)."""
+    from django.db.models.functions import TruncDate
+
+    from apps.pos.models import PosSale
+    window = today - timedelta(days=30)
+    voided = PosSale.objects.filter(store=store, status=PosSale.VOID, voided_at__date__gte=window)
+    if not voided.exists():
+        return Check("pos_voids", "Struk kasir dibatalkan tidak berulang", OK,
+            "Tidak ada struk kasir dibatalkan dalam 30 hari terakhir.")
+    by_day = list(voided.annotate(day=TruncDate("voided_at")).values("cashier__username", "day").annotate(
+        count=Count("pk")).filter(count__gte=3).order_by("-count"))
+    if not by_day:
+        return Check("pos_voids", "Struk kasir dibatalkan tidak berulang", OK,
+            f"{voided.count()} struk dibatalkan dalam 30 hari, tidak ada kasir yang berulang dalam sehari.")
+    check = Check("pos_voids", "Struk kasir dibatalkan tidak berulang", WARN,
+        f"{len(by_day)} kasir membatalkan 3 struk atau lebih dalam sehari. Periksa alasan pembatalannya.",
+        url=reverse("merchant-pos"), action="Buka kasir")
+    check.items = [f"{row['cashier__username']} · {row['day']:%d/%m} · {row['count']} struk" for row in by_day[:10]]
+    return check
+
+
+def pos_variance_trend(store, today, ledger):
+    """A cashier whose drawer is short shift after shift is worth a closer look, not just the one
+    whose shift is open overnight (``pos_shifts``)."""
+    from apps.pos.models import PosShift
+    window = today - timedelta(days=30)
+    shifts = PosShift.objects.filter(register__store=store, status=PosShift.CLOSED, closed_on__gte=window,
+        variance__lt=0).select_related("closed_by")
+    by_cashier = {}
+    for shift in shifts:
+        name = shift.closed_by.get_username() if shift.closed_by else "?"
+        by_cashier[name] = by_cashier.get(name, 0) + 1
+    flagged = sorted(((name, count) for name, count in by_cashier.items() if count >= 3), key=lambda row: -row[1])
+    if not flagged:
+        return Check("pos_variance_trend", "Selisih kas kasir tidak berulang", OK,
+            "Tidak ada kasir dengan laci kurang berulang dalam 30 hari terakhir.")
+    check = Check("pos_variance_trend", "Selisih kas kasir tidak berulang", WARN,
+        f"{len(flagged)} kasir menutup shift dengan laci kurang (selisih minus) 3 kali atau lebih dalam 30 hari.",
+        url=reverse("merchant-pos"), action="Buka kasir")
+    check.items = [f"{name} · {count} shift kurang" for name, count in flagged[:10]]
+    return check
+
+
 CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_status, receivable, payable,
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
-    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie, delivered_tie, intercompany_tie, negative_stock, purchase_orders_late, pos_receipts, pos_shifts]
+    large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie,
+    delivered_tie, intercompany_tie, negative_stock, purchase_orders_late, pos_receipts, pos_shifts, pos_voids,
+    pos_variance_trend]
 
 
 def run_checks(store, today):

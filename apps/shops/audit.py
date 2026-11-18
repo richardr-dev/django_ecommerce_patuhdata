@@ -17,6 +17,10 @@ LABELS = {
     "approval.requested": "Diajukan untuk persetujuan", "approval.approved": "Disetujui",
     "approval.rejected": "Ditolak", "attachment.added": "Lampiran ditambahkan",
     "attachment.removed": "Lampiran dihapus",
+    "pos.shift_opened": "Shift kasir dibuka", "pos.shift_closed": "Shift kasir ditutup",
+    "pos.sale_voided": "Struk kasir dibatalkan", "pos.refund": "Retur/refund kasir",
+    "pos.paid_out": "Kas keluar kasir", "pos.paid_in": "Kas masuk kasir",
+    "pos.shift_variance_approved": "Selisih kas shift disetujui",
 }
 
 

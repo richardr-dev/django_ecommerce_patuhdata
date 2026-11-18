@@ -71,7 +71,8 @@ def worksheet(store, year, month):
     net = out - inn
     position = net - carry
     sales = Invoice.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0
-        ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).order_by("issued_on", "number")
+        ).exclude(status__in=[Invoice.STATUS_VOID, Invoice.STATUS_DRAFT]).select_related("order").order_by(
+        "issued_on", "number")
     credits = CreditNote.objects.filter(store=store, issued_on__gte=first, issued_on__lte=last, tax__gt=0,
         status=CreditNote.STATUS_ISSUED).select_related("invoice")
     purchases = Bill.objects.filter(store=store, bill_date__gte=first, bill_date__lte=last, tax__gt=0
@@ -82,8 +83,17 @@ def worksheet(store, year, month):
     dpp_returns = credits.aggregate(t=Sum("subtotal"))["t"] or ZERO
     due_next = (last + datetime.timedelta(days=1)).replace(day=1)
     deadline = (due_next.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
+    # Walk-in register sales (no buyer NPWP) are reported to DJP as one digunggung total for the
+    # month, not per invoice: list only the rest, and count only the rest as missing a buyer id.
+    from .faktur import is_pos_digunggung
+    all_sales = list(sales)
+    digunggung_sales = [invoice for invoice in all_sales if is_pos_digunggung(invoice)]
+    itemised = [invoice for invoice in all_sales if invoice not in digunggung_sales]
+    digunggung = {"count": len(digunggung_sales), "dpp": sum((i.tax_base for i in digunggung_sales), ZERO),
+        "tax": sum((i.tax for i in digunggung_sales), ZERO)}
     return {"year": year, "month": month, "start": first, "end": last, "out": out, "in": inn, "net": net,
         "carry_in": carry, "to_pay": position if position > 0 else ZERO,
         "overpaid": -position if position < 0 else ZERO, "dpp_out": dpp_out, "dpp_returns": dpp_returns,
-        "sales": sales, "credits": credits, "purchases": purchases, "expenses": expenses,
-        "deadline": deadline, "missing_npwp": sales.filter(buyer_npwp="").count()}
+        "sales": itemised, "digunggung": digunggung, "credits": credits, "purchases": purchases,
+        "expenses": expenses, "deadline": deadline,
+        "missing_npwp": sum(1 for invoice in itemised if not invoice.buyer_npwp)}

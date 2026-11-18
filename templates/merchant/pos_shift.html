@@ -30,6 +30,7 @@ body.pd-body{font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;ov
   <div class="tile"><small>Laci menurut buku</small><strong>{{ summary.expected_cash|rp }}</strong><span>modal + tunai masuk − setoran</span></div>
   {% if not shift.is_open %}<div class="tile {% if shift.variance %}warn{% endif %}"><small>Selisih kas</small><strong>{{ shift.variance|signed_rp }}</strong><span>dihitung {{ shift.counted_cash|rp }}</span></div>{% endif %}
 </div>
+{% if shift.variance_pending_approval %}{% if shift.variance_request.status == "rejected" %}<div class="notice">Selisih kas {{ shift.variance|signed_rp }} ditolak ({{ shift.variance_request.decision_note }}) dan belum dicatat ke buku besar. Perbaiki dengan jurnal manual bila perlu.</div>{% else %}<div class="notice">Selisih kas {{ shift.variance|signed_rp }} menunggu persetujuan manajer/keuangan lain sebelum dicatat ke buku besar. Lihat halaman <a href="{% url 'merchant-approvals' %}">Persetujuan</a>.</div>{% endif %}{% endif %}
 <div class="shift-grid">
 <section class="panel"><header class="panel-head"><h2>Cara bayar</h2></header>
   <table class="tbl"><thead><tr><th>Cara bayar</th><th class="num">Transaksi</th><th class="num">Jumlah</th></tr></thead><tbody>
@@ -37,7 +38,20 @@ body.pd-body{font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;ov
   </tbody></table>
   <p class="shift-note">Tunai masuk ke akun {{ register.cash_account.name }}. Kartu dan QRIS menunggu di Piutang EDC / QRIS (1210) sampai bank mencairkannya.</p>
 </section>
-{% if shift.is_open and can_shift %}<section class="panel"><header class="panel-head"><h2>Tutup shift</h2></header>
+{% if shift.is_open and can_shift %}<section class="panel"><header class="panel-head"><h2>Kas keluar / masuk</h2></header>
+  <form method="post" action="{% url 'merchant-pos-paid-out' shift.pk %}">{% csrf_token %}
+    <label class="field"><span>Kas keluar (bensin, parkir, dll.)</span><input name="amount" data-rupiah inputmode="numeric" required></label>
+    <label class="field"><span>Keterangan</span><input name="reason" maxlength="200" placeholder="mis. parkir, es batu"></label>
+    <button class="btn">Catat kas keluar</button>
+  </form>
+  {% if can_refund %}<form method="post" action="{% url 'merchant-pos-paid-in' shift.pk %}" style="margin-top:10px;border-top:1px solid var(--ds-line,#d6e6f0);padding-top:14px">{% csrf_token %}
+    <label class="field"><span>Kas masuk (tambah modal)</span><input name="amount" data-rupiah inputmode="numeric" required></label>
+    <label class="field"><span>Dari rekening</span><select name="fund_from" required><option value="">— pilih —</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.name }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Keterangan</span><input name="reason" maxlength="200" placeholder="mis. tambahan modal siang"></label>
+    <button class="btn">Catat kas masuk</button>
+  </form>{% endif %}
+</section>
+<section class="panel"><header class="panel-head"><h2>Tutup shift</h2></header>
   <form method="post" data-confirm="Tutup shift ini? Selisih kas akan dicatat dan shift tidak bisa dibuka lagi." data-confirm-ok="Tutup shift" data-confirm-tone="neutral">{% csrf_token %}
     <label class="field"><span>Uang tunai di laci (hasil hitung)</span><input name="counted_cash" data-rupiah inputmode="numeric" required></label>
     <label class="field"><span>Modal ditinggal untuk besok</span><input name="keep_float" data-rupiah inputmode="numeric" value="{{ shift.opening_float|floatformat:'0' }}"></label>
@@ -52,9 +66,11 @@ body.pd-body{font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;ov
 </section>{% endif %}
 </div>
 <section class="panel"><header class="panel-head"><h2>Struk shift ini</h2></header>
-{% if sales %}<table class="tbl"><thead><tr><th>Struk</th><th>Jam</th><th>Kasir</th><th>Invoice</th><th>Cara bayar</th><th class="num">Total</th></tr></thead><tbody>
+{% if sales %}<table class="tbl"><thead><tr><th>Struk</th><th>Jam</th><th>Kasir</th><th>Invoice</th><th>Cara bayar</th><th class="num">Total</th><th data-no-row></th></tr></thead><tbody>
 {% for sale in sales %}<tr><td><a class="rowlink" target="_blank" rel="noopener" href="{% url 'merchant-pos-receipt' sale.pk %}"><b>{{ sale.number }}</b></a>{% if sale.status == 'void' %} <span class="pill pill-void">batal</span>{% endif %}</td><td>{{ sale.sold_at|date:"H.i" }}</td><td>{{ sale.cashier.get_full_name|default:sale.cashier.username }}</td><td>{{ sale.invoice.number }}</td>
-<td>{% for tender in sale.tenders.all %}{{ tender.get_method_display }}{% if not forloop.last %}, {% endif %}{% endfor %}</td><td class="num">{{ sale.total|rp }}</td></tr>{% endfor %}
+<td>{% for tender in sale.tenders.all %}{{ tender.get_method_display }}{% if not forloop.last %}, {% endif %}{% endfor %}</td><td class="num">{{ sale.total|rp }}</td>
+<td data-no-row>{% if sale.status == 'paid' %}{% if shift.is_open %}{% if can_refund or sale.cashier_id == request.user.id and can_void %}<form method="post" action="{% url 'merchant-pos-void' sale.pk %}" data-confirm="Batalkan struk {{ sale.number }}? Stok kembali ke rak dan invoicenya dibalik." data-confirm-ok="Batalkan struk" style="display:inline">{% csrf_token %}<input type="hidden" name="reason" value=""><button class="btn" style="padding:4px 10px;font-size:12px">Batal</button></form>{% endif %}{% endif %}
+{% if can_refund %}<a class="btn" style="padding:4px 10px;font-size:12px" href="{% url 'merchant-pos-refund' sale.pk %}">Retur</a>{% endif %}{% endif %}</td></tr>{% endfor %}
 </tbody></table>{% else %}<div class="empty-box"><b>Belum ada penjualan di shift ini.</b></div>{% endif %}</section>
 </main>
 <dialog id="pd-confirm" aria-labelledby="pd-confirm-title">

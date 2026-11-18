@@ -25,11 +25,13 @@
 
 <div class="notice">Lembar Faktur keluaran membantu mengisi template Coretax dari DJP dan menandai pembeli tanpa NPWP/NIK. Ini bukan file XML siap impor; nomor Faktur Pajak diterbitkan Coretax.</div>
 {% if w.missing_npwp %}<div class="notice">{{ w.missing_npwp }} invoice bulan ini belum punya NPWP pembeli. Lengkapi bila faktur pajak harus diterbitkan atas nama pembeli.</div>{% endif %}
+{% if w.digunggung.count %}<div class="notice">{{ w.digunggung.count }} struk kasir tanpa NPWP/NIK pembeli (DPP {{ w.digunggung.dpp|rp }}, PPN {{ w.digunggung.tax|rp }}) dilaporkan digunggung: satu angka, bukan faktur per struk.</div>{% endif %}
 
 <section class="panel"><header><div><h2>PPN keluaran</h2><p>Invoice penjualan ber-PPN bulan ini.</p></div></header>
 <div class="scroll-x"><table class="tbl"><thead><tr><th>Invoice</th><th>Tanggal</th><th>Pembeli</th><th class="num">DPP</th><th class="num">PPN</th></tr></thead><tbody>
+  {% if w.digunggung.count %}<tr><td colspan="2">Struk kasir digunggung</td><td>{{ w.digunggung.count }} struk</td><td class="num">{{ w.digunggung.dpp|rp }}</td><td class="num">{{ w.digunggung.tax|rp }}</td></tr>{% endif %}
   {% for i in w.sales %}<tr><td>{{ i.number }}</td><td>{{ i.issued_on|date:"d M Y" }}</td><td>{{ i.buyer_name }}</td><td class="num">{{ i.tax_base|rp }}</td><td class="num">{{ i.tax|rp }}</td></tr>
-  {% empty %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Tidak ada penjualan ber-PPN bulan ini.</td></tr>{% endfor %}
+  {% empty %}{% if not w.digunggung.count %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Tidak ada penjualan ber-PPN bulan ini.</td></tr>{% endif %}{% endfor %}
   {% for c in w.credits %}<tr><td>{{ c.number }} <small>(retur)</small></td><td>{{ c.issued_on|date:"d M Y" }}</td><td>{{ c.buyer_name }}</td><td class="num">− {{ c.subtotal|rp }}</td><td class="num">− {{ c.tax|rp }}</td></tr>{% endfor %}
 </tbody></table></div></section>
 
