@@ -120,10 +120,24 @@ class ProductForm(StyledModelForm):
         exclude = ("store", "created_at")
         widgets = {"description": forms.Textarea(attrs={"rows": 4}), "seo_description": forms.Textarea(attrs={"rows": 3})}
 
+    # Product fields the product page has no input for. A ModelForm treats a field missing from the
+    # post as empty, so keeping them would wipe their saved value (or, for a required number, refuse
+    # every save without showing why). They are left out and keep what is stored.
+    NOT_ON_PAGE = ("ab_shop_price", "image_url", "photo", "seo_title", "is_preorder", "preorder_daily_quota")
+    DIMENSIONS = ("weight_grams", "length_cm", "width_cm", "height_cm")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.store and not self.instance.store_id:
             self.instance.store = self.store
+        for name in self.NOT_ON_PAGE:
+            self.fields.pop(name, None)
+        for name in self.DIMENSIONS:
+            # Left empty means 0 (not measured), never a refused save.
+            self.fields[name].required = False
+        self.fields["length_cm"].label = "Panjang (cm)"
+        self.fields["width_cm"].label = "Lebar (cm)"
+        self.fields["height_cm"].label = "Tinggi (cm)"
         self.fields["category"].queryset = Category.objects.filter(store=self.store)
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store, is_active=True)
         self.stock_level = None
@@ -247,6 +261,9 @@ class ProductForm(StyledModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        for name in self.DIMENSIONS:
+            if cleaned.get(name) is None and name not in self.errors:
+                cleaned[name] = 0
         # self.instance still holds the saved values here; the form copies onto it afterwards.
         if cleaned.get("is_digital") and not (cleaned.get("digital_file") or cleaned.get("digital_url")):
             self.add_error("digital_file", "Unggah file atau isi link digital untuk produk digital.")

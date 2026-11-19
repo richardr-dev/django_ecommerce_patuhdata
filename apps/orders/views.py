@@ -2277,6 +2277,28 @@ def _save_entity(request, store, section, entity, form, instance, variants):
     saved = form.save(commit=False)
     if hasattr(saved, "store_id"):
         saved.store = store
+    if entity is InventoryLevel:
+        # Same rule as Kelola stok: a quantity change is a stock movement, never a silent edit.
+        stored = InventoryLevel.objects.select_for_update().filter(pk=saved.pk).first() if saved.pk else None
+        previous = stored.on_hand if stored else 0
+        reserved = stored.reserved if stored else 0
+        if saved.on_hand < reserved:
+            raise ValidationError(f"Stok tidak boleh kurang dari {reserved} unit yang sedang direservasi.")
+        if stored:
+            saved.reserved = reserved  # the locked row's figure, not the one read before the lock
+            saved.save(update_fields=["on_hand", "safety_stock", "updated_at"])
+        else:
+            saved.save()
+        if saved.on_hand != previous:
+            record_movement(store=store, inventory_level=saved, kind="adjust",
+                quantity=abs(saved.on_hand - previous), reason="Ubah stok di Persediaan", actor=request.user,
+                previous_on_hand=previous, new_on_hand=saved.on_hand,
+                previous_reserved=reserved, new_reserved=saved.reserved)
+        form.save_m2m()
+        AuditLog.objects.create(store=store, actor=request.user,
+            action=f"{section}.{'updated' if instance else 'created'}", object_type=entity.__name__,
+            object_id=str(saved.id), details={"label": str(saved), "new_stock": saved.on_hand})
+        return saved, 0
     saved.save()
     form.save_m2m()
     if hasattr(form, "save_uploads"):

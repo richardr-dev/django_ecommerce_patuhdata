@@ -43,6 +43,8 @@ urlpatterns = [
         name="merchant-invoices-csv"),
     path("books/sales/invoices/export.pdf", views.merchant_invoices_pdf,
         name="merchant-invoices-pdf"),
+    path("books/sales/invoices/gabungan/", views.merchant_invoices_combined,
+        name="merchant-invoices-combined"),
     path("books/sales/invoices/export.xlsx", views.merchant_invoices_xlsx,
         name="merchant-invoices-xlsx"),
     path("books/sales/invoices/<uuid:invoice_id>/pdf/", views.merchant_invoice_pdf,

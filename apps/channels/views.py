@@ -1176,6 +1176,41 @@ def merchant_invoices_pdf(request):
     return response
 
 
+@login_required(login_url="/login/")
+def merchant_invoices_combined(request):
+    """Invoice gabungan: the selected invoices as one bill (product summary, each invoice with its
+    subtotal, one grand total). An extra document; the separate invoices are unchanged. ``?view=1``
+    shows it in the browser instead of downloading the PDF."""
+    from django.template.loader import render_to_string
+    from django.utils import timezone
+    from weasyprint import HTML
+
+    from apps.accounting.models import BankAccount
+    from apps.tax.combined import CombinedInvoiceError, combine
+
+    store = _staff_store(request)
+    _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
+    if not request.GET.get("ids", "").strip():
+        messages.warning(request, "Pilih invoice yang ingin digabung.")
+        return redirect("merchant-sales-invoices")
+    invoices = _resolve_invoice_qs(request, store).select_related("order").prefetch_related(
+        "items", "payments", "credit_notes")
+    try:
+        bill = combine(store, invoices)
+    except CombinedInvoiceError as error:
+        messages.error(request, str(error))
+        return redirect("merchant-sales-invoices")
+    banks = BankAccount.objects.filter(store=store, is_active=True).exclude(account_number="").order_by("created_at")
+    context = {"bill": bill, "store": store, "banks": banks, "today": timezone.localdate()}
+    html_str = render_to_string("merchant/invoice_combined.html", context, request=request)
+    if request.GET.get("view"):
+        return HttpResponse(html_str)
+    pdf_bytes = HTML(string=html_str, base_url=request.build_absolute_uri("/")).write_pdf()
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="invoice-gabungan-{bill.number}.pdf"'
+    return response
+
+
 # ── Invoice XLSX export ───────────────────────────────────────────────────────
 
 @login_required(login_url="/login/")
