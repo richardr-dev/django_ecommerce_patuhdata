@@ -1,0 +1,78 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Selisih & klaim marketplace{% endblock %}{% block content %}
+<p class="dp-crumb"><a href="{% url 'merchant-payouts' %}">Pencairan dana</a> › Selisih &amp; klaim</p>
+<div class="pg-head">
+  <div><span class="pg-kicker">Kas &amp; bank</span><h1>Selisih &amp; klaim marketplace</h1>
+    <p>Catat uang antara perusahaan dan Shopee, Tokopedia, Lazada, atau gateway yang tidak ada di file pencairan: kelebihan ongkir yang ditagih balik, denda, kompensasi, atau klaim. Langsung masuk buku besar.</p></div>
+  {% if can_edit %}<div class="dp-actions"><button type="button" class="btn-primary" data-open="adj-dialog">{% icon "plus" %} Catat selisih</button></div>{% endif %}
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Selisih terbuka</small><strong>{{ open_count }}</strong><span>Belum dipotong atau dibayar</span></div>
+  <div class="tile"><small>Potongan terbuka</small><strong>{{ open_charges|rp }}</strong><span>Akan dipotong marketplace</span></div>
+  <div class="tile"><small>Klaim terbuka</small><strong>{{ open_claims|rp }}</strong><span>Akan dibayar marketplace</span></div>
+</div>
+
+<div class="notice">{% icon "alert" %}<span><b>Kapan memakai halaman ini?</b> Hanya untuk selisih yang <b>tidak</b> ada di laporan pencairan yang Anda impor. Potongan di laporan penghasilan (misalnya "selisih ongkir") sudah tercatat otomatis ke 6130 saat diimpor; jangan dicatat dua kali.</span></div>
+
+<section class="panel"><header><div><h2>Daftar selisih</h2><p>Potongan mengurangi piutang marketplace; klaim menambahnya. Lunasi saat marketplace memotongnya dari pencairan, atau saat uangnya ditransfer.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Marketplace</th><th>Jenis</th><th>Keterangan</th><th>Akun lawan</th><th class="num">Jumlah</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for row in rows %}<tr>
+    <td>{{ row.date|date:"d M Y" }}</td><td><b>{{ row.label }}</b></td>
+    <td>{% if row.kind == "charge" %}Potongan{% else %}Klaim{% endif %}</td>
+    <td>{{ row.description }}{% if row.reference %}<small>{{ row.reference }}</small>{% endif %}</td>
+    <td>{{ row.account.code }} {{ row.account.name }}</td>
+    <td class="num"><b>{% if row.kind == "charge" %}−{% endif %}{{ row.amount|rp }}</b></td>
+    <td>{% if row.voided %}<span class="pill pill-void">Dibatalkan</span>{% elif row.settled_on %}<span class="pill pill-paid">Lunas {{ row.settled_on|date:"d M" }}</span>{% if row.settled_bank %}<small>{{ row.settled_bank.name }}</small>{% endif %}{% else %}<span class="pill pill-pending">Terbuka</span>{% endif %}</td>
+    <td data-no-row>{% if not row.voided %}{% if can_edit %}
+      {% if row.settled_on %}<form method="post" data-confirm="Batalkan pelunasan selisih ini? Jurnal pelunasannya dibalik." data-confirm-ok="Batalkan pelunasan">{% csrf_token %}<input type="hidden" name="action" value="unsettle"><input type="hidden" name="id" value="{{ row.id }}"><button class="btn">Batalkan pelunasan</button></form>
+      {% else %}<button type="button" class="btn" data-open="settle-{{ row.id }}">Lunasi</button>
+      <form method="post" data-confirm="Batalkan selisih ini? Jurnalnya dibalik." data-confirm-ok="Batalkan">{% csrf_token %}<input type="hidden" name="action" value="void"><input type="hidden" name="id" value="{{ row.id }}"><button class="btn btn-danger">Batalkan</button></form>
+      <dialog id="settle-{{ row.id }}" class="pd-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="settle"><input type="hidden" name="id" value="{{ row.id }}">
+        <header><h2>Lunasi selisih</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+        <div><p class="dp-help">{% if row.kind == "charge" %}Potongan {{ row.amount|rp }} dianggap lunas saat marketplace memotongnya dari pencairan atau Anda mentransfernya. Pilih rekening tempat pencairan itu masuk (atau rekening yang mentransfer).{% else %}Klaim {{ row.amount|rp }} lunas saat uangnya masuk. Pilih rekening yang menerimanya.{% endif %}</p>
+          <label class="field"><span>Tanggal</span><input type="date" name="settled_on" value="{{ today|date:'Y-m-d' }}" required></label>
+          <label class="field"><span>Rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>
+          <label class="field"><span>Catatan <em>(opsional)</em></span><input type="text" name="note" maxlength="200" placeholder="Misalnya: dipotong di pencairan 12 Nov"></label></div>
+        <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan pelunasan</button></footer></form></dialog>
+      {% endif %}{% endif %}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="dp-empty">Belum ada selisih marketplace. Gunakan "Catat selisih" bila marketplace menagih atau berutang di luar file pencairan.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{% if journal %}{% include "merchant/_journal_card.html" %}{% endif %}
+
+<dialog id="adj-dialog" class="pd-dialog" aria-labelledby="adj-title">
+  <form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="create"><input type="hidden" name="idem" value="{{ idem_key }}">
+    <header><h2 id="adj-title">Catat selisih marketplace</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <div class="field-row">
+        <label class="field"><span>Marketplace / gateway</span><select name="provider" required>{% for code, label in providers %}<option value="{{ code }}"{% if posted.provider == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Tanggal</span><input type="date" name="date" value="{% if posted.date %}{{ posted.date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required></label>
+      </div>
+      <label class="field"><span>Jenis</span><select name="kind" id="adj-kind" required>{% for code, label in kinds %}<option value="{{ code }}"{% if posted.kind == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Akun lawan</span><select name="account" id="adj-account" required>{% for a in accounts %}<option value="{{ a.id }}" data-code="{{ a.code }}"{% if posted.account == a.id|stringformat:"s" %} selected{% endif %}>{{ a.code }} · {{ a.name }}</option>{% endfor %}</select>
+        <small class="dp-help">Kelebihan ongkir yang ditanggung: 6130. Ongkir yang dulu tercatat sebagai pendapatan lalu ditarik: 4200. Akan diminta kembali dari kurir: 1290 Piutang lainnya. Kompensasi dari marketplace: 7100.</small></label>
+      <div class="field-row">
+        <label class="field"><span>Jumlah</span><input type="text" inputmode="numeric" name="amount" data-rupiah value="{{ posted.amount }}" required></label>
+        <label class="field"><span>Referensi <em>(opsional)</em></span><input type="text" name="reference" maxlength="120" value="{{ posted.reference }}" placeholder="No. pesanan atau tiket"></label>
+      </div>
+      <label class="field"><span>Keterangan</span><input type="text" name="description" maxlength="300" value="{{ posted.description }}" required placeholder="Contoh: selisih ongkir ditagih Shopee, Oktober"></label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan &amp; jurnal</button></footer>
+  </form>
+</dialog>
+{% include "merchant/_dialog_js.html" %}
+<script>
+(function () {
+  var kind = document.getElementById("adj-kind"), account = document.getElementById("adj-account");
+  if (!kind || !account) return;
+  var defaults = {"charge": "{{ defaults.charge }}", "claim": "{{ defaults.claim }}"};
+  function pick() {
+    var code = defaults[kind.value];
+    for (var i = 0; i < account.options.length; i++) if (account.options[i].dataset.code === code) { account.selectedIndex = i; break; }
+  }
+  kind.addEventListener("change", pick);
+  {% if not posted %}pick();{% endif %}
+})();
+</script>
+{% if posted %}<script>document.getElementById("adj-dialog").showModal();</script>{% endif %}
+{% endblock %}

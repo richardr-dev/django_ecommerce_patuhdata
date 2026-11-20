@@ -528,18 +528,21 @@ def merchant_bill_detail(request, bill_id):
                 messages.error(request, f"Gagal: {exc}")
         return redirect("merchant-bill-detail", bill_id=bill.id)
 
-    from .ledger import entries_for
+    from .ledger import PAYABLE, control_tie, entries_for
     items = bill.items.select_related("product", "variant")
     payments = bill.payments.all()
     amount_paid = bill.amount_paid
     amount_due = bill.amount_due
     today = timezone.localdate().isoformat()
-    journal = entries_for(store, [("bill", bill.pk)] + [("bill_payment", p.pk) for p in payments])
+    journal = entries_for(store, [("bill", bill.pk)] + [("bill_payment", p.pk) for p in payments]
+        + [("debit_note", n.pk) for n in bill.debit_notes.all()])
+    ledger_tie = control_tie(journal, PAYABLE, Decimal(0) if bill.status == "void" else amount_due,
+        credit_normal=True, label="Utang usaha")
     goods = [item for item in items if item.product_id]
     to_receive = sum((int(item.quantity) - item.received_quantity for item in goods
         if int(item.quantity) > item.received_quantity), 0)
     return render(request, "merchant/bill_detail.html", _merchant_context(request, store,
-        bill=bill, items=items, payments=payments, journal=journal, audit=audit_trail(store, bill),
+        bill=bill, items=items, payments=payments, journal=journal, ledger_tie=ledger_tie, audit=audit_trail(store, bill),
         attachments=attachment_list(store, "bill", bill.pk), attach_kind="bill", attach_id=bill.pk,
         amount_paid=amount_paid, amount_due=amount_due, today=today,
         paid_pct=min(100, int(amount_paid * 100 / bill.total)) if bill.total else 0,
@@ -645,9 +648,25 @@ def merchant_journal_new(request):
     _require_roles(request, store, EDIT_ROLES)
     accounts = list(chart_of_accounts(store).values())
     accounts.sort(key=lambda account: account.code)
+    from . import idempotency
+    posted = None
     if request.method == "POST":
+        key = request.POST.get("idem", "")
+        earlier = idempotency.claim(store, "journal", key)
+        if earlier is not None:
+            messages.info(request, "Jurnal ini sudah dicatat.")
+            return redirect("merchant-journal-list")
+        # What was typed comes back on the page after an error, never an empty form.
+        posted = {"date": request.POST.get("date", ""), "memo": request.POST.get("memo", ""),
+            "cost_center": request.POST.get("cost_center", ""),
+            "rows": [{"account": code, "debit": debit, "credit": credit} for code, debit, credit in zip(
+                request.POST.getlist("account[]"), request.POST.getlist("debit[]"),
+                request.POST.getlist("credit[]"), strict=False)]}
         try:
-            date = datetime.date.fromisoformat(request.POST.get("date", ""))
+            try:
+                date = datetime.date.fromisoformat(request.POST.get("date", ""))
+            except ValueError:
+                raise LedgerError("Isi tanggal jurnal.") from None
             lines = []
             for code, debit, credit in zip(request.POST.getlist("account[]"),
                     request.POST.getlist("debit[]"), request.POST.getlist("credit[]"), strict=False):
@@ -667,27 +686,50 @@ def merchant_journal_new(request):
             total_credit = sum((line[2] for line in lines), Decimal(0))
             if total_debit != total_credit:
                 raise LedgerError(f"Jurnal tidak seimbang: debit Rp{total_debit:,.0f}, "
-                    f"kredit Rp{total_credit:,.0f}.")
+                    f"kredit Rp{total_credit:,.0f}.".replace(",", "."))
+            upload = request.FILES.get("attachment")
+            if upload:   # refuse a bad file before anything is booked
+                from .attachments import AttachmentError, validate
+                try:
+                    validate(upload)
+                except AttachmentError as error:
+                    raise LedgerError(str(error)) from None
+            center = CostCenter.objects.filter(store=store, is_active=True,
+                pk=request.POST.get("cost_center") or 0).first()
             if approvals.required(store, "journal", total_debit, request.user):
-                center = CostCenter.objects.filter(store=store, is_active=True,
-                    pk=request.POST.get("cost_center") or 0).first()
                 approvals.submit(store, "journal", total_debit, f"Jurnal manual: {memo}",
                     {"date": date.isoformat(), "memo": memo, "cost_center_id": center.pk if center else None,
                      "lines": [[code, str(d), str(c)] for code, d, c in lines]}, request.user)
+                idempotency.finish(store, "journal", key, "pending")
                 messages.info(request, "Jurnal ini perlu persetujuan orang lain karena nilainya besar. "
-                    "Sudah diajukan di menu Persetujuan.")
+                    "Sudah diajukan di menu Persetujuan." + (" Lampirkan buktinya lagi di jurnal setelah "
+                    "disetujui." if upload else ""))
                 return redirect("merchant-journal-new")
             entry = post_journal(store, date=date, memo=memo, lines=lines, actor=request.user,
-                cost_center=CostCenter.objects.filter(store=store, is_active=True,
-                    pk=request.POST.get("cost_center") or 0).first())
+                cost_center=center)
             AuditLog.objects.create(store=store, actor=request.user, action="journal.created",
                 object_type="JournalEntry", object_id=str(entry.id),
                 details={"memo": memo, "debit": str(total_debit)})
+            idempotency.finish(store, "journal", key, entry.pk)
+            if upload:
+                from .attachments import add as attach
+                attach(store, "journal", entry.pk, upload, actor=request.user)
             messages.success(request, "Jurnal dicatat.")
-            return redirect("merchant-finance")
+            return redirect("merchant-journal-detail", entry_id=entry.pk)
         except (LedgerError, ValueError, InvalidOperation) as error:
+            idempotency.release(store, "journal", key)
             messages.error(request, f"Gagal: {error}")
+    copy = request.GET.get("copy", "")
+    if posted is None and copy.isdigit():   # same lines again, today's date (payroll, rent, accruals)
+        source = JournalEntry.objects.filter(store=store, pk=int(copy), source_type="journal").first()
+        if source:
+            posted = {"date": "", "memo": source.memo, "cost_center": str(source.cost_center_id or ""),
+                "rows": [{"account": line.account.code, "debit": f"{line.debit:.0f}" if line.debit else "",
+                    "credit": f"{line.credit:.0f}" if line.credit else ""}
+                    for line in source.lines.select_related("account").order_by("-debit", "id")]}
     return render(request, "merchant/journal_new.html", _merchant_context(request, store,
-        accounts=accounts, today=timezone.localdate().isoformat(),
+        accounts=accounts, today=timezone.localdate().isoformat(), posted=posted,
+        blank_rows=range(max(0, 6 - len(posted["rows"] if posted else []))),
+        idem_key=idempotency.new_key(),
         opening=request.GET.get("opening") == "1", locked_through=locked_through(store),
         cost_centers=CostCenter.objects.filter(store=store, is_active=True)))

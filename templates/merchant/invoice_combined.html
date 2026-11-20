@@ -1,0 +1,88 @@
+{% load branding books %}{% brand store as b %}<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Invoice gabungan {{ bill.number }}</title>
+<style>
+  @page { size: A4; margin: 16mm 18mm; @bottom-center { content: "Halaman " counter(page) " dari " counter(pages); font-size: 8pt; color: #9ca3af; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9.5pt; color: #012441; line-height: 1.4; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14pt; }
+  .store { font-size: 16pt; font-weight: 700; }
+  .meta { font-size: 8pt; color: #5b7186; white-space: pre-line; margin-top: 2pt; }
+  .title { text-align: right; }
+  .title h1 { font-size: 19pt; font-weight: 800; }
+  .title .no { font-family: 'Courier New', monospace; font-size: 10pt; margin-top: 2pt; }
+  hr { border: none; border-top: 1.5pt solid {{ b.accent }}; margin: 8pt 0 12pt; }
+  .row { display: flex; justify-content: space-between; gap: 20pt; margin-bottom: 14pt; }
+  .lbl { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .8pt; color: #5b7186; margin-bottom: 3pt; }
+  .name { font-size: 10.5pt; font-weight: 700; }
+  .small { font-size: 8.5pt; color: #374151; white-space: pre-line; }
+  h2 { font-size: 10pt; margin: 14pt 0 5pt; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+  thead th { background: {{ b.accent }}; color: #fff; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .4pt; padding: 5pt 7pt; text-align: left; }
+  th.r, td.r { text-align: right; }
+  td { padding: 5pt 7pt; font-size: 9pt; border-bottom: .5pt solid #d6e6f0; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  .sku { font-size: 7.5pt; color: #5b7186; font-family: 'Courier New', monospace; }
+  .inv { background: #eaf7fe; padding: 5pt 7pt; font-weight: 700; font-size: 9pt; display: flex; justify-content: space-between; margin-top: 10pt; page-break-after: avoid; }
+  .sub td { font-weight: 700; border-bottom: 1pt solid #012441; }
+  .totals { width: 230pt; margin-left: auto; page-break-inside: avoid; }
+  .totals td { border: none; padding: 2pt 0; }
+  .totals .grand td { font-size: 11.5pt; font-weight: 800; border-top: 1.5pt solid #012441; padding-top: 5pt; }
+  .totals .due td { color: {{ b.accent }}; font-weight: 800; }
+  .bank { margin-top: 16pt; padding: 8pt 10pt; background: #eaf7fe; border-left: 3pt solid {{ b.accent }}; page-break-inside: avoid; }
+  .foot { margin-top: 16pt; font-size: 7.5pt; color: #5b7186; border-top: .5pt solid #d6e6f0; padding-top: 6pt; }
+</style>
+</head>
+<body>
+<div class="head">
+  <div style="display:flex;gap:10pt;align-items:flex-start">
+    {% with logo=b.data_uri %}{% if logo %}<img src="{{ logo }}" alt="" style="max-height:44pt;max-width:110pt;object-fit:contain">{% endif %}{% endwith %}
+    <div>{% if b.show_name or not b.logo %}<div class="store" style="color:{{ b.accent }}">{{ b.name }}</div>{% endif %}
+      {% if b.address %}<div class="meta">{{ b.address }}</div>{% endif %}</div>
+  </div>
+  <div class="title"><h1 style="color:{{ b.accent }}">INVOICE GABUNGAN</h1><div class="no">{{ bill.number }}</div></div>
+</div>
+<hr>
+<div class="row">
+  <div><div class="lbl">Tagihan kepada</div><div class="name">{{ bill.buyer_name }}</div>
+    {% if bill.buyer_address %}<div class="small">{{ bill.buyer_address }}</div>{% endif %}
+    {% if bill.buyer_npwp %}<div class="small">NPWP: {{ bill.buyer_npwp }}</div>{% endif %}</div>
+  <div style="text-align:right"><div class="small">Tanggal cetak: <b>{{ today|date:"d M Y" }}</b></div>
+    <div class="small">Periode: <b>{{ bill.first_date|date:"d M Y" }}{% if bill.first_date != bill.last_date %} – {{ bill.last_date|date:"d M Y" }}{% endif %}</b></div>
+    <div class="small">Jumlah invoice: <b>{{ bill.invoices|length }}</b></div></div>
+</div>
+
+<h2>Ringkasan produk</h2>
+<table><thead><tr><th>Produk</th><th class="r">Qty</th><th class="r">Harga</th><th class="r">Jumlah</th></tr></thead><tbody>
+{% for p in bill.products %}<tr><td>{{ p.description }}{% if p.sku %}<div class="sku">{{ p.sku }}</div>{% endif %}</td><td class="r">{{ p.quantity|floatformat:"-2" }}{% if p.unit %} {{ p.unit }}{% endif %}</td><td class="r">{{ p.unit_price|rp }}</td><td class="r">{{ p.amount|rp }}</td></tr>{% endfor %}
+</tbody></table>
+
+<h2>Rincian per invoice</h2>
+{% for inv in bill.invoices %}
+<div class="inv"><span>{{ inv.number }}{% if inv.buyer_name and not bill.one_buyer %} · {{ inv.buyer_name }}{% endif %}</span><span>{{ inv.issued_on|date:"d M Y" }}</span></div>
+<table><tbody>
+{% for item in inv.lines %}<tr><td>{{ item.description }}</td><td class="r">{{ item.quantity|floatformat:"-2" }}</td><td class="r">{{ item.unit_price|rp }}</td><td class="r">{{ item.line_total|rp }}</td></tr>{% endfor %}
+<tr class="sub"><td colspan="3" class="r">Total invoice</td><td class="r">{{ inv.total|rp }}</td></tr>
+</tbody></table>
+{% endfor %}
+
+<table class="totals"><tbody>
+<tr><td>Subtotal</td><td class="r">{{ bill.totals.subtotal|rp }}</td></tr>
+{% if bill.totals.discount %}<tr><td>Diskon</td><td class="r">-{{ bill.totals.discount|rp }}</td></tr>{% endif %}
+{% if bill.totals.shipping %}<tr><td>Ongkos kirim</td><td class="r">{{ bill.totals.shipping|rp }}</td></tr>{% endif %}
+{% if bill.totals.other_charges %}<tr><td>Biaya lain</td><td class="r">{{ bill.totals.other_charges|rp }}</td></tr>{% endif %}
+{% if bill.totals.tax %}<tr><td>PPN</td><td class="r">{{ bill.totals.tax|rp }}</td></tr>{% endif %}
+{% if bill.totals.rounding %}<tr><td>Pembulatan</td><td class="r">{{ bill.totals.rounding|rp }}</td></tr>{% endif %}
+<tr class="grand"><td>Total</td><td class="r">{{ bill.totals.total|rp }}</td></tr>
+{% if bill.totals.paid %}<tr><td>Sudah dibayar</td><td class="r">-{{ bill.totals.paid|rp }}</td></tr>{% endif %}
+{% if bill.totals.credited %}<tr><td>Nota kredit</td><td class="r">-{{ bill.totals.credited|rp }}</td></tr>{% endif %}
+<tr class="due"><td>Sisa tagihan</td><td class="r">{{ bill.totals.due|rp }}</td></tr>
+</tbody></table>
+
+{% if banks and bill.totals.due %}<div class="bank"><div class="lbl">Pembayaran ke rekening</div>
+{% for a in banks %}<div class="small"><b>{{ a.bank_name|default:a.name }}</b> · {{ a.account_number }} · a.n. {{ a.name }}</div>{% endfor %}</div>{% endif %}
+{% if b.footer %}<div class="foot">{{ b.footer }}</div>{% endif %}
+</body>
+</html>

@@ -2,7 +2,7 @@
 {% block title %}Terima Pembayaran{% endblock %}
 {% block content %}
 <nav class="dp-crumb"><a href="{% url 'merchant-receivables' %}">Piutang pelanggan</a> › <span>Terima pembayaran</span></nav>
-<div class="pg-head"><div><h1>Terima pembayaran</h1><p>Satu transfer untuk beberapa invoice sekaligus. Kelebihannya disimpan sebagai kredit pelanggan untuk invoice berikutnya.</p></div>
+<div class="pg-head"><div><h1>Terima pembayaran</h1><p>Satu transfer untuk beberapa invoice sekaligus. Kelebihannya disimpan sebagai kredit pelanggan untuk invoice berikutnya. Bila pembeli memotong PPh 23, isi potongannya per invoice: uang yang diterima + potongan melunasi invoice.</p></div>
   <div class="dp-actions"><a class="btn" href="{% url 'merchant-receipts' %}">Riwayat penerimaan</a></div></div>
 <form class="toolbar" method="get"><label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Pelanggan</span>
   <select name="customer" onchange="this.form.submit()"><option value="">— pilih pelanggan —</option>{% for c in customers %}<option value="{{ c.id }}" {% if customer and customer.id == c.id %}selected{% endif %}>{{ c.name }}{% if c.company_name and c.company_name != c.name %} · {{ c.company_name }}{% endif %}</option>{% endfor %}</select></label>
@@ -19,11 +19,12 @@
     <label class="field wide"><span>Catatan <em>(opsional)</em></span><input name="note" maxlength="200" value="{{ post.note }}"></label>
   </div>
   <div class="scroll-x"><table class="editor">
-    <thead><tr><th>Invoice</th><th>Jatuh tempo</th><th class="num" style="width:130px">Sisa tagihan</th><th class="num" style="width:160px">Dibayar sekarang</th></tr></thead>
+    <thead><tr><th>Invoice</th><th>Jatuh tempo</th><th class="num" style="width:130px">Sisa tagihan</th><th class="num" style="width:160px">Dibayar sekarang</th><th class="num" style="width:140px">PPh dipotong <em>(opsional)</em></th></tr></thead>
     <tbody>{% for inv in invoices %}<tr><td><a href="{% url 'merchant-invoice-detail' inv.id %}" style="color:var(--pd-ink);font-weight:600">{{ inv.number }}</a><br><small style="color:var(--pd-faint)">{{ inv.issued_on|date:"d M Y" }}</small></td>
       <td>{{ inv.due_date|date:"d M Y"|default:"—" }}</td><td class="num" style="padding-right:14px">{{ inv.amount_due|rp }}</td>
-      <td class="num"><input name="alloc_{{ inv.id }}" inputmode="decimal" data-rupiah placeholder="0" data-alloc data-due="{{ inv.amount_due|floatformat:'0' }}"></td></tr>
-    {% empty %}<tr><td colspan="4"><div class="empty-box">Tidak ada invoice terbuka untuk pelanggan ini. Jumlah yang diterima akan disimpan sebagai kredit.</div></td></tr>{% endfor %}</tbody></table></div>
+      <td class="num"><input name="alloc_{{ inv.id }}" inputmode="decimal" data-rupiah placeholder="0" data-alloc data-due="{{ inv.amount_due|floatformat:'0' }}"></td>
+      <td class="num"><input name="pph_{{ inv.id }}" inputmode="decimal" data-rupiah placeholder="0" data-pph aria-label="PPh dipotong pembeli untuk {{ inv.number }}"></td></tr>
+    {% empty %}<tr><td colspan="5"><div class="empty-box">Tidak ada invoice terbuka untuk pelanggan ini. Jumlah yang diterima akan disimpan sebagai kredit.</div></td></tr>{% endfor %}</tbody></table></div>
   <div class="editor-foot"><div>{% if invoices %}<button type="button" class="add-line" id="auto">Alokasikan otomatis (terlama dulu)</button>{% endif %}
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="keep_rest" value="1" checked style="width:auto;height:auto"> Simpan sisa yang tidak dialokasikan sebagai kredit pelanggan</label></div>
     <div class="sum"><div><span>Diterima</span><span id="recv">Rp0</span></div><div><span>Dialokasikan ke invoice</span><span id="alloc">Rp0</span></div><div class="grand"><span>Menjadi kredit</span><span id="rest">Rp0</span></div></div></div>
@@ -34,9 +35,10 @@
   function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
   function fmt(n){return (n<0?"−":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");}
   var amount=document.getElementById("amount"),fields=document.querySelectorAll("[data-alloc]");
+  function pph(f){var p=f.closest("tr").querySelector("[data-pph]");return p?num(p.value):0;}
   function calc(){var a=num(amount.value),s=0;fields.forEach(function(f){s+=num(f.value);});
     document.getElementById("recv").textContent=fmt(a);document.getElementById("alloc").textContent=fmt(s);var r=document.getElementById("rest");r.textContent=fmt(a-s);r.style.color=a-s<0?"#b42318":"";}
-  document.getElementById("auto")&&document.getElementById("auto").addEventListener("click",function(){var left=num(amount.value);fields.forEach(function(f){var d=num(f.dataset.due),p=Math.min(left,d);f.value=p>0?p:"";left-=Math.max(p,0);});calc();});
+  document.getElementById("auto")&&document.getElementById("auto").addEventListener("click",function(){var left=num(amount.value);fields.forEach(function(f){var d=num(f.dataset.due)-pph(f),p=Math.min(left,d);f.value=p>0?p:"";left-=Math.max(p,0);});calc();});
   document.querySelector("form.panel").addEventListener("input",calc);calc();
 })();
 </script>

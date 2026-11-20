@@ -2,83 +2,28 @@
 
 {# ── Pending approval queue ──────────────────────────────────────────── #}
 {% if pending %}
-<div class="mb-6">
-  <div class="flex items-center justify-between mb-3">
-    <div>
-      <h2 class="text-base font-semibold text-gray-800">Antrean Konfirmasi Pelanggan Baru</h2>
-      <p class="text-xs text-gray-500 mt-0.5">{{ pending_count }} pelanggan baru dari marketplace menunggu persetujuan.</p>
-    </div>
-    <form method="post">{% csrf_token %}
-      <input type="hidden" name="action" value="approve_all">
-      <button type="submit" class="btn-primary">Setujui semua ({{ pending_count }})</button>
-    </form>
-  </div>
-
-  <div class="overflow-hidden rounded-2xl border border-amber-100 shadow-sm bg-amber-50">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-amber-100">
-          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Pelanggan</th>
-          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Platform</th>
-          <th class="text-left px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Lokasi</th>
-          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Pesanan</th>
-          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Total Belanja</th>
-          <th class="text-right px-5 py-3 text-xs font-medium text-amber-700 uppercase tracking-wide">Aksi</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-amber-50">
-        {% for customer in pending %}
-        <tr class="bg-white hover:bg-amber-50 transition-colors">
-          <td class="px-5 py-3">
-            <div class="font-medium text-gray-800">{{ customer.name }}</div>
-            {% if customer.channel_buyer %}<div class="text-xs text-gray-400">ID: {{ customer.channel_buyer.external_id|truncatechars:30 }}</div>{% endif %}
-          </td>
-          <td class="px-5 py-3">
-            {% if customer.channel_buyer %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-              {% if customer.channel_buyer.platform == 'tokopedia' %}bg-green-100 text-green-700
-              {% elif customer.channel_buyer.platform == 'shopee' %}bg-orange-100 text-orange-700
-              {% elif customer.channel_buyer.platform == 'tiktok' %}bg-gray-100 text-gray-700
-              {% else %}bg-indigo-100 text-indigo-700{% endif %}">
-              {{ customer.channel_buyer.get_platform_display }}
-            </span>
-            {% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-gray-500 text-xs">
-            {% if customer.channel_buyer.city %}{{ customer.channel_buyer.city }}{% if customer.channel_buyer.province %}, {{ customer.channel_buyer.province }}{% endif %}{% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-right text-gray-700">
-            {% if customer.channel_buyer %}{{ customer.channel_buyer.order_count }}{% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-right font-semibold text-gray-800">
-            {% if customer.channel_buyer and customer.channel_buyer.total_spent %}
-              Rp{{ customer.channel_buyer.total_spent|floatformat:"0g" }}
-            {% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3 text-right">
-            <form method="post" class="inline-flex gap-2">{% csrf_token %}
-              <input type="hidden" name="customer_id" value="{{ customer.id }}">
-              <button type="submit" name="action" value="approve"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90" style="background:#22c55e">
-                Setujui
-              </button>
-              <button type="submit" name="action" value="block"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200">
-                Blokir
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+<section class="panel"><header><div><h2>Antrean konfirmasi pelanggan baru</h2><small>{{ pending_count }} pelanggan baru dari marketplace menunggu persetujuan.</small></div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve_all"><button type="submit" class="btn btn-primary">Setujui semua ({{ pending_count }})</button></form></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Pelanggan</th><th>Platform</th><th>Lokasi</th><th class="num">Pesanan</th><th class="num">Total belanja</th><th class="num">Aksi</th></tr></thead><tbody>
+    {% for customer in pending %}<tr>
+      <td><b>{{ customer.name }}</b>{% if customer.channel_buyer %}<br><small class="muted">ID: {{ customer.channel_buyer.external_id|truncatechars:30 }}</small>{% endif %}</td>
+      <td>{% if customer.channel_buyer %}<span class="pill pill-info">{{ customer.channel_buyer.get_platform_display }}</span>{% else %}—{% endif %}</td>
+      <td>{% if customer.channel_buyer.city %}{{ customer.channel_buyer.city }}{% if customer.channel_buyer.province %}, {{ customer.channel_buyer.province }}{% endif %}{% else %}—{% endif %}</td>
+      <td class="num">{% if customer.channel_buyer %}{{ customer.channel_buyer.order_count }}{% else %}—{% endif %}</td>
+      <td class="num">{% if customer.channel_buyer and customer.channel_buyer.total_spent %}Rp{{ customer.channel_buyer.total_spent|floatformat:"0g" }}{% else %}—{% endif %}</td>
+      <td class="num" data-no-row><form method="post" class="inline" style="display:inline-flex;gap:8px">{% csrf_token %}<input type="hidden" name="customer_id" value="{{ customer.id }}">
+        <button type="submit" name="action" value="approve" class="btn btn-primary">Setujui</button>
+        <button type="submit" name="action" value="block" class="btn">Blokir</button></form></td></tr>{% endfor %}
+  </tbody></table></div></section>
 {% endif %}
 
 {# ── Existing active customers ────────────────────────────────────────── #}
-<div class="bo-heading"><div><span class="eyebrow">Pelanggan</span><h1>Pelanggan</h1><p>Semua pelanggan perusahaan: dari invoice, pesanan, marketplace, atau ditambah sendiri. Saring menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div><div class="flex items-center gap-3">{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<button type="button" class="bo-button" data-open="customer-dialog">+ Tambah pelanggan</button>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="bo-button" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">Kirim email ke segmen ini ({{ audience }})</a>{% endif %}{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<form method="post" class="inline" data-confirm="Sinkronkan semua pesanan ke profil pelanggan?">{% csrf_token %}<button type="submit" name="action" value="sync_customers" class="bo-button secondary">↻ Sinkron Pesanan</button></form><a class="bo-button secondary" href="{% url 'merchant-customer-duplicates' %}">{% icon "users" %} Pelanggan ganda</a>{% endif %}</div></div>
-<form id="cust-filter" method="get" class="bo-card segment-filters !p-5" style="display:grid;gap:14px"
+<div class="pg-head"><div><span class="pg-kicker">Pelanggan</span><h1>Pelanggan</h1><p>Semua pelanggan perusahaan: dari invoice, pesanan, marketplace, atau ditambah sendiri. Saring menjadi segmen, beri tag, lalu kirim promo ke segmen itu.</p></div>
+  <div class="dp-actions">{% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<button type="button" class="btn btn-primary" data-open="customer-dialog">{% icon "plus" %} Tambah pelanggan</button>{% endif %}
+    {% if merchant_role == 'admin' or merchant_role == 'manager' %}<a class="btn" href="{% url 'merchant-broadcasts' %}?{{ segment_query }}">{% icon "megaphone" %} Kirim email ke segmen ({{ audience }})</a>{% endif %}
+    {% if merchant_role == 'admin' or merchant_role == 'manager' or merchant_role == 'customer_service' %}<form method="post" class="inline" data-confirm="Sinkronkan semua pesanan ke profil pelanggan?" data-confirm-tone="neutral">{% csrf_token %}<button type="submit" name="action" value="sync_customers" class="btn">{% icon "swap" %} Sinkron pesanan</button></form>
+    <a class="btn" href="{% url 'merchant-customer-duplicates' %}">{% icon "users" %} Pelanggan ganda</a>{% endif %}</div></div>
+<form id="cust-filter" method="get" class="panel segment-filters" data-no-loading style="display:grid;gap:14px"
   hx-get="{% url 'merchant-customers' %}" hx-target="#cust-list" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
   hx-trigger="input changed delay:350ms from:#cust-q, input changed delay:350ms from:#cust-loc, change">
   <div class="flex flex-wrap items-center gap-2">

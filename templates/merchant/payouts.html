@@ -2,7 +2,7 @@
 <div class="pg-head">
   <div><span class="pg-kicker">Akuntansi</span><h1>Pencairan dana</h1>
     <p>Cocokkan setiap pencairan dari payment gateway dan marketplace dengan pesanan yang sudah dibayar. Selisihnya tercatat sebagai biaya.</p></div>
-  <div class="dp-actions"><a class="btn" href="{% url 'merchant-payout-template' %}" data-no-soft>{% icon "download" %} Template CSV pencairan</a></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-marketplace-adjustments' %}">{% icon "swap" %} Selisih &amp; klaim marketplace</a><a class="btn" href="{% url 'merchant-payout-template' %}" data-no-soft>{% icon "download" %} Template CSV pencairan</a></div>
 </div>
 
 {% if summary %}<div class="notice {% if summary.errors %}warn{% else %}ok{% endif %}">{% icon "check-circle" %}<span><b>Hasil impor:</b> {{ summary.created }} pencairan dicatat ({{ summary.net|rp }} masuk rekening) · {{ summary.duplicates }} sudah pernah dicatat{% if summary.errors %} · <b>{{ summary.errors|length }}</b> ditolak{% endif %}

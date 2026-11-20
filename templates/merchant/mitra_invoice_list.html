@@ -1,90 +1,28 @@
-{% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Invoice Mitra — {{ partner.name }}{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penjualan mitra · {{ partner.name }}{% endblock %}
 {% block content %}
+<nav class="dp-crumb"><a href="{% url 'settlement-partner-detail' partner.id %}">{{ partner.name }}</a> › <span>Penjualan mitra</span></nav>
+<div class="pg-head"><div><span class="pg-kicker">Mitra</span><h1>Penjualan mitra · {{ partner.name }}</h1>
+  <p>Penjualan yang dilaporkan mitra ini. Dibukukan (pendapatan, HPP, piutang ke mitra) saat ditagih lewat settlement.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'settlement-list' %}?partner={{ partner.id }}">Lihat settlement</a>
+    <a class="btn" href="{% url 'settlement-new' %}?partner={{ partner.id }}">{% icon "receipt" %} Buat settlement</a>
+    <a class="btn-primary" href="{% url 'mitra-invoice-new' partner.id %}">{% icon "plus" %} Catat penjualan</a></div></div>
 
-<div class="flex items-start justify-between mb-6">
-  <div>
-    <a href="{% url 'settlement-partner-detail' partner.id %}" class="text-xs text-indigo-600 hover:text-indigo-800 mb-2 inline-block">← {{ partner.name }}</a>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">MITRA</p>
-    <h1 class="text-2xl font-bold text-gray-900">Invoice Mitra — {{ partner.name }}</h1>
-    <p class="text-sm text-gray-500 mt-1">Riwayat penjualan yang dilaporkan oleh mitra ini.</p>
-  </div>
-  <a href="{% url 'mitra-invoice-new' partner.id %}"
-     class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
-    {% icon "plus" %} Tambah Invoice
-  </a>
+<div class="tiles">
+  <div class="tile accent"><small>Total penjualan mitra</small><strong>{{ revenue|rp }}</strong><span>Semua laporan mitra ini</span></div>
+  <div class="tile"><small>Jumlah laporan</small><strong>{{ order_count }}</strong><span>Pesanan penjualan mitra</span></div>
 </div>
 
-{# Summary cards #}
-<div class="grid grid-cols-2 gap-4 mb-6">
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan Mitra</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Invoice</p>
-    <p class="text-2xl font-bold text-gray-900">{{ order_count }}</p>
-  </div>
-</div>
-
-{# Invoice table #}
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-gray-100">
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tanggal</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">No. Invoice</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pembeli / Keterangan</th>
-        <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status Tagihan</th>
-        <th class="px-4 py-3"></th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for order in orders %}
-      <tr class="hover:bg-gray-50 transition-colors">
-        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ order.created_at|date:"d M Y" }}</td>
-        <td class="px-4 py-3">
-          <span class="font-mono text-xs font-semibold text-indigo-600">{{ order.invoice_number|default:"—" }}</span>
-        </td>
-        <td class="px-4 py-3">
-          <div class="text-gray-800 font-medium">{{ order.customer_name }}</div>
-          {% if order.delivery_notes %}<div class="text-xs text-gray-400 truncate max-w-xs">{{ order.delivery_notes }}</div>{% endif %}
-        </td>
-        <td class="px-4 py-3 text-right font-semibold text-gray-900">Rp{{ order.total|floatformat:"0g" }}</td>
-        <td class="px-4 py-3">
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-            {% if order.abshop_billing_status == 'paid' %}bg-green-100 text-green-700
-            {% elif order.abshop_billing_status == 'billed' %}bg-blue-100 text-blue-700
-            {% else %}bg-amber-100 text-amber-700{% endif %}">
-            {{ order.get_abshop_billing_status_display }}
-          </span>
-        </td>
-        <td class="px-4 py-3 text-right">
-          <a href="{% url 'merchant-orders' %}?q={{ order.invoice_number }}" class="text-xs text-indigo-600 hover:text-indigo-800">Detail →</a>
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="6" class="px-4 py-10 text-center text-gray-400 text-sm">
-          Belum ada invoice untuk mitra ini.
-          <a href="{% url 'mitra-invoice-new' partner.id %}" class="text-indigo-600 hover:text-indigo-800 ml-1">Tambah invoice pertama →</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
+<section class="panel"><header><h2>Riwayat penjualan</h2><small>{{ order_count }} laporan</small></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Nomor</th><th>Pembeli / keterangan</th><th class="num">Total</th><th>Status tagihan</th><th></th></tr></thead><tbody>
+  {% for order in orders %}<tr>
+    <td>{{ order.created_at|date:"d M Y" }}</td>
+    <td><a href="{% url 'merchant-order-detail' order.id %}"><b>{{ order.invoice_number|default:"–" }}</b></a></td>
+    <td>{{ order.customer_name }}{% if order.delivery_notes %}<small>{{ order.delivery_notes|truncatechars:80 }}</small>{% endif %}</td>
+    <td class="num"><b>{{ order.total|rp }}</b></td>
+    <td><span class="pill {% if order.abshop_billing_status == 'paid' %}pill-paid{% elif order.abshop_billing_status == 'billed' %}pill-info{% else %}pill-pending{% endif %}">{{ order.get_abshop_billing_status_display }}</span></td>
+    <td data-no-row><a href="{% url 'merchant-order-detail' order.id %}">Detail →</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="dp-empty">Belum ada penjualan untuk mitra ini. <a href="{% url 'mitra-invoice-new' partner.id %}">Catat penjualan pertama →</a></td></tr>{% endfor %}
+  </tbody></table></div></section>
 {% include "storefront/pagination.html" %}
-
-<div class="mt-6 flex gap-3">
-  <a href="{% url 'settlement-new' %}?partner={{ partner.id }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-indigo-200 text-indigo-600 text-sm font-semibold hover:bg-indigo-50 transition-colors">
-    Buat Settlement dari Invoice ini →
-  </a>
-  <a href="{% url 'settlement-list' %}?partner={{ partner.id }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors">
-    Lihat Settlement →
-  </a>
-</div>
-
 {% endblock %}

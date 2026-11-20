@@ -79,6 +79,13 @@ def _invoice_void(store, p, actor):
     audit_log(store, actor, "invoice.voided", invoice, total=invoice.total, approved=True)
 
 
+def _invoice_writeoff(store, p, actor):
+    from apps.tax.models import Invoice
+    from apps.tax.writeoff import write_off_invoice
+    invoice = Invoice.objects.get(pk=p["invoice_id"], store=store)
+    write_off_invoice(invoice, date=datetime.date.fromisoformat(p["date"]), reason=p["reason"], actor=actor)
+
+
 def _journal(store, p, actor):
     from .ledger import post_journal
     from .models import CostCenter
@@ -115,6 +122,7 @@ def _pos_shift_variance(store, p, actor):
 
 
 EXECUTORS = {"bill_payment": _bill_payment, "bill_void": _bill_void, "invoice_void": _invoice_void,
+    "invoice_writeoff": _invoice_writeoff,
     "journal": _journal, "expense": _expense, "pos_shift_variance": _pos_shift_variance}
 
 

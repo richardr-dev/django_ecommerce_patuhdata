@@ -126,7 +126,7 @@ from .models import (
     ReturnRequest,
     ShippingMethod,
 )
-from .onboarding import setup_steps
+from .onboarding import books_setup_steps, setup_steps
 from .pricing import calculate_price
 from .refunds import RefundError, create_refund_request, execute_refund, record_manual_refund
 from .sales import active_sale_offers, offer_sold_quantity
@@ -1145,6 +1145,7 @@ def merchant_dashboard(request):
     from apps.accounting.todo import todo_items
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
         books=_books_summary(request, store, today),
+        books_setup=(lambda steps: steps if not all(x.done for x in steps) else [])(books_setup_steps(store)),
         finance_todo=todo_items(store, today, request.user), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,

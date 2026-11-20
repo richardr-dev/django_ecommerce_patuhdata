@@ -186,8 +186,12 @@ def merchant_credit_note_detail(request, note_id):
             messages.success(request, "Nota kredit dibatalkan dan jurnalnya dibalik.")
         return redirect("merchant-credit-note-detail", note.pk)
     journal = entries_for(store, [("credit_note", note.pk)])
+    from apps.accounting.ledger import REFUNDS, control_tie
+    # Retur penjualan in the books must equal the note's subtotal (nothing once it is voided).
+    ledger_tie = control_tie(journal, REFUNDS, 0 if note.status == CreditNote.STATUS_VOID else note.subtotal,
+        label="Retur penjualan", document_label="nilai nota (sebelum PPN)")
     return render(request, "merchant/credit_note_detail.html", _merchant_context(request, store,
-        note=note, items=note.items.all(), journal=journal, can_edit=_can_edit(request, store),
+        note=note, items=note.items.all(), journal=journal, ledger_tie=ledger_tie, can_edit=_can_edit(request, store),
         audit=audit_trail(store, note)))
 
 
@@ -212,8 +216,10 @@ def merchant_receive_payment(request):
     if request.method == "POST" and (customer or buyer):
         try:
             by_id = {str(inv.pk): inv for inv in invoices}
-            allocations = [(by_id[key[6:]], _amount(value)) for key, value in request.POST.items()
-                if key.startswith("alloc_") and key[6:] in by_id and value.strip()]
+            def _part(name):
+                value = request.POST.get(name, "").strip()
+                return _amount(value) if value else Decimal(0)
+            allocations = [(inv, _part(f"alloc_{key}"), _part(f"pph_{key}")) for key, inv in by_id.items()]
             receipt = receipts.receive_payment(store, customer=customer, buyer_name=buyer,
                 date=_date(request.POST.get("date"), timezone.localdate()),
                 amount=_amount(request.POST.get("amount")),
@@ -231,7 +237,7 @@ def merchant_receive_payment(request):
     customers = Customer.objects.filter(store=store).order_by("name")[:500]
     return render(request, "merchant/receive_payment.html", _merchant_context(request, store,
         customer=customer, buyer=buyer, invoices=invoices, customers=customers, banks=_banks(store),
-        methods=[m for m in InvoicePayment.METHOD_CHOICES if m[0] not in {"credit", "cod"}],
+        methods=[m for m in InvoicePayment.METHOD_CHOICES if m[0] not in {"credit", "cod", "writeoff"}],
         credit=receipts.credit_balance(store, customer, buyer) if (customer or buyer) else 0,
         owed=sum((i.amount_due for i in invoices), Decimal(0)),
         today=timezone.localdate().isoformat(), post=request.POST))

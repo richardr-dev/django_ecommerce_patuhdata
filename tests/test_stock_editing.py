@@ -55,3 +55,20 @@ class StockEditingTests(TestCase):
             "target_id": self.product.id, "stock": 7, "safety_stock": 0, "reason": "Stok awal"})
         self.assertEqual(InventoryLevel.objects.get(product=self.product).on_hand, 7)
         self.assertNotContains(self.seller.get("/books/stock/"), "Produk belum punya stok")
+
+    def test_saving_without_dimensions_still_saves_stock(self):
+        """A post missing Panjang/Lebar/Tinggi used to be refused silently, so stock never saved."""
+        data = {"name": "Kopi", "slug": "kopi", "sku": "KOPI", "price": "50000", "is_active": "on",
+            "preorder_days": 1, "stock": 7}
+        reply = self.seller.post(self.url, data)
+        self.assertEqual(reply.status_code, 302)
+        self.assertEqual(InventoryLevel.objects.get(product=self.product).on_hand, 7)
+
+    def test_every_required_product_field_is_on_the_page(self):
+        """A required field the page has no input for refuses every save without the user seeing why."""
+        for url in (self.url, "/books/setup/products/new/"):
+            page = self.seller.get(url)
+            html = page.content.decode()
+            missing = [name for name, field in page.context["form"].fields.items()
+                if field.required and f'name="{page.context["form"][name].html_name}"' not in html]
+            self.assertEqual(missing, [], url)

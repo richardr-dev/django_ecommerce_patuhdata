@@ -26,6 +26,15 @@
 </div>
 {% endif %}
 
+{% if books and books_setup %}
+<section class="panel">
+  <header><div><h2>Siapkan pembukuan</h2><p>Selesaikan langkah ini agar angka di buku besar bisa dipercaya.</p></div></header>
+  <div class="grid gap-1 p-3 md:grid-cols-2">
+    {% for step in books_setup %}<a class="flex items-center gap-3 rounded-2xl p-3 hover:bg-blue-50" href="{{ step.url }}"><span class="pill {% if step.done %}pill-paid{% else %}pill-pending{% endif %}">{% if step.done %}Selesai{% else %}Belum{% endif %}</span><span><b class="block text-sm">{{ step.title }}</b><small class="text-slate-500">{{ step.hint }}</small></span></a>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <div class="tiles">
   <div class="tile{% if not books %} accent{% endif %}"><small>Penjualan hari ini</small><strong>Rp{{ today_net|floatformat:"0g" }}</strong><span>{% if today_refunds %}Setelah refund Rp{{ today_refunds|floatformat:"0g" }}{% else %}Pesanan yang sudah dibayar{% endif %}</span></div>
   <div class="tile"><small>Pesanan hari ini</small><strong>{{ today_orders }}</strong><span>Rata-rata Rp{{ today_aov|floatformat:"0g" }}</span></div>

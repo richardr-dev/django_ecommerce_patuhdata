@@ -167,6 +167,7 @@
         </div>
         {% if invoice.status != 'void' and amount_due > 0 %}
         <button type="button" class="btn-primary btn-block" style="margin-top:14px" data-open="pay-dialog">{% icon "cash" %} Catat pembayaran</button>
+        <button type="button" class="btn btn-block" style="margin-top:8px" data-open="writeoff-dialog">Hapus piutang</button>
         {% endif %}
       </div>
     </section>
@@ -197,7 +198,8 @@
       <ul class="timeline">
         <li><strong>Invoice diterbitkan</strong><small>{{ invoice.issued_on|date:"d M Y" }} · Rp{{ invoice.total|floatformat:"0g" }}</small></li>
         {% for pmt in payments %}
-        <li class="ok"><strong><span>Pembayaran diterima</span><span>Rp{{ pmt.amount|floatformat:"0g" }}</span></strong>
+        <li class="ok"><strong><span>{% if pmt.method == "writeoff" %}Piutang dihapus{% else %}Pembayaran diterima{% endif %}</span><span>Rp{{ pmt.amount|floatformat:"0g" }}</span></strong>
+          {% if pmt.withheld %}<small>Diterima Rp{{ pmt.received|floatformat:"0g" }} · PPh dipotong pembeli Rp{{ pmt.withheld|floatformat:"0g" }}</small>{% endif %}
           <small>{{ pmt.paid_on|date:"d M Y" }} · {{ pmt.get_method_display }}{% if pmt.reference %} · {{ pmt.reference }}{% endif %}</small>
           {% if pmt.note %}<small>{{ pmt.note }}</small>{% endif %}</li>
         {% endfor %}
@@ -209,27 +211,7 @@
       </ul>
     </section>
 
-    <section class="dp-card">
-      <header><h2>Jurnal</h2><small>Buku besar</small></header>
-      {% for entry in journal %}
-      <table class="journal">
-        <colgroup><col><col class="c-debit"><col class="c-credit"></colgroup>
-        <caption>{{ entry.memo }}{% if entry.reverses_id %}<span class="tag">pembalikan</span>{% elif entry.superseded %}<span class="tag">dibatalkan</span>{% endif %}<small>{{ entry.date|date:"d M Y" }}</small></caption>
-        <tbody>
-        {% for line in entry.rows %}
-          <tr>
-            <td class="{% if line.credit %}credit-name{% endif %}"><small>{{ line.account.code }}</small>{{ line.account.name }}</td>
-            <td class="amt">{% if line.debit %}Rp{{ line.debit|floatformat:"0g" }}{% endif %}</td>
-            <td class="amt">{% if line.credit %}Rp{{ line.credit|floatformat:"0g" }}{% endif %}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      {% if forloop.last %}<p class="dp-help" style="padding:0 18px 14px">Debit di kolom kiri, kredit di kanan (menjorok).</p>{% endif %}
-      {% empty %}
-      <p class="dp-empty">Belum masuk buku besar.{% if order.payment_transactions.exists %} Penjualan ini dicatat saat pembayaran diproses.{% endif %}</p>
-      {% endfor %}
-    </section>
+    {% include "merchant/_journal_card.html" %}
 
     <section class="dp-card dp-links">
       <a href="{% url 'merchant-order-detail' order.id %}"><span>Pesanan {{ order.invoice_number|default:"terkait" }}</span><small>{{ order.get_status_display }} →</small></a>
@@ -243,6 +225,20 @@
   </aside>
 </div>
 
+{# ── Write off the balance ───────────────────────────────────────────── #}
+<dialog id="writeoff-dialog" class="pd-dialog" aria-labelledby="writeoff-title">
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="action" value="writeoff">
+    <header><h2 id="writeoff-title">Hapus piutang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <p class="dp-help">Sisa tagihan <b>Rp{{ amount_due|floatformat:"0g" }}</b> dikeluarkan dari piutang usaha karena pembeli tidak akan membayar. Diambil dari cadangan kerugian piutang lebih dulu; sisanya menjadi beban piutang tak tertagih. Bisa dibatalkan dengan membatalkan pembayaran ini.</p>
+      <label class="field"><span>Tanggal penghapusan</span><input type="date" name="date" value="{{ today }}" required></label>
+      <label class="field"><span>Alasan</span><input type="text" name="reason" maxlength="200" required placeholder="Contoh: pembeli tidak dapat dihubungi, pailit"></label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Hapus piutang</button></footer>
+  </form>
+</dialog>
+
 {# ── Record a payment ────────────────────────────────────────────────── #}
 <dialog id="pay-dialog" class="pd-dialog" aria-labelledby="pay-title">
   <form method="post">
@@ -250,11 +246,12 @@
     <header><h2 id="pay-title">Catat pembayaran</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
     <div>
       <label class="field"><span>Jumlah diterima</span>
-        <input type="number" name="amount" value="{{ amount_due|floatformat:0 }}" min="1" max="{{ amount_due|floatformat:0 }}" step="1" required></label>
+        <input type="number" name="amount" value="{{ amount_due|floatformat:0 }}" min="0" step="1" required></label>
+      <label class="field"><span>PPh dipotong pembeli <em>(opsional)</em></span><input type="text" inputmode="numeric" name="withheld" data-rupiah value="0"><small class="dp-help">Isi bila pembeli memotong PPh 23 atau 4(2) dan memberi bukti potong. Jumlah diterima + potongan = yang melunasi invoice.</small></label>
       <div class="field-row">
         <label class="field"><span>Tanggal bayar</span><input type="date" name="paid_on" value="{{ today }}" required></label>
         <label class="field"><span>Metode</span>
-          <select name="method">{% for code, label in payment_methods %}{% if code != 'credit' %}<option value="{{ code }}"{% if code == 'transfer' %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></label>
+          <select name="method">{% for code, label in payment_methods %}{% if code != 'credit' and code != 'writeoff' %}<option value="{{ code }}"{% if code == 'transfer' %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></label>
       </div>
       {% if banks %}<label class="field"><span>Masuk ke rekening</span><select name="bank_account"><option value="">Kas utama</option>{% for b in banks %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>{% endif %}
       <label class="field"><span>No. referensi <em>(opsional)</em></span><input type="text" name="reference" maxlength="120" placeholder="No. transfer atau kode transaksi"></label>

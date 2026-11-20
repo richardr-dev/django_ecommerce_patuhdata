@@ -220,185 +220,23 @@ def merchant_import(request):
 
 @login_required(login_url="/login/")
 def merchant_sales(request):
-    """Unified sales dashboard — all channels combined: Lakuin, Shopee, Tokopedia, etc."""
+    """Ringkasan penjualan: every channel together for a period (``channels/sales_summary.py``)."""
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | roles("sales.view"))
-
-    from datetime import date, timedelta
-    from decimal import Decimal
-
-    from django.db.models import Count, Sum
-    from django.db.models.functions import TruncDate, TruncMonth
-    from django.utils import timezone
-
-    from apps.orders.models import Order, OrderItem
-
-    REVENUE_STATUSES = {"paid", "confirmed", "allocated", "picking",
-                        "packed", "shipped", "delivered", "completed",
-                        "refund_requested", "partially_refunded", "refunded"}
-
-    # --- Date range filter ---
-    today = timezone.localdate()
-    date_from_raw = request.GET.get("date_from", "")
-    date_to_raw = request.GET.get("date_to", "")
-    try:
-        date_from = date.fromisoformat(date_from_raw) if date_from_raw else today - timedelta(days=29)
-    except ValueError:
-        date_from = today - timedelta(days=29)
-    try:
-        date_to = date.fromisoformat(date_to_raw) if date_to_raw else today
-    except ValueError:
-        date_to = today
-
-    channel_filter = request.GET.get("channel", "")
-
-    base_qs = Order.objects.filter(store=store, status__in=REVENUE_STATUSES)
-    if channel_filter:
-        base_qs = base_qs.filter(channel=channel_filter)
-
-    period_qs = base_qs.filter(created_at__date__gte=date_from, created_at__date__lte=date_to)
-
-    # --- Summary cards ---
-    totals = period_qs.aggregate(
-        revenue=Sum("total"), orders=Count("id"), customers=Count("phone", distinct=True),
-        discount=Sum("discount"), shipping=Sum("shipping_cost"),
-    )
-    revenue = totals["revenue"] or Decimal(0)
-    order_count = totals["orders"] or 0
-    aov = revenue / order_count if order_count else Decimal(0)
-
-    # --- Channel breakdown ---
-    channel_rows = (period_qs
-        .values("channel")
-        .annotate(revenue=Sum("total"), orders=Count("id"),
-                  customers=Count("phone", distinct=True))
-        .order_by("-revenue"))
-    channel_label_map = dict(Order.CHANNELS)
-    for row in channel_rows:
-        row["label"] = channel_label_map.get(row["channel"], row["channel"])
-        row["pct"] = round(float(row["revenue"] / revenue * 100), 1) if revenue else 0
-
-    # --- Daily trend (bar chart data) ---
-    daily = list(period_qs
-        .annotate(day=TruncDate("created_at"))
-        .values("day")
-        .annotate(revenue=Sum("total"), orders=Count("id"))
-        .order_by("day"))
-    peak = max((r["revenue"] for r in daily), default=Decimal(0))
-    for row in daily:
-        row["pct"] = round(float(row["revenue"] / peak * 100), 1) if peak else 0
-
-    # --- Monthly trend ---
-    monthly = list(base_qs
-        .annotate(month=TruncMonth("created_at"))
-        .values("month")
-        .annotate(revenue=Sum("total"), orders=Count("id"))
-        .order_by("-month")[:12])
-    monthly_peak = max((r["revenue"] for r in monthly), default=Decimal(0))
-    for row in monthly:
-        row["pct"] = round(float(row["revenue"] / monthly_peak * 100), 1) if monthly_peak else 0
-
-    # --- Top products ---
-    top_products = list(
-        OrderItem.objects.filter(order__in=period_qs)
-        .values("name")
-        .annotate(units=Sum("quantity"), revenue=Sum("line_total"))
-        .order_by("-revenue")[:10])
-
-    # --- Import batches in period ---
-    recent_batches = (ImportBatch.objects
-        .filter(store=store, imported_at__date__gte=date_from, imported_at__date__lte=date_to)
-        .select_related("channel")
-        .order_by("-imported_at")[:10])
-
-    # --- Recent orders ---
-    recent_orders = (Order.objects.filter(store=store)
-        .filter(created_at__date__gte=date_from, created_at__date__lte=date_to)
-        .order_by("-created_at")
-        .prefetch_related("items")[:15])
-
-    # --- Channel choices for filter ---
-    channel_choices = [(ch, channel_label_map.get(ch, ch)) for ch in
-                       Order.objects.filter(store=store)
-                       .values_list("channel", flat=True).distinct().order_by("channel")]
-
-    return render(request, "merchant/sales.html", _merchant_context(request, store,
-        # Filters
-        date_from=date_from, date_to=date_to,
-        channel_filter=channel_filter, channel_choices=channel_choices,
-        # Summary
-        revenue=revenue, order_count=order_count, aov=aov,
-        unique_customers=totals["customers"] or 0,
-        total_discount=totals["discount"] or Decimal(0),
-        # Charts
-        channel_rows=list(channel_rows),
-        daily=daily, monthly=monthly,
-        # Lists
-        top_products=top_products,
-        recent_batches=recent_batches,
-        recent_orders=recent_orders,
-    ))
+    from .sales_summary import summary
+    data = summary(store, request.GET)
+    data["recent_batches"] = (ImportBatch.objects.filter(store=store, imported_at__date__gte=data["date_from"],
+        imported_at__date__lte=data["date_to"]).select_related("channel").order_by("-imported_at")[:10])
+    return render(request, "merchant/sales.html", _merchant_context(request, store, **data))
 
 
 @login_required(login_url="/login/")
 def merchant_sales_stats(request):
-    """htmx partial — summary cards + channel breakdown for the sales dashboard."""
+    """htmx partial: the summary tiles and channel split of the same period."""
     store = _staff_store(request)
     _require_roles(request, store, CHANNEL_ROLES | {"viewer"})
-
-    from datetime import date, timedelta
-    from decimal import Decimal
-
-    from django.db.models import Count, Sum
-    from django.utils import timezone
-
-    from apps.orders.models import Order
-
-    REVENUE_STATUSES = {"paid", "confirmed", "allocated", "picking",
-                        "packed", "shipped", "delivered", "completed",
-                        "refund_requested", "partially_refunded", "refunded"}
-
-    today = timezone.localdate()
-    date_from_raw = request.GET.get("date_from", "")
-    date_to_raw = request.GET.get("date_to", "")
-    try:
-        date_from = date.fromisoformat(date_from_raw) if date_from_raw else today - timedelta(days=29)
-    except ValueError:
-        date_from = today - timedelta(days=29)
-    try:
-        date_to = date.fromisoformat(date_to_raw) if date_to_raw else today
-    except ValueError:
-        date_to = today
-
-    channel_filter = request.GET.get("channel", "")
-    base_qs = Order.objects.filter(store=store, status__in=REVENUE_STATUSES)
-    if channel_filter:
-        base_qs = base_qs.filter(channel=channel_filter)
-    period_qs = base_qs.filter(created_at__date__gte=date_from, created_at__date__lte=date_to)
-
-    totals = period_qs.aggregate(
-        revenue=Sum("total"), orders=Count("id"), customers=Count("phone", distinct=True),
-        discount=Sum("discount"),
-    )
-    revenue = totals["revenue"] or Decimal(0)
-    order_count = totals["orders"] or 0
-    aov = revenue / order_count if order_count else Decimal(0)
-
-    channel_rows = (period_qs
-        .values("channel")
-        .annotate(revenue=Sum("total"), orders=Count("id"))
-        .order_by("-revenue"))
-    channel_label_map = dict(Order.CHANNELS)
-    for row in channel_rows:
-        row["label"] = channel_label_map.get(row["channel"], row["channel"])
-        row["pct"] = round(float(row["revenue"] / revenue * 100), 1) if revenue else 0
-
-    return render(request, "merchant/sales_stats_partial.html", {
-        "revenue": revenue, "order_count": order_count, "aov": aov,
-        "unique_customers": totals["customers"] or 0,
-        "total_discount": totals["discount"] or Decimal(0),
-        "channel_rows": list(channel_rows),
-    })
+    from .sales_summary import summary
+    return render(request, "merchant/sales_stats_partial.html", summary(store, request.GET, detail=False))
 
 
 @login_required(login_url="/login/")
@@ -523,7 +361,7 @@ def merchant_sales_invoices(request):
 
     from urllib.parse import urlencode
     filter_query = urlencode([(key, value) for key in KEYS
-        for value in (values(params, key) if key == "channel" else [params.get(key, "")]) if value])
+        for value in (values(params, key) if key in ("channel", "mitra") else [params.get(key, "")]) if value])
 
     chip_rows = (_Inv.objects.filter(store=store).exclude(status__in=(_Inv.STATUS_DRAFT,
         _Inv.STATUS_VOID)).values("order__channel").annotate(n=Count("id")).order_by("-n"))
@@ -531,6 +369,13 @@ def merchant_sales_invoices(request):
         r["order__channel"], r["order__channel"]), "count": r["n"],
         "active": r["order__channel"] in channel_filter} for r in chip_rows]
     channel_total = sum(chip["count"] for chip in channel_chips)
+    mitra_filter = {int(v) for v in values(params, "mitra") if v.isdigit()}
+    mitra_chips = [{"id": r["order__consignment_partner"], "label": r["order__consignment_partner__name"],
+        "count": r["n"], "active": r["order__consignment_partner"] in mitra_filter}
+        for r in _Inv.objects.filter(store=store, order__consignment_partner__isnull=False)
+        .exclude(status__in=(_Inv.STATUS_DRAFT, _Inv.STATUS_VOID))
+        .values("order__consignment_partner", "order__consignment_partner__name")
+        .annotate(n=Count("id")).order_by("order__consignment_partner__name")]
 
     from .invoice_filters import date_range
     start, end, _label = date_range(params, today)
@@ -545,7 +390,7 @@ def merchant_sales_invoices(request):
         date_to=params.get("date_to") or (end.isoformat() if end and not params.get("range") else ""),
         min_total=params.get("min_total", ""), max_total=params.get("max_total", ""),
         query=params.get("q", "").strip(), filter_query=filter_query,
-        channel_chips=channel_chips, channel_total=channel_total,
+        channel_chips=channel_chips, channel_total=channel_total, mitra_chips=mitra_chips,
         channel_choices=channel_choices, status_choices=status_choices,
         revenue=revenue, order_count=order_count, outstanding=outstanding,
         overdue_total=overdue_total, paid_total=paid_total,
@@ -675,16 +520,42 @@ def merchant_invoice_detail(request, invoice_id):
                 method = request.POST.get("method", "transfer")
                 reference = request.POST.get("reference", "")[:120]
                 note = request.POST.get("note", "")[:200]
+                withheld = Decimal(request.POST.get("withheld", "0").replace(".", "").replace(",", "") or "0")
                 from apps.accounting.bank import bank_accounts
                 bank = next((b for b in bank_accounts(store)
                     if str(b.pk) == request.POST.get("bank_account")), None)
                 record_payment(invoice, amount, paid_on, method, reference, note, request.user,
-                    bank_account=bank)
+                    bank_account=bank, withheld=withheld)
                 from apps.shops.audit import log as audit_log
                 audit_log(store, request.user, "invoice.paid", invoice, amount=amount, method=method)
                 messages.success(request, "Pembayaran berhasil dicatat.")
             except Exception as exc:
                 messages.error(request, f"Gagal: {exc}")
+            return redirect("merchant-invoice-detail", invoice_id=invoice.id)
+
+        if action == "writeoff":
+            import datetime
+            from apps.accounting import approvals
+            from apps.tax.services import InvoiceError
+            from apps.tax.writeoff import write_off_invoice
+            reason = request.POST.get("reason", "")
+            try:
+                when = datetime.date.fromisoformat(request.POST.get("date", "")) if request.POST.get("date") else datetime.date.today()
+            except ValueError:
+                messages.error(request, "Isi tanggal penghapusan dengan benar.")
+                return redirect("merchant-invoice-detail", invoice_id=invoice.id)
+            if approvals.required(store, "invoice_writeoff", invoice.amount_due, request.user):
+                approvals.submit(store, "invoice_writeoff", invoice.amount_due,
+                    f"Hapus piutang invoice {invoice.number}", {"invoice_id": str(invoice.pk),
+                    "date": when.isoformat(), "reason": reason}, request.user, subject=invoice)
+                messages.info(request, "Penghapusan piutang ini perlu persetujuan orang lain. Sudah diajukan di menu Persetujuan.")
+            else:
+                try:
+                    write_off_invoice(invoice, date=when, reason=reason, actor=request.user)
+                except InvoiceError as error:
+                    messages.error(request, str(error))
+                else:
+                    messages.success(request, "Piutang invoice dihapus.")
             return redirect("merchant-invoice-detail", invoice_id=invoice.id)
 
         if action == "void":
@@ -726,6 +597,11 @@ def merchant_invoice_detail(request, invoice_id):
         + [("payment", tx.pk) for tx in order.payment_transactions.all()]
         + [("refund", refund.pk) for refund in order.refunds.all()])
     paid_pct = min(100, int((amount_paid + credited) * 100 / invoice.total)) if invoice.total else 0
+    from apps.accounting.ledger import RECEIVABLE, control_tie
+    ledger_tie = None   # does Piutang usaha in the books equal what the invoice says is owed?
+    if not credit_notes_off_ledger(credit_notes):
+        ledger_tie = control_tie(journal, RECEIVABLE, 0 if invoice.status == Invoice.STATUS_VOID else amount_due,
+            label="Piutang usaha")
     from datetime import date as _date
 
     from apps.accounting.attachments import for_record as attachment_list
@@ -749,9 +625,15 @@ def merchant_invoice_detail(request, invoice_id):
         credit_notes=credit_notes, banks=bank_accounts(store),
         credit_available=max(credit_balance(store, order.customer, invoice.buyer_name), 0),
         amount_paid=amount_paid, amount_due=amount_due, paid_pct=paid_pct,
-        today=today, journal=journal,
+        today=today, journal=journal, ledger_tie=ledger_tie,
         payment_methods=InvoicePayment.METHOD_CHOICES,
     ))
+
+
+def credit_notes_off_ledger(notes):
+    """A refund taken off the marketplace payout credits Piutang marketplace, not Piutang usaha."""
+    from apps.tax.models import CreditNote
+    return any(note.excess_action == CreditNote.EXCESS_PLATFORM for note in notes)
 
 
 @login_required(login_url="/login/")

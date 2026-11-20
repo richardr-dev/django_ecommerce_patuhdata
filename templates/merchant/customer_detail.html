@@ -30,163 +30,50 @@
   </div>
 </div>
 
-{# KPI cards #}
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Total belanja</p>
-    <p class="text-xl font-bold text-gray-900">Rp{{ lifetime_spend|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Pesanan dibayar</p>
-    <p class="text-xl font-bold text-gray-900">{{ order_count }}</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Rata-rata per pesanan</p>
-    <p class="text-xl font-bold text-gray-900">Rp{{ average_order|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Terakhir belanja</p>
-    <p class="text-sm font-bold text-gray-900">
-      {% if days_since is not None %}
-        {% if days_since == 0 %}Hari ini
-        {% elif days_since == 1 %}Kemarin
-        {% else %}{{ days_since }} hari lalu{% endif %}
-      {% else %}—{% endif %}
-    </p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-xs text-gray-500 mb-1">Piutang</p>
-    <p class="text-xl font-bold {% if overdue_receivable %}text-red-600{% else %}text-gray-900{% endif %}">Rp{{ receivable|floatformat:"0g" }}</p>
-    {% if open_invoice_count %}<a class="text-xs text-indigo-600" href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{{ open_invoice_count }} invoice terbuka{% if overdue_receivable %} · Rp{{ overdue_receivable|floatformat:"0g" }} terlambat{% endif %} →</a>{% else %}<p class="text-xs text-gray-400">Tidak ada tagihan terbuka</p>{% endif %}
-  </div>
+{# KPI tiles #}
+<div class="tiles">
+  <div class="tile accent"><small>Total belanja</small><strong>Rp{{ lifetime_spend|floatformat:"0g" }}</strong><span>{{ order_count }} pesanan dibayar</span></div>
+  <div class="tile"><small>Rata-rata per pesanan</small><strong>Rp{{ average_order|floatformat:"0g" }}</strong></div>
+  <div class="tile"><small>Terakhir belanja</small><strong>{% if days_since is not None %}{% if days_since == 0 %}Hari ini{% elif days_since == 1 %}Kemarin{% else %}{{ days_since }} hari lalu{% endif %}{% else %}—{% endif %}</strong></div>
+  <div class="tile"><small>Piutang</small><strong{% if overdue_receivable %} style="color:var(--ds-bad,#c92a2a)"{% endif %}>Rp{{ receivable|floatformat:"0g" }}</strong>
+    {% if open_invoice_count %}<span><a href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{{ open_invoice_count }} invoice terbuka{% if overdue_receivable %} · Rp{{ overdue_receivable|floatformat:"0g" }} terlambat{% endif %} →</a></span>{% else %}<span>Tidak ada tagihan terbuka</span>{% endif %}</div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+  <section class="panel"><header><h2>Channel pembelian</h2></header>
+    {% if channel_breakdown %}<table class="tbl"><tbody>{% for row in channel_breakdown %}<tr><td><span class="pill pill-info">{{ row.label }}</span></td><td class="num"><b>Rp{{ row.revenue|floatformat:"0g" }}</b><br><small class="muted">{{ row.orders }} pesanan</small></td></tr>{% endfor %}</tbody></table>
+    {% else %}<p class="dp-empty">Belum ada data.</p>{% endif %}</section>
 
-  {# Channel breakdown #}
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Channel Pembelian</h3>
-    {% if channel_breakdown %}
-    <div class="space-y-3">
-      {% for row in channel_breakdown %}
-      <div class="flex items-center justify-between text-sm">
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-          {% if row.channel == 'tokopedia' %}bg-green-100 text-green-700
-          {% elif row.channel == 'shopee' %}bg-orange-100 text-orange-700
-          {% elif row.channel == 'tiktok_shop' %}bg-gray-900 text-white
-          {% elif row.channel == 'manual' %}bg-pink-100 text-pink-700
-          {% elif row.channel == 'web' %}bg-indigo-100 text-indigo-700
-          {% elif row.channel == 'abshop' %}bg-blue-100 text-blue-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">
-          {{ row.label }}
-        </span>
-        <div class="text-right">
-          <p class="font-semibold text-gray-800">Rp{{ row.revenue|floatformat:"0g" }}</p>
-          <p class="text-xs text-gray-400">{{ row.orders }} pesanan</p>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-gray-400 py-4 text-center">Belum ada data.</p>
-    {% endif %}
-  </div>
+  <section class="panel"><header><h2>Produk favorit</h2></header>
+    {% if top_products %}<table class="tbl"><tbody>{% for p in top_products %}<tr><td><b>{{ p.name }}</b>{% if p.sku %}<br><small class="muted">{{ p.sku }}</small>{% endif %}</td><td class="num"><b>{{ p.units }}×</b><br><small class="muted">Rp{{ p.revenue|floatformat:"0g" }}</small></td></tr>{% endfor %}</tbody></table>
+    {% else %}<p class="dp-empty">Belum ada data.</p>{% endif %}</section>
 
-  {# Top products #}
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Produk Favorit</h3>
-    {% if top_products %}
-    <div class="space-y-2">
-      {% for p in top_products %}
-      <div class="flex items-center justify-between text-sm">
-        <div class="flex-1 min-w-0 mr-3">
-          <p class="font-medium text-gray-800 truncate">{{ p.name }}</p>
-          {% if p.sku %}<p class="text-xs font-mono text-gray-400">{{ p.sku }}</p>{% endif %}
-        </div>
-        <div class="text-right flex-shrink-0">
-          <p class="font-semibold text-gray-800">{{ p.units }}×</p>
-          <p class="text-xs text-gray-400">Rp{{ p.revenue|floatformat:"0g" }}</p>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-gray-400 py-4 text-center">Belum ada data.</p>
-    {% endif %}
-  </div>
-
-  {# Info panel #}
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Info Pelanggan</h3>
-
-    {% if customer.company_name %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">Perusahaan</p>
-      <p class="text-sm font-semibold text-gray-800">{{ customer.company_name }}</p>
-    </div>
-    {% endif %}
-
-    {% if customer.npwp %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">NPWP</p>
-      <p class="text-sm font-mono text-gray-700">{{ customer.npwp }}</p>
-    </div>
-    {% endif %}
-
-    {% if customer.address %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">Alamat</p>
-      <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{{ customer.address }}</p>
-    </div>
-    {% endif %}
-
-    {% if customer.channel_buyer %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">Marketplace</p>
-      <p class="text-sm font-medium text-gray-800">{{ customer.channel_buyer.get_platform_display }}</p>
-      <p class="text-xs font-mono text-gray-400">{{ customer.channel_buyer.external_id }}</p>
-    </div>
-    {% if customer.channel_buyer.city %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">Kota / Provinsi</p>
-      <p class="text-sm text-gray-700">{{ customer.channel_buyer.city }}, {{ customer.channel_buyer.province }}</p>
-    </div>
-    {% endif %}
-    {% endif %}
-    <div>
-      <p class="text-xs text-gray-400 mb-1">Bergabung</p>
-      <p class="text-sm text-gray-700">{{ customer.created_at|date:"d M Y" }}</p>
-    </div>
-
-    <div class="pt-2 border-t border-gray-100">
-      <p class="text-xs text-gray-400 mb-1">Ketentuan penjualan</p>
-      <p class="text-sm text-gray-700">{% if customer.payment_terms_days != None %}Termin {{ customer.payment_terms_days }} hari{% else %}Termin ditanyakan tiap invoice{% endif %} · {% if customer.price_list %}Daftar harga <b>{{ customer.price_list.name }}</b>{% else %}Harga jual (retail){% endif %}</p>
-      {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
-      <form method="post" action="{% url 'merchant-customer-terms' customer.id %}" class="mt-2 grid gap-2">{% csrf_token %}
-        <label class="field"><span>Termin pembayaran (hari)</span><input name="payment_terms_days" type="number" min="0" max="365" value="{{ customer.payment_terms_days|default_if_none:'' }}" placeholder="kosong: ditanyakan"></label>
-        <label class="field"><span>Daftar harga</span><select name="price_list"><option value="">Harga jual (retail)</option>{% for pl in price_lists %}<option value="{{ pl.id }}"{% if customer.price_list_id == pl.id %} selected{% endif %}>{{ pl.name }}{% if pl.discount_percent %} (−{{ pl.discount_percent|floatformat:"-2" }}%){% endif %}</option>{% endfor %}</select></label>
-        <button class="btn">Simpan ketentuan</button>
-      </form>
-      {% endif %}
-    </div>
-
+  <section class="panel"><header><h2>Info pelanggan</h2></header>
+    <dl class="dp-meta" style="grid-template-columns:1fr;margin:0;border-radius:16px;overflow:hidden">
+      {% if customer.company_name %}<div><dt>Perusahaan</dt><dd>{{ customer.company_name }}</dd></div>{% endif %}
+      {% if customer.npwp %}<div><dt>NPWP</dt><dd>{{ customer.npwp }}</dd></div>{% endif %}
+      {% if customer.address %}<div><dt>Alamat</dt><dd style="white-space:pre-line">{{ customer.address }}</dd></div>{% endif %}
+      {% if customer.channel_buyer %}<div><dt>Marketplace</dt><dd>{{ customer.channel_buyer.get_platform_display }}<br><small class="muted">{{ customer.channel_buyer.external_id }}</small></dd></div>
+        {% if customer.channel_buyer.city %}<div><dt>Kota / provinsi</dt><dd>{{ customer.channel_buyer.city }}, {{ customer.channel_buyer.province }}</dd></div>{% endif %}{% endif %}
+      <div><dt>Bergabung</dt><dd>{{ customer.created_at|date:"d M Y" }}</dd></div>
+      <div><dt>Ketentuan penjualan</dt><dd>{% if customer.payment_terms_days != None %}Termin {{ customer.payment_terms_days }} hari{% else %}Termin ditanyakan tiap invoice{% endif %} · {% if customer.price_list %}Daftar harga <b>{{ customer.price_list.name }}</b>{% else %}Harga jual (retail){% endif %}</dd></div>
+    </dl>
     {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
-    <form method="post" action="{% url 'merchant-customer-tags' customer.id %}" class="pt-2 border-t border-gray-100">
-      {% csrf_token %}
-      <label class="block text-xs font-medium text-gray-600 mb-1">Tag</label>
-      <div class="flex gap-2">
-        <input class="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-               name="tags" value="{{ customer.tags }}" placeholder="mis. reseller, vip">
-        <button class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 transition-colors">Simpan</button>
-      </div>
+    <form method="post" action="{% url 'merchant-customer-terms' customer.id %}" style="display:grid;gap:10px;margin-top:12px">{% csrf_token %}
+      <label class="field"><span>Termin pembayaran (hari)</span><input name="payment_terms_days" type="number" min="0" max="365" value="{{ customer.payment_terms_days|default_if_none:'' }}" placeholder="kosong: ditanyakan"></label>
+      <label class="field"><span>Daftar harga</span><select name="price_list"><option value="">Harga jual (retail)</option>{% for pl in price_lists %}<option value="{{ pl.id }}"{% if customer.price_list_id == pl.id %} selected{% endif %}>{{ pl.name }}{% if pl.discount_percent %} (−{{ pl.discount_percent|floatformat:"-2" }}%){% endif %}</option>{% endfor %}</select></label>
+      <button class="btn">Simpan ketentuan</button>
+    </form>
+    <form method="post" action="{% url 'merchant-customer-tags' customer.id %}" style="display:grid;gap:10px;margin-top:12px">{% csrf_token %}
+      <label class="field"><span>Tag</span><input name="tags" value="{{ customer.tags }}" placeholder="mis. reseller, vip"></label>
+      <button class="btn">Simpan tag</button>
     </form>
     {% endif %}
-  </div>
-
+  </section>
 </div>
 
 {# Order history #}
-<form id="hist-filter" method="get" class="mb-4 grid gap-3"
+<form id="hist-filter" method="get" class="panel" style="display:grid;gap:12px"
   hx-get="{% url 'merchant-customer-detail' customer.id %}" hx-target="#cust-history" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace"
   hx-trigger="input changed delay:350ms from:#hist-q, change">
   <div class="flex flex-wrap items-center gap-2">

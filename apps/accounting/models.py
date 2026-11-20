@@ -532,7 +532,7 @@ class ApprovalPolicy(models.Model):
     """From what amount an action needs a second person to approve it (maker and checker)."""
     KINDS = [("bill_payment", "Pembayaran tagihan supplier"), ("expense", "Biaya operasional"),
         ("journal", "Jurnal manual"), ("invoice_void", "Pembatalan invoice"),
-        ("bill_void", "Pembatalan tagihan supplier"), ("pos_shift_variance", "Selisih kas tutup shift kasir")]
+        ("bill_void", "Pembatalan tagihan supplier"), ("invoice_writeoff", "Hapus piutang invoice"), ("pos_shift_variance", "Selisih kas tutup shift kasir")]
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="approval_policies")
     kind = models.CharField(max_length=20, choices=KINDS)
     threshold = models.DecimalField(max_digits=16, decimal_places=2, default=0,
@@ -953,3 +953,44 @@ class LoanInstallment(models.Model):
     @property
     def amount(self):
         return self.principal + self.interest
+
+
+class MarketplaceAdjustment(models.Model):
+    """A charge or a claim between the company and a marketplace (or gateway) that is not in an imported payout:
+    extra ongkir Shopee takes back, a shipping overcharge to be refunded, a compensation Shopee owes. It changes
+    what the marketplace owes the company (Piutang marketplace, 1300) against the account chosen, and stays open
+    until it is settled, either deducted from or added to a payout, or paid by transfer."""
+    CHARGE, CLAIM = "charge", "claim"
+    KINDS = [(CHARGE, "Potongan dari marketplace (kita yang menanggung)"),
+        (CLAIM, "Klaim ke marketplace (marketplace yang membayar)")]
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="marketplace_adjustments")
+    provider = models.CharField(max_length=40)
+    kind = models.CharField(max_length=10, choices=KINDS)
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="+")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    date = models.DateField()
+    reference = models.CharField(max_length=120, blank=True,
+        help_text="Nomor pesanan, nomor tiket, atau periode laporan marketplace.")
+    description = models.CharField(max_length=300)
+    voided = models.BooleanField(default=False)
+    settled_on = models.DateField(null=True, blank=True)
+    settled_bank = models.ForeignKey(BankAccount, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    settled_note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="marketplace_adjustment_positive")]
+
+    @property
+    def signed(self):
+        """What it adds to the marketplace's debt to the company: a claim adds, a charge takes away."""
+        return self.amount if self.kind == self.CLAIM else -self.amount
+
+    @property
+    def is_open(self):
+        return not self.voided and self.settled_on is None
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.provider} {self.amount}"

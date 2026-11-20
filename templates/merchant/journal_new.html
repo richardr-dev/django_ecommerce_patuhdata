@@ -6,21 +6,26 @@
   <p>{% if opening %}Masukkan saldo akun saat mulai memakai pembukuan di sini, misalnya kas, utang, dan modal pemilik. Total debit harus sama dengan total kredit.{% else %}Untuk transaksi yang tidak berasal dari penjualan, tagihan, atau biaya: setoran modal, penyusutan, dan koreksi. Total debit harus sama dengan total kredit.{% endif %}</p></div>
   <nav class="kind-switch"><a href="?" class="{% if not opening %}on{% endif %}">Jurnal umum</a><a href="?opening=1" class="{% if opening %}on{% endif %}">Saldo awal</a></nav></div>
 {% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup: gunakan tanggal setelahnya.</span></div>{% endif %}
-<form method="post" data-unsaved class="panel">{% csrf_token %}
+<form method="post" enctype="multipart/form-data" data-unsaved class="panel">{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
   <div class="form-grid">
-    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label>
-    <label class="field" style="grid-column:span 3"><span>Keterangan</span><input name="memo" maxlength="300" required value="{% if opening %}Saldo awal{% endif %}" placeholder="mis. Setoran modal pemilik"></label>
-    {% if cost_centers %}<label class="field"><span>Pusat biaya</span><select name="cost_center"><option value="">Seluruh usaha</option>{% for c in cost_centers %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}</select></label>{% endif %}
+    <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ posted.date|default:today }}" required></label>
+    <label class="field" style="grid-column:span 3"><span>Keterangan</span><input name="memo" maxlength="300" required value="{% if posted %}{{ posted.memo }}{% elif opening %}Saldo awal{% endif %}" placeholder="mis. Setoran modal pemilik"></label>
+    {% if cost_centers %}<label class="field"><span>Pusat biaya</span><select name="cost_center"><option value="">Seluruh usaha</option>{% for c in cost_centers %}<option value="{{ c.pk }}"{% if posted.cost_center == c.pk|stringformat:"s" %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>{% endif %}
   </div>
   <div class="scroll-x"><table class="editor">
     <thead><tr><th>Akun</th><th class="num" style="width:180px">Debit</th><th class="num" style="width:180px">Kredit</th><th class="x"></th></tr></thead>
-    <tbody id="rows">{% for n in "123456" %}<tr>
+    <tbody id="rows">{% for row in posted.rows %}<tr>
+      <td><select name="account[]" aria-label="Akun"><option value="">— pilih akun —</option>{% for account in accounts %}<option value="{{ account.code }}"{% if account.code == row.account %} selected{% endif %}>{{ account.code }} · {{ account.name }}</option>{% endfor %}</select></td>
+      <td class="num"><input name="debit[]" inputmode="decimal" data-rupiah placeholder="0" data-debit value="{{ row.debit }}"></td>
+      <td class="num"><input name="credit[]" inputmode="decimal" data-rupiah placeholder="0" data-credit value="{{ row.credit }}"></td>
+      <td class="x"><button type="button" data-remove aria-label="Hapus baris">×</button></td></tr>{% endfor %}{% for n in blank_rows %}<tr>
       <td><select name="account[]" aria-label="Akun"><option value="">— pilih akun —</option>{% for account in accounts %}<option value="{{ account.code }}">{{ account.code }} · {{ account.name }}</option>{% endfor %}</select></td>
-      <td class="num"><input name="debit[]" inputmode="decimal" data-rupiah placeholder="0" data-debit></td>
-      <td class="num"><input name="credit[]" inputmode="decimal" data-rupiah placeholder="0" data-credit></td>
+      <td class="num"><input name="debit[]" inputmode="decimal" data-rupiah placeholder="0" data-debit value=""></td>
+      <td class="num"><input name="credit[]" inputmode="decimal" data-rupiah placeholder="0" data-credit value=""></td>
       <td class="x"><button type="button" data-remove aria-label="Hapus baris">×</button></td></tr>{% endfor %}</tbody></table></div>
   <div class="editor-foot"><button type="button" class="add-line" id="add-line">+ Tambah baris</button>
     <div class="sum"><div><span>Total debit</span><span id="td">Rp0</span></div><div><span>Total kredit</span><span id="tc">Rp0</span></div><div class="grand"><span id="state">Selisih</span><span id="diff">Rp0</span></div></div></div>
+  <label class="field" style="margin-top:14px"><span>Bukti pendukung (opsional)</span><input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp"><small>PDF atau foto, maksimal 5 MB. Bisa menambah lampiran lain di halaman jurnal.</small></label>
   <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-accounting' %}">Batal</a><button class="btn-primary" id="save">{% icon "check" %} Catat jurnal</button></div>
 </form>
 <script>

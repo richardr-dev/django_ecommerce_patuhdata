@@ -191,24 +191,35 @@ def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None,
 
 
 def record_payment(invoice, amount, paid_on, method, reference="", note="", user=None,
-        bank_account=None, receipt=None):
-    """Record a payment against an invoice, book it, and update the invoice status."""
+        bank_account=None, receipt=None, withheld=0):
+    """Record a payment against an invoice, book it, and update the invoice status.
+
+    `amount` is the money received; `withheld` is PPh the buyer kept back (bukti potong). Together they
+    settle the invoice, so the receivable falls by both and only `amount` reaches the bank."""
     from apps.accounting.ledger import LedgerError
 
     from .posting import booked_by_invoice, post_invoice, post_invoice_payment, refresh_status
 
+    if method == InvoicePayment.METHOD_WRITEOFF:
+        raise InvoiceError("Gunakan Hapus piutang untuk menghapus sisa tagihan.")
     amount = Decimal(str(amount))
-    if amount <= 0:
+    withheld = Decimal(str(withheld or 0))
+    if withheld < 0:
+        raise InvoiceError("PPh yang dipotong tidak boleh negatif.")
+    if amount <= 0 and not withheld:
         raise InvoiceError("Jumlah pembayaran harus lebih dari nol.")
+    if amount < 0:
+        raise InvoiceError("Jumlah pembayaran harus lebih dari nol.")
+    settles = amount + withheld
     if invoice.status in {Invoice.STATUS_DRAFT, Invoice.STATUS_VOID}:
         raise InvoiceError("Invoice ini tidak bisa menerima pembayaran.")
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
-        if amount > invoice.amount_due:
+        if settles > invoice.amount_due:
             raise InvoiceError("Pembayaran melebihi sisa tagihan "
                 f"(Rp{invoice.amount_due:,.0f}).".replace(",", "."))
         payment = InvoicePayment.objects.create(
-            invoice=invoice, paid_on=paid_on, amount=amount,
+            invoice=invoice, paid_on=paid_on, amount=settles, withheld=withheld,
             method=method, reference=reference, note=note, recorded_by=user,
             bank_account=bank_account, receipt=receipt,
         )

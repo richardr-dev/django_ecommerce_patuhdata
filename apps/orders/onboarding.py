@@ -46,3 +46,25 @@ def _warehouse_url(store):
     warehouse = store.warehouses.filter(is_active=True).order_by("priority", "id").first()
     return (reverse("merchant-entity-edit", args=["warehouses", warehouse.id]) if warehouse
         else reverse("merchant-entity-new", args=["warehouses"]))
+
+
+def books_setup_steps(store):
+    """The accountant's setup list for Beranda: what the books need before the numbers can be trusted.
+    Each step is ticked from real data, like the shop list above."""
+    from apps.accounting import opening
+    from apps.accounting.models import BankAccount
+    from apps.tax.models import Invoice, TaxProfile
+
+    profile = TaxProfile.objects.filter(store=store).first()
+    return [
+        SetupStep("Lengkapi profil pajak", "NPWP, alamat, dan status PKP tercetak di setiap invoice.",
+            bool(profile and profile.npwp), reverse("merchant-tax"), "Isi profil pajak"),
+        SetupStep("Catat rekening kas & bank", "Satu rekening per bank, kas tunai, atau e-wallet.",
+            BankAccount.objects.filter(store=store, is_active=True).exists(),
+            reverse("merchant-bank-accounts"), "Tambah rekening"),
+        SetupStep("Isi saldo awal", "Saldo kas, piutang, dan utang saat Anda mulai memakai pembukuan.",
+            opening.existing(store) is not None, reverse("merchant-opening-balances"), "Isi saldo awal"),
+        SetupStep("Terbitkan invoice pertama", "Penjualan langsung tercatat di buku besar.",
+            Invoice.objects.filter(order__store=store).exists(), reverse("merchant-invoice-new"),
+            "Buat invoice"),
+    ]

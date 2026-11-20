@@ -139,24 +139,7 @@
       </ul>
     </section>
 
-    <section class="dp-card">
-      <header><h2>Jurnal</h2><small>Buku besar</small></header>
-      {% for entry in journal %}
-      <table class="journal">
-        <colgroup><col><col class="c-debit"><col class="c-credit"></colgroup>
-        <caption>{{ entry.memo }}{% if entry.reverses_id %}<span class="tag">pembalikan</span>{% elif entry.superseded %}<span class="tag">dibatalkan</span>{% endif %}<small>{{ entry.date|date:"d M Y" }}</small></caption>
-        <tbody>
-        {% for line in entry.rows %}
-          <tr><td class="{% if line.credit %}credit-name{% endif %}"><small>{{ line.account.code }}</small>{{ line.account.name }}</td>
-            <td class="amt">{% if line.debit %}Rp{{ line.debit|floatformat:"0g" }}{% endif %}</td><td class="amt">{% if line.credit %}Rp{{ line.credit|floatformat:"0g" }}{% endif %}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      {% if forloop.last %}<p class="dp-help" style="padding:0 18px 14px">Debit di kolom kiri, kredit di kanan (menjorok).</p>{% endif %}
-      {% empty %}
-      <p class="dp-empty">Belum masuk buku besar.</p>
-      {% endfor %}
-    </section>
+    {% include "merchant/_journal_card.html" %}
     {% include "merchant/_attachments_card.html" %}
   {% include "merchant/_audit_card.html" %}
   </aside>

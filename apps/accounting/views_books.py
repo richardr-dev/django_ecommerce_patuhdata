@@ -276,10 +276,15 @@ def merchant_cash_detail(request, txn_id):
         return redirect("merchant-cash-detail", txn.pk)
     journal = entries_for(store, [("cash", txn.pk)])
     matched = BankStatementLine.objects.filter(matched_line__entry__in=journal).first()
+    from .ledger import control_tie
+    # The account the money left or reached must move by the transaction's total (nothing once voided).
+    expected = 0 if txn.voided else (txn.total if txn.kind == CashTransaction.RECEIVE else -txn.total)
+    ledger_tie = control_tie(journal, txn.bank_account.account.code, expected, label=txn.bank_account.name,
+        document_label="nilai transaksi")
     return render(request, "merchant/cash_detail.html", _merchant_context(request, store,
         attachments=attachment_list(store, "cash", txn.pk), attach_kind="cash", attach_id=txn.pk,
         audit=audit_trail(store, txn),
-        txn=txn, items=txn.lines.select_related("account"), journal=journal, matched=matched,
+        txn=txn, items=txn.lines.select_related("account"), journal=journal, matched=matched, ledger_tie=ledger_tie,
         can_edit=_can_edit(request, store)))
 
 
@@ -360,7 +365,7 @@ def merchant_journal_detail(request, entry_id):
         entry=entry, rows=rows, total=total, source_label=label, source_url=url,
         audit=audit_trail(store, entry), attachments=attachment_list(store, "journal", entry.pk),
         attach_kind="journal", attach_id=entry.pk,
-        reversal=reversal, can_reverse=entry.source_type == "journal" and not entry.superseded
+        reversal=reversal, can_edit=_can_edit(request, store), can_reverse=entry.source_type == "journal" and not entry.superseded
             and _can_edit(request, store), today=timezone.localdate().isoformat()))
 
 

@@ -128,6 +128,55 @@ def invoice_vs_journal(store, today, ledger):
         url=reverse("merchant-sales-invoices"), action="Buka invoice", items=wrong[:10])
 
 
+def invoice_open_balance(store, today, ledger):
+    """Invoice by invoice: the Piutang the books hold for it against what it says is still owed. The
+    receivable check below compares only the totals; this one names the invoice that is off."""
+    from collections import defaultdict
+
+    from apps.tax.models import CreditNote, Invoice, InvoicePayment
+    from apps.tax.posting import UNPOSTED_STATUSES, booked_by_invoice
+    invoices = [i for i in Invoice.objects.filter(store=store).exclude(status__in=UNPOSTED_STATUSES)
+        .select_related("order") if booked_by_invoice(i)]
+    if not invoices:
+        return Check("invoice_open_balance", "Piutang tiap invoice sesuai", OK, "Belum ada invoice yang dijurnal.")
+    owner = {("invoice", str(i.pk)): i.pk for i in invoices}
+    ids = [i.pk for i in invoices]
+    skipped = set()
+    for note in CreditNote.objects.filter(invoice_id__in=ids).exclude(status=CreditNote.STATUS_VOID):
+        owner[("credit_note", str(note.pk))] = note.invoice_id
+        if note.excess_action == CreditNote.EXCESS_PLATFORM:
+            skipped.add(note.invoice_id)   # the marketplace pays the buyer: not through Piutang usaha
+    for pay_id, inv_id in InvoicePayment.objects.filter(invoice_id__in=ids).values_list("pk", "invoice_id"):
+        owner[("invoice_payment", str(pay_id))] = inv_id
+    from apps.orders.models import PaymentTransaction, Refund
+    for pk, inv_id in PaymentTransaction.objects.filter(order__invoice__in=ids).values_list("pk", "order__invoice"):
+        owner[("payment", str(pk))] = inv_id
+    for pk, inv_id in Refund.objects.filter(order__invoice__in=ids).values_list("pk", "order__invoice"):
+        owner[("refund", str(pk))] = inv_id
+    moved = defaultdict(Decimal)
+    rows = JournalLine.objects.filter(entry__store=store, account__code=RECEIVABLE,
+        entry__source_type__in={t for t, _ in owner}).values_list(
+        "entry__source_type", "entry__source_id", "debit", "credit")
+    for source_type, source_id, debit, credit in rows:
+        inv_id = owner.get((source_type, source_id))
+        if inv_id is not None:
+            moved[inv_id] += debit - credit
+    wrong = []
+    for invoice in invoices:
+        if invoice.pk in skipped or invoice.pk not in moved:
+            continue
+        if abs(moved[invoice.pk] - invoice.amount_due) > TOLERANCE:
+            wrong.append(f"{invoice.number}: invoice {invoice.amount_due:,.0f}, buku {moved[invoice.pk]:,.0f}"
+                .replace(",", "."))
+    if not wrong:
+        return Check("invoice_open_balance", "Piutang tiap invoice sesuai", OK,
+            f"Sisa tagihan {len(moved)} invoice sama dengan piutangnya di buku besar.")
+    return Check("invoice_open_balance", "Ada invoice yang piutangnya tidak sama dengan sisa tagihan", WARN,
+        f"{len(wrong)} invoice berbeda: sisa tagihan di invoice tidak sama dengan piutangnya di buku besar. "
+        "Buka invoice untuk melihat jurnalnya.", url=reverse("merchant-sales-invoices"), action="Buka invoice",
+        items=wrong[:10])
+
+
 def invoice_paid_status(store, today, ledger):
     from apps.tax.posting import paid_elsewhere
     count = paid_elsewhere(store).count()
@@ -240,8 +289,10 @@ def cash_accounts(store, today, ledger):
 
 
 def held_by_providers(store, today, ledger):
+    from .marketplace_adjustments import open_total
     from .payouts import outstanding_by_provider
-    waiting = sum((row["total"] for row in outstanding_by_provider(store)), ZERO)
+    # Open selisih/klaim change what the marketplace owes until a payout or transfer settles them.
+    waiting = sum((row["total"] for row in outstanding_by_provider(store)), ZERO) + open_total(store)
     book = ledger.get(GATEWAY, ZERO) + ledger.get(MARKETPLACE, ZERO)
     check = _tie("providers", "Dana di gateway dan marketplace sama dengan yang belum cair", book,
         waiting, "Pembayaran belum dicairkan", url=reverse("merchant-payouts"),
@@ -637,7 +688,7 @@ def pos_variance_trend(store, today, ledger):
     return check
 
 
-CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_paid_status, receivable, payable,
+CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_open_balance, invoice_paid_status, receivable, payable,
     inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,

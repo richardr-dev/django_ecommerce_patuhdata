@@ -3,7 +3,7 @@
     laba komersial (ledger) + koreksi positif − koreksi negatif = laba fiskal → PKP (rounded down to
     thousands, never below zero) → PPh terutang at 22%, or with the Pasal 31E reduction (half the rate on the
     part of PKP that matches Rp4,8 miliar of turnover) when turnover is within Rp50 miliar → less credits
-    (PPh 22/23/25 already paid) = PPh 29 kurang/lebih bayar.
+    (PPh 22/23/25 already paid; PPh 23 withheld by buyers comes from the invoice payments) = PPh 29 kurang/lebih bayar.
 
 The corrections and credits are entered by the accountant (``FiscalAdjustment``): the worksheet never
 guesses what is deductible. It is a preparation aid, not a replacement for the tax advisor; individuals
@@ -47,6 +47,14 @@ def applicable(profile):
     return ""
 
 
+def buyer_withholdings(store, year):
+    """PPh that buyers withheld from their payments to us in ``year`` (``InvoicePayment.withheld``, booked to 1520):
+    a credit against this year's PPh badan, read from the books so it is never typed twice."""
+    from .models import Invoice, InvoicePayment
+    return list(InvoicePayment.objects.filter(invoice__store=store, paid_on__year=year, withheld__gt=0)
+        .exclude(invoice__status=Invoice.STATUS_VOID).select_related("invoice").order_by("paid_on", "id"))
+
+
 def worksheet(store, year):
     from datetime import date
 
@@ -58,12 +66,16 @@ def worksheet(store, year):
     positive = sum((r.amount for r in rows if r.kind == FiscalAdjustment.POSITIVE), ZERO)
     negative = sum((r.amount for r in rows if r.kind == FiscalAdjustment.NEGATIVE), ZERO)
     credits = sum((r.amount for r in rows if r.kind == FiscalAdjustment.CREDIT), ZERO)
+    withheld = buyer_withholdings(store, year)
+    buyer_withheld = sum((p.withheld for p in withheld), ZERO)
+    credits_total = credits + buyer_withheld
     fiscal = commercial + positive - negative
     pkp = max((fiscal / 1000).quantize(Decimal(1), ROUND_DOWN) * 1000, ZERO)
     tax, detail = tax_due(pkp, turnover)
     return {"year": year, "profile": profile, "not_applicable": applicable(profile), "commercial": commercial,
         "turnover": turnover, "rows": rows, "positive": positive, "negative": negative, "credits": credits,
-        "fiscal": fiscal, "pkp": pkp, "tax": tax, "detail": detail, "pph29": tax - credits,
+        "buyer_withheld": buyer_withheld, "buyer_withholdings": withheld, "credits_total": credits_total,
+        "fiscal": fiscal, "pkp": pkp, "tax": tax, "detail": detail, "pph29": tax - credits_total,
         "pph25_monthly": _round(tax / 12), "loss": -fiscal if fiscal < 0 else ZERO,
         "effective": round(tax / commercial * 100, 1) if commercial > 0 and tax else None,
         "facility": ZERO < turnover <= DISCOUNT_CEILING}

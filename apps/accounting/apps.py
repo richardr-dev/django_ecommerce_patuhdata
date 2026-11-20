@@ -6,4 +6,4 @@ class AccountingConfig(AppConfig):
     name = "apps.accounting"
 
     def ready(self):
-        from . import payables  # noqa: F401  registers its ledger backlog
+        from . import marketplace_adjustments, payables  # noqa: F401  register their ledger backlog

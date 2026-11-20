@@ -10,7 +10,7 @@
   <div class="tile"><small>Laba komersial</small><strong>{{ w.commercial|rp }}</strong><span>dari laba rugi {{ year }}</span></div>
   <div class="tile"><small>PKP</small><strong>{{ w.pkp|rp }}</strong><span>dibulatkan ke ribuan</span></div>
   <div class="tile accent"><small>PPh terutang</small><strong>{{ w.tax|rp }}</strong><span>{% if w.effective is not None %}{{ w.effective|floatformat:1 }}% dari laba komersial{% else %}tidak ada pajak terutang{% endif %}</span></div>
-  <div class="tile {% if w.pph29 > 0 %}warn{% endif %}"><small>PPh 29 {% if w.pph29 < 0 %}lebih bayar{% else %}kurang bayar{% endif %}</small><strong>{{ w.pph29|abs|rp }}</strong><span>setelah kredit pajak {{ w.credits|rp }}</span></div>
+  <div class="tile {% if w.pph29 > 0 %}warn{% endif %}"><small>PPh 29 {% if w.pph29 < 0 %}lebih bayar{% else %}kurang bayar{% endif %}</small><strong>{{ w.pph29|abs|rp }}</strong><span>setelah kredit pajak {{ w.credits_total|rp }}</span></div>
 </div>
 <section class="panel"><header><div><h2>Perhitungan</h2></div></header><div class="scroll-x"><table class="stmt"><tbody>
   <tr class="line"><td>Peredaran usaha (omzet) {{ year }}</td><td class="num">{{ w.turnover|rp }}</td></tr>
@@ -21,19 +21,24 @@
   <tr class="line"><td>Penghasilan kena pajak (PKP)</td><td class="num">{{ w.pkp|rp }}</td></tr>
   {% for label, base, rate in w.detail %}<tr class="line"><td>{{ label }}: {{ base|rp }} × {% widthratio rate 1 100 %}%</td><td class="num"></td></tr>{% endfor %}
   <tr class="total"><td>PPh terutang</td><td class="num">{{ w.tax|rp }}</td></tr>
-  <tr class="line"><td>Kredit pajak (PPh 22/23/25)</td><td class="num">({{ w.credits|rp }})</td></tr>
+  {% if w.buyer_withheld %}<tr class="line"><td>PPh dipotong pembeli (dari pembayaran invoice, akun 1520)</td><td class="num">({{ w.buyer_withheld|rp }})</td></tr>{% endif %}
+  <tr class="line"><td>Kredit pajak lain (PPh 22/23/25, diisi manual)</td><td class="num">({{ w.credits|rp }})</td></tr>
   <tr class="total bottom"><td>PPh 29 {% if w.pph29 < 0 %}lebih bayar{% else %}kurang bayar{% endif %}</td><td class="num">{{ w.pph29|rp }}</td></tr>
 </tbody></table></div>
 <div class="dp-card-body"><p class="dp-help" style="margin:0">{% if w.facility %}Fasilitas Pasal 31E: tarif 11% untuk bagian PKP yang setara omzet sampai {{ facility_note|rp }}, sisanya 22%; berlaku bila omzet sampai Rp50 miliar.{% else %}Omzet di atas Rp50 miliar: tarif 22% tanpa fasilitas.{% endif %}
   {% if w.loss %} Rugi fiskal {{ w.loss|rp }} dapat dikompensasikan sampai lima tahun berikutnya; catat sebagai koreksi negatif pada tahun yang memakainya.{% endif %}
   PPh 25 bulanan tahun depan (perkiraan, sebelum kredit PPh 22/23): <b>{{ w.pph25_monthly|rp }}</b>.</p></div></section>
 
-<section class="panel"><header><div><h2>Koreksi fiskal dan kredit pajak</h2><p>Contoh koreksi positif: biaya representasi tanpa daftar nominatif, sumbangan, denda pajak. Negatif: penghasilan yang sudah kena PPh final, kompensasi rugi. Kredit: PPh 25 yang disetor dan PPh 23 yang dipotong pihak lain.</p></div>
+<section class="panel"><header><div><h2>Koreksi fiskal dan kredit pajak</h2><p>Contoh koreksi positif: biaya representasi tanpa daftar nominatif, sumbangan, denda pajak. Negatif: penghasilan yang sudah kena PPh final, kompensasi rugi. Kredit: PPh 25 yang disetor dan PPh 22 yang dipungut. PPh 23 yang dipotong pembeli saat membayar invoice sudah dihitung otomatis; jangan dimasukkan lagi di sini.</p></div>
   {% if can_edit %}<button type="button" class="btn-primary" data-open="adj-dialog">{% icon "plus" %} Tambah baris</button>{% endif %}</header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Jenis</th><th>Keterangan</th><th class="num">Jumlah</th><th></th></tr></thead><tbody>
   {% for r in w.rows %}<tr><td><span class="pill {% if r.kind == 'credit' %}pill-paid{% elif r.kind == 'positive' %}pill-pending{% else %}pill-info{% endif %}">{{ r.get_kind_display|truncatechars:22 }}</span></td><td>{{ r.description }}</td><td class="num"><b>{{ r.amount|rp }}</b></td>
     <td class="num" data-no-row>{% if can_edit %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ r.pk }}"><input type="hidden" name="year" value="{{ year }}"><button class="btn btn-danger" data-confirm="Hapus baris ini dari lembar kerja?" data-confirm-ok="Hapus">Hapus</button></form>{% endif %}</td></tr>
   {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada koreksi atau kredit untuk {{ year }}.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if w.buyer_withholdings %}<section class="panel"><header><div><h2>PPh dipotong pembeli {{ year }}</h2><p>Dari pembayaran invoice yang dicatat dengan potongan PPh. Cocokkan dengan bukti potong yang Anda terima.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal bayar</th><th>Invoice</th><th>Pembeli</th><th>Referensi</th><th class="num">PPh dipotong</th></tr></thead><tbody>
+  {% for p in w.buyer_withholdings %}<tr><td>{{ p.paid_on|date:"d M Y" }}</td><td><a href="{% url 'merchant-invoice-detail' p.invoice.id %}"><b>{{ p.invoice.number }}</b></a></td><td>{{ p.invoice.buyer_name }}</td><td>{{ p.reference|default:"–" }}</td><td class="num"><b>{{ p.withheld|rp }}</b></td></tr>{% endfor %}
+  <tr><td colspan="4"><b>Jumlah</b></td><td class="num"><b>{{ w.buyer_withheld|rp }}</b></td></tr></tbody></table></div></section>{% endif %}
 {% if can_edit %}<dialog id="adj-dialog" class="pd-dialog" aria-labelledby="adj-title"><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="year" value="{{ year }}">
   <header><h2 id="adj-title">Tambah baris</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
     <label class="field"><span>Jenis</span><select name="kind">{% for key, label in kinds %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>

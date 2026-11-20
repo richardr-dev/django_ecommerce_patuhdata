@@ -8,6 +8,8 @@ import logging
 from django.db import transaction
 
 from apps.accounting.ledger import (
+    ALLOWANCE,
+    BAD_DEBT,
     CASH,
     COGS,
     CUSTOMER_CREDIT,
@@ -15,6 +17,7 @@ from apps.accounting.ledger import (
     EDC_CLEARING,
     INVENTORY,
     MARKETPLACE,
+    PPH_PREPAID,
     RECEIVABLE,
     ROUNDING,
     SALES,
@@ -66,6 +69,13 @@ def post_invoice(invoice, *, actor=None):
 
 def post_invoice_payment(payment, *, strict=False, actor=None):
     invoice = payment.invoice
+    if payment.method == InvoicePayment.METHOD_WRITEOFF:
+        from .writeoff import split
+        provision, expense = split(invoice.store, payment.amount)
+        return post_entry(invoice.store, date=payment.paid_on, strict=strict, actor=actor,
+            cost_center=invoice.cost_center, source=("invoice_payment", payment.pk),
+            memo=f"Hapus piutang invoice {invoice.number} · {payment.note}",
+            amounts={ALLOWANCE: provision, BAD_DEBT: expense, RECEIVABLE: -payment.amount})
     if payment.method == InvoicePayment.METHOD_CREDIT:
         received = CUSTOMER_CREDIT  # settled from the buyer's advance, not new money
     elif payment.method == InvoicePayment.METHOD_MARKETPLACE:
@@ -79,7 +89,8 @@ def post_invoice_payment(payment, *, strict=False, actor=None):
     return post_entry(invoice.store, date=payment.paid_on, strict=strict, actor=actor,
         cost_center=invoice.cost_center, source=("invoice_payment", payment.pk),
         memo=f"Pembayaran invoice {invoice.number} · {payment.get_method_display()}",
-        amounts={received: payment.amount, RECEIVABLE: -payment.amount})
+        amounts={received: payment.amount - payment.withheld, PPH_PREPAID: payment.withheld,
+            RECEIVABLE: -payment.amount})
 
 
 def status_for(invoice):

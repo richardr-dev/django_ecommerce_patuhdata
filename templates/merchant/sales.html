@@ -1,244 +1,52 @@
-{% extends "merchant/base.html" %}{% load icons %}
-{% block title %}Penjualan{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Ringkasan penjualan{% endblock %}
 {% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Ringkasan penjualan</h1>
+  <p>Semua channel dalam satu periode: invoice langsung, kasir, mitra, Shopee, Tokopedia, dan lainnya. Angka dari nilai pesanan dikurangi refund; laba menurut pembukuan ada di <a href="{% url 'merchant-profit-loss' %}">Laba rugi</a>.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-orders' %}">Semua pesanan</a><a class="btn-primary" href="{% url 'merchant-import' %}">{% icon "upload" %} Impor pesanan</a></div></div>
 
-<div class="bb-hero mb-5 flex flex-wrap items-end justify-between gap-4">
-  <div>
-    <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 mb-1">SALES</p>
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">Penjualan</h1>
-    <p class="text-sm text-gray-500">Semua channel — Toko Online, Shopee, Tokopedia, dan lainnya.</p>
-  </div>
-  <div class="flex items-center gap-3 mt-1">
-    <a class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors" href="{% url 'merchant-import' %}">{% icon "upload" %} Impor Pesanan</a>
-    <a class="text-sm text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-orders' %}">Semua pesanan →</a>
-  </div>
-</div>
-
-<div id="sales-content">
-
-{# ── Date + channel filter ─────────────────────────────────────────────── #}
-<form id="filter-form" method="get"
-      hx-get="{% url 'merchant-sales' %}"
-      hx-target="body"
-      hx-swap="innerHTML"
-      hx-push-url="true"
-      class="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-  <div class="flex items-center gap-2">
-    <label class="text-xs text-gray-500 font-medium">Dari</label>
-    <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
-           class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-  </div>
-  <div class="flex items-center gap-2">
-    <label class="text-xs text-gray-500 font-medium">Sampai</label>
-    <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
-           class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-  </div>
-  <select name="channel"
-          class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-    <option value="">Semua channel</option>
-    {% for code, label in channel_choices %}<option value="{{ code }}"{% if channel_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
-  </select>
-  <button class="px-4 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">Filter</button>
-  {% if channel_filter or date_from %}
-  <a class="text-sm text-gray-400 hover:text-gray-600" href="{% url 'merchant-sales' %}">Reset</a>
-  {% endif %}
+<form method="get" class="toolbar" aria-label="Filter ringkasan">
+  <label class="field"><span>Dari</span><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
+  <label class="field"><span>Sampai</span><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+  <label class="field"><span>Channel</span><select name="channel"><option value="">Semua channel</option>{% for code, label in channel_choices %}<option value="{{ code }}"{% if channel_filter == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <button class="btn-primary">Terapkan</button>
+  {% if channel_filter or request.GET.date_from or request.GET.date_to %}<a class="btn" href="{% url 'merchant-sales' %}">Atur ulang</a>{% endif %}
 </form>
 
-{# ── Summary cards ─────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Pendapatan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ revenue|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Jumlah Pesanan</p>
-    <p class="text-2xl font-bold text-gray-900">{{ order_count }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Rata-rata / Pesanan</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ aov|floatformat:"0g" }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Pelanggan Unik</p>
-    <p class="text-2xl font-bold text-gray-900">{{ unique_customers }}</p>
-  </div>
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Diskon</p>
-    <p class="text-2xl font-bold text-gray-900">Rp{{ total_discount|floatformat:"0g" }}</p>
-  </div>
+{% include "merchant/sales_stats_partial.html" %}
+
+<section class="panel"><header><div><h2>Tren harian</h2><p>{{ date_from|date:"d M" }} – {{ date_to|date:"d M Y" }}</p></div></header><div class="dp-card-body">
+  {% if daily %}<div class="bb-cols">{% for row in daily %}<div data-tip="{{ row.day|date:'d M' }}: {{ row.revenue|rp }} · {{ row.orders }} pesanan"><i style="height:{{ row.pct }}%"></i>{% if daily|length <= 31 %}<small>{{ row.day|date:"d" }}</small>{% endif %}</div>{% endfor %}</div>
+  {% else %}<p class="dp-empty">Belum ada penjualan pada periode ini.</p>{% endif %}
+</div></section>
+
+<div class="grid gap-5 lg:grid-cols-2">
+  <section class="panel !mb-0"><header><h2>Tren bulanan</h2><small>12 bulan terakhir</small></header><div class="dp-card-body">
+    {% for row in monthly %}<div class="bb-bar-row" data-tip="{{ row.month|date:'F Y' }}: {{ row.orders }} pesanan"><span>{{ row.month|date:"M Y" }}</span><div class="bb-bar"><i style="width:{{ row.pct }}%"></i></div><b>{{ row.revenue|rp }}</b></div>
+    {% empty %}<p class="dp-empty">Belum ada data bulanan.</p>{% endfor %}
+  </div></section>
+  <section class="panel !mb-0"><header><h2>Produk terlaris</h2><a class="btn" href="{% url 'merchant-sales-analytics' %}">Analitik lengkap</a></header>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Produk</th><th class="num">Unit</th><th class="num">Pendapatan</th></tr></thead><tbody>
+    {% for p in top_products %}<tr><td><b>{{ p.name }}</b>{% if p.sku %}<small>{{ p.sku }}</small>{% endif %}</td><td class="num">{{ p.units }}</td><td class="num"><b>{{ p.revenue|rp }}</b></td></tr>
+    {% empty %}<tr><td colspan="3" class="dp-empty">Belum ada produk terjual pada periode ini.</td></tr>{% endfor %}
+    </tbody></table></div></section>
 </div>
 
-{# ── Charts row ────────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+<section class="panel mt-5"><header><h2>Pesanan terbaru</h2><a class="btn" href="{% url 'merchant-orders' %}">Lihat semua</a></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Pembeli</th><th>Channel</th><th>Tanggal</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for o in recent_orders %}<tr>
+    <td><a href="{% url 'merchant-order-detail' o.id %}"><b>{% if o.invoice_number %}{{ o.invoice_number }}{% else %}{{ o.id|stringformat:"s"|slice:":8" }}{% endif %}</b></a></td>
+    <td>{{ o.customer_name }}{% if o.phone %}<small>{{ o.phone }}</small>{% endif %}</td>
+    <td><span class="pill pill-info">{{ o.get_channel_display }}</span></td>
+    <td>{{ o.created_at|date:"d M Y H:i" }}</td>
+    <td class="num"><b>{{ o.total|rp }}</b></td>
+    <td><span class="pill {% if o.status == 'paid' or o.status == 'completed' or o.status == 'delivered' %}pill-paid{% elif o.status == 'cancelled' or o.status == 'refunded' %}pill-overdue{% elif o.status == 'pending' %}pill-pending{% else %}pill-info{% endif %}">{{ o.get_status_display }}</span></td></tr>
+  {% empty %}<tr><td colspan="6" class="dp-empty">Belum ada pesanan pada periode ini.</td></tr>{% endfor %}
+  </tbody></table></div></section>
 
-  {# Daily trend — spans 2 cols #}
-  <div class="md:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <h2 class="text-sm font-semibold text-gray-700 mb-4">Tren Harian ({{ date_from|date:"d M" }} – {{ date_to|date:"d M Y" }})</h2>
-    {% if daily %}
-    <div class="flex items-end gap-px h-32 mb-2">
-      {% for row in daily %}
-      <div class="flex-1 bg-indigo-500 rounded-t hover:bg-indigo-700 transition-colors cursor-default"
-           style="height:{{ row.pct }}%;min-height:2px"
-           title="{{ row.day|date:'d M' }}: Rp{{ row.revenue|floatformat:"0g" }} · {{ row.orders }} pesanan"></div>
-      {% endfor %}
-    </div>
-    <div class="flex gap-px overflow-hidden">
-      {% for row in daily %}<span class="flex-1 text-center text-gray-400 overflow-hidden" style="font-size:10px">{{ row.day|date:"d/m" }}</span>{% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-gray-400 py-8 text-center">Belum ada data penjualan pada periode ini.</p>
-    {% endif %}
-  </div>
-
-  {# Channel breakdown #}
-  <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-    <h2 class="text-sm font-semibold text-gray-700 mb-4">Penjualan per Channel</h2>
-    {% if channel_rows %}
-    <div class="space-y-3">
-      {% for row in channel_rows %}
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-xs text-gray-700 font-medium">{{ row.label }}</span>
-          <span class="text-xs text-gray-500">{{ row.orders }} pst</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div class="h-full bg-indigo-500 rounded-full" style="width:{{ row.pct }}%"></div>
-          </div>
-          <span class="text-xs text-gray-700 font-medium w-20 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-gray-400 py-8 text-center">Belum ada data.</p>
-    {% endif %}
-  </div>
-
-</div>
-
-{# ── Monthly trend ─────────────────────────────────────────────────────── #}
-<div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-  <h2 class="text-sm font-semibold text-gray-700 mb-4">Tren Bulanan (12 bulan)</h2>
-  {% if monthly %}
-  <div class="space-y-2">
-    {% for row in monthly %}
-    <div class="flex items-center gap-3">
-      <span class="text-xs text-gray-500 w-16 flex-shrink-0">{{ row.month|date:"M Y" }}</span>
-      <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div class="h-full bg-indigo-400 rounded-full" style="width:{{ row.pct }}%"></div>
-      </div>
-      <span class="text-xs text-gray-700 w-24 text-right flex-shrink-0">Rp{{ row.revenue|floatformat:"0g" }}</span>
-      <span class="text-xs text-gray-400 w-8 text-right flex-shrink-0">{{ row.orders }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="text-sm text-gray-400 py-4 text-center">Belum ada data bulanan.</p>
-  {% endif %}
-</div>
-
-{# ── Bottom tables ─────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-
-  {# Top products #}
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-50">
-      <h2 class="text-sm font-semibold text-gray-700">Produk Terlaris</h2>
-    </div>
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50">
-          <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Produk</th>
-          <th class="text-right px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit</th>
-          <th class="text-right px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Pendapatan</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-        {% for p in top_products %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-5 py-3 text-gray-800">{{ p.name }}</td>
-          <td class="px-5 py-3 text-right text-gray-600">{{ p.units }}</td>
-          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ p.revenue|floatformat:"0g" }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="3" class="px-5 py-8 text-center text-sm text-gray-400">Belum ada data produk.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  {# Recent imports #}
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
-      <h2 class="text-sm font-semibold text-gray-700">Impor Terbaru</h2>
-      {% if recent_batches %}<a class="text-xs text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-sales-invoices' %}">Lihat semua →</a>{% endif %}
-    </div>
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50">
-          <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Platform</th>
-          <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">File</th>
-          <th class="text-right px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Pst</th>
-          <th class="text-right px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-        {% for b in recent_batches %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-5 py-3 font-medium text-gray-800">{{ b.channel.get_platform_display }}</td>
-          <td class="px-5 py-3 text-xs text-gray-500 truncate max-w-xs">{{ b.file_name|default:"—" }}</td>
-          <td class="px-5 py-3 text-right text-gray-600">{{ b.order_count }}</td>
-          <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ b.total_amount|floatformat:"0g" }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="4" class="px-5 py-8 text-center text-sm text-gray-400">Belum ada impor. <a class="text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-import' %}">Impor sekarang →</a></td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-</div>
-
-{# ── Recent orders ─────────────────────────────────────────────────────── #}
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-  <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
-    <h2 class="text-sm font-semibold text-gray-700">Pesanan Terbaru — Semua Channel</h2>
-    <a class="text-xs text-indigo-600 hover:text-indigo-800" href="{% url 'merchant-orders' %}">Lihat semua →</a>
-  </div>
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="bg-gray-50">
-        <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">No. Pesanan</th>
-        <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Pembeli</th>
-        <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Channel</th>
-        <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Tanggal</th>
-        <th class="text-right px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-        <th class="text-left px-5 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for o in recent_orders %}
-      <tr class="hover:bg-gray-50">
-        <td class="px-5 py-3">
-          <a class="text-indigo-600 hover:text-indigo-800 font-mono text-xs" href="{% url 'merchant-orders' %}?q={{ o.invoice_number }}">{{ o.invoice_number|default:o.id|stringformat:"s"|slice:":8" }}</a>
-        </td>
-        <td class="px-5 py-3">
-          <div class="font-medium text-gray-800">{{ o.customer_name }}</div>
-          <div class="text-xs text-gray-400">{{ o.phone }}</div>
-        </td>
-        <td class="px-5 py-3 text-gray-600">{{ o.get_channel_display }}</td>
-        <td class="px-5 py-3 text-xs text-gray-500">{{ o.created_at|date:"d M Y H:i" }}</td>
-        <td class="px-5 py-3 text-right font-medium text-gray-800">Rp{{ o.total|floatformat:"0g" }}</td>
-        <td class="px-5 py-3"><span class="badge {{ o.status }}">{{ o.get_status_display }}</span></td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="6" class="px-5 py-8 text-center text-sm text-gray-400">Belum ada pesanan pada periode ini.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-</div>{# /sales-content #}
-
+<section class="panel"><header><h2>Impor terbaru</h2><a class="btn" href="{% url 'merchant-import' %}">{% icon "upload" %} Impor</a></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Platform</th><th>File</th><th class="num">Pesanan</th><th class="num">Total</th><th>Diimpor</th></tr></thead><tbody>
+  {% for b in recent_batches %}<tr><td><b>{{ b.channel.get_platform_display }}</b></td><td>{{ b.file_name|default:"–" }}</td><td class="num">{{ b.order_count }}</td><td class="num"><b>{{ b.total_amount|rp }}</b></td><td>{{ b.imported_at|date:"d M Y H:i" }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="dp-empty">Belum ada impor pada periode ini. <a href="{% url 'merchant-import' %}">Impor file marketplace →</a></td></tr>{% endfor %}
+  </tbody></table></div></section>
 {% endblock %}

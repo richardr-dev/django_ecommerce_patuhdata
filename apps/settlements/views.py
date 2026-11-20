@@ -387,117 +387,89 @@ def mitra_invoice_list(request, partner_id):
 
 @login_required(login_url="/login/")
 def mitra_invoice_new(request, partner_id):
-    """Create a sell-through invoice for a Mitra partner."""
+    """Record what a mitra reports it sold (a sell-through order). Nothing is booked here: the settlement
+    that bills these orders books the revenue, HPP and Persediaan di mitra (``consignment.record_settlement_sales``)."""
     from decimal import Decimal, InvalidOperation
 
+    from django.db import transaction as db_transaction
+
+    from apps.accounting import idempotency
     from apps.catalog.models import Product
-    from apps.orders.models import OrderItem
+    from apps.orders.models import OrderItem, OrderStatusEvent
+
+    from .pricing import partner_price
 
     store = _staff_store(request)
     _require_roles(request, store, SETTLEMENT_ROLES)
     partner = get_object_or_404(ConsignmentPartner, id=partner_id, store=store)
+    products = list(Product.objects.filter(store=store, is_active=True).order_by("name"))
+    for product in products:
+        product.mitra_price = partner_price(partner, product) or product.price
 
-    products = Product.objects.filter(store=store, is_active=True).order_by("name")
+    def page(post=None, lines=()):
+        return render(request, "merchant/mitra_invoice_new.html", _merchant_context(request, store,
+            partner=partner, products=products, today=date.today().isoformat(), post=post or {},
+            post_lines=list(lines), idem_key=(post or {}).get("idem") or idempotency.new_key()))
 
-    if request.method == "POST":
-        try:
-            invoice_date_str = request.POST.get("invoice_date", "")
-            invoice_date = parse_date(invoice_date_str) if invoice_date_str else date.today()
-            buyer_name = request.POST.get("buyer_name", partner.name)[:120]
-            notes = request.POST.get("notes", "")[:300]
+    if request.method != "POST":
+        return page()
+    post = request.POST
+    typed = [{"sku": sku.strip(), "qty": qty, "price": price} for sku, qty, price in zip(
+        post.getlist("sku[]"), post.getlist("qty[]"), post.getlist("unit_price[]")) if sku.strip()]
 
-            skus = request.POST.getlist("sku[]")
-            qtys = request.POST.getlist("qty[]")
-            prices = request.POST.getlist("unit_price[]")
+    def number(text):
+        return Decimal((text or "0").replace(".", "").replace(",", ".").strip() or "0")
 
-            lines = []
-            subtotal = Decimal(0)
-            for sku, qty_str, price_str in zip(skus, qtys, prices):
-                sku = sku.strip()
-                if not sku:
-                    continue
-                try:
-                    qty = int(qty_str)
-                    unit_price = Decimal(price_str.replace(",", "").replace(".", ""))
-                except (ValueError, InvalidOperation):
-                    continue
-                if qty <= 0 or unit_price < 0:
-                    continue
-                product = Product.objects.filter(store=store, sku=sku).first()
-                if not product:
-                    # Try by name
-                    product = Product.objects.filter(store=store, name__iexact=sku).first()
-                if not product:
-                    messages.error(request, f"Produk dengan SKU '{sku}' tidak ditemukan.")
-                    return render(request, "merchant/mitra_invoice_new.html",
-                        _merchant_context(request, store, partner=partner, products=products))
-                line_total = unit_price * qty
-                subtotal += line_total
-                lines.append({"product": product, "sku": product.sku,
-                               "name": product.name, "qty": qty,
-                               "unit_price": unit_price, "line_total": line_total})
+    lines, subtotal = [], Decimal(0)
+    try:
+        for row in typed:
+            qty, unit_price = int(row["qty"]), number(row["price"])
+            if qty <= 0 or unit_price < 0:
+                raise ValueError
+            product = (Product.objects.filter(store=store, sku=row["sku"]).first()
+                or Product.objects.filter(store=store, name__iexact=row["sku"]).first())
+            if product is None:
+                messages.error(request, f"Produk dengan SKU '{row['sku']}' tidak ditemukan.")
+                return page(post, typed)
+            lines.append({"product": product, "qty": qty, "unit_price": unit_price, "line_total": unit_price * qty})
+            subtotal += unit_price * qty
+        discount = number(post.get("discount"))
+        invoice_date = parse_date(post.get("invoice_date", "")) or date.today()
+    except (ValueError, InvalidOperation):
+        messages.error(request, "Periksa jumlah, harga, diskon, dan tanggal: ada yang tidak valid.")
+        return page(post, typed)
+    if not lines:
+        messages.error(request, "Tambahkan minimal satu produk.")
+        return page(post, typed)
+    if discount < 0 or discount > subtotal:
+        messages.error(request, "Diskon tidak boleh negatif atau melebihi subtotal.")
+        return page(post, typed)
 
-            if not lines:
-                messages.error(request, "Tambahkan minimal satu produk.")
-                return render(request, "merchant/mitra_invoice_new.html",
-                    _merchant_context(request, store, partner=partner, products=products))
-
-            discount = Decimal(0)
-            try:
-                discount = Decimal(request.POST.get("discount", "0").replace(",", ""))
-            except InvalidOperation:
-                pass
-            subtotal_net = max(subtotal - discount, Decimal(0))
-
-            from django.db import transaction as db_transaction
-            with db_transaction.atomic():
-                from apps.orders.models import OrderStatusEvent
-                order = Order.objects.create(
-                    store=store,
-                    channel="abshop",
-                    order_type="reseller_sell_through",
-                    consignment_partner=partner,
-                    customer_name=buyer_name,
-                    phone=partner.contact_phone or "-",
-                    shipping_address="-",
-                    subtotal=subtotal,
-                    discount=discount,
-                    shipping_cost=Decimal(0),
-                    total=subtotal_net,
-                    payment_method="mitra",
-                    delivery_notes=notes,
-                    paid_to_store_account=False,
-                )
-                # Backdate the order to the invoice date
-                Order.objects.filter(pk=order.pk).update(created_at=invoice_date)
-                order.refresh_from_db()
-                order.save()  # triggers auto invoice_number generation
-
-                for line in lines:
-                    OrderItem.objects.create(
-                        order=order,
-                        product=line["product"],
-                        name=line["name"],
-                        sku=line["sku"],
-                        unit_price=line["unit_price"],
-                        quantity=line["qty"],
-                        line_total=line["line_total"],
-                    )
-                OrderStatusEvent.objects.create(
-                    order=order, status="paid",
-                    note=f"Invoice Mitra dibuat untuk {partner.name}")
-                order.status = "paid"
-                order.save(update_fields=["status"])
-
-            messages.success(request, f"Invoice {order.invoice_number} berhasil dibuat.")
-            return redirect("mitra-invoice-list", partner_id=partner.id)
-
-        except Exception as exc:
-            messages.error(request, f"Gagal membuat invoice: {exc}")
-
-    return render(request, "merchant/mitra_invoice_new.html",
-        _merchant_context(request, store, partner=partner, products=products,
-                          today=date.today().isoformat()))
+    key = post.get("idem", "")
+    if idempotency.claim(store, "mitra_sale", key) is not None:
+        messages.info(request, "Penjualan mitra ini sudah dicatat.")
+        return redirect("mitra-invoice-list", partner_id=partner.id)
+    with db_transaction.atomic():
+        order = Order.objects.create(store=store, channel="abshop", order_type="reseller_sell_through",
+            consignment_partner=partner, customer_name=(post.get("buyer_name") or partner.name)[:120],
+            phone=partner.contact_phone or "-", shipping_address="-", subtotal=subtotal, discount=discount,
+            shipping_cost=Decimal(0), total=subtotal - discount, payment_method="mitra",
+            delivery_notes=post.get("notes", "")[:300], paid_to_store_account=False)
+        Order.objects.filter(pk=order.pk).update(created_at=invoice_date)  # dated by the mitra's report
+        order.refresh_from_db()
+        order.save()  # assigns the invoice number
+        for line in lines:
+            OrderItem.objects.create(order=order, product=line["product"], name=line["product"].name,
+                sku=line["product"].sku, unit_price=line["unit_price"], quantity=line["qty"],
+                line_total=line["line_total"])
+        OrderStatusEvent.objects.create(order=order, status="paid", note=f"Penjualan mitra dicatat untuk {partner.name}")
+        order.status = "paid"
+        order.save(update_fields=["status"])
+    idempotency.finish(store, "mitra_sale", key, order.pk)
+    from apps.shops.audit import log as audit_log
+    audit_log(store, request.user, "mitra_sale.created", order, total=str(order.total), partner=partner.name)
+    messages.success(request, f"Penjualan mitra {order.invoice_number} dicatat. Tagihkan lewat settlement.")
+    return redirect("mitra-invoice-list", partner_id=partner.id)
 
 
 # ── Stok di mitra (konsinyasi) ───────────────────────────────────────────────

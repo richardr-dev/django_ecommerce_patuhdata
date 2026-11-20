@@ -11,7 +11,7 @@
   <dl class="dp-meta"><div><dt>Tanggal</dt><dd>{{ receipt.date|date:"d M Y" }}</dd></div><div><dt>Metode</dt><dd>{{ receipt.get_method_display }}</dd></div><div><dt>Rekening</dt><dd>{{ receipt.bank_account.name|default:"Kas utama" }}</dd></div><div><dt>Referensi</dt><dd>{{ receipt.reference|default:"—" }}</dd></div></dl>
   <div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Diterima dari</h4><strong>{{ receipt.buyer_name }}</strong></div></div>
   <div class="scroll-x"><table class="dp-items"><thead><tr><th>Dialokasikan ke</th><th class="num">Jumlah</th></tr></thead><tbody>
-    {% for p in allocations %}<tr><td><strong><a href="{% url 'merchant-invoice-detail' p.invoice_id %}" style="color:inherit">{{ p.invoice.number }}</a></strong></td><td class="num"><strong>{{ p.amount|rp }}</strong></td></tr>{% endfor %}
+    {% for p in allocations %}<tr><td><strong><a href="{% url 'merchant-invoice-detail' p.invoice_id %}" style="color:inherit">{{ p.invoice.number }}</a></strong></td><td class="num"><strong>{{ p.amount|rp }}</strong>{% if p.withheld %}<small>diterima {{ p.received|rp }} · PPh dipotong {{ p.withheld|rp }}</small>{% endif %}</td></tr>{% endfor %}
     {% if receipt.deposit %}<tr><td><strong>Kredit pelanggan (uang muka)</strong><small>Dapat dipakai untuk invoice berikutnya</small></td><td class="num"><strong>{{ receipt.deposit|rp }}</strong></td></tr>{% endif %}</tbody></table></div>
   <div class="dp-foot"><div class="dp-notes">{% if receipt.note %}<h4>Catatan</h4><p>{{ receipt.note }}</p>{% endif %}</div><div class="dp-totals"><div class="grand"><span>Total diterima</span><span>{{ receipt.amount|rp }}</span></div></div></div>
   {% if receipt.voided %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}</article>

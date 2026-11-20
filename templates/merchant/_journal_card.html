@@ -15,4 +15,7 @@
   {% empty %}
   <p class="dp-empty">Belum masuk buku besar.</p>
   {% endfor %}
+  {% if ledger_tie %}<p class="dp-help" style="padding:0 18px 14px" data-ledger-tie="{% if ledger_tie.ok %}ok{% else %}diff{% endif %}">
+    {% if ledger_tie.ok %}<span class="pill pill-paid">Sesuai</span> {{ ledger_tie.label|default:"Saldo" }} di buku besar {{ ledger_tie.books|rp }} sama dengan {{ ledger_tie.document_label|default:"sisa dokumen" }}.
+    {% else %}<span class="pill pill-overdue">Selisih</span> {{ ledger_tie.label|default:"Saldo" }} di buku besar {{ ledger_tie.books|rp }}, {{ ledger_tie.document_label|default:"sisa dokumen" }} {{ ledger_tie.document|rp }}. Periksa di <a href="{% url 'merchant-books-checks' %}">Kontrol</a>.{% endif %}</p>{% endif %}
 </section>

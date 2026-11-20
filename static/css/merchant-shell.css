@@ -1230,3 +1230,18 @@ html[data-density="compact"] .tile strong { font-size: 20px; }
 .create-panel a { width: auto; padding: 7px 10px; white-space: nowrap; font-size: 13.5px; }
 @media (max-width: 1100px) { .create-panel { grid-template-columns: repeat(3, max-content); } }
 @media (max-width: 640px) { .create-panel { grid-template-columns: 1fr 1fr; right: -8px; max-width: calc(100vw - 24px); } .create-panel a { white-space: normal; } }
+
+/* Bubble layer: one-hue bars (blue = magnitude). Width/height come from the template as a dotted string
+   (`|stringformat:"s"` or a service that formats it), never a localised float. */
+.bb-bar-row { display: grid; grid-template-columns: minmax(90px, 160px) 1fr auto; align-items: center; gap: 12px;
+  padding: 6px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bb-bar-row > span { color: var(--ds-ink, #012441); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-bar-row > b { text-align: right; min-width: 96px; }
+.bb-bar { height: 10px; border-radius: 999px; background: var(--ds-nested, #eaf7fe); overflow: hidden; }
+.bb-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--ds-primary, #0b6fb8); min-width: 2px; }
+.bb-cols { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 8px; }
+.bb-cols > div { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.bb-cols i { display: block; width: 100%; border-radius: 8px 8px 0 0; background: var(--ds-primary, #0b6fb8); min-height: 2px; opacity: .85; }
+.bb-cols > div:hover i { opacity: 1; }
+.bb-cols small { font-size: 10px; color: var(--ds-muted, #5b7186); white-space: nowrap; }
+@media (max-width: 640px) { .bb-bar-row { grid-template-columns: 90px 1fr; } .bb-bar-row > b { grid-column: 1 / -1; text-align: left; } }

@@ -170,6 +170,8 @@ class InvoicePayment(models.Model):
     # Piutang EDC / QRIS (1210) whatever bank account is named.
     METHOD_EDC        = "edc"
     METHOD_QRIS_POS   = "qris_pos"
+    # Not money: the balance given up as a bad debt (tax/writeoff.py).
+    METHOD_WRITEOFF   = "writeoff"
     CLEARING_METHODS  = {METHOD_EDC, METHOD_QRIS_POS}
     METHOD_CHOICES = [
         (METHOD_CASH,        "Tunai"),
@@ -181,6 +183,7 @@ class InvoicePayment(models.Model):
         (METHOD_OTHER,       "Lainnya"),
         (METHOD_EDC,         "Kartu debit/kredit (EDC)"),
         (METHOD_QRIS_POS,    "QRIS kasir"),
+        (METHOD_WRITEOFF,    "Hapus piutang"),
     ]
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments")
@@ -191,7 +194,11 @@ class InvoicePayment(models.Model):
     receipt = models.ForeignKey("CustomerReceipt", on_delete=models.PROTECT, null=True,
         blank=True, related_name="allocations")
     paid_on = models.DateField()
+    # What this payment settles of the invoice. Money received is amount - withheld.
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    # PPh the buyer held back and pays to the tax office for us (PPh 23 on services, 4(2) on rent). We hold
+    # a bukti potong instead of the cash; it books to PPh dibayar di muka, not to the bank.
+    withheld = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default=METHOD_TRANSFER)
     reference = models.CharField(max_length=120, blank=True,
         help_text="Nomor referensi/bukti transfer atau kode transaksi.")
@@ -204,7 +211,13 @@ class InvoicePayment(models.Model):
         ordering = ["paid_on", "id"]
         constraints = [
             models.CheckConstraint(condition=models.Q(amount__gt=0), name="invoice_payment_positive"),
+            models.CheckConstraint(condition=models.Q(withheld__gte=0, withheld__lte=models.F("amount")),
+                name="invoice_payment_withheld_within_amount"),
         ]
+
+    @property
+    def received(self):
+        return self.amount - self.withheld
 
     def __str__(self):
         return f"{self.paid_on} Rp{self.amount}"

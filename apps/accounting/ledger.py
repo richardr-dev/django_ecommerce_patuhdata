@@ -43,6 +43,8 @@ STOCK_DIFFERENCE = "6960"  # Selisih persediaan: what a stok opname found missin
 # Point of sale (docs/pos-architecture.md). Card and QRIS tenders wait in EDC_CLEARING until the acquirer
 # settles to the bank; the drawer's shortage or surplus at shift close goes to CASH_SHORT / CASH_OVER.
 EDC_CLEARING = "1210"  # Piutang EDC / QRIS
+OTHER_RECEIVABLE, OTHER_PAYABLE = "1290", "2390"  # Piutang lainnya / Utang lainnya: claims and debts outside sales and purchases
+PPH_PREPAID = "1520"  # PPh dibayar di muka: tax a buyer withheld from a payment to us (bukti potong), a credit on our own PPh
 ROUNDING = "4950"  # Pembulatan penjualan: rounding given or taken at the register
 MDR_FEES = "6155"  # Biaya MDR EDC / QRIS found at settlement
 CASH_SHORT, CASH_OVER = "6980", "7250"  # Selisih kas kasir (kurang) / Lebih kas kasir
@@ -61,17 +63,20 @@ CHART = [
     (MARKETPLACE, "Piutang marketplace", "asset"),
     (INTERCO_RECEIVABLE, "Piutang antar perusahaan", "asset"),
     (ALLOWANCE, "Cadangan kerugian piutang", "asset"),
+    (OTHER_RECEIVABLE, "Piutang lainnya", "asset"),
     (PREPAID, "Biaya dibayar di muka", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
     (DELIVERED, "Barang terkirim belum ditagih", "asset"),
     (CONSIGNED, "Persediaan di mitra (konsinyasi)", "asset"),
     (INPUT_VAT, "PPN masukan", "asset"),
+    (PPH_PREPAID, "PPh dibayar di muka (dipotong pembeli)", "asset"),
     (FIXED_ASSETS, "Aset tetap", "asset"),
     (ACCUMULATED_DEPRECIATION, "Akumulasi penyusutan", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
     (WITHHELD, "Utang PPh dipotong (21/23/4(2))", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (PAYABLE, "Utang usaha", "liability"),
+    (OTHER_PAYABLE, "Utang lainnya", "liability"),
     (GRNI, "Barang diterima belum ditagih (GRNI)", "liability"),
     (ACCRUED, "Utang biaya (akrual)", "liability"),
     (INTERCO_PAYABLE, "Utang antar perusahaan", "liability"),
@@ -435,6 +440,19 @@ def account_balances(store, *, start=None, end=None, exclude_closing=False):
         account.balance = (account.total_debit - account.total_credit if debit_normal
             else account.total_credit - account.total_debit)
     return list(accounts)
+
+
+def control_tie(entries, code, expected, *, credit_normal=False, label="Saldo", document_label="sisa dokumen"):
+    """Does the account's movement across a document's entries equal what the document says is
+    open? ``entries`` come from ``entries_for``. None when the entries never touch ``code``.
+    The figure a detail page shows under its journal card."""
+    lines = [line for entry in entries for line in entry.rows]
+    if not any(line.account.code == code for line in lines):
+        return None
+    movement = sum((line.debit - line.credit for line in lines if line.account.code == code), Decimal(0))
+    books = -movement if credit_normal else movement
+    return {"books": books, "document": expected, "ok": books == expected, "label": label,
+        "document_label": document_label}
 
 
 def entries_for(store, sources):

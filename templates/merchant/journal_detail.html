@@ -9,6 +9,7 @@
   </div>
   <div class="dp-actions">
     {% if source_url %}<a class="btn" href="{{ source_url }}">{% icon "file" %} Buka {{ source_label|lower }}</a>{% endif %}
+    {% if entry.source_type == "journal" and can_edit %}<a class="btn" href="{% url 'merchant-journal-new' %}?copy={{ entry.pk }}">{% icon "copy" %} Salin jurnal</a>{% endif %}
     {% if can_reverse %}<button type="button" class="btn btn-danger" data-open="rev-dialog">{% icon "undo" %} Balik jurnal</button>{% endif %}
   </div>
 </div>

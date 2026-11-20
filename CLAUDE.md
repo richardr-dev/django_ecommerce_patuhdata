@@ -23,8 +23,8 @@ All user-facing text is Indonesian. Code, comments and tests are English.
 .venv/bin/python manage.py stock_audit   # stock vs movements; --fix
 ```
 
-Four test files failed before this work and still do: `test_digital_products`,
-`test_segments`, `test_smoke_urls` (KeyError `return_id`), `test_stock_editing`.
+The full suite passes (1414 tests, 2026-11-20); the four files that used to fail (`test_digital_products`,
+`test_segments`, `test_smoke_urls`, `test_stock_editing`) are green.
 
 ## Architecture rules
 
@@ -207,6 +207,8 @@ Four test files failed before this work and still do: `test_digital_products`,
   `shops.audit.log`) and bills, journals, cash transactions and invoices take attachments.
   Fraud checks (duplicate bills, unusual expenses, big manual journals, back-dated entries, voided
   paid invoices) live in `accounting/controls.py`.
+- **The manual journal form** (`accounting/views.py:merchant_journal_new`) keeps what was typed after a refusal, carries an
+  `idem` key, and takes one optional attachment that is validated before anything is booked.
 - **Budgets and cost centres** (`accounting/budgets.py`): actuals are read from the ledger, cost-centre
   actuals from `JournalEntry.cost_center`, so a posting that should count for a centre must pass it.
 - **Year-end closing** (`accounting/closing.py`): `close_year` posts one `("year_close", year)` entry on
@@ -312,6 +314,25 @@ Four test files failed before this work and still do: `test_digital_products`,
   `/books/`, buyers' existing orders (`/orders/<id>/`), invoice links (`/i/`), payment webhooks, password reset.
   The code is kept, not deleted; tests run with it on (`tests/conftest.py`), `tests/test_no_storefront.py`
   covers off. A new shopper-facing route must be added to `SHOPPING`.
+- **PPh withheld by the buyer** (`InvoicePayment.withheld`, `record_payment(withheld=)`, account 1520 PPh dibayar di muka):
+  `amount` is what the payment settles, `withheld` the part the buyer paid to the tax office (bukti potong), so the money
+  received is `amount - withheld` (`InvoicePayment.received`). The entry debits the bank for the net and 1520 for the
+  withheld, credits Piutang for the whole; the invoice is paid. The multi-invoice receipt takes it per invoice
+  (`receive_payment` allocations `(invoice, amount, withheld)`, inputs `pph_<id>`). The SPT Tahunan worksheet reads it as a
+  credit (`fiscal.buyer_withholdings`, row "PPh dipotong pembeli"), so it is never typed as a manual credit too.
+- **Writing off a bad invoice** (`tax/writeoff.py:write_off_invoice`, button "Hapus piutang" on the invoice): the unpaid
+  balance is an `InvoicePayment` of method `writeoff` (never money; `record_payment` refuses that method), so status, aging and
+  voiding keep working. It debits Cadangan kerugian piutang 1255 as far as it holds a balance, the rest Beban piutang tak
+  tertagih 6970, and credits Piutang usaha. Above the store's threshold it is an approval of kind `invoice_writeoff`. PPN on
+  the written-off sale is not recovered. Control `invoice_open_balance` names each invoice whose Piutang in the books differs
+  from its open balance (the `receivable` control only compares totals).
+- **Selisih & klaim marketplace** (`accounting/marketplace_adjustments.py`, page `/books/payouts/selisih/`, model
+  `MarketplaceAdjustment`): money between the company and a marketplace that no imported payout carries (extra ongkir taken
+  back, a penalty, a compensation). A charge debits the chosen account (6130, 4200, 1290 Piutang lainnya...) and credits
+  1300; a claim the reverse. It stays open until settled (`settle`: 1300 against the bank, `("mp_adjustment_settle", id)`);
+  `controls.held_by_providers` adds open ones to what the marketplace owes. Void and unsettle reverse, never delete. Charges
+  already in an imported income report (mapped to 6130 by `parsers/income.py`) must not be recorded here again.
+  1290 Piutang lainnya and 2390 Utang lainnya are in the default chart.
 - **Price lists and payment terms** (`catalog.PriceList`/`PriceListItem`, `Customer.price_list`,
   `Customer.payment_terms_days`; service `tax/pricing.py`; pages Penjualan › Daftar harga): a customer's list prices
   the invoice form's lines in the browser (`_catalog` sends `lists` per product, `price_lists` the discounts; the
@@ -619,7 +640,7 @@ foreign currency; no fiscal loss carry-forward ledger (it is a manual negative c
 threshold (only the one-off manual journal is).
 
 Legacy pages still on the old markup (scan of `templates/merchant` for `bo-card`, `kpi-grid`, `data-table`,
-`bo-heading`, `bo-button`, `entity-form`, Tailwind `bg-gray-*`): _customer_history, _customers_list, _orders_list, abshop, billing_demo_pay, customer_detail, customers, entity_form, import, mitra_invoice_list, mitra_invoice_new, order_detail, order_new, order_payment_link, orders, product_partner_prices_partial, sales, sales_stats_partial.
+`bo-heading`, `bo-button`, `entity-form`, Tailwind `bg-gray-*`): abshop, billing_demo_pay, entity_form, import, product_partner_prices_partial. (Customers, customer detail, Pesanan list, order detail and order new were rebuilt 2026-11-19; the mitra sales list and entry form, Ringkasan penjualan (`sales`, service `channels/sales_summary.py`, bars `bb-bar-row`/`bb-cols`) and the payment-link page 2026-11-20.)
 The whole Pengaturan menu (settings, payments, delivery, WhatsApp, integrations, tracking, staff, access, activity, billing)
 is rebuilt. The rest work and take the blue palette; large ones need care: `entity_form` (product form), `sales` (htmx
 replaces the whole page).
@@ -647,7 +668,7 @@ replaces the whole page).
 - [x] One scheduled worker: `manage.py run_books` (ledger backlog, recurring invoices,
       monthly depreciation). It still has to be scheduled (cron) in deployment.
 - [x] The suite passes on SQLite and PostgreSQL (CI has a `postgres` job). Local dev now runs on PostgreSQL too (`.env` `DATABASE_URL`); `db.sqlite3` is kept untouched as the fallback.
-- [ ] Fix the four failing test files listed above.
+- [x] The four formerly failing test files pass.
 
 ### 2. Features still missing
 

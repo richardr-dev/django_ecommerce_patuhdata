@@ -83,12 +83,18 @@ def auto_allocate(invoices, amount):
 @transaction.atomic
 def receive_payment(store, *, customer, buyer_name, date, amount, method, allocations,
         reference="", bank_account=None, note="", keep_rest=True, actor=None):
-    """Record ``amount`` received and spread it over ``allocations`` (``[(invoice, amount)]``)."""
+    """Record ``amount`` received and spread it over ``allocations``: ``[(invoice, amount)]`` or
+    ``[(invoice, amount, withheld)]``, where ``withheld`` is PPh the buyer kept back on that invoice (bukti potong).
+    The money received covers only the amounts; each invoice is settled by its amount plus its withholding."""
     amount = Decimal(str(amount))
     if amount <= 0:
         raise ReceiptError("Jumlah yang diterima harus lebih dari nol.")
-    allocations = [(inv, Decimal(str(part))) for inv, part in allocations if part and Decimal(str(part)) > 0]
-    allocated = sum((part for _, part in allocations), Decimal(0))
+    allocations = [(a[0], Decimal(str(a[1] or 0)), Decimal(str(a[2] if len(a) > 2 and a[2] else 0)))
+        for a in allocations]
+    if any(part < 0 or withheld < 0 for _, part, withheld in allocations):
+        raise ReceiptError("Alokasi dan PPh dipotong tidak boleh negatif.")
+    allocations = [a for a in allocations if a[1] > 0 or a[2] > 0]
+    allocated = sum((part for _, part, _w in allocations), Decimal(0))
     if allocated > amount:
         raise ReceiptError(f"Alokasi (Rp{allocated:,.0f}) melebihi jumlah diterima "
             f"(Rp{amount:,.0f}).".replace(",", "."))
@@ -97,16 +103,16 @@ def receive_payment(store, *, customer, buyer_name, date, amount, method, alloca
         raise ReceiptError(f"Rp{rest:,.0f} belum dialokasikan ke invoice.".replace(",", "."))
     if bank_account and bank_account.store_id != store.id:
         raise ReceiptError("Rekening tidak ditemukan.")
-    if any(inv.store_id != store.id for inv, _ in allocations):
+    if any(inv.store_id != store.id for inv, _p, _w in allocations):
         raise ReceiptError("Invoice tidak ditemukan.")
     receipt = CustomerReceipt.objects.create(store=store, customer=customer,
         buyer_name=buyer_name, number=next_number(store, "RC", date), date=date, amount=amount,
         deposit=rest, method=method, reference=reference[:120], bank_account=bank_account,
         note=note[:200], created_by=actor)
-    for invoice, part in allocations:
+    for invoice, part, withheld in allocations:
         try:
             record_payment(invoice, part, date, method, reference=reference, note=note,
-                user=actor, bank_account=bank_account, receipt=receipt)
+                user=actor, bank_account=bank_account, receipt=receipt, withheld=withheld)
         except InvoiceError as error:
             raise ReceiptError(f"{invoice.number}: {error}") from error
     if rest:
