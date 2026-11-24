@@ -1,0 +1,27 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perusahaan · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pc-b{height:30px;padding:0 12px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}.pc-b.bad{background:#ffebeb;color:#c92a2a}.pc-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}.pc-row input[type=date]{height:30px;border:1px solid #d6e6f0;border-radius:99px;padding:0 10px;font:inherit;font-size:12px}.pc-pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:#e6f7ee;color:#0d7a3e}.pc-pill.off{background:#ffebeb;color:#c92a2a}.pc-pill.wait{background:#fff4e5;color:#b85d00}.pc-wrap{overflow-x:auto}.pc-search{display:flex;gap:8px;margin-bottom:14px}.pc-search input{flex:1;height:40px;border:1px solid #d6e6f0;border-radius:99px;padding:0 16px;font:inherit}</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="companies" %}
+  <div class="ln-card">
+    <h1>Perusahaan</h1>
+    <p class="ln-sub">Atur masa uji coba tiap perusahaan: pilih tanggal akhir, perpanjang, beri akses penuh, atau akhiri sekarang. Setelah uji coba berakhir, perusahaan terkunci sampai berlangganan.</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    <form class="pc-search" method="get"><input name="q" value="{{ q }}" placeholder="Cari nama atau kode perusahaan" aria-label="Cari perusahaan"><button class="pc-b">Cari</button></form>
+    <div class="pc-wrap"><table class="ln-table"><thead><tr><th>Perusahaan</th><th>Pemilik</th><th>Uji coba</th><th>Ubah masa uji coba</th></tr></thead><tbody>
+    {% for s in companies %}<tr>
+      <td><a href="{% url 'platform-company' s.pk %}"><b>{{ s.name }}</b></a><small>{{ s.slug }}</small></td>
+      <td>{{ s.owner.username }}</td>
+      <td>{% if not s.trial %}<span class="pc-pill">Akses penuh</span>{% elif s.trial.expired %}<span class="pc-pill off">Terkunci</span><small>berakhir {{ s.trial.ends_at|date:"d M Y" }}</small>{% elif s.trial.paid %}<span class="pc-pill">Berlangganan</span><small>sampai {{ s.trial.ends_at|date:"d M Y" }}</small>{% else %}<span class="pc-pill wait">{{ s.trial.days_left }} hari lagi</span><small>sampai {{ s.trial.ends_at|date:"d M Y" }}</small>{% endif %}</td>
+      <td>
+        <form method="post" class="pc-row">{% csrf_token %}<input type="hidden" name="store" value="{{ s.pk }}"><input type="hidden" name="trial_action" value="set">
+          <input type="date" name="date" value="{{ s.trial.ends_at|date:'Y-m-d' }}" aria-label="Tanggal akhir uji coba {{ s.name }}" required><button class="pc-b">Atur tanggal</button></form>
+        <form method="post" class="pc-row">{% csrf_token %}<input type="hidden" name="store" value="{{ s.pk }}">
+          <button class="pc-b" name="trial_action" value="extend">+14 hari</button>{% if s.trial %}<button class="pc-b" name="trial_action" value="activate">Akses penuh</button>{% endif %}<button class="pc-b bad" name="trial_action" value="end">Akhiri sekarang</button><a class="pc-b" href="{% url 'platform-company' s.pk %}">Detail</a></form>
+      </td></tr>
+    {% empty %}<tr><td colspan="4">Belum ada perusahaan.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</main></body></html>

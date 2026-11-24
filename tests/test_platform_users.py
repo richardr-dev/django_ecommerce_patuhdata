@@ -287,3 +287,38 @@ class SubscribeToUnlockTests(TestCase):
         self.client.force_login(viewer)
         page = self.client.get("/books/")
         self.assertNotContains(page, "Pilih paket dan bayar", status_code=402)
+
+
+class CompanyListTests(TestCase):
+    def setUp(self):
+        self.partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.store = install(**CLIENT, trial_days=14)["store"]
+        self.client.force_login(self.partner)
+
+    def test_list_shows_the_company_with_trial_controls(self):
+        page = self.client.get("/platform/companies/")
+        self.assertContains(page, "Toko Maju")
+        self.assertContains(page, "Atur tanggal")
+        self.assertContains(page, "Akhiri sekarang")
+
+    def test_set_an_exact_date_end_now_and_full_access_from_the_list(self):
+        from apps.shops.trial import is_expired
+        self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "set", "date": "2020-01-01"})
+        self.store.refresh_from_db()
+        self.assertTrue(is_expired(self.store))
+        self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "set", "date": "2035-01-01"})
+        self.store.refresh_from_db()
+        self.assertFalse(is_expired(self.store))
+        self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "end"})
+        self.store.refresh_from_db()
+        self.assertTrue(is_expired(self.store))
+        self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "activate"})
+        self.store.refresh_from_db()
+        self.assertIsNone(self.store.trial_ends_at)
+
+    def test_a_store_account_cannot_open_it(self):
+        self.client.force_login(self.store.owner)
+        self.assertEqual(self.client.get("/platform/companies/").status_code, 302)
+        self.assertEqual(self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "end"}).status_code, 302)
+        self.store.refresh_from_db()
+        self.assertIsNotNone(self.store.trial_ends_at)

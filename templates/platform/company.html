@@ -4,7 +4,7 @@
 <link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
-<body class="ln ln-wide"><main class="ln-wrap">
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="companies" %}
   <div class="ln-card">
     <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Partner platform</span></div></div>
     <h1>{{ store.name }}</h1>

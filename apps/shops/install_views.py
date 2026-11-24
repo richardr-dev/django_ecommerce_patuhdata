@@ -34,6 +34,37 @@ def _email_owner(result):
     return True
 
 
+def _trial_action(request):
+    """One trial button from a company row: extend, set an exact date, full access, or end now."""
+    import datetime
+
+    from django.utils import timezone
+
+    from . import trial
+    company = Store.objects.filter(pk=request.POST.get("store") or 0).first()
+    action = request.POST.get("trial_action", "")
+    if company is None:
+        messages.error(request, "Perusahaan tidak ditemukan.")
+    elif action == "extend":
+        trial.extend_trial(company, int(request.POST.get("days") or 14), request.user)
+        messages.success(request, f"Uji coba {company.name} diperpanjang.")
+    elif action == "activate":
+        trial.activate_full_access(company, request.user)
+        messages.success(request, f"{company.name} sekarang punya akses penuh.")
+    elif action == "end":
+        trial.end_trial_now(company, request.user)
+        messages.success(request, f"Uji coba {company.name} diakhiri.")
+    elif action == "set":
+        try:
+            day = datetime.date.fromisoformat(request.POST.get("date", ""))
+        except ValueError:
+            messages.error(request, "Pilih tanggal akhir uji coba.")
+        else:
+            trial.set_trial_end(company, timezone.make_aware(datetime.datetime.combine(
+                day, datetime.time(23, 59, 59))), request.user)
+            messages.success(request, f"Uji coba {company.name} berakhir {day:%d-%m-%Y}.")
+
+
 @login_required(login_url="/login/")
 def partner_install(request):
     if not request.user.is_superuser:
@@ -43,19 +74,7 @@ def partner_install(request):
     result, error = None, ""
     from . import trial
     if request.method == "POST" and request.POST.get("trial_action"):
-        company = Store.objects.filter(pk=request.POST.get("store") or 0).first()
-        action = request.POST["trial_action"]
-        if company is None:
-            messages.error(request, "Perusahaan tidak ditemukan.")
-        elif action == "extend":
-            trial.extend_trial(company, int(request.POST.get("days") or 14), request.user)
-            messages.success(request, f"Uji coba {company.name} diperpanjang.")
-        elif action == "activate":
-            trial.activate_full_access(company, request.user)
-            messages.success(request, f"{company.name} sekarang punya akses penuh.")
-        elif action == "end":
-            trial.end_trial_now(company, request.user)
-            messages.success(request, f"Uji coba {company.name} diakhiri.")
+        _trial_action(request)
         return redirect("partner-install")
     values = {name: request.POST.get(name, "") for name in FIELDS}
     if request.method != "POST":
@@ -258,3 +277,24 @@ def platform_settings(request):
             messages.success(request, "Pengaturan platform disimpan.")
             return redirect("platform-settings")
     return render(request, "platform/settings.html", {"conf": conf, "error": error})
+
+
+@login_required(login_url="/login/")
+def platform_companies(request):
+    """/platform/companies/: every company with its trial, and the trial buttons."""
+    from . import trial
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman perusahaan hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    if request.method == "POST":
+        _trial_action(request)
+        return redirect("platform-companies")
+    query = request.GET.get("q", "").strip()
+    companies = Store.objects.select_related("owner", "organization").order_by("-id")
+    if query:
+        companies = companies.filter(name__icontains=query) | companies.filter(slug__icontains=query)
+    companies = list(companies[:200])
+    for company in companies:
+        company.trial = trial.trial_state(company)
+    return render(request, "platform/companies.html", {"companies": companies, "q": query})

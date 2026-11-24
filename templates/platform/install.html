@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/login.css' %}">
 <style>.pu-b{height:28px;padding:0 12px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}.pu-b.bad{background:#ffebeb;color:#c92a2a}</style></head>
-<body class="ln ln-wide"><main class="ln-wrap">
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="install" %}
   <div class="ln-card">
     <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Instalasi oleh partner</span></div></div>
     <h1>Pasang perusahaan untuk klien</h1>
