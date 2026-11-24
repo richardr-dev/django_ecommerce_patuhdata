@@ -18,7 +18,7 @@ from apps.shops.permissions import roles
 
 from . import sales_orders
 from .models import Delivery, Quote, SalesOrder
-from .sales_views import _customer, _doc_form_context, _product_lines
+from .sales_views import _customer, _doc_form_context, _goods_items, _goods_lines
 from .services import InvoiceError
 
 LOGIN = "/login/"
@@ -37,6 +37,22 @@ def _amount(text):
     if value is None:
         raise InvalidOperation(text)
     return value
+
+
+def _warehouses(store):
+    """Locations a parcel can leave from; offered only when there are two or more."""
+    from apps.catalog.models import Warehouse
+    found = list(Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id"))
+    return found if len(found) > 1 else []
+
+
+def _warehouse(store, value):
+    if not value:
+        return None
+    found = next((w for w in _warehouses(store) if str(w.pk) == str(value)), None)
+    if found is None:
+        raise sales_orders.SalesOrderError("Gudang tidak ditemukan.")
+    return found
 
 
 def _can(request, store, allowed):
@@ -70,7 +86,7 @@ def merchant_sales_order_new(request):
     if request.method == "POST":
         try:
             customer = _customer(store, request.POST.get("customer_id"))
-            order = sales_orders.create_sales_order(store, lines=_product_lines(request, store),
+            order = sales_orders.create_sales_order(store, lines=_goods_lines(request, store),
                 buyer_name=request.POST.get("buyer_name") or (customer.name if customer else ""), customer=customer,
                 issued_on=parse_date(request.POST.get("issued_on", "") or "") or None,
                 expected_on=parse_date(request.POST.get("expected_on", "") or "") or None,
@@ -86,7 +102,7 @@ def merchant_sales_order_new(request):
             return redirect("merchant-sales-order-detail", order.pk)
     from collections import defaultdict
     return render(request, "merchant/sales_order_form.html", _doc_form_context(request, store,
-        prefill=prefill or defaultdict(str)))
+        prefill=prefill or defaultdict(str), products=_goods_items(store)))
 
 
 @login_required(login_url=LOGIN)
@@ -122,7 +138,8 @@ def merchant_sales_order_detail(request, order_id):
                 delivery = sales_orders.create_delivery(order, quantities=quantities,
                     delivered_on=parse_date(request.POST.get("delivered_on", "") or "") or None,
                     courier=request.POST.get("courier", ""), tracking_number=request.POST.get("tracking_number", ""),
-                    notes=request.POST.get("notes", ""), actor=request.user)
+                    notes=request.POST.get("notes", ""), actor=request.user,
+                    warehouse=_warehouse(store, request.POST.get("warehouse")))
                 audit_log(store, request.user, "delivery.created", delivery, number=delivery.number, order=order.number)
                 messages.success(request, f"Surat jalan {delivery.number} dibuat; stok keluar.")
                 return redirect("merchant-delivery-detail", delivery.pk)
@@ -136,6 +153,15 @@ def merchant_sales_order_detail(request, order_id):
                 audit_log(store, request.user, "invoice.created", invoice, number=invoice.number, order=order.number)
                 messages.success(request, f"Invoice {invoice.number} dibuat dari surat jalan.")
                 return redirect("merchant-invoice-detail", invoice_id=invoice.pk)
+            if action == "reserve":
+                _require_roles(request, store, DELIVER_ROLES)
+                held = sales_orders.reserve(order, actor=request.user)
+                audit_log(store, request.user, "sales_order.reserved", order, units=held)
+                if held:
+                    messages.success(request, f"{held} unit dicadangkan untuk pesanan ini.")
+                else:
+                    messages.info(request, "Belum ada stok bebas tambahan untuk dicadangkan.")
+                return redirect("merchant-sales-order-detail", order.pk)
             if action == "close":
                 _require_roles(request, store, EDIT_ROLES)
                 sales_orders.close_order(order, actor=request.user)
@@ -147,16 +173,18 @@ def merchant_sales_order_detail(request, order_id):
             messages.error(request, f"Gagal: {error}")
         return redirect("merchant-sales-order-detail", order.pk)
     lines = []
-    for line in order.lines.select_related("product"):
-        lines.append({"line": line, "shelf": on_shelf(line.product), "remaining": line.remaining,
+    for line in order.lines.select_related("product", "variant").prefetch_related("reservations"):
+        lines.append({"line": line, "shelf": on_shelf(line.product, line.variant), "remaining": line.remaining,
+            "held": line.reserved_quantity,
             "to_invoice": line.delivered_quantity - line.invoiced_quantity})
-    deliveries = order.deliveries.select_related("invoice").prefetch_related("lines__product").order_by("delivered_on", "number")
+    deliveries = order.deliveries.select_related("invoice", "warehouse").prefetch_related("lines__order_line").order_by("delivered_on", "number")
     return render(request, "merchant/sales_order_detail.html", _merchant_context(request, store,
         order=order, rows=lines, deliveries=deliveries,
         uninvoiced=[d for d in deliveries if d.status == Delivery.STATUS_SHIPPED and d.invoice_id is None],
         invoices=order.invoices.order_by("issued_on"), audit=audit_trail(store, order),
         can_edit=_can(request, store, EDIT_ROLES), can_deliver=_can(request, store, DELIVER_ROLES),
-        open_for_delivery=order.status in {SalesOrder.STATUS_OPEN, SalesOrder.STATUS_PARTIAL}, today=timezone.localdate()))
+        open_for_delivery=order.status in {SalesOrder.STATUS_OPEN, SalesOrder.STATUS_PARTIAL}, today=timezone.localdate(),
+        warehouses=_warehouses(store)))
 
 
 @login_required(login_url=LOGIN)
@@ -172,7 +200,7 @@ def merchant_deliveries(request):
 def merchant_delivery_detail(request, delivery_id):
     store = _staff_store(request)
     _require_roles(request, store, VIEW_ROLES | roles("stock.fulfil"))
-    delivery = get_object_or_404(Delivery.objects.select_related("sales_order", "invoice"), pk=delivery_id, store=store)
+    delivery = get_object_or_404(Delivery.objects.select_related("sales_order", "invoice", "warehouse"), pk=delivery_id, store=store)
     if request.method == "POST":
         _require_roles(request, store, EDIT_ROLES)
         if request.POST.get("action") != "cancel":
@@ -187,7 +215,7 @@ def merchant_delivery_detail(request, delivery_id):
         return redirect("merchant-delivery-detail", delivery.pk)
     return render(request, "merchant/delivery_detail.html", _merchant_context(request, store, delivery=delivery,
         order=delivery.sales_order, lines=delivery.lines.select_related("product", "order_line"),
-        entries=entries_for(store, "delivery", delivery.pk), audit=audit_trail(store, delivery),
+        journal=entries_for(store, [("delivery", delivery.pk)]), audit=audit_trail(store, delivery),
         can_edit=_can(request, store, EDIT_ROLES)))
 
 
@@ -198,4 +226,4 @@ def merchant_delivery_print(request, delivery_id):
     _require_roles(request, store, VIEW_ROLES | roles("stock.fulfil"))
     delivery = get_object_or_404(Delivery.objects.select_related("sales_order"), pk=delivery_id, store=store)
     return render(request, "tax/delivery_order_note.html", {"delivery": delivery, "order": delivery.sales_order,
-        "lines": delivery.lines.select_related("product"), "store": store, "today": timezone.localdate()})
+        "lines": delivery.lines.select_related("product", "order_line"), "store": store, "today": timezone.localdate()})

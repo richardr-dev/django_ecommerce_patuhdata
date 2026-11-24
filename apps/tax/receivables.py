@@ -27,7 +27,7 @@ def _party(invoice):
 
 def open_invoices(store, *, customer_id=None):
     invoices = Invoice.objects.filter(store=store, status__in=OPEN).select_related(
-        "order__customer").prefetch_related("payments")
+        "order__customer").prefetch_related("payments", "credit_notes")  # amount_due reads both
     if customer_id:
         invoices = invoices.filter(order__customer_id=customer_id)
     return [invoice for invoice in invoices.order_by("issued_on") if invoice.amount_due > 0]

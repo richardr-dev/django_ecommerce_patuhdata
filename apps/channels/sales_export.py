@@ -42,7 +42,7 @@ DATASETS = {"lines": ("Baris barang", LINE_COLUMNS), "orders": ("Per pesanan", O
 
 
 def orders_in(store, start, end, *, channel=None, only_sold=False):
-    orders = Order.objects.filter(store=store, created_at__date__range=(start, end))
+    orders = Order.objects.filter(store=store, created_at__date__range=(start, end)).exclude(order_type="opening")
     if channel:
         orders = orders.filter(channel=channel)
     if only_sold:

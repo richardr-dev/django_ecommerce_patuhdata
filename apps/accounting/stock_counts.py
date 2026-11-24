@@ -29,19 +29,41 @@ def next_number(store, count_date):
 
 @transaction.atomic
 def open_count(store, *, warehouse, count_date, notes="", actor=None):
-    """Start counting a warehouse: one line per product held there, with today's system quantity frozen."""
+    """Start counting a warehouse: one line per product held there, and one per variant (size, colour) held
+    there, with today's system quantity frozen."""
     if warehouse.store_id != store.pk:
         raise CountError("Gudang bukan milik perusahaan ini.")
     if StockCount.objects.filter(store=store, warehouse=warehouse, status=StockCount.DRAFT).exists():
         raise CountError("Gudang ini masih punya stok opname yang belum selesai.")
     levels = list(InventoryLevel.objects.filter(warehouse=warehouse, product__store=store).select_related("product"))
-    if not levels:
+    sizes = _variants_at(store, warehouse)
+    if not levels and not sizes:
         raise CountError("Gudang ini belum menyimpan barang.")
     count = StockCount.objects.create(store=store, warehouse=warehouse, count_date=count_date, notes=notes[:300],
         number=next_number(store, count_date), created_by=actor)
-    StockCountLine.objects.bulk_create(StockCountLine(count=count, product=level.product, system_qty=level.on_hand)
-        for level in levels)
+    StockCountLine.objects.bulk_create([StockCountLine(count=count, product=level.product, system_qty=level.on_hand)
+        for level in levels] + [StockCountLine(count=count, product=variant.product, variant=variant, system_qty=units)
+        for variant, units in sizes])
     return count
+
+
+def _variants_at(store, warehouse):
+    """``[(variant, units)]`` of every active variant with a row (or old unlocated units) in ``warehouse``."""
+    from apps.catalog.models import ProductVariant
+    from apps.orders.variant_stock import locations
+    found = []
+    for variant in ProductVariant.objects.filter(product__store=store, is_active=True).select_related("product"):
+        here = dict(locations(variant))
+        if warehouse.pk in here:
+            found.append((variant, here[warehouse.pk]))
+    return found
+
+
+def _cost(line):
+    """The cost a difference is valued at: the variant's own, else its product's."""
+    if line.variant_id and line.variant.cost_price is not None:
+        return line.variant.cost_price
+    return line.product.cost_price
 
 
 @transaction.atomic
@@ -54,22 +76,22 @@ def enter_counts(count, counted):
         if line.pk in counted:
             value = counted[line.pk]
             if value is not None and value < 0:
-                raise CountError(f"Hasil hitung {line.product.name} tidak boleh negatif.")
+                raise CountError(f"Hasil hitung {line.label} tidak boleh negatif.")
             line.counted_qty = value
             line.save(update_fields=["counted_qty"])
 
 
 def differences(count):
-    return [line for line in count.lines.select_related("product") if line.difference]
+    return [line for line in count.lines.select_related("product", "variant") if line.difference]
 
 
 def summary(count):
     """``{"lines", "counted", "short_units", "extra_units", "value"}``; ``value`` is signed (negative = loss)."""
-    rows = list(count.lines.select_related("product"))
+    rows = list(count.lines.select_related("product", "variant"))
     value = Decimal(0)
     for line in rows:
-        if line.difference and line.product.cost_price is not None:
-            value += line.difference * line.product.cost_price
+        if line.difference and _cost(line) is not None:
+            value += line.difference * _cost(line)
     return {"lines": len(rows), "counted": sum(1 for r in rows if r.counted_qty is not None),
         "short_units": -sum(r.difference for r in rows if r.difference and r.difference < 0),
         "extra_units": sum(r.difference for r in rows if r.difference and r.difference > 0), "value": value}
@@ -88,26 +110,28 @@ def approve(count, *, actor):
     if permissions.maker_may_not_check(store, actor, count.created_by, "stock.count_approve"):
         raise CountError("Stok opname yang Anda buat tidak boleh Anda setujui sendiri. Minta admin, manajer, atau "
             "keuangan lain.")
-    lines = list(count.lines.select_related("product"))
+    lines = list(count.lines.select_related("product", "variant"))
     if any(line.counted_qty is None for line in lines):
         raise CountError("Masih ada barang yang belum dihitung. Isi semua, atau samakan dengan stok sistem.")
     value = Decimal(0)
     for line in lines:
         if not line.difference:
             continue
-        if line.product.cost_price is None:
-            raise CountError(f"{line.product.name} belum punya harga pokok. Isi dulu; selisihnya tidak dinilai asal-asalan.")
-        line.unit_cost = line.product.cost_price
+        if _cost(line) is None:
+            raise CountError(f"{line.label} belum punya harga pokok. Isi dulu; selisihnya tidak dinilai asal-asalan.")
+        line.unit_cost = _cost(line)
         line.save(update_fields=["unit_cost"])
         value += line.difference * line.unit_cost
     try:
         for line in lines:
             if line.difference:
-                kwargs = dict(store=store, product=line.product, quantity=abs(line.difference), kind="opname",
-                    reason=f"Stok opname {count.number}"[:200], source=("stock_count", str(count.pk)),
-                    unit_cost=line.unit_cost, actor=actor)
+                # Both ways at the warehouse counted: a shortage there is not taken from another branch.
+                kwargs = {"store": store, "product": line.product, "variant": line.variant,
+                    "quantity": abs(line.difference), "kind": "opname", "reason": f"Stok opname {count.number}"[:200],
+                    "source": ("stock_count", str(count.pk)), "unit_cost": line.unit_cost, "actor": actor,
+                    "warehouse": count.warehouse}
                 if line.difference > 0:
-                    stock_in(warehouse=count.warehouse, **kwargs)
+                    stock_in(**kwargs)
                 else:
                     stock_out(**kwargs)
         if value:

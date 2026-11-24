@@ -1,0 +1,70 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penggajian {{ run.period|date:"F Y" }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-payroll' %}">Penggajian</a> › <span>{{ run.period|date:"F Y" }}</span></nav>
+<div class="pg-head"><div><span class="pg-kicker">{{ run.number }}</span><h1>Penggajian {{ run.period|date:"F Y" }}</h1>
+  <p>{% if run.status == 'draft' %}Draf: periksa gaji, lembur/bonus, dan tarif PPh 21, lalu posting. Belum ada yang dibukukan.{% elif run.status == 'posted' %}Diposting {{ run.posted_on|date:"d M Y" }}: gaji terutang ke karyawan. Bayar dari rekening saat ditransfer.{% elif run.status == 'paid' %}Dibayar {{ run.paid_on|date:"d M Y" }}{% if run.paid_from %} dari {{ run.paid_from.name }}{% endif %}.{% else %}Dibatalkan.{% endif %}</p></div>
+  <div class="dp-actions">
+    {% if can_edit and run.status == 'posted' %}<button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Bayar gaji</button>{% endif %}
+    {% if can_edit and run.status in 'posted,paid' and not run.bpjs_paid_on and run.bpjs_total %}<button type="button" class="btn" data-open="bpjs-pay">{% icon "bank" %} Setor BPJS</button>{% endif %}
+    {% if can_edit and run.status != 'void' and run.status != 'paid' and not run.bpjs_paid_on %}<form method="post" data-confirm="Batalkan penggajian ini?{% if run.status == 'posted' %} Jurnalnya dibalik dan bukti potong PPh 21-nya dihapus.{% endif %}">{% csrf_token %}<input type="hidden" name="action" value="void"><button class="btn">{% icon "x" %} Batalkan</button></form>{% endif %}
+  </div></div>
+
+{% if run.approval_pending %}<div class="notice">{% icon "clock" %}<span><b>Menunggu persetujuan.</b> Penggajian ini di atas batas persetujuan; diposting setelah disetujui orang lain di <a href="{% url 'merchant-approvals' %}">Persetujuan</a>.</span></div>{% endif %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Dibayar ke karyawan</small><strong>{{ run.net|rp }}</strong><span>{{ lines|length }} karyawan</span></div>
+  <div class="tile"><small>Gaji bruto</small><strong>{{ run.gross|rp }}</strong><span>gaji pokok + tunjangan + lembur/bonus</span></div>
+  <div class="tile"><small>BPJS</small><strong>{{ run.bpjs_total|rp }}</strong><span>karyawan {{ run.bpjs_employee|rp }} · perusahaan {{ run.bpjs_company|rp }}{% if run.bpjs_paid_on %} · disetor {{ run.bpjs_paid_on|date:"d M" }}{% endif %}</span></div>
+  <div class="tile"><small>PPh 21 dipotong</small><strong>{{ run.pph21|rp }}</strong><span>bukti potong per karyawan saat posting</span></div>
+</div>
+
+{% with editing=can_edit %}
+<form method="post" class="panel" {% if editing and run.status == 'draft' and not run.approval_pending %}data-unsaved{% endif %}>{% csrf_token %}
+  <header><div><h2>Rincian per karyawan</h2><p>BPJS dari gaji pokok + tunjangan tetap. PPh 21 otomatis dari tabel TER PP 58/2023 atas bruto + BPJS Kesehatan, JKK, JKM perusahaan{% if run.period.month == 12 %}; Desember dihitung ulang setahun dengan tarif Pasal 17 dikurangi PPh Januari–November{% endif %}. Isi kolom % hanya untuk tarif manual.</p></div>
+    {% if editing and run.status == 'draft' and missing %}<button class="btn" name="action" value="add_missing">{% icon "plus" %} Tambah {{ missing }} karyawan baru</button>{% endif %}</header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Karyawan</th><th class="num">Gaji pokok</th><th class="num">Tunjangan</th><th class="num">Lembur / bonus</th><th class="num">PPh 21 %</th><th class="num">BPJS karyawan</th><th class="num">PPh 21</th><th class="num">Diterima</th><th>{% if run.status == 'draft' %}Keluarkan{% else %}Slip{% endif %}</th></tr></thead><tbody>
+  {% for line in lines %}<tr>
+    <td><b>{{ line.employee.name }}</b><small>{{ line.employee.ptkp_status }} · TER {{ line.employee.ter_category }}{% if line.employee.bank_account_number %} · {{ line.employee.bank_account_number }}{% endif %}</small></td>
+    {% if editing and run.status == 'draft' and not run.approval_pending %}
+    <td class="num"><input name="salary_{{ line.pk }}" data-rupiah inputmode="numeric" value="{{ line.salary|floatformat:'0' }}" aria-label="Gaji pokok {{ line.employee.name }}" style="width:120px;text-align:right"></td>
+    <td class="num"><input name="allowance_{{ line.pk }}" data-rupiah inputmode="numeric" value="{{ line.allowance|floatformat:'0' }}" aria-label="Tunjangan {{ line.employee.name }}" style="width:110px;text-align:right"></td>
+    <td class="num"><input name="extra_{{ line.pk }}" data-rupiah inputmode="numeric" value="{{ line.extra|floatformat:'0' }}" aria-label="Lembur atau bonus {{ line.employee.name }}" style="width:110px;text-align:right"></td>
+    <td class="num"><input name="rate_{{ line.pk }}" inputmode="decimal" value="{% if line.pph21_manual != None %}{{ line.pph21_manual|floatformat:'-2' }}{% endif %}" placeholder="{% if line.pph21_method == 'annual' %}Des{% else %}{{ line.pph21_rate|floatformat:'-2' }}{% endif %}" aria-label="Tarif PPh 21 manual {{ line.employee.name }}, kosong berarti otomatis" style="width:64px;text-align:right"><small>{% if line.pph21_method == 'annual' %}hitung ulang setahun{% elif line.pph21_method == 'manual' %}manual{% else %}otomatis{% endif %}</small></td>
+    {% else %}
+    <td class="num">{{ line.salary|rp }}</td><td class="num">{{ line.allowance|rp }}</td><td class="num">{{ line.extra|rp }}</td><td class="num">{% if line.pph21_method == 'annual' %}Des{% else %}{{ line.pph21_rate|floatformat:"-2" }}%{% endif %}<small>{% if line.pph21_method == 'annual' %}setahun{% elif line.pph21_method == 'manual' %}manual{% else %}TER {{ line.employee.ter_category }}{% endif %}</small></td>
+    {% endif %}
+    <td class="num">{{ line.bpjs_employee|rp }}</td><td class="num">{{ line.pph21|rp }}</td><td class="num"><b>{{ line.net|rp }}</b></td>
+    <td data-no-row style="white-space:nowrap">{% if run.status != 'draft' %}<a class="btn" href="{% url 'merchant-payroll-slip' run.pk line.pk %}" target="_blank" data-no-soft>{% icon "printer" %} Slip</a>{% elif editing and not run.approval_pending %}<input type="checkbox" name="remove_{{ line.pk }}" value="1" aria-label="Keluarkan {{ line.employee.name }} dari penggajian ini" style="width:16px;height:16px;accent-color:var(--ds-primary)">{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="9"><div class="empty-box"><strong>Tidak ada karyawan di penggajian ini</strong>Tambahkan karyawan aktif.</div></td></tr>{% endfor %}
+  </tbody>
+  {% if lines %}<tfoot><tr><td><b>Total</b></td><td class="num" colspan="3"><b>{{ run.gross|rp }}</b></td><td></td><td class="num"><b>{{ run.bpjs_employee|rp }}</b></td><td class="num"><b>{{ run.pph21|rp }}</b></td><td class="num"><b>{{ run.net|rp }}</b></td><td></td></tr></tfoot>{% endif %}
+  </table></div>
+  {% if editing and run.status == 'draft' and not run.approval_pending and lines %}
+  <div class="form-actions-bar"><button class="btn" name="action" value="save">{% icon "refresh" %} Hitung ulang</button>
+    <button class="btn-primary" name="action" value="post" data-confirm="Posting penggajian {{ run.period|date:'F Y' }}? Gaji, BPJS, dan PPh 21 dibukukan dan bukti potong PPh 21 dibuat." data-confirm-ok="Posting" data-confirm-tone="neutral">{% icon "check" %} Posting</button></div>
+  {% endif %}
+</form>
+{% endwith %}
+
+<div class="grid gap-5 lg:grid-cols-2">
+  {% include "merchant/_journal_card.html" %}
+  {% include "merchant/_audit_card.html" %}
+</div>
+
+{% if can_edit %}
+<dialog id="pay-dialog" class="pd-dialog" aria-labelledby="pay-title" style="max-width:480px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="pay"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="pay-title">Bayar gaji {{ run.period|date:"F Y" }}</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <p class="dp-help" style="margin:0">Total transfer ke karyawan <b>{{ run.net|rp }}</b>. Utang gaji berkurang, saldo rekening berkurang.</p>
+    <label class="field"><span>Dari rekening</span><select name="bank_account">{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Tanggal transfer</span><input type="date" name="date" value="{{ today }}" required></label></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Bayar</button></footer></form></dialog>
+<dialog id="bpjs-pay" class="pd-dialog" aria-labelledby="bpjs-pay-title" style="max-width:480px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="pay_bpjs"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2 id="bpjs-pay-title">Setor BPJS {{ run.period|date:"F Y" }}</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <p class="dp-help" style="margin:0">Bagian karyawan {{ run.bpjs_employee|rp }} dan perusahaan {{ run.bpjs_company|rp }}: total <b>{{ run.bpjs_total|rp }}</b>.</p>
+    <label class="field"><span>Dari rekening</span><select name="bank_account">{% for b in banks %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Tanggal setor</span><input type="date" name="date" value="{{ today }}" required></label></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Setor</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

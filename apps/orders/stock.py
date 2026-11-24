@@ -61,8 +61,8 @@ def stock_out(*, store, product, variant=None, quantity, kind, reason, source=("
     """Take ``quantity`` units off the shelf (never reserved ones). Returns the units taken per
     location as ``[(level or variant, quantity)]``. Without ``warehouse`` the units come from the
     store's locations in priority order; with it, from that location only (an outlet sells what is
-    on its own shelf, never what another branch holds). Variants have one stock figure for the whole
-    store, so ``warehouse`` does not apply to them yet."""
+    on its own shelf, never what another branch holds). Variants too: their per-warehouse rows
+    (``variant_stock``) follow, and reservations stay store-wide."""
     if quantity <= 0:
         raise StockError("Jumlah harus lebih dari nol.")
     check_warehouse(store, warehouse)
@@ -70,8 +70,12 @@ def stock_out(*, store, product, variant=None, quantity, kind, reason, source=("
     if variant:
         variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
         free = variant.stock - variant.reserved
+        if warehouse is not None:
+            from .variant_stock import at
+            free = min(free, at(variant, warehouse))
         if free < quantity:
-            raise StockError(f"Stok {variant.sku or variant.name} kurang: butuh {quantity}, "
+            where = f" di {warehouse.name}" if warehouse is not None else ""
+            raise StockError(f"Stok {variant.sku or variant.name}{where} kurang: butuh {quantity}, "
                 f"tersedia {free}.")
         before = variant.stock
         variant.stock -= quantity
@@ -79,7 +83,7 @@ def stock_out(*, store, product, variant=None, quantity, kind, reason, source=("
         record_movement(store=store, kind=kind, quantity=quantity, reason=reason, variant=variant,
             previous_on_hand=before, new_on_hand=variant.stock, previous_reserved=variant.reserved,
             new_reserved=variant.reserved, actor=actor, source_type=source[0],
-            source_id=source[1], unit_cost=unit_cost)
+            source_id=source[1], unit_cost=unit_cost, warehouse=warehouse)
         return [(variant, quantity)]
     levels = _levels(product, warehouse=warehouse)
     free = sum(level.on_hand - level.reserved for level in levels)
@@ -121,7 +125,8 @@ def stock_in(*, store, product, variant=None, quantity, kind, reason, source=(""
         return record_movement(store=store, kind=kind, quantity=quantity, reason=reason,
             variant=variant, previous_on_hand=before, new_on_hand=variant.stock,
             previous_reserved=variant.reserved, new_reserved=variant.reserved, actor=actor,
-            source_type=source[0], source_id=source[1], unit_cost=unit_cost)
+            source_type=source[0], source_id=source[1], unit_cost=unit_cost,
+            warehouse=check_warehouse(store, warehouse))
     warehouse = warehouse or default_warehouse(store)
     level, _ = InventoryLevel.objects.select_for_update().get_or_create(
         warehouse=warehouse, product=product)
@@ -167,12 +172,28 @@ def receive_goods(*, store, product, variant=None, quantity, unit_cost, warehous
 
 @transaction.atomic
 def transfer_stock(*, store, product, quantity, source, target, reason="Transfer gudang",
-        actor=None):
-    """Move product stock between two of the store's warehouses."""
+        actor=None, variant=None):
+    """Move product (or variant) stock between two of the store's warehouses. The store's total is
+    unchanged: one ``transfer_out`` at the source and one ``transfer_in`` at the target."""
     if source.pk == target.pk:
         raise StockError("Gudang asal dan tujuan sama.")
     if source.store_id != store.id or target.store_id != store.id:
         raise StockError("Gudang bukan milik perusahaan ini.")
+    if variant is not None:
+        from .variant_stock import at
+        variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
+        if quantity <= 0 or at(variant, source) < quantity:
+            raise StockError(f"Stok {variant.sku or variant.name} di {source.name} kurang untuk transfer "
+                f"{quantity} unit.")
+        total = variant.stock
+        for kind, location, step, other in (("transfer_out", source, -quantity, target),
+                ("transfer_in", target, quantity, source)):
+            record_movement(store=store, kind=kind, quantity=quantity, reason=reason, variant=variant,
+                previous_on_hand=total, new_on_hand=total + step, previous_reserved=variant.reserved,
+                new_reserved=variant.reserved, actor=actor, source_type="transfer", source_id=other.pk,
+                warehouse=location)
+            total += step
+        return
     level = InventoryLevel.objects.select_for_update().filter(warehouse=source,
         product=product).first()
     if not level or level.on_hand - level.reserved < quantity:

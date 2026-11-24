@@ -6,6 +6,8 @@ sale against Piutang usaha when issued, and each payment received against that r
 import logging
 
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 
 from apps.accounting.ledger import (
     ALLOWANCE,
@@ -54,7 +56,19 @@ def booked_by_invoice(invoice):
     return not order.payment_transactions.filter(kind="payment", status="succeeded").exists()
 
 
+OPENING = "opening"  # Order.order_type of an invoice carried over from the old books
+
+
 def post_invoice(invoice, *, actor=None):
+    if invoice.order.order_type == OPENING:
+        # Saldo awal piutang per invoice: sold and taxed in the old books, so no sale, PPN or HPP here,
+        # only the receivable against Modal pemilik on the day the books start (tax/opening_invoices.py).
+        from apps.accounting import opening
+        from apps.accounting.ledger import EQUITY
+        start = opening.existing(invoice.store)
+        return post_entry(invoice.store, date=start.date if start else invoice.issued_on, actor=actor,
+            source=("invoice", invoice.pk), memo=f"Saldo awal piutang {invoice.number} · {invoice.buyer_name}",
+            amounts={RECEIVABLE: invoice.total, EQUITY: -invoice.total})
     cost = cost_of_goods(invoice.order)
     # Sales is the residual, so the entry balances whatever the invoice was edited to.
     sales = invoice.total - invoice.shipping - invoice.tax + invoice.discount - invoice.rounding
@@ -77,7 +91,13 @@ def post_invoice_payment(payment, *, strict=False, actor=None):
             memo=f"Hapus piutang invoice {invoice.number} · {payment.note}",
             amounts={ALLOWANCE: provision, BAD_DEBT: expense, RECEIVABLE: -payment.amount})
     if payment.method == InvoicePayment.METHOD_CREDIT:
-        received = CUSTOMER_CREDIT  # settled from the buyer's advance, not new money
+        # Settled from the buyer's advance, not new money. PPN already charged on a taxed uang muka was
+        # in PPN keluaran since the advance came in: it comes off now, so the sale's PPN counts once.
+        return post_entry(invoice.store, date=payment.paid_on, strict=strict, actor=actor,
+            cost_center=invoice.cost_center, source=("invoice_payment", payment.pk),
+            memo=f"Pembayaran invoice {invoice.number} · {payment.get_method_display()}",
+            amounts={CUSTOMER_CREDIT: payment.amount - payment.vat_settled, VAT: payment.vat_settled,
+                RECEIVABLE: -payment.amount})
     elif payment.method == InvoicePayment.METHOD_MARKETPLACE:
         received = MARKETPLACE
     elif payment.method in InvoicePayment.CLEARING_METHODS:
@@ -93,13 +113,33 @@ def post_invoice_payment(payment, *, strict=False, actor=None):
             RECEIVABLE: -payment.amount})
 
 
-def status_for(invoice):
-    """Paid once payments and credit notes cover the total; part paid once money has come in;
-    otherwise open. (A credit note alone lowers the balance but is not a payment.)"""
+def status_for(invoice, today=None):
+    """Paid once payments and credit notes cover the total; overdue once an unpaid balance is past
+    its due date (part paid or not: the balance is late either way); part paid once money has come
+    in; otherwise open. (A credit note alone lowers the balance but is not a payment.)"""
     paid = sum(payment.amount for payment in invoice.payments.all())
     if paid + invoice.credited >= invoice.total:
         return Invoice.STATUS_PAID
+    if invoice.due_date and invoice.due_date < (today or timezone.localdate()):
+        return Invoice.STATUS_OVERDUE
     return Invoice.STATUS_PARTIAL if paid > 0 else Invoice.STATUS_ISSUED
+
+
+def mark_overdue(store=None, today=None):
+    """Move open invoices past their due date to overdue, and an overdue one whose due date was
+    moved later (or removed) back to open or part paid. Run by `run_books` and the invoice list.
+    Returns how many invoices became overdue."""
+    today = today or timezone.localdate()
+    late = Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL],
+        due_date__lt=today)
+    back = Invoice.objects.filter(status=Invoice.STATUS_OVERDUE).filter(
+        Q(due_date__isnull=True) | Q(due_date__gte=today))
+    if store is not None:
+        late, back = late.filter(store=store), back.filter(store=store)
+    count = late.update(status=Invoice.STATUS_OVERDUE)
+    for invoice in back.select_related("order").prefetch_related("payments", "credit_notes"):
+        refresh_status(invoice)
+    return count
 
 
 def refresh_status(invoice):

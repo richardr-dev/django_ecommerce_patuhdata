@@ -94,6 +94,15 @@ def reconciliation(store):
         "difference_mitra": settle(book_mitra - valuation["mitra_value"])}
 
 
+def opening_stock(store):
+    """What Saldo awal books as Persediaan: the stock value the books do not hold yet. Goods already booked
+    (received on a bill, added by a Penyesuaian stok) are not booked a second time. Same keys as
+    ``stock_valuation``, with ``shelf_value`` / ``mitra_value`` reduced and ``booked`` the part already held."""
+    data = reconciliation(store)
+    shelf, mitra = max(-data["difference"], ZERO), max(-data["difference_mitra"], ZERO)
+    return {**data, "booked": data["book"] + data["book_mitra"], "shelf_value": shelf, "mitra_value": mitra}
+
+
 CONTRA = {"opening": (EQUITY, "Saldo awal persediaan"),
     "loss": ("5100", "Selisih persediaan"), "drawings": (DRAWINGS, "Persediaan diambil pemilik")}
 

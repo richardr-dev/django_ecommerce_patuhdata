@@ -7,7 +7,8 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
 
-from apps.accounting.ledger import post_pending_entries
+from apps.accounting.closing import close_year
+from apps.accounting.ledger import CASH, OTHER_INCOME, post_entry, post_pending_entries
 from apps.accounting.models import JournalEntry
 from apps.integrations.reconciliation import confirm_payment
 from apps.orders.models import Order, Refund
@@ -135,6 +136,20 @@ class MonthlyTaxTests(TaxTestCase):
         self.assertEqual((march.pph_base, march.pph), (0, 0))
         self.assertEqual((april.pph_base, april.pph), (Decimal(70000), Decimal(350)))
         self.assertEqual(april.turnover_ytd, Decimal(220000))
+
+    def test_other_income_is_not_turnover(self):
+        _book_in(2025, 7, _order(self.store))
+        post_entry(self.store, date=date(2025, 7, 31), memo="Jasa giro", source=("test", 1),
+            amounts={CASH: Decimal(5000), OTHER_INCOME: Decimal(-5000)})
+
+        self.assertEqual(monthly_tax(self.store, 2025, 7).turnover, Decimal(110000))
+
+    def test_closing_the_year_does_not_wipe_december(self):
+        _book_in(2025, 12, _order(self.store))
+        close_year(self.store, 2025, today=date(2026, 2, 1), actor=self.owner)
+
+        december = monthly_tax(self.store, 2025, 12)
+        self.assertEqual((december.turnover, december.pph), (Decimal(110000), Decimal(550)))
 
     def test_normal_regime_has_no_monthly_pph(self):
         self.profile.pph_regime = "normal"

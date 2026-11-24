@@ -18,5 +18,5 @@ def marketplace_orders(store):
 
 def website_orders(store):
     """Everything made in the system: online shop, manual, POS, TV shopping, reseller."""
-    return Order.objects.filter(store=store).exclude(
+    return Order.objects.filter(store=store).exclude(order_type="opening").exclude(
         pk__in=marketplace_orders(store).values("pk"))

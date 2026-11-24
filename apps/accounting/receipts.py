@@ -45,7 +45,11 @@ def create_receipt(store, *, supplier, lines, received_on, number="", warehouse=
             raise ReceiptError(f"Jumlah {product.name} harus bilangan bulat lebih dari nol.")
         if cost < 0:
             raise ReceiptError("Harga tidak boleh negatif.")
-        resolved.append((product, variant, int(qty), cost, line.get("po_line")))
+        lot = (line.get("lot") or "").strip()[:60]
+        if product.tracks_lots and not lot:   # every unit of a tracked item belongs to a lot: one from the receipt
+            lot = f"{(number or 'GR').replace(' ', '')[:40]}-{received_on:%y%m%d}-{len(resolved) + 1}"
+        resolved.append((product, variant, int(qty), cost, line.get("po_line"), lot if product.tracks_lots else "",
+            line.get("expiry") if product.tracks_lots else None))
     if purchase_order is not None:
         from .purchasing import PurchaseError, take_against_po
         try:
@@ -57,14 +61,17 @@ def create_receipt(store, *, supplier, lines, received_on, number="", warehouse=
         purchase_order=purchase_order)
     GoodsReceiptLine.objects.bulk_create(GoodsReceiptLine(receipt=receipt, product=product, variant=variant,
         description=f"{product.name} · {variant.name}" if variant else product.name, quantity=qty,
-        unit_cost=cost, po_line=po_line) for product, variant, qty, cost, po_line in resolved)
+        unit_cost=cost, po_line=po_line, lot_code=lot, expiry_date=expiry)
+        for product, variant, qty, cost, po_line, lot, expiry in resolved)
     if receipt.value <= 0:
         raise ReceiptError("Nilai penerimaan harus lebih dari nol.")
+    from apps.orders.lots import receiving
     try:
-        for product, variant, qty, cost, _po_line in resolved:
-            receive_goods(store=store, product=product, variant=variant, quantity=qty, unit_cost=cost,
-                warehouse=warehouse, actor=actor, source=("goods_receipt", receipt.pk),
-                reason=f"Penerimaan barang dari {supplier.name} {number}".strip())
+        for product, variant, qty, cost, _po_line, lot, expiry in resolved:
+            with receiving(lot, expiry):
+                receive_goods(store=store, product=product, variant=variant, quantity=qty, unit_cost=cost,
+                    warehouse=warehouse, actor=actor, source=("goods_receipt", receipt.pk),
+                    reason=f"Penerimaan barang dari {supplier.name} {number}".strip())
         post_receipt(receipt, strict=True, actor=actor)
     except (StockError, LedgerError) as error:
         raise ReceiptError(str(error)) from error

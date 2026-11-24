@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Tagihan {{ bill.number|default:bill.supplier.name }}{% endblock %}
 {% block content %}
 
@@ -11,16 +11,16 @@
     <h1 class="dp-title">{{ bill.number|default:"Tagihan supplier" }} <span class="pill pill-{{ bill.status }}">{{ bill.get_status_display }}</span></h1>
     <p class="dp-sub">
       Dari <b>{{ bill.supplier.name }}</b>
-      {% if bill.status != 'void' %} · Sisa utang <b>Rp{{ amount_due|floatformat:"0g" }}</b>{% endif %}
-      {% if bill.amount_credited %} · Nota debit <b>Rp{{ bill.amount_credited|floatformat:"0g" }}</b>{% endif %}
+      {% if bill.status != 'void' %} · Sisa utang <b>{{ amount_due|rp }}</b>{% endif %}
+      {% if bill.amount_credited %} · Nota debit <b>{{ bill.amount_credited|rp }}</b>{% endif %}
       {% if bill.due_date %} · Jatuh tempo <b>{{ bill.due_date|date:"d M Y" }}</b>{% endif %}
     </p>
   </div>
-  <div class="dp-actions">
+  <div class="dp-actions">{% if bill.category == "1460" and bill.status != "void" %}<a class="btn-primary" href="{% url 'merchant-landed-costs' %}?bill={{ bill.pk }}">{% icon "layers" %} Alokasikan ke penerimaan</a>{% endif %}
     {% if bill.status != 'void' and amount_due > 0 %}
     <button type="button" class="btn-primary" data-open="pay-dialog">{% icon "cash" %} Bayar tagihan</button>
     {% endif %}
-    {% if bill.status != 'void' and bill.status != 'draft' and amount_due > 0 %}<a class="btn" href="{% url 'merchant-debit-note-new' %}?bill={{ bill.id }}">{% icon "truck" %} Retur ke supplier</a>{% endif %}
+    {% if bill.status != 'void' and bill.status != 'draft' and amount_due > 0 and not bill.is_opening %}<a class="btn" href="{% url 'merchant-debit-note-new' %}?bill={{ bill.id }}">{% icon "truck" %} Retur ke supplier</a>{% endif %}
     {% if bill.status != 'void' and to_receive %}
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="receive">
       <button type="submit" class="btn">{% icon "box" %} Terima barang ({{ to_receive }})</button>
@@ -44,6 +44,8 @@
     {% endif %}
   </div>
 </div>
+
+{% if bill.is_opening %}<div class="notice">{% icon "clipboard" %}<span><b>Saldo awal dari pembukuan lama.</b> Tagihan ini hanya membawa sisa utang ke supplier (Modal pemilik / Utang usaha); pembelian, stok, dan PPN masukannya sudah dicatat di sistem lama. Bila sisanya salah, batalkan lalu catat lagi di <a href="{% url 'merchant-opening-bills' %}">Utang per tagihan</a>.</span></div>{% endif %}
 
 <div class="dp-grid">
   <article class="dp-paper">
@@ -89,8 +91,8 @@
           <td><strong>{{ item.description }}</strong>{% if item.product_id %}<small>Stok · SKU {% if item.variant_id %}{{ item.variant.sku }}{% else %}{{ item.product.sku }}{% endif %}</small>{% endif %}</td>
           {% if has_goods %}<td class="num">{% if item.product_id %}{{ item.received_quantity }}{% else %}—{% endif %}</td>{% endif %}
           <td class="num">{{ item.quantity|floatformat:"-2" }}</td>
-          <td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td>
-          <td class="num"><strong>Rp{{ item.line_total|floatformat:"0g" }}</strong></td>
+          <td class="num">{{ item.unit_price|rp }}</td>
+          <td class="num"><strong>{{ item.line_total|rp }}</strong></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -100,11 +102,11 @@
     <div class="dp-foot">
       <div class="dp-notes">{% if bill.notes %}<h4>Catatan</h4><p>{{ bill.notes }}</p>{% endif %}</div>
       <div class="dp-totals">
-        <div><span>Subtotal</span><span>Rp{{ bill.subtotal|floatformat:"0g" }}</span></div>
-        {% if bill.tax %}<div><span>PPN</span><span>Rp{{ bill.tax|floatformat:"0g" }}</span></div>{% endif %}
-        <div class="grand"><span>Total</span><span>Rp{{ bill.total|floatformat:"0g" }}</span></div>
-        {% if amount_paid %}<div><span>Sudah dibayar</span><span>−Rp{{ amount_paid|floatformat:"0g" }}</span></div>{% endif %}
-        {% if bill.status != 'void' %}<div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa utang{% endif %}</span><span>Rp{{ amount_due|floatformat:"0g" }}</span></div>{% endif %}
+        <div><span>Subtotal</span><span>{{ bill.subtotal|rp }}</span></div>
+        {% if bill.tax %}<div><span>PPN</span><span>{{ bill.tax|rp }}</span></div>{% endif %}
+        <div class="grand"><span>Total</span><span>{{ bill.total|rp }}</span></div>
+        {% if amount_paid %}<div><span>Sudah dibayar</span><span>−{{ amount_paid|rp }}</span></div>{% endif %}
+        {% if bill.status != 'void' %}<div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa utang{% endif %}</span><span>{{ amount_due|rp }}</span></div>{% endif %}
       </div>
     </div>
     {% if bill.status == 'paid' %}<span class="dp-stamp paid">LUNAS</span>{% elif bill.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
@@ -115,11 +117,11 @@
       <header><h2>Pembayaran</h2><small>{{ paid_pct }}% dibayar</small></header>
       <div class="dp-card-body">
         <p class="dp-help" style="margin:0 0 2px">{% if bill.status == 'void' %}Tagihan dibatalkan{% elif amount_due <= 0 %}Sudah lunas{% else %}Sisa utang ke supplier{% endif %}</p>
-        <div class="dp-amount {% if amount_due <= 0 %}ok{% elif bill.status == 'overdue' %}alert{% endif %}">Rp{{ amount_due|floatformat:"0g" }}</div>
+        <div class="dp-amount {% if amount_due <= 0 %}ok{% elif bill.status == 'overdue' %}alert{% endif %}">{{ amount_due|rp }}</div>
         <div class="progress{% if paid_pct >= 100 %} done{% endif %}"><span style="width:{{ paid_pct }}%"></span></div>
         <div class="kv">
-          <div><span>Total tagihan</span><span>Rp{{ bill.total|floatformat:"0g" }}</span></div>
-          <div><span>Sudah dibayar</span><span>Rp{{ amount_paid|floatformat:"0g" }}</span></div>
+          <div><span>Total tagihan</span><span>{{ bill.total|rp }}</span></div>
+          <div><span>Sudah dibayar</span><span>{{ amount_paid|rp }}</span></div>
         </div>
         {% if bill.status != 'void' and amount_due > 0 %}
         <button type="button" class="btn-primary btn-block" style="margin-top:14px" data-open="pay-dialog">{% icon "cash" %} Bayar tagihan</button>
@@ -130,9 +132,9 @@
     <section class="dp-card">
       <header><h2>Riwayat</h2><small>{{ payments|length }} pembayaran</small></header>
       <ul class="timeline">
-        <li><strong>Tagihan dicatat</strong><small>{{ bill.bill_date|date:"d M Y" }} · Rp{{ bill.total|floatformat:"0g" }}</small></li>
+        <li><strong>Tagihan dicatat</strong><small>{{ bill.bill_date|date:"d M Y" }} · {{ bill.total|rp }}</small></li>
         {% for pmt in payments %}
-        <li class="ok"><strong><span>Dibayar</span><span>Rp{{ pmt.amount|floatformat:"0g" }}</span></strong>
+        <li class="ok"><strong><span>Dibayar</span><span>{{ pmt.amount|rp }}</span></strong>
           <small>{{ pmt.paid_on|date:"d M Y" }} · {{ pmt.get_method_display }}{% if pmt.reference %} · {{ pmt.reference }}{% endif %}</small></li>
         {% endfor %}
         {% if bill.status == 'void' %}<li><strong>Tagihan dibatalkan</strong><small>Pencatatannya dibalik.</small></li>{% endif %}

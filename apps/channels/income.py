@@ -24,8 +24,16 @@ def _payout_reference(channel, released_on, order_ids):
     return f"{channel.platform}-{channel.id}-{released_on:%Y%m%d}-{digest}"
 
 
-def _fee_breakdown(incomes):
-    """The fees of a set of orders by ledger account."""
+def pph22_account(store):
+    """Where PPh 22 collected by a marketplace is booked: prepaid tax under the general rates, the final tax
+    itself (an expense) under PPh Final UMKM."""
+    from apps.accounting.ledger import MARKETPLACE_PPH22, PPH_FINAL_EXPENSE
+    from apps.tax.services import tax_profile
+    return PPH_FINAL_EXPENSE if tax_profile(store).pph_regime == "umkm_final" else MARKETPLACE_PPH22
+
+
+def _fee_breakdown(incomes, tax_code):
+    """What the marketplace kept from a set of orders, by ledger account: each fee, and the PPh 22."""
     from apps.accounting.ledger import FEE_ACCOUNTS
     split = {}
     for income in incomes:
@@ -34,13 +42,15 @@ def _fee_breakdown(incomes):
             if value:
                 code = FEE_ACCOUNTS[name]
                 split[code] = split.get(code, Decimal(0)) + value
+        if income.pph22:
+            split[tax_code] = split.get(tax_code, Decimal(0)) + income.pph22
     return split
 
 
 def import_income(channel, rows, *, default_release=None, actor=None, bank_account=None):
     """Store each row's fees on its order and book the payouts. Returns a summary with counts
     and the messages for rows that could not be used."""
-    summary = {"orders": 0, "payouts": 0, "net": Decimal(0), "fees": Decimal(0),
+    summary = {"orders": 0, "payouts": 0, "net": Decimal(0), "fees": Decimal(0), "pph22": Decimal(0),
         "already": 0, "errors": [], "warnings": []}
     ready = {}  # release date -> [(channel_order, payment, row, fee)]
     for row in rows:
@@ -72,14 +82,17 @@ def import_income(channel, rows, *, default_release=None, actor=None, bank_accou
             summary["warnings"].append(f"{row.order_id}: dana cair Rp{row.net:,.0f} lebih besar "
                 f"dari pembayaran Rp{payment.amount:,.0f}; selisih tidak dicatat sebagai biaya.")
             fee = Decimal(0)
+        # The PPh 22 the marketplace collected comes out of what it deducted first: tax, not a fee.
+        pph22 = min(row.fees.get("pph22", Decimal(0)), fee)
         itemised = {name: value for name, value in row.fees.items() if name in
             ChannelOrderIncome.FEE_FIELDS}
         itemised["other_fee"] = itemised.get("other_fee", Decimal(0)) + max(
-            Decimal(0), fee - sum(itemised.values(), Decimal(0)))
+            Decimal(0), fee - pph22 - sum(itemised.values(), Decimal(0)))
         income, _ = ChannelOrderIncome.objects.update_or_create(channel_order=channel_order,
             defaults={**{name: Decimal(0) for name in ChannelOrderIncome.FEE_FIELDS}, **itemised,
-                "net_released": row.net, "released_on": released_on})
+                "pph22": pph22, "net_released": row.net, "released_on": released_on})
         ready.setdefault(released_on, []).append((income, payment, row, fee))
+    tax_code = pph22_account(channel.store)
     for released_on, items in sorted(ready.items()):
         reference = _payout_reference(channel, released_on, [row.order_id for _, _, row, _ in items])
         data = {"paid_on": released_on, "lines": [{"number": row.line, "order": row.order_id,
@@ -88,7 +101,7 @@ def import_income(channel, rows, *, default_release=None, actor=None, bank_accou
             with transaction.atomic():
                 payout, created = import_payout(channel.store, channel.platform, reference, data,
                     actor=actor, bank_account=bank_account,
-                    fee_breakdown=_fee_breakdown([income for income, *_ in items]))
+                    fee_breakdown=_fee_breakdown([income for income, *_ in items], tax_code))
                 ChannelOrderIncome.objects.filter(pk__in=[income.pk for income, *_ in items]
                     ).update(payout_reference=reference)
         except PayoutImportError as error:
@@ -96,7 +109,9 @@ def import_income(channel, rows, *, default_release=None, actor=None, bank_accou
             continue
         summary["orders"] += len(items)
         if created:
+            tax = sum((income.pph22 for income, *_ in items), Decimal(0))
             summary["payouts"] += 1
             summary["net"] += payout.net
-            summary["fees"] += payout.fees
+            summary["fees"] += payout.fees - tax
+            summary["pph22"] += tax
     return summary

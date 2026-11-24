@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 CASH, GATEWAY, RECEIVABLE, MARKETPLACE = "1100", "1200", "1250", "1300"
 INVENTORY, CONSIGNED, INPUT_VAT = "1400", "1450", "1500"
+# Freight, duty and handling billed for goods received (landed cost): held here until allocated to receipts
+# (accounting/landed_costs.py), which moves it into Persediaan and, for units already sold, HPP.
+LANDED = "1460"
 DELIVERED = "1410"  # Barang terkirim belum ditagih: cost of goods that left on a surat jalan, invoice still to come
 VAT, UNIDENTIFIED, PAYABLE = "2100", "2200", "2300"
 INTERCO_RECEIVABLE, INTERCO_PAYABLE, INTERCO_SALES = "1260", "2360", "4150"
@@ -40,10 +43,19 @@ DEPRECIATION, OTHER_INCOME, ASSET_GAIN, BANK_CHARGES = "6950", "7100", "7200", "
 PREPAID, ALLOWANCE, ACCRUED = "1550", "1255", "2310"  # Biaya dibayar di muka, Cadangan kerugian piutang, Utang biaya
 BAD_DEBT, INTEREST = "6970", "8200"  # Beban piutang tak tertagih, Beban bunga
 STOCK_DIFFERENCE = "6960"  # Selisih persediaan: what a stok opname found missing (debit) or extra (credit)
+# Penyesuaian stok (accounting/stock_adjustments.py): goods written off for a stated reason.
+DAMAGED_STOCK, SAMPLES = "6965", "6250"  # Persediaan rusak & kedaluwarsa / Sampel & promosi barang
 # Point of sale (docs/pos-architecture.md). Card and QRIS tenders wait in EDC_CLEARING until the acquirer
 # settles to the bank; the drawer's shortage or surplus at shift close goes to CASH_SHORT / CASH_OVER.
 EDC_CLEARING = "1210"  # Piutang EDC / QRIS
+# Penggajian (accounting/payroll.py): salaries against what is owed to staff, BPJS and the tax office.
+SALARIES, BPJS_EXPENSE = "6200", "6210"
+BPJS_PAYABLE, WAGES_PAYABLE = "2160", "2170"
 OTHER_RECEIVABLE, OTHER_PAYABLE = "1290", "2390"  # Piutang lainnya / Utang lainnya: claims and debts outside sales and purchases
+# PPh 22 a marketplace collects from each payout (PMK 37/2025, 0,5% of gross turnover). Under the general rates
+# it is prepaid tax, credited in the SPT Tahunan (1525); under PPh Final UMKM it is part of the month's final tax
+# itself, so it is an expense (6990) and only the rest of the 0,5% is deposited.
+MARKETPLACE_PPH22, PPH_FINAL_EXPENSE = "1525", "6990"
 PPH_PREPAID = "1520"  # PPh dibayar di muka: tax a buyer withheld from a payment to us (bukti potong), a credit on our own PPh
 ROUNDING = "4950"  # Pembulatan penjualan: rounding given or taken at the register
 MDR_FEES = "6155"  # Biaya MDR EDC / QRIS found at settlement
@@ -66,14 +78,18 @@ CHART = [
     (OTHER_RECEIVABLE, "Piutang lainnya", "asset"),
     (PREPAID, "Biaya dibayar di muka", "asset"),
     (INVENTORY, "Persediaan barang", "asset"),
+    (LANDED, "Biaya perolehan persediaan (belum dialokasikan)", "asset"),
     (DELIVERED, "Barang terkirim belum ditagih", "asset"),
     (CONSIGNED, "Persediaan di mitra (konsinyasi)", "asset"),
     (INPUT_VAT, "PPN masukan", "asset"),
     (PPH_PREPAID, "PPh dibayar di muka (dipotong pembeli)", "asset"),
+    (MARKETPLACE_PPH22, "PPh 22 dipungut marketplace", "asset"),
     (FIXED_ASSETS, "Aset tetap", "asset"),
     (ACCUMULATED_DEPRECIATION, "Akumulasi penyusutan", "asset"),
     (VAT, "Utang PPN keluaran", "liability"),
     (WITHHELD, "Utang PPh dipotong (21/23/4(2))", "liability"),
+    (BPJS_PAYABLE, "Utang BPJS", "liability"),
+    (WAGES_PAYABLE, "Utang gaji", "liability"),
     (UNIDENTIFIED, "Pembayaran belum teridentifikasi", "liability"),
     (PAYABLE, "Utang usaha", "liability"),
     (OTHER_PAYABLE, "Utang lainnya", "liability"),
@@ -101,10 +117,14 @@ CHART = [
     ("6150", "Komisi afiliasi marketplace", "expense"),
     (MDR_FEES, "Biaya MDR EDC / QRIS", "expense"),
 ] + [(code, name, "expense") for code, name in EXPENSE_CATEGORIES] + [
+    (BPJS_EXPENSE, "Beban BPJS perusahaan", "expense"),
+    (SAMPLES, "Sampel & promosi barang", "expense"),
     (DEPRECIATION, "Beban penyusutan", "expense"),
     (STOCK_DIFFERENCE, "Selisih persediaan (stok opname)", "expense"),
+    (DAMAGED_STOCK, "Persediaan rusak & kedaluwarsa", "expense"),
     (CASH_SHORT, "Selisih kas kasir", "expense"),
     (BAD_DEBT, "Beban piutang tak tertagih", "expense"),
+    (PPH_FINAL_EXPENSE, "Beban PPh final", "expense"),
     (INTEREST, "Beban bunga", "expense"),
     (OTHER_INCOME, "Pendapatan lain-lain (bunga, dll.)", "revenue"),
     (ASSET_GAIN, "Laba (rugi) pelepasan aset", "revenue"),

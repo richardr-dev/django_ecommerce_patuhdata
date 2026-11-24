@@ -17,7 +17,15 @@ from .ledger import account_balances, chart_of_accounts
 from .models import FixedAsset, JournalLine, Withholding
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-RP = '#,##0;[Red]-#,##0'
+RP = '#,##0;[Red]-#,##0'  # rupiah: whole numbers
+
+
+def money_format():
+    """Excel number format for the company's book currency (apps/shops/currency.py): no decimals for rupiah,
+    two for dollars and euros."""
+    from apps.shops import currency
+    places = currency.current().decimals
+    return RP if not places else f"#,##0.{'0' * places};[Red]-#,##0.{'0' * places}"
 BLUE, SKY, ICE = "0066FF", "EBF3FF", "F4F8FF"
 HEAD = Font(bold=True, color="FFFFFF")
 HEAD_FILL = PatternFill("solid", fgColor=BLUE)
@@ -64,7 +72,7 @@ class Sheet:
                 value = float(value)
             cell = self.ws.cell(self.row, col, value)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                cell.number_format = fmt or RP
+                cell.number_format = fmt or money_format()
                 cell.alignment = Alignment(horizontal="right")
             elif isinstance(value, (datetime.date, datetime.datetime)):
                 cell.number_format = "dd/mm/yyyy"
@@ -203,7 +211,35 @@ REPORTS = {
     "arus-kas": ("Arus kas", lambda wb, store, start, end: cash_flow(wb, store, start, end, first=True)),
     "neraca-saldo": ("Neraca saldo", lambda wb, store, start, end: trial_balance(wb, store, through=end, first=True)),
     "buku-besar": ("Buku besar", lambda wb, store, start, end: general_ledger(wb, store, start, end, first=True)),
+    "mutasi-persediaan": ("Mutasi persediaan", lambda wb, store, start, end: inventory_mutation(wb, store, start, end,
+        first=True)),
 }
+
+
+def inventory_mutation(wb, store, start, end, *, warehouse=None, first=False):
+    """Mutasi persediaan (``inventory_reports.mutation``): units per item, then Persediaan in rupiah per document."""
+    from .inventory_reports import MUTATION_COLUMNS, mutation
+    report = mutation(store, start, end, warehouse=warehouse)
+    where = f" · {warehouse.name}" if warehouse else ""
+    sheet = Sheet(wb, "Mutasi unit", store, f"{start:%d/%m/%Y} s.d. {end:%d/%m/%Y}{where}", first=first)
+    sheet.header("SKU", "Barang", "Saldo awal", *[label for _c, label, _k in MUTATION_COLUMNS], "Saldo akhir")
+    for row in report["rows"]:
+        sheet.add(row["sku"], row["name"], row["opening"], *[row[c] for c, _l, _k in MUTATION_COLUMNS], row["closing"],
+            fmt="#,##0;[Red]-#,##0")
+    units = report["units"]
+    sheet.add("", "Jumlah", units["opening"], *[units[c] for c, _l, _k in MUTATION_COLUMNS], units["closing"],
+        fmt="#,##0;[Red]-#,##0", total=True)
+    sheet.finish("C5")
+    value = report["value"]
+    money = Sheet(wb, "Mutasi nilai", store, f"Persediaan barang (1400) · {start:%d/%m/%Y} s.d. {end:%d/%m/%Y}")
+    money.header("Dokumen", "Masuk (debit)", "Keluar (kredit)")
+    money.add("Saldo awal", value["opening"], "", bold=True)
+    for row in value["rows"]:
+        money.add(row["label"], row["debit"], row["credit"])
+    money.add("Jumlah mutasi", value["debit"], value["credit"], total=True)
+    money.add("Saldo akhir", value["closing"], "", bold=True)
+    money.finish("A5")
+    return sheet
 
 
 def report_workbook(kind, store, start, end):
@@ -370,4 +406,76 @@ def quarter_workbook(store, year, quarter):
         es.add(label, value)
     es.add("Ekuitas akhir", eq["closing"], bold=True, total=True)
     es.finish("A5")
+    return wb
+
+
+# ---------------------------------------------------------------------------
+# Paket pajak marketplace (one month, for the accountant)
+# ---------------------------------------------------------------------------
+
+def marketplace_tax_workbook(store, year, month):
+    """The month's marketplace selling, from ``channels.marketplace_tax.build`` (the same service as the screen):
+    a summary per shop, every order, and what still needs fixing."""
+    from apps.channels import marketplace_tax
+    from apps.tax.services import month_bounds, monthly_tax, tax_profile
+    start, end = month_bounds(year, month)
+    pack = marketplace_tax.build(store, start, end)
+    tax, profile = monthly_tax(store, year, month), tax_profile(store)
+    wb = Workbook()
+    period = f"{start:%m/%Y}"
+    sheet = Sheet(wb, "Ringkasan", store, f"Paket pajak marketplace {period}", first=True)
+    shops = pack["shops"]
+    names = [f"{r['channel'].get_platform_display()} · {r['channel'].name}" for r in shops]
+    sheet.header("Penjualan (tanggal invoice)", *names, "Jumlah")
+
+    def line(label, key, *, total=False):
+        sheet.add(label, *[r[key] for r in shops], pack["totals"][key], total=total)
+
+    line("Jumlah invoice", "invoices")
+    line("DPP", "dpp")
+    line("PPN keluaran", "vat")
+    line("Total ditagih", "total", total=True)
+    line("Retur / nota kredit", "returns")
+    line("PPN atas retur", "returns_vat")
+    line("Penjualan bersih", "net_sales", total=True)
+    sheet.blank()
+    sheet.header("Pencairan (tanggal dana dilepas)", *names, "Jumlah")
+    line("Pesanan dicairkan", "released_count")
+    line("Nilai pesanan dicairkan", "gross_released")
+    for name, label in pack["fee_labels"]:
+        sheet.add(label, *[r["fees"][name] for r in shops], pack["totals"]["fees"][name])
+    line("Jumlah biaya marketplace", "fees_total", total=True)
+    line("PPh 22 dipungut marketplace", "pph22")
+    line("Dana masuk ke bank", "net", total=True)
+    sheet.blank()
+    line("Belum dicairkan s.d. akhir bulan (piutang marketplace)", "awaiting_value")
+    sheet.blank()
+    sheet.section("Pajak bulan ini (seluruh perusahaan, dari buku besar)", len(names) + 2)
+    sheet.add("Omzet bruto", tax.turnover)
+    sheet.add("PPN keluaran", tax.vat)
+    if profile.pph_regime == "umkm_final":
+        sheet.add("PPh Final UMKM 0,5%", tax.pph)
+        sheet.add("Sudah dipungut marketplace (PPh 22)", tax.marketplace_pph22)
+        sheet.add("Sisa PPh Final disetor", tax.pph_to_deposit, total=True)
+    else:
+        sheet.add("PPh 22 dipungut marketplace (kredit pajak SPT Tahunan, akun 1525)", tax.marketplace_pph22)
+    if pack["checks"]:
+        sheet.blank()
+        sheet.section("Perlu dicek sebelum diserahkan", len(names) + 2)
+        for _level, text, _url in pack["checks"]:
+            sheet.add(text)
+    sheet.finish("A5")
+
+    orders = Sheet(wb, "Per pesanan", store, period)
+    fee_names = [name for name, _label in pack["fee_labels"]]
+    orders.header("Tanggal invoice", "Marketplace", "Toko", "No. pesanan", "No. invoice", "Pembeli", "DPP", "PPN",
+        "Total", "Retur", *[label for _name, label in pack["fee_labels"]], "PPh 22", "Dana cair", "Tanggal cair",
+        "Referensi pencairan")
+    for row in pack["orders"]:
+        orders.add(row["date"], row["platform"], row["shop"], row["order"], row["invoice"].number, row["buyer"],
+            row["dpp"], row["vat"], row["total"], row["returned"], *[row["fees"][n] for n in fee_names], row["pph22"],
+            row["net"], row["released_on"], row["payout"])
+    orders.add("Jumlah", "", "", "", "", "", pack["totals"]["dpp"], pack["totals"]["vat"], pack["totals"]["total"],
+        pack["totals"]["returns"], total=True)
+    orders.finish("A5")
     return wb

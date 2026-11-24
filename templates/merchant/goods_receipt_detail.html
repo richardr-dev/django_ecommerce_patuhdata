@@ -9,7 +9,7 @@
     {% elif can_bill %}<button type="button" class="btn-primary" data-open="bill-dialog">{% icon "plus" %} Buat tagihan</button>{% endif %}</div></div>
 <div class="dp-grid"><div class="space-y-5">
   <section class="panel"><header><h2>Barang diterima</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Jumlah</th><th class="num">Harga</th><th class="num">Nilai</th></tr></thead><tbody>
-    {% for l in lines %}<tr><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_cost|rp }}</td><td class="num"><b>{{ l.line_total|rp }}</b></td></tr>{% endfor %}
+    {% for l in lines %}<tr><td>{{ l.description }}{% if l.lot_code %}<small style="display:block;color:var(--ds-muted)">Lot {{ l.lot_code }}{% if l.expiry_date %} · kedaluwarsa {{ l.expiry_date|date:"d M Y" }}{% endif %}</small>{% endif %}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_cost|rp }}</td><td class="num"><b>{{ l.line_total|rp }}</b></td></tr>{% endfor %}
     <tr><td colspan="3"><b>Total</b></td><td class="num"><b>{{ receipt.value|rp }}</b></td></tr></tbody></table></div></section>
   {% include "merchant/_journal_card.html" %}
 </div>

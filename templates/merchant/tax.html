@@ -3,6 +3,7 @@
   <div><span class="pg-kicker">Pajak</span><h1>PPN & PPh</h1>
     <p>Invoice terbit otomatis untuk setiap pesanan yang dibayar. Kewajiban pajak bulanan dihitung dari buku besar.</p></div>
   <div class="dp-actions"><a class="btn" href="{% url 'merchant-spt-ppn' %}?month={{ month }}">{% icon "file" %} SPT Masa PPN</a>
+    <a class="btn" href="{% url 'merchant-marketplace-tax' %}?month={{ month }}">{% icon "file" %} Paket pajak marketplace</a>
     <a class="btn" href="{% url 'merchant-invoice-register' %}?month={{ month }}" data-no-soft>{% icon "download" %} Rekap invoice CSV</a></div>
 </div>
 
@@ -13,8 +14,8 @@
 
 <div class="tiles">
   <div class="tile accent"><small>Omzet bruto {{ report.start|date:"F Y" }}</small><strong>{{ report.turnover|rp }}</strong><span>Setelah potongan & refund, tanpa PPN · {{ report.invoice_count }} invoice</span></div>
-  {% if profile.pph_regime == "umkm_final" %}<div class="tile"><small>PPh Final UMKM 0,5%</small><strong>{{ report.pph|rp }}</strong><span>{% if report.pph_base < report.turnover %}Dasar {{ report.pph_base|rp }} setelah bebas Rp500 juta/tahun · {% endif %}setor paling lambat {{ report.pph_due|date:"d M Y" }}</span></div>
-  {% else %}<div class="tile"><small>PPh</small><strong>Tarif umum</strong><span>Dihitung dari laba di SPT Tahunan, bukan dari omzet bulanan</span></div>{% endif %}
+  {% if profile.pph_regime == "umkm_final" %}<div class="tile"><small>PPh Final UMKM 0,5%{% if report.marketplace_pph22 %} · sisa disetor{% endif %}</small><strong>{{ report.pph_to_deposit|rp }}</strong><span>{% if report.marketplace_pph22 %}Terutang {{ report.pph|rp }}, sudah dipungut marketplace {{ report.marketplace_pph22|rp }} · {% endif %}{% if report.pph_base < report.turnover %}Dasar {{ report.pph_base|rp }} setelah bebas Rp500 juta/tahun · {% endif %}setor paling lambat {{ report.pph_due|date:"d M Y" }}</span></div>
+  {% else %}<div class="tile"><small>PPh</small><strong>Tarif umum</strong><span>Dihitung dari laba di SPT Tahunan, bukan dari omzet bulanan{% if report.marketplace_pph22 %} · PPh 22 dipungut marketplace {{ report.marketplace_pph22|rp }} menjadi kredit pajak{% endif %}</span></div>{% endif %}
   <div class="tile"><small>PPN keluaran</small><strong>{{ report.vat|rp }}</strong><span>{% if profile.is_pkp %}Setor & lapor SPT Masa PPN paling lambat {{ report.vat_due|date:"d M Y" }}{% else %}Belum PKP: tidak ada PPN yang perlu disetor{% endif %}</span></div>
   {% if profile.is_pkp and report.input_vat %}<div class="tile {% if report.vat_payable >= 0 %}warn{% endif %}"><small>PPN masukan · {% if report.vat_payable >= 0 %}kurang bayar{% else %}lebih bayar{% endif %}</small><strong>{{ report.vat_payable|rp }}</strong><span>Keluaran dikurangi masukan {{ report.input_vat|rp }} dari <a href="{% url 'merchant-expenses' %}">biaya operasional</a>. Setiap PPN masukan perlu Faktur Pajak dari penjual.</span></div>{% endif %}
   <div class="tile"><small>Omzet tahun {{ report.start|date:"Y" }} s.d. bulan ini</small><strong>{{ report.turnover_ytd|rp }}</strong><span>Batas UMKM Rp4,8 miliar per tahun</span></div>

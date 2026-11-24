@@ -14,22 +14,30 @@ from django.views.decorators.http import require_POST
 from apps.accounting import idempotency
 from apps.accounting.bank import parse_amount
 from apps.accounting.ledger import LedgerError
-from apps.catalog.models import Product, annotate_available_stock
+from apps.catalog.models import (
+    PriceListItem,
+    Product,
+    ProductUnit,
+    ProductVariant,
+    annotate_available_stock,
+)
 from apps.orders.models import Order
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog, Customer
-from apps.shops.permissions import roles
+from apps.shops.permissions import can, roles
 
+from . import credit_limit
 from .models import Invoice
 from .sales import (
     clean_lines,
     create_sales_invoice,
+    from_inclusive,
     invoice_lines,
     invoice_locks,
     line_net,
     update_sales_invoice,
 )
-from .services import InvoiceError, normalize_npwp, vat_for
+from .services import InvoiceError, exclusive_price, normalize_npwp, vat_for
 
 EDIT_ROLES = roles("sales.edit")
 LOGIN = "/login/"
@@ -84,43 +92,108 @@ def _post_lines(request, store):
             column("product[]"), column("description[]"), column("qty[]"), column("unit_price[]"),
             column("line_discount[]"), column("unit[]"), column("note[]"), column("code[]"),
             strict=False):
-        product = Product.objects.filter(store=store, pk=product_id).first() if product_id else None
+        product, variant = _item(store, product_id)
         if not product and not text.strip():
             continue
         unit_price = _number(price)
         if not unit_price and product and partner is not None:
-            unit_price = partner_price(partner, product) or unit_price  # the mitra's own price
-        lines.append({"product": product, "description": text.strip(),
+            unit_price = partner_price(partner, product, variant) or unit_price  # the mitra's own price
+        lines.append({"product": product, "variant": variant, "description": text.strip(),
             "qty": _number(qty, Decimal(1)), "unit_price": unit_price,
             "discount": _number(discount), "unit": unit, "note": note, "code": code})
     return lines
 
 
+def _item(store, value):
+    """``(product, variant)`` of a posted ``product[]``: a product id, or ``v<id>`` for a size or colour."""
+    value = (value or "").strip()
+    if not value:
+        return None, None
+    if value.startswith("v"):
+        variant = ProductVariant.objects.select_related("product").filter(product__store=store,
+            pk=value[1:] if value[1:].isdigit() else None).first()
+        if variant is None:
+            raise InvoiceError("Varian produk tidak ditemukan.")
+        return variant.product, variant
+    return Product.objects.filter(store=store, pk=value).first(), None
+
+
 def _rows(lines):
     """Lines as the template needs them to draw (and redraw after an error)."""
-    return [{"product_id": line["product"].pk if line.get("product") else "",
-        "text": line["description"] if not line.get("product") else (
-            f"{line['product'].sku} — {line['product'].name}"),
+    return [{"product_id": (f"v{line['variant'].pk}" if line.get("variant") else line["product"].pk)
+        if line.get("product") else "",
+        "text": line["description"] if not line.get("product") else _label(line["product"], line.get("variant")),
         "qty": f"{Decimal(line['qty']).normalize():f}", "price": f"{Decimal(line['unit_price']):.0f}",
         "discount": f"{Decimal(line.get('discount') or 0):.0f}" if line.get("discount") else "",
         "net": f"{line_net(line):.0f}", "unit": line.get("unit", ""), "note": line.get("note", ""),
         "code": line.get("code", "")} for line in lines]
 
 
+def _with_tax(store, amount):
+    """A price before PPN as the seller typed it with PPN in: the whole rupiah that ``exclusive_price``
+    brings back to the same figure (else the exact cents)."""
+    amount = Decimal(amount or 0)
+    if not amount or not store.tax_rate:
+        return amount
+    gross = amount * (100 + store.tax_rate) / 100
+    whole = gross.quantize(Decimal(1))
+    return whole if exclusive_price(store, whole) == amount else gross.quantize(Decimal("0.01"))
+
+
+def _typed_with_tax(store, lines, discount):
+    """Lines and invoice discount of an invoice entered with "Harga sudah termasuk PPN", put back the
+    way they were typed so the edit form shows the same figures."""
+    lines = [{**line, "unit_price": _with_tax(store, line["unit_price"]),
+        "discount": _with_tax(store, line.get("discount") or 0)} for line in lines]
+    return lines, _with_tax(store, discount)
+
+
+def _label(product, variant=None):
+    """How a product (or one of its sizes) reads in the picker; the form matches typed text against it."""
+    if variant is not None:
+        return f"{variant.sku} — {product.name} / {variant.name}"
+    return f"{product.sku} — {product.name}"
+
+
 def _catalog(store):
+    """Products for the picker. A product with variants is sold through its sizes or colours, each its own
+    entry with its own stock; the parent stays in the list (``pick: False``) only so older lines still read."""
     from apps.settlements.models import PartnerProductPrice
     products = annotate_available_stock(Product.objects.filter(store=store, is_active=True)
         ).order_by("name")[:3000]
+    units = {}   # larger units (dus = 12 pcs): the form prices a line by the unit chosen
+    for product_id, name, factor in ProductUnit.objects.filter(product__store=store, is_active=True).values_list(
+            "product_id", "name", "factor"):
+        units.setdefault(product_id, []).append({"name": name, "factor": factor})
+    variants = {}
+    for variant in ProductVariant.objects.filter(product__store=store, product__is_active=True,
+            is_active=True).order_by("product_id", "name"):
+        variants.setdefault(variant.product_id, []).append(variant)
+    variant_lists = {}
+    for variant_id, list_id, price in PriceListItem.objects.filter(price_list__store=store,
+            price_list__is_active=True, variant__isnull=False).values_list("variant_id", "price_list_id", "price"):
+        variant_lists.setdefault(variant_id, {})[str(list_id)] = f"{price:.0f}"
     mitra = {}
     for product_id, partner_id, price in PartnerProductPrice.objects.filter(
             partner__store=store).values_list("product_id", "partner_id", "price"):
         mitra.setdefault(product_id, {})[str(partner_id)] = f"{price:.0f}"
     from .pricing import price_map
     lists = price_map(store)
-    return [{"id": str(p.pk), "sku": p.sku, "name": p.name, "price": f"{p.price:.0f}",
-        "ab_price": f"{p.ab_shop_price:.0f}" if p.ab_shop_price is not None else "",
-        "mitra": mitra.get(p.pk, {}), "lists": lists.get(p.pk, {}),
-        "stock": getattr(p, "stock_available", None)} for p in products]
+    found = []
+    for p in products:
+        sizes = variants.get(p.pk, [])
+        found.append({"id": str(p.pk), "label": _label(p), "sku": p.sku, "name": p.name, "price": f"{p.price:.0f}",
+            "base": p.base_unit or "pcs", "units": units.get(p.pk, []),
+            "ab_price": f"{p.ab_shop_price:.0f}" if p.ab_shop_price is not None else "",
+            "mitra": mitra.get(p.pk, {}), "lists": lists.get(p.pk, {}), "pick": not sizes,
+            "stock": getattr(p, "stock_available", None)})
+        for v in sizes:   # the parent's list and mitra prices apply unless the variant has its own row
+            found.append({"id": f"v{v.pk}", "label": _label(p, v), "sku": v.sku, "name": f"{p.name} / {v.name}",
+                "price": f"{v.effective_price:.0f}", "ab_price": f"{v.effective_ab_shop_price:.0f}"
+                if v.ab_shop_price is not None or p.ab_shop_price is not None else "",
+                "mitra": mitra.get(p.pk, {}), "lists": {**lists.get(p.pk, {}), **variant_lists.get(v.pk, {})},
+                "pick": True, "stock": v.available_stock})
+    return found
 
 
 def _initial(store, source, mode, prefill):
@@ -129,6 +202,9 @@ def _initial(store, source, mode, prefill):
         order = source.order
         buyer = source.buyer_name
         company = ""
+        lines, discount = invoice_lines(source), source.discount
+        if source.prices_include_tax and source.seller_is_pkp:
+            lines, discount = _typed_with_tax(store, lines, discount)
         if " (" in buyer and buyer.endswith(")") and order.customer_id and (
                 order.customer.company_name and buyer.startswith(order.customer.company_name)):
             company = order.customer.company_name
@@ -144,10 +220,12 @@ def _initial(store, source, mode, prefill):
             "partner_id": order.consignment_partner_id or "",
             "issued_on": source.issued_on if mode == "edit" else timezone.localdate(),
             "due_date": source.due_date if mode == "edit" else None,
-            "discount": f"{source.discount:.0f}" if source.discount else "",
+            "discount": f"{discount:.0f}" if discount else "",
+            "prices_include_tax": source.prices_include_tax,
             "shipping": f"{source.shipping:.0f}" if source.shipping else "",
             "on_credit": source.status != Invoice.STATUS_PAID if mode == "edit" else False,
-            "lines": _rows(invoice_lines(source))}
+            "warehouse": str(source.warehouse_id or ""),   # a copy sells from the same location
+            "lines": _rows(lines)}
     return {"customer": prefill, "buyer_name": prefill.name if prefill else "",
         "company_name": prefill.company_name if prefill else "", "npwp": prefill.npwp if prefill else "",
         "phone": prefill.phone if prefill else "", "address": prefill.address if prefill else "",
@@ -176,6 +254,8 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
             messages.info(request, "Invoice ini sudah dibuat.")
             return redirect("merchant-invoice-detail", invoice_id=earlier) if earlier else redirect("merchant-sales-invoices")
         customer = _customer(store, post.get("customer_id"))
+        # A manager or finance may sell past the customer's credit limit; everyone else is held to it.
+        override = post.get("credit_override") == "1" and can(request.user, store, "sales.credit")
         try:
             lines = _post_lines(request, store) if not locks else None
             if lines is not None:
@@ -190,24 +270,31 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                 from .pricing import due_date_for  # the customer's terms fill a due date left empty
                 due = due_date_for(customer, common["issued_on"])
             reference = post.get("reference", "")
+            inclusive = post.get("prices_include_tax") == "1" and lines is not None
+            discount, rounding = _number(post.get("discount")), Decimal(0)
+            if inclusive:   # prices typed with PPN in them
+                lines, discount, rounding = from_inclusive(store, lines, discount)
             if editing:
                 invoice = update_sales_invoice(source, **common, buyer_address=post.get("address", ""),
                     due_date=due, external_order_id=reference, lines=lines,
-                    discount=_number(post.get("discount")) if lines is not None else None,
+                    discount=discount if lines is not None else None,
                     shipping=_number(post.get("shipping")) if lines is not None else None,
-                    actor=request.user)
+                    rounding=rounding, prices_include_tax=inclusive if lines is not None else None,
+                    actor=request.user, credit_check=not override)
                 Order.objects.filter(pk=invoice.order_id).update(
                     courier_code=post.get("courier", "").strip().lower()[:40],
                     tracking_number=post.get("tracking_number", "").strip()[:100])
             else:
                 invoice = create_sales_invoice(store, lines=lines, address=post.get("address", "-"),
                     channel=post.get("channel", "manual"), external_order_id=reference,
-                    discount=_number(post.get("discount")), shipping=_number(post.get("shipping")),
+                    discount=discount, shipping=_number(post.get("shipping")), rounding=rounding,
+                    warehouse=_warehouse(store, post.get("warehouse")),
                     on_credit=post.get("payment_status") == "credit", due_date=due,
                     actor=request.user, **{k: v for k, v in common.items() if k != "notes"},
                     notes=common["notes"], courier=post.get("courier", ""),
                     tracking_number=post.get("tracking_number", ""),
-                    partner=_partner(store, post.get("partner_id")))
+                    partner=_partner(store, post.get("partner_id")), credit_check=not override,
+                    prices_include_tax=inclusive)
         except (InvoiceError, LedgerError, InvalidOperation, ValueError) as error:
             idempotency.release(store, "invoice", idem)
             messages.error(request, f"Gagal: {error}" if str(error) else "Isian tidak valid.")
@@ -220,13 +307,16 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
                 "notes": post.get("notes", ""), "discount": post.get("discount", ""),
                 "shipping": post.get("shipping", ""), "on_credit": post.get("payment_status") == "credit",
                 "issued_on": parse_date(post.get("issued_on", "")) or timezone.localdate(),
-                "due_date": parse_date(post.get("due_date", ""))})
+                "due_date": parse_date(post.get("due_date", "")),
+                "prices_include_tax": post.get("prices_include_tax") == "1", "warehouse": post.get("warehouse", "")})
             try:
                 initial["lines"] = _rows(_post_lines(request, store))
-            except InvalidOperation:
+            except (InvalidOperation, InvoiceError):
                 pass
         else:
             idempotency.finish(store, "invoice", idem, invoice.pk)
+            if override and customer is not None:
+                credit_limit.log_override(store, request.user, invoice, customer)
             AuditLog.objects.create(store=store, actor=request.user,
                 action="invoice.updated" if editing else "invoice.created", object_type="Invoice",
                 object_id=str(invoice.pk), details={"number": invoice.number,
@@ -241,7 +331,26 @@ def merchant_invoice_form(request, invoice_id=None, mode="new"):
         price_lists=__import__("apps.tax.pricing", fromlist=["lists_for_form"]).lists_for_form(store),
         channels=[c for c in Order.CHANNELS if c[0] not in {"pos", "abshop"}],
         catalog=_catalog(store), partners=_partners(store), idem_key=idempotency.new_key(),
-        today=timezone.localdate().isoformat(), post=request.POST))
+        may_override_credit=can(request.user, store, "sales.credit"),
+        today=timezone.localdate().isoformat(), post=request.POST, warehouses=_warehouses(store)))
+
+
+def _warehouses(store):
+    """Locations to sell from; the choice is offered only when there is more than one."""
+    from apps.catalog.models import Warehouse
+    found = list(Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id"))
+    return found if len(found) > 1 else []
+
+
+def _warehouse(store, value):
+    """The chosen location, or None: the store's locations in priority order."""
+    if not value:
+        return None
+    from apps.catalog.models import Warehouse
+    found = Warehouse.objects.filter(store=store, is_active=True, pk=value).first() if str(value).isdigit() else None
+    if found is None:
+        raise InvoiceError("Gudang tidak ditemukan.")
+    return found
 
 
 @login_required(login_url=LOGIN)

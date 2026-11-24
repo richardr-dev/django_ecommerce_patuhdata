@@ -102,7 +102,7 @@ def merchant_stock_request(request, request_id):
             messages.error(request, f"Gagal: {error}")
         return redirect("merchant-stock-request", request_id=doc.pk)
     return render(request, "merchant/stock_request_detail.html", _merchant_context(request, store, doc=doc,
-        lines=list(doc.lines.select_related("product")), audit=audit_trail(store, doc),
+        lines=list(doc.lines.select_related("product", "variant")), audit=audit_trail(store, doc),
         can_request=permissions.can(request.user, store, "stock.request"),
         can_approve=permissions.can(request.user, store, "stock.request_approve"),
         can_send=permissions.can(request.user, store, "stock.send")))

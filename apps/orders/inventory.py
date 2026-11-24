@@ -8,12 +8,37 @@ from .models import InventoryAllocation, InventoryMovement
 
 def record_movement(*, store, kind, quantity, reason, order_item=None, inventory_level=None,
     variant=None, previous_on_hand, new_on_hand, previous_reserved, new_reserved, actor=None,
-    source_type="", source_id="", unit_cost=None):
-    return InventoryMovement.objects.create(store=store, order_item=order_item,
-        inventory_level=inventory_level, variant=variant, kind=kind, quantity=quantity, reason=reason,
-        actor=actor, previous_on_hand=previous_on_hand, new_on_hand=new_on_hand,
-        previous_reserved=previous_reserved, new_reserved=new_reserved,
-        source_type=source_type, source_id=str(source_id), unit_cost=unit_cost)
+    source_type="", source_id="", unit_cost=None, warehouse=None):
+    """Write the movement. For a variant whose total changes, its per-warehouse rows change with it
+    (``variant_stock.apply``): one movement per location touched, each carrying its warehouse, so a sale
+    that takes units from two warehouses leaves two movements. Returns the (last) movement."""
+    fields = {"store": store, "order_item": order_item, "inventory_level": inventory_level, "variant": variant, "kind": kind,
+        "reason": reason, "actor": actor, "previous_reserved": previous_reserved, "new_reserved": new_reserved,
+        "source_type": source_type, "source_id": str(source_id), "unit_cost": unit_cost}
+    delta = new_on_hand - previous_on_hand
+    if variant is None or not delta:
+        movement = InventoryMovement.objects.create(quantity=quantity, previous_on_hand=previous_on_hand,
+            new_on_hand=new_on_hand, warehouse=warehouse if variant is not None else None, **fields)
+        _follow_lots(movement, inventory_level, variant, delta)
+        return movement
+    from .variant_stock import apply
+    running, movement = previous_on_hand, None
+    for location, part in apply(variant, store=store, before=previous_on_hand, delta=delta, warehouse=warehouse):
+        movement = InventoryMovement.objects.create(quantity=abs(part), previous_on_hand=running,
+            new_on_hand=running + part, warehouse=location, **fields)
+        _follow_lots(movement, inventory_level, variant, part)
+        running += part
+    return movement
+
+
+def _follow_lots(movement, inventory_level, variant, delta):
+    """Lots and expiry dates follow the units of a product that tracks them (``orders/lots.py``)."""
+    if not delta:
+        return
+    product = variant.product if variant is not None else (inventory_level.product if inventory_level else None)
+    if product is not None and product.tracks_lots:
+        from .lots import follow
+        follow(movement, product, variant, delta)
 
 
 def reserve_variant(order_item, variant, quantity):
@@ -116,6 +141,19 @@ def commit_order_inventory(order, *, actor=None):
             previous_reserved=previous_reserved, new_reserved=variant.reserved)
 
 
+def _commit_variant(store, item, variant, quantity, *, warehouse, actor=None):
+    """Take a reserved variant line off one location's shelf now (a sale from a chosen warehouse or outlet);
+    ``commit_order_inventory`` then finds the commit and leaves the line alone."""
+    variant = ProductVariant.objects.select_for_update().get(pk=variant.pk)
+    previous_on_hand, previous_reserved = variant.stock, variant.reserved
+    variant.stock -= quantity
+    variant.reserved -= quantity
+    variant.save(update_fields=["stock", "reserved"])
+    record_movement(store=store, order_item=item, variant=variant, kind="commit", quantity=quantity,
+        reason="order_packed", actor=actor, previous_on_hand=previous_on_hand, new_on_hand=variant.stock,
+        previous_reserved=previous_reserved, new_reserved=variant.reserved, warehouse=warehouse)
+
+
 def _tracked_levels(store, product, warehouse=None, *, lock=False):
     """``(tracked, levels)``: whether the product has stock levels anywhere in the store, and the
     levels a sale may take from: all of them in priority order, or only the one in ``warehouse``.
@@ -167,13 +205,18 @@ def deduct_invoice_stock(order, *, allow_negative=False, actor=None, warehouse=N
             if item.variant_id:
                 try:
                     variant = _PV.objects.select_for_update().get(id=item.variant_id)
-                    if variant.available_stock >= qty:
-                        reserve_variant(item, variant, qty)
-                    else:
-                        shortages.append((item.sku, qty, variant.available_stock))
-                        continue
                 except _PV.DoesNotExist:
                     continue
+                available = variant.available_stock
+                if warehouse is not None:
+                    from .variant_stock import at
+                    available = min(available, at(variant, warehouse))
+                if available < qty:
+                    shortages.append((item.sku, qty, available))
+                    continue
+                reserve_variant(item, variant, qty)
+                if warehouse is not None:
+                    _commit_variant(order.store, item, variant, qty, warehouse=warehouse, actor=actor)
             else:
                 tracked, levels = _tracked_levels(order.store, item.product, warehouse, lock=True)
                 if not tracked:
@@ -192,6 +235,10 @@ def deduct_invoice_stock(order, *, allow_negative=False, actor=None, warehouse=N
                     sell_short(item, levels[0], qty - available, actor=actor)
                     continue
                 reserve_from_levels(item, levels, qty, reason="manual_invoice")
+        if shortages:
+            # The caller refuses the invoice: undo what this call reserved or took, and say what was short.
+            transaction.set_rollback(True)
+            return shortages
         commit_order_inventory(order)
     return shortages
 
@@ -225,10 +272,17 @@ def return_order_inventory(order, *, actor=None, reason="pesanan_dibatalkan"):
         if not committed or InventoryMovement.objects.filter(order_item=item, variant=variant,
                 kind="return").exists():
             continue
-        previous_on_hand = variant.stock
-        variant.stock += item.quantity
-        variant.save(update_fields=["stock"])
-        record_movement(store=order.store, order_item=item, variant=variant, kind="return",
-            quantity=item.quantity, reason=reason, actor=actor, previous_on_hand=previous_on_hand,
-            new_on_hand=variant.stock, previous_reserved=variant.reserved,
-            new_reserved=variant.reserved)
+        # The units go back where they left from (a sale over two warehouses returns to both).
+        taken = {}
+        for move in InventoryMovement.objects.filter(order_item=item, variant=variant, kind="commit"):
+            taken[move.warehouse] = taken.get(move.warehouse, 0) + move.previous_on_hand - move.new_on_hand
+        for location, quantity in taken.items():
+            if quantity <= 0:
+                continue
+            previous_on_hand = variant.stock
+            variant.stock += quantity
+            variant.save(update_fields=["stock"])
+            record_movement(store=order.store, order_item=item, variant=variant, kind="return",
+                quantity=quantity, reason=reason, actor=actor, previous_on_hand=previous_on_hand,
+                new_on_hand=variant.stock, previous_reserved=variant.reserved,
+                new_reserved=variant.reserved, warehouse=location)

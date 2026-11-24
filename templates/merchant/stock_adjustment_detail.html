@@ -1,0 +1,26 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ adjustment.number }}{% endblock %}
+{% block content %}
+<div class="dp-crumb"><a href="{% url 'merchant-stock-adjustments' %}">Penyesuaian stok</a> / {{ adjustment.number }}</div>
+<div class="pg-head"><div><h1 class="dp-title">{{ adjustment.number }}</h1><p>{{ adjustment.reason_label }} · {{ adjustment.warehouse.name }} · {{ adjustment.adjusted_on|date:"d F Y" }} · dibuat {{ adjustment.created_by.username|default:"—" }} ·
+  {% if adjustment.status == "void" %}<span class="pill pill-draft">Dibatalkan</span>{% if adjustment.voided_by %} oleh {{ adjustment.voided_by.username }}{% endif %}{% else %}<span class="pill pill-paid">Dibukukan</span>{% endif %}</p></div>
+  {% if can_void %}<div class="dp-actions"><form method="post">{% csrf_token %}<button class="btn btn-danger" name="action" value="void" data-confirm="Batalkan penyesuaian {{ adjustment.number }}? Stok dikembalikan dan jurnalnya dibalik." data-confirm-ok="Batalkan penyesuaian">Batalkan</button></form></div>{% endif %}</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Nilai</small><strong>{{ adjustment.value|signed_rp }}</strong><span>{% if adjustment.value < 0 %}Persediaan berkurang{% elif adjustment.value > 0 %}Persediaan bertambah{% else %}tanpa nilai{% endif %}</span></div>
+  <div class="tile"><small>Akun lawan</small><strong style="font-size:18px">{{ adjustment.account_code }}</strong><span>{{ account.name|default:"" }}</span></div>
+  <div class="tile"><small>Barang</small><strong>{{ lines|length }}</strong><span>baris</span></div>
+</div>
+
+{% if adjustment.notes %}<div class="notice">{% icon "info" %}<span>{{ adjustment.notes }}</span></div>{% endif %}
+
+<section class="panel"><header><div><h2>Barang</h2><p>Plus = masuk ke gudang, minus = keluar. Barang keluar dinilai pada harga pokok rata-rata saat itu.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Jumlah</th><th class="num">Harga pokok</th><th class="num">Nilai</th></tr></thead><tbody>
+  {% for l in lines %}<tr><td><a href="{% url 'merchant-stock-card' %}?sku={{ l.product.sku|urlencode }}"><b>{{ l.name }}</b></a><small>{{ l.variant.sku|default:l.product.sku }}</small></td>
+    <td class="num"><span class="pill {% if l.quantity < 0 %}pill-overdue{% else %}pill-paid{% endif %}">{% if l.quantity > 0 %}+{% endif %}{{ l.quantity }}</span></td>
+    <td class="num">{{ l.unit_cost|rp }}</td><td class="num"><b>{{ l.value|signed_rp }}</b></td></tr>{% endfor %}
+  <tr><td colspan="3"><b>Jumlah</b></td><td class="num"><b>{{ adjustment.value|signed_rp }}</b></td></tr>
+  </tbody></table></div></section>
+{% include "merchant/_journal_card.html" %}
+{% include "merchant/_audit_card.html" %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{% endblock %} · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"></div>
+    {% block card %}{% endblock %}
+  </div>
+  <p class="ln-foot">{{ platform_company_name }}</p>
+</main>
+<script>
+(function () {
+  var form = document.querySelector("form[data-busy]");
+  if (form) form.addEventListener("submit", function () {
+    var button = form.querySelector(".ln-btn"); button.disabled = true; button.textContent = form.dataset.busy;
+  });
+  document.querySelectorAll("[data-toggle]").forEach(function (toggle) {
+    var field = document.getElementById(toggle.getAttribute("aria-controls"));
+    toggle.addEventListener("click", function () {
+      var show = field.type === "password";
+      field.type = show ? "text" : "password";
+      toggle.textContent = show ? "Sembunyikan" : "Lihat";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+    });
+  });
+})();
+</script></body></html>

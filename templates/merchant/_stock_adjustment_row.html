@@ -1,0 +1,6 @@
+{% load books %}<tr><td><input type="text" name="sku[]" list="sa-catalog" class="sa-sku" value="{{ r.sku }}" placeholder="Nama, SKU, atau barcode" aria-label="Barang" autocomplete="off"><small class="sa-name"></small></td>
+  <td class="sa-sign"><select name="sign[]" class="sa-sign-input" aria-label="Arah"><option value="-"{% if r.sign != "+" %} selected{% endif %}>Kurangi</option><option value="+"{% if r.sign == "+" %} selected{% endif %}>Tambah</option></select></td>
+  <td><input type="number" name="qty[]" value="{{ r.qty|default:'1' }}" min="1" step="1" class="qty-input num" aria-label="Jumlah"></td>
+  <td><input type="text" name="cost[]" data-rupiah inputmode="numeric" value="{{ r.cost }}" class="cost-input num" placeholder="Harga pokok" aria-label="Harga pokok per unit"></td>
+  <td class="num sa-line"><b class="line-total">{{ 0|rp }}</b></td>
+  <td data-no-row><button type="button" class="remove-row" aria-label="Hapus baris" style="border:0;background:none;color:var(--ds-faint);font-size:20px;cursor:pointer">&times;</button></td></tr>

@@ -53,6 +53,14 @@ services:
     <<: *app
     command: sh -c 'while true; do python manage.py run_books; python manage.py clearsessions; sleep ${BOOKS_EVERY_SECONDS:-21600}; done'
     depends_on: {web: {condition: service_healthy}}
+    # No web server in this container: healthy while run_books has finished a cycle in the last 14 hours
+    # (it runs every 6 by default), instead of the image's HTTP check, which always failed here.
+    healthcheck:
+      test: ["CMD", "python", "docker/worker_healthcheck.py", "run_books", "50400"]
+      interval: 60s
+      timeout: 20s
+      start_period: 300s
+      retries: 3
   db:
     image: postgres:17-alpine
     restart: always

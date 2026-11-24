@@ -1,0 +1,49 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Pajak marketplace{% endblock %}{% block content %}
+<nav class="text-xs text-blue-700"><a href="{% url 'merchant-tax' %}?month={{ month }}">Pajak</a> › Pajak marketplace</nav>
+<div class="pg-head">
+  <div><span class="pg-kicker">Pajak</span><h1>Paket pajak marketplace</h1>
+    <p>Penjualan, biaya, dan PPh 22 dari Shopee, Tokopedia, TikTok Shop, dan Lazada untuk satu bulan, siap diserahkan ke akuntan.</p></div>
+  <div class="dp-actions"><a class="btn-primary" href="?month={{ month }}&format=xlsx" data-no-soft>{% icon "download" %} Unduh Excel</a></div>
+</div>
+
+<form method="get" class="toolbar"><label class="field"><span>Bulan</span><input type="month" name="month" value="{{ month }}" onchange="this.form.submit()"></label></form>
+
+{% for level, text, url in pack.checks %}<div class="notice"{% if level == "bad" %} style="background:var(--ds-bad-bg);color:var(--ds-bad)"{% endif %}>{% icon "alert" %}<span>{{ text }} <a href="{{ url }}">Buka</a></span></div>{% endfor %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Penjualan bersih marketplace</small><strong>{{ pack.totals.net_sales|rp }}</strong><span>{{ pack.totals.invoices }} invoice, setelah retur {{ pack.totals.returns|rp }}</span></div>
+  <div class="tile"><small>PPN keluaran</small><strong>{{ pack.totals.vat|rp }}</strong><span>{% if profile.is_pkp %}Masuk SPT Masa PPN{% else %}Belum PKP{% endif %}</span></div>
+  <div class="tile"><small>Biaya marketplace</small><strong>{{ pack.totals.fees_total|rp }}</strong><span>Dari {{ pack.totals.released_count }} pesanan yang dicairkan</span></div>
+  {% if profile.pph_regime == "umkm_final" %}<div class="tile warn"><small>Sisa PPh Final disetor</small><strong>{{ report.pph_to_deposit|rp }}</strong><span>Terutang {{ report.pph|rp }} (seluruh omzet), dipungut marketplace {{ report.marketplace_pph22|rp }}</span></div>
+  {% else %}<div class="tile"><small>PPh 22 dipungut marketplace</small><strong>{{ pack.totals.pph22|rp }}</strong><span>Kredit pajak di SPT Tahunan (akun 1525)</span></div>{% endif %}
+</div>
+
+<section class="panel"><header><div><h2>Per toko</h2><p>Penjualan menurut tanggal invoice; pencairan menurut tanggal dana dilepas marketplace.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th></th>{% for r in pack.shops %}<th class="num">{{ r.channel.get_platform_display }}<small style="display:block;font-weight:500">{{ r.channel.name }}</small></th>{% endfor %}<th class="num">Jumlah</th></tr></thead><tbody>
+    <tr><td>Invoice</td>{% for r in pack.shops %}<td class="num">{{ r.invoices }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.invoices }}</b></td></tr>
+    <tr><td>DPP</td>{% for r in pack.shops %}<td class="num">{{ r.dpp|rp }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.dpp|rp }}</b></td></tr>
+    <tr><td>PPN keluaran</td>{% for r in pack.shops %}<td class="num">{{ r.vat|rp }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.vat|rp }}</b></td></tr>
+    <tr><td>Retur</td>{% for r in pack.shops %}<td class="num">{{ r.returns|rp }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.returns|rp }}</b></td></tr>
+    <tr><td><b>Penjualan bersih</b></td>{% for r in pack.shops %}<td class="num"><b>{{ r.net_sales|rp }}</b></td>{% endfor %}<td class="num"><b>{{ pack.totals.net_sales|rp }}</b></td></tr>
+    <tr><td>Pesanan dicairkan</td>{% for r in pack.shops %}<td class="num">{{ r.released_count }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.released_count }}</b></td></tr>
+    <tr><td>Biaya marketplace</td>{% for r in pack.shops %}<td class="num">{{ r.fees_total|rp }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.fees_total|rp }}</b></td></tr>
+    <tr><td>PPh 22 dipungut</td>{% for r in pack.shops %}<td class="num">{{ r.pph22|rp }}</td>{% endfor %}<td class="num"><b>{{ pack.totals.pph22|rp }}</b></td></tr>
+    <tr><td><b>Dana masuk bank</b></td>{% for r in pack.shops %}<td class="num"><b>{{ r.net|rp }}</b></td>{% endfor %}<td class="num"><b>{{ pack.totals.net|rp }}</b></td></tr>
+    <tr><td>Belum dicairkan</td>{% for r in pack.shops %}<td class="num">{{ r.awaiting_value|rp }}{% if r.awaiting_count %}<small>{{ r.awaiting_count }} pesanan</small>{% endif %}</td>{% endfor %}<td class="num"><b>{{ pack.totals.awaiting_value|rp }}</b></td></tr>
+  {% if not pack.shops %}<tr><td colspan="2" class="!py-10 text-center text-slate-400">Belum ada penjualan marketplace pada bulan ini. <a href="{% url 'merchant-channels' %}">Impor pesanan marketplace</a>.</td></tr>{% endif %}
+  </tbody></table></div></section>
+
+{% if pack.totals.fee_rows %}<section class="panel"><header><div><h2>Biaya marketplace menurut jenis</h2><p>Masing-masing dibukukan ke akunnya sendiri (6110–6150), sehingga laba rugi menunjukkan ke mana uangnya pergi.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Jenis</th><th class="num">Jumlah</th></tr></thead><tbody>
+  {% for label, amount in pack.totals.fee_rows %}<tr><td>{{ label }}</td><td class="num">{{ amount|rp }}</td></tr>{% endfor %}
+  <tr><td><b>Jumlah</b></td><td class="num"><b>{{ pack.totals.fees_total|rp }}</b></td></tr></tbody></table></div></section>{% endif %}
+
+<section class="panel"><header><div><h2>Per pesanan</h2><p>{% if pack.orders|length > 200 %}200 pertama dari {{ pack.orders|length }}; Excel memuat semuanya.{% else %}{{ pack.orders|length }} pesanan.{% endif %}</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Invoice</th><th>Toko</th><th>No. pesanan</th><th class="num">DPP</th><th class="num">PPN</th><th class="num">Biaya</th><th class="num">PPh 22</th><th class="num">Dana cair</th></tr></thead><tbody>
+  {% for row in pack.orders|slice:":200" %}<tr><td><a href="{% url 'merchant-invoice' row.invoice.id %}"><b>{{ row.invoice.number }}</b></a><small>{{ row.date|date:"d M Y" }}</small></td><td>{{ row.shop }}</td><td>{{ row.order }}</td>
+    <td class="num">{{ row.dpp|rp }}</td><td class="num">{{ row.vat|rp }}</td>
+    {% if row.net != None %}<td class="num">{{ row.fees_total|rp }}</td><td class="num">{{ row.pph22|rp }}</td><td class="num"><b>{{ row.net|rp }}</b><small>{{ row.released_on|date:"d M Y" }}</small></td>
+    {% else %}<td class="num" colspan="3"><span class="pill pill-issued">Belum dicairkan</span></td>{% endif %}</tr>
+  {% empty %}<tr><td colspan="8" class="!py-10 text-center text-slate-400">Tidak ada invoice marketplace pada bulan ini.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+{% endblock %}

@@ -1,7 +1,7 @@
-{% load icons %}
+{% load icons books %}
 <div class="tiles">
   <div class="tile"><small>Pesanan{% if active_filters %} (terfilter){% endif %}</small><strong>{{ history_count }}</strong></div>
-  <div class="tile"><small>Total belanja</small><strong>Rp{{ history_spend|floatformat:"0g" }}</strong></div>
+  <div class="tile"><small>Total belanja</small><strong>{{ history_spend|rp }}</strong></div>
   <div class="tile"><small>Jenis produk</small><strong>{{ purchased|length }}</strong></div>
   <div class="tile"><small>Jumlah unit</small><strong>{{ history_units }}</strong></div>
 </div>
@@ -11,7 +11,7 @@
 </div>{% endif %}
 <section class="panel mt-4"><header><div><h2>Apa saja yang dibeli</h2><p>Gabungan semua pesanan pada tampilan ini.</p></div></header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Produk</th><th class="num">Unit</th><th class="num">Pesanan</th><th class="num">Nilai</th><th>Terakhir beli</th></tr></thead>
-    <tbody>{% for p in purchased %}<tr><td><b class="rowlink">{{ p.name }}</b>{% if p.sku %}<small>{{ p.sku }}</small>{% endif %}</td><td class="num">{{ p.units }}</td><td class="num">{{ p.orders }}</td><td class="num"><b>Rp{{ p.revenue|floatformat:"0g" }}</b></td><td>{{ p.last|date:"d M Y" }}</td></tr>
+    <tbody>{% for p in purchased %}<tr><td><b class="rowlink">{{ p.name }}</b>{% if p.sku %}<small>{{ p.sku }}</small>{% endif %}</td><td class="num">{{ p.units }}</td><td class="num">{{ p.orders }}</td><td class="num"><b>{{ p.revenue|rp }}</b></td><td>{{ p.last|date:"d M Y" }}</td></tr>
     {% empty %}<tr><td colspan="5" class="dp-empty">Belum ada pembelian di tampilan ini.</td></tr>{% endfor %}</tbody></table></div></section>
 <section class="panel"><header><h2>Riwayat pembelian</h2><small>{{ history_count }} pesanan{% if active_filters %} (terfilter){% endif %}</small></header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Tanggal</th><th>Channel</th><th>Status</th><th>Produk</th><th class="num">Total</th><th></th></tr></thead><tbody>
@@ -20,9 +20,9 @@
     <td>{{ order.created_at|date:"d M Y" }}</td>
     <td><span class="pill pill-info">{{ order.get_channel_display }}</span></td>
     <td><span class="pill {% if order.status == 'paid' or order.status == 'completed' %}pill-paid{% elif order.status == 'cancelled' %}pill-overdue{% else %}pill-void{% endif %}">{{ order.get_status_display }}</span></td>
-    <td>{% for item in order.items.all %}<div>{{ item.quantity }} × {{ item.name }}{% if item.sku %} <small class="muted">{{ item.sku }}</small>{% endif %} <small class="muted">· Rp{{ item.line_total|floatformat:"0g" }}</small></div>{% empty %}<small class="muted">Tidak ada detail produk.</small>{% endfor %}
-      {% if order.discount or order.shipping_cost %}<small class="muted">{% if order.discount %}Diskon −Rp{{ order.discount|floatformat:"0g" }} {% endif %}{% if order.shipping_cost %}Ongkir Rp{{ order.shipping_cost|floatformat:"0g" }}{% endif %}</small>{% endif %}</td>
-    <td class="num"><b>Rp{{ order.total|floatformat:"0g" }}</b></td>
+    <td>{% for item in order.items.all %}<div>{{ item.quantity }} × {{ item.name }}{% if item.sku %} <small class="muted">{{ item.sku }}</small>{% endif %} <small class="muted">· {{ item.line_total|rp }}</small></div>{% empty %}<small class="muted">Tidak ada detail produk.</small>{% endfor %}
+      {% if order.discount or order.shipping_cost %}<small class="muted">{% if order.discount %}Diskon −{{ order.discount|rp }} {% endif %}{% if order.shipping_cost %}Ongkir {{ order.shipping_cost|rp }}{% endif %}</small>{% endif %}</td>
+    <td class="num"><b>{{ order.total|rp }}</b></td>
     <td data-no-row>{% if order.invoice %}<a href="{% url 'merchant-invoice-detail' order.invoice.id %}">Invoice →</a>{% else %}<a href="{% url 'merchant-order-detail' order.id %}">Detail →</a>{% endif %}</td></tr>
   {% empty %}<tr><td colspan="7" class="dp-empty">Belum ada riwayat pembelian.</td></tr>{% endfor %}
   </tbody></table></div></section>

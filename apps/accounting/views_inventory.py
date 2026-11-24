@@ -67,3 +67,27 @@ def merchant_inventory_close(request):
     picture = inventory_reports.close_picture(store, timezone.localdate())
     return render(request, "merchant/inventory_close.html", _merchant_context(request, store, picture=picture))
 
+
+
+@login_required(login_url=LOGIN)
+def merchant_inventory_mutation(request):
+    """Mutasi persediaan for a period: units per item and Persediaan in rupiah per kind of document."""
+    from apps.catalog.models import Warehouse
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    today = timezone.localdate()
+    start = _date(request.GET.get("start")) or today.replace(day=1)
+    end = _date(request.GET.get("end")) or today
+    if start > end:
+        start, end = end, start
+    warehouses = list(Warehouse.objects.filter(store=store).order_by("priority", "id"))
+    warehouse = next((w for w in warehouses if str(w.pk) == request.GET.get("gudang")), None)
+    if request.GET.get("format") == "xlsx":
+        from openpyxl import Workbook
+        wb = Workbook()
+        exports.inventory_mutation(wb, store, start, end, warehouse=warehouse, first=True)
+        return exports.response(wb, f"mutasi-persediaan-{store.slug}-{start}-{end}.xlsx")
+    report = inventory_reports.mutation(store, start, end, warehouse=warehouse)
+    return render(request, "merchant/inventory_mutation.html", _merchant_context(request, store, report=report,
+        start=start, end=end, warehouses=warehouses if len(warehouses) > 1 else [], warehouse=warehouse,
+        rows=report["rows"][:500], query=request.GET.urlencode()))

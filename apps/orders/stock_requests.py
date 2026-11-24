@@ -2,7 +2,8 @@
 
 request → approve (a different person) → send (stock leaves the source, in transit) → receive (stock
 joins the target). A shortfall on receipt is a loss in transit: Selisih persediaan / Persediaan at the
-item's cost. Free stock only is sent (reserved units are not); a product without variants only."""
+item's cost. Free stock only is sent (reserved units are not). A variant (size, colour) moves between its own
+warehouse rows (``variant_stock``)."""
 from decimal import Decimal
 
 from django.db import transaction
@@ -11,7 +12,7 @@ from django.utils import timezone
 from apps.catalog.models import InventoryLevel
 
 from .models import StockRequest, StockRequestLine
-from .stock import StockError, stock_in
+from .stock import StockError, stock_in, stock_out
 
 
 class RequestError(ValueError):
@@ -37,18 +38,19 @@ def create_request(store, *, from_warehouse, to_warehouse, lines, notes="", acto
         product, variant = _find_goods(store, line.get("sku", ""))
         if not product:
             raise RequestError(f"SKU {line.get('sku') or '(kosong)'} tidak ada di katalog.")
-        if variant:
-            raise RequestError(f"{product.name}: permintaan barang bervarian belum didukung.")
+        if variant is None and product.variants.filter(is_active=True).exists():
+            raise RequestError(f"{product.name} punya varian; minta per SKU varian (ukuran/warna).")
         qty = line["qty"]
         if qty != int(qty) or qty <= 0:
-            raise RequestError(f"Jumlah {product.name} harus bilangan bulat lebih dari nol.")
-        picked[product.pk] = (product, picked.get(product.pk, (product, 0))[1] + int(qty))
+            raise RequestError(f"Jumlah {variant or product.name} harus bilangan bulat lebih dari nol.")
+        key = (product.pk, variant.pk if variant else None)
+        picked[key] = (product, variant, picked.get(key, (product, variant, 0))[2] + int(qty))
     if not picked:
         raise RequestError("Tambahkan minimal satu barang.")
     request = StockRequest.objects.create(store=store, number=next_number(store, timezone.localdate()),
         from_warehouse=from_warehouse, to_warehouse=to_warehouse, notes=notes[:300], requested_by=actor)
-    StockRequestLine.objects.bulk_create(StockRequestLine(request=request, product=product, quantity=qty)
-        for product, qty in picked.values())
+    StockRequestLine.objects.bulk_create(StockRequestLine(request=request, product=product, variant=variant,
+        quantity=qty) for product, variant, qty in picked.values())
     return request
 
 
@@ -87,21 +89,29 @@ def send(request, *, quantities, actor=None):
     """``quantities`` maps a line id to the units dispatched (at most requested, at most free stock)."""
     request = _locked(request, status=StockRequest.APPROVED)
     sent_any = False
-    for line in request.lines.select_related("product"):
+    for line in request.lines.select_related("product", "variant"):
         qty = int(quantities.get(line.pk, 0) or 0)
         if qty < 0 or qty > line.quantity:
-            raise RequestError(f"{line.product.name}: kirim 0 sampai {line.quantity}.")
+            raise RequestError(f"{line.label}: kirim 0 sampai {line.quantity}.")
         if not qty:
             continue
-        level = InventoryLevel.objects.select_for_update().filter(warehouse=request.from_warehouse, product=line.product).first()
-        free = (level.on_hand - level.reserved) if level else 0
-        if qty > free:
-            raise RequestError(f"{line.product.name}: stok bebas di {request.from_warehouse.name} hanya {free}.")
+        cost = line.variant.cost_price if line.variant and line.variant.cost_price is not None else line.product.cost_price
         try:
-            _out(request, line, level, qty, actor)
+            if line.variant is not None:   # leaves the source's own row of that size (refused when short there)
+                stock_out(store=request.store, product=line.product, variant=line.variant, quantity=qty,
+                    kind="transfer_out", reason=f"Kirim {request.number} ke {request.to_warehouse.name}"[:200],
+                    source=("stock_request", str(request.pk)), unit_cost=cost, actor=actor,
+                    warehouse=request.from_warehouse)
+            else:
+                level = InventoryLevel.objects.select_for_update().filter(warehouse=request.from_warehouse,
+                    product=line.product).first()
+                free = (level.on_hand - level.reserved) if level else 0
+                if qty > free:
+                    raise RequestError(f"{line.label}: stok bebas di {request.from_warehouse.name} hanya {free}.")
+                _out(request, line, level, qty, actor)
         except StockError as error:
             raise RequestError(str(error)) from error
-        line.sent_quantity, line.unit_cost = qty, line.product.cost_price
+        line.sent_quantity, line.unit_cost = qty, cost
         line.save(update_fields=["sent_quantity", "unit_cost"])
         sent_any = True
     if not sent_any:
@@ -128,19 +138,20 @@ def receive(request, *, quantities, actor=None):
     from apps.accounting.ledger import INVENTORY, STOCK_DIFFERENCE, LedgerError, post_entry
     request = _locked(request, status=StockRequest.SENT)
     loss = Decimal(0)
-    for line in request.lines.select_related("product"):
+    for line in request.lines.select_related("product", "variant"):
         if not line.sent_quantity:
             continue
         qty = int(quantities.get(line.pk, line.sent_quantity) or 0)
         if qty < 0 or qty > line.sent_quantity:
-            raise RequestError(f"{line.product.name}: diterima 0 sampai {line.sent_quantity}.")
+            raise RequestError(f"{line.label}: diterima 0 sampai {line.sent_quantity}.")
         missing = line.sent_quantity - qty
         if missing:
             if line.unit_cost is None:
-                raise RequestError(f"{line.product.name} belum punya harga pokok, jadi kekurangannya tidak bisa dinilai.")
+                raise RequestError(f"{line.label} belum punya harga pokok, jadi kekurangannya tidak bisa dinilai.")
             loss += missing * line.unit_cost
+            _lost_in_transit(line, missing)
         if qty:
-            stock_in(store=request.store, product=line.product, quantity=qty, kind="transfer_in",
+            stock_in(store=request.store, product=line.product, variant=line.variant, quantity=qty, kind="transfer_in",
                 reason=f"Terima {request.number} dari {request.from_warehouse.name}"[:200], warehouse=request.to_warehouse,
                 source=("stock_request", str(request.pk)), unit_cost=line.unit_cost, actor=actor)
         line.received_quantity = qty
@@ -154,6 +165,21 @@ def receive(request, *, quantities, actor=None):
     request.status, request.received_by, request.received_at = StockRequest.RECEIVED, actor, timezone.now()
     request.save(update_fields=["status", "received_by", "received_at"])
     return request
+
+
+def _lost_in_transit(line, missing):
+    """Lots count units in transit (a transfer leaves them alone): units that never arrived leave their lots."""
+    if not line.product.tracks_lots:
+        return
+    from .lots import draw
+    draw(line.product, line.variant, missing)
+
+
+def in_transit(product, variant=None):
+    """Units of an item sent on a stock request and not received yet."""
+    from django.db.models import F, Sum
+    return StockRequestLine.objects.filter(request__status=StockRequest.SENT, product=product, variant=variant
+        ).aggregate(n=Sum(F("sent_quantity") - F("received_quantity"), default=0))["n"]
 
 
 def in_transit_value(store):

@@ -17,11 +17,13 @@
         {% if warehouses|length > 1 %}<label class="field"><span>Gudang</span><select name="warehouse">{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
       </div>
     </div></section>
-    <section class="panel"><header><h2>2. Barang yang diterima</h2><p>Gunakan SKU produk di katalog. Jumlah dalam unit utuh.</p></header>
-      <div class="scroll-x"><table class="tbl editor"><thead><tr><th>SKU</th><th class="num">Jumlah</th><th class="num">Harga satuan</th><th class="num">Nilai</th></tr></thead><tbody id="rows">
+    <section class="panel"><header><h2>2. Barang yang diterima</h2><p>Gunakan SKU produk di katalog. Jumlah dalam unit utuh. Lot dan kedaluwarsa hanya dipakai untuk barang yang dilacak lotnya (kosong: nomor lot dibuat otomatis).</p></header>
+      <div class="scroll-x"><table class="tbl editor"><thead><tr><th>SKU</th><th class="num">Jumlah</th><th class="num">Harga satuan</th><th>Lot</th><th>Kedaluwarsa</th><th class="num">Nilai</th></tr></thead><tbody id="rows">
         {% for i in "12345" %}<tr><td><input name="sku[]" aria-label="SKU baris {{ forloop.counter }}" maxlength="60"></td>
           <td><input name="qty[]" inputmode="numeric" class="num" aria-label="Jumlah baris {{ forloop.counter }}"></td>
           <td><input name="unit_cost[]" data-rupiah class="num" aria-label="Harga baris {{ forloop.counter }}"></td>
+          <td><input name="lot[]" maxlength="60" aria-label="Lot baris {{ forloop.counter }}" style="width:110px"></td>
+          <td><input type="date" name="expiry[]" aria-label="Kedaluwarsa baris {{ forloop.counter }}"></td>
           <td class="num"><span data-line>Rp0</span></td></tr>{% endfor %}
       </tbody></table></div>
     </section>
@@ -35,7 +37,7 @@
 (function () {
   var rows = document.querySelectorAll("#rows tr"), total = document.getElementById("total");
   function num(v) { return Number((v || "0").replace(/\./g, "").replace(",", ".")) || 0; }
-  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function fmt(n) { return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID"); }
   function recalc() {
     var sum = 0;
     rows.forEach(function (tr) {

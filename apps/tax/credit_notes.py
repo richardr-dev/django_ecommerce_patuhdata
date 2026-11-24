@@ -61,7 +61,10 @@ def _unit_cost(invoice, item):
     """What the returned unit cost when it was sold: the order line's cost, else the product's."""
     line = None
     if item.product_id:
-        line = OrderItem.objects.filter(order=invoice.order, product_id=item.product_id).first()
+        lines = OrderItem.objects.filter(order=invoice.order, product_id=item.product_id)
+        if item.variant_id:  # two sizes of one product on the invoice: the size returned
+            lines = lines.filter(variant_id=item.variant_id)
+        line = lines.first()
     cost = line.unit_cost if line and line.unit_cost is not None else None
     if cost is None and item.product_id:
         cost = item.product.cost_price
@@ -80,8 +83,8 @@ def _post(note, *, strict=False, actor=None):
         target = note.bank_account.account.code if note.bank_account_id else CASH
     amounts = {REFUNDS: note.subtotal, VAT: note.tax, RECEIVABLE: -(note.total - direct)}
     amounts[target] = amounts.get(target, Decimal(0)) - direct
-    cost = sum((item.restocked_cost * item.quantity for item in note.items.all() if item.restock),
-        Decimal(0))
+    cost = money(sum((item.restocked_cost * item.quantity * item.unit_factor for item in note.items.all()
+        if item.restock), Decimal(0)))
     if cost:
         amounts[INVENTORY] = cost
         amounts[COGS] = -cost
@@ -99,6 +102,11 @@ def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
     invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status in {Invoice.STATUS_DRAFT, Invoice.STATUS_VOID}:
         raise CreditNoteError("Invoice ini tidak bisa dibuatkan nota kredit.")
+    if invoice.order.order_type == "opening":
+        # No sale or PPN of it is in these books to reverse: an amount the buyer will not pay is
+        # written off ("Hapus piutang"), a wrong amount is voided and entered again.
+        raise CreditNoteError("Invoice saldo awal tidak memakai nota kredit. Hapus piutangnya, atau batalkan "
+            "dan catat ulang bila jumlahnya salah.")
     if bank_account and bank_account.store_id != invoice.store_id:
         raise CreditNoteError("Rekening tidak ditemukan.")
     if excess_action == CreditNote.EXCESS_PLATFORM and \
@@ -117,6 +125,10 @@ def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
             if quantity > left:
                 raise CreditNoteError(f"{item.description}: hanya {left:g} yang masih bisa "
                     "dikreditkan.")
+            units = quantity * item.unit_factor
+            if line.get("restock") and item.product_id and units != units.to_integral_value():
+                raise CreditNoteError(f"{item.description}: barang yang kembali harus utuh dalam satuan dasar "
+                    f"({quantity:g} {item.unit or ''} = {units:g}).")
         total = money(quantity * price)
         subtotal += total
         rows.append({**line, "quantity": quantity, "unit_price": price, "line_total": total})
@@ -151,12 +163,13 @@ def create_credit_note(invoice, *, lines, issued_on, reason="return", notes="",
             product=item.product if item else None, variant=variant if restock else None,
             description=row.get("description") or (item.description if item else "Koreksi"),
             sku=item.sku if item else "", quantity=row["quantity"], unit_price=row["unit_price"],
-            line_total=row["line_total"], restock=restock, restocked_cost=cost if restock else 0)
+            line_total=row["line_total"], restock=restock, restocked_cost=cost if restock else 0,
+            unit_factor=item.unit_factor if item is not None else 1)
     try:
         _post(note, strict=True, actor=actor)
         for line in note.items.filter(restock=True).select_related("product", "variant"):
             stock_in(store=invoice.store, product=line.product, variant=line.variant,
-                quantity=int(line.quantity), kind="return", actor=actor,
+                quantity=int(line.quantity * line.unit_factor), kind="return", actor=actor,
                 reason=f"Retur dari nota kredit {note.number}", warehouse=warehouse,
                 source=("credit_note", note.pk), unit_cost=line.restocked_cost)
     except (LedgerError, StockError) as error:
@@ -177,7 +190,7 @@ def void_credit_note(note, *, actor=None):
     try:
         for line in note.items.filter(restock=True).select_related("product", "variant"):
             stock_out(store=note.store, product=line.product, variant=line.variant,
-                quantity=int(line.quantity), kind="adjust", actor=actor,
+                quantity=int(line.quantity * line.unit_factor), kind="adjust", actor=actor,
                 reason=f"Pembatalan nota kredit {note.number}",
                 source=("credit_note", note.pk), unit_cost=line.restocked_cost)
         reverse_source(note.store, "credit_note", note.pk, actor=actor, strict=True,

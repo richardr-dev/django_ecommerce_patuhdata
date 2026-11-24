@@ -5,7 +5,7 @@
 <div class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
 <section class="panel !mb-0"><header><div><h2>Harga per produk</h2><p>Produk di sini dijual pada harga ini untuk pelanggan dengan daftar {{ price_list.name }}.</p></div></header>
   {% if can_edit %}<form method="post" class="dp-card-body" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">{% csrf_token %}<input type="hidden" name="action" value="add">
-    <label class="field" style="flex:2;min-width:220px"><span>Produk</span><select name="product" required><option value="">Pilih produk…</option>{% for p in products %}<option value="{{ p.pk }}">{{ p.sku }} — {{ p.name }} (Rp{{ p.price|floatformat:"0g" }})</option>{% endfor %}</select></label>
+    <label class="field" style="flex:2;min-width:220px"><span>Produk</span><select name="product" required><option value="">Pilih produk…</option>{% for p in products %}<option value="{{ p.pk }}">{{ p.sku }} — {{ p.name }} ({{ p.price|rp }})</option>{% endfor %}</select></label>
     <label class="field" style="flex:1;min-width:150px"><span>Harga di daftar ini</span><input name="price" data-rupiah required inputmode="numeric" placeholder="0"></label>
     <button class="btn-primary">Tambah</button></form>{% endif %}
   {% if items %}<table class="tbl"><thead><tr><th>Produk</th><th class="num">Harga jual</th><th class="num">Harga daftar</th><th class="num">Selisih</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>

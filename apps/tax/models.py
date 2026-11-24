@@ -110,6 +110,13 @@ class Invoice(models.Model):
     cost_center = models.ForeignKey("accounting.CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="invoices")
     sales_order = models.ForeignKey("SalesOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices")
+    # The location the goods were sold from ("Jual dari gudang", a register's outlet); empty: the store's
+    # locations in priority order. An edit takes the new goods from the same place.
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
+    # The prices were typed with PPN in them ("Harga sudah termasuk PPN"): the edit form shows them that
+    # way again and backs PPN out once more, so an edit keeps the total the seller typed.
+    prices_include_tax = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -140,10 +147,15 @@ class InvoiceItem(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="+")
+    # The size or colour sold; its stock and cost are the variant's, ``product`` is its parent.
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
     description = models.CharField(max_length=200)
     sku = models.CharField(max_length=60, blank=True)
-    dimension = models.CharField(max_length=60, blank=True, help_text="Ukuran/dimensi, mis. 100×200cm")
+    dimension =models.CharField(max_length=60, blank=True, help_text="Ukuran/dimensi, mis. 100×200cm")
     unit = models.CharField(max_length=20, blank=True, help_text="Satuan, mis. pcs, box, kg, jam")
+    # Base units in one ``unit`` (a dus of 12 pcs: 12). Stock moves quantity × unit_factor base units.
+    unit_factor = models.PositiveIntegerField(default=1)
     note = models.CharField(max_length=300, blank=True, help_text="Keterangan tambahan di bawah nama barang")
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
@@ -199,6 +211,8 @@ class InvoicePayment(models.Model):
     # PPh the buyer held back and pays to the tax office for us (PPh 23 on services, 4(2) on rent). We hold
     # a bukti potong instead of the cash; it books to PPh dibayar di muka, not to the bank.
     withheld = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # Paid from a taxed uang muka: the PPN already charged on it comes off PPN keluaran with this payment.
+    vat_settled = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default=METHOD_TRANSFER)
     reference = models.CharField(max_length=120, blank=True,
         help_text="Nomor referensi/bukti transfer atau kode transaksi.")
@@ -309,7 +323,8 @@ class CreditNoteItem(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
     restock = models.BooleanField(default=False)  # goods come back to the shelf
-    restocked_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    restocked_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # per base unit
+    unit_factor = models.PositiveIntegerField(default=1)  # base units in one of ``quantity`` (the invoice line's)
 
     class Meta:
         ordering = ["id"]
@@ -331,6 +346,8 @@ class CustomerReceipt(models.Model):
     date = models.DateField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     deposit = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # kept as credit
+    # Uang muka kena PPN: the PPN inside ``deposit`` (faktur uang muka), booked to PPN keluaran on receipt.
+    deposit_vat = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     method = models.CharField(max_length=20, choices=InvoicePayment.METHOD_CHOICES,
         default=InvoicePayment.METHOD_TRANSFER)
     reference = models.CharField(max_length=120, blank=True)
@@ -341,6 +358,11 @@ class CustomerReceipt(models.Model):
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True,
         blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def deposit_base(self):
+        """DPP of a taxed uang muka: the deposit without its PPN."""
+        return self.deposit - self.deposit_vat
 
     class Meta:
         ordering = ["-date", "-created_at"]
@@ -363,6 +385,8 @@ class CustomerCredit(models.Model):
     kind = models.CharField(max_length=12, choices=KINDS)
     date = models.DateField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)  # signed
+    # Signed PPN inside ``amount`` that was already charged (a taxed uang muka); Kredit pelanggan holds amount - vat.
+    vat = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     note = models.CharField(max_length=200, blank=True)
     invoice = models.ForeignKey(Invoice, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="+")
@@ -435,11 +459,19 @@ class Quote(models.Model):
 class QuoteItem(models.Model):
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    # The size or colour offered; ``product`` is its parent.
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
     description = models.CharField(max_length=200)
     sku = models.CharField(max_length=60, blank=True)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    @property
+    def pick_id(self):
+        """The value the line editor's product picker uses: ``v<id>`` for a variant."""
+        return f"v{self.variant_id}" if self.variant_id else str(self.product_id)
 
     class Meta:
         ordering = ["id"]
@@ -543,6 +575,9 @@ class ReminderPolicy(models.Model):
     days_after = models.CharField(max_length=60, default="1,7,14", help_text="Hari setelah jatuh tempo, dipisah koma.")
     use_email = models.BooleanField(default=True)
     use_whatsapp = models.BooleanField(default=True)
+    # Tahan kredit: no new credit sale to a customer with an invoice more than N days past due (tax/credit_limit.py).
+    credit_hold_days = models.PositiveSmallIntegerField(null=True, blank=True,
+        help_text="Kosong: tidak ditahan. 0: tahan begitu ada invoice lewat jatuh tempo.")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -617,6 +652,9 @@ class SalesOrder(models.Model):
 class SalesOrderLine(models.Model):
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    # The size or colour ordered; ``product`` is its parent. Its delivery takes that variant's units.
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
     description = models.CharField(max_length=200)
     sku = models.CharField(max_length=80, blank=True)
     quantity = models.PositiveIntegerField()
@@ -625,6 +663,10 @@ class SalesOrderLine(models.Model):
     unit = models.CharField(max_length=20, blank=True)
     delivered_quantity = models.PositiveIntegerField(default=0)
     invoiced_quantity = models.PositiveIntegerField(default=0)
+
+    @property
+    def reserved_quantity(self):
+        return sum(row.quantity for row in self.reservations.all())
 
     class Meta:
         ordering = ["id"]
@@ -636,6 +678,21 @@ class SalesOrderLine(models.Model):
     @property
     def line_total(self):
         return self.quantity * self.unit_price - self.discount
+
+
+class SalesOrderReservation(models.Model):
+    """Units held for an open sales order line: on one warehouse level (a product) or store-wide (a variant).
+    Released when they are delivered, or when the order is closed or cancelled. See ``tax/sales_orders.py``."""
+    line = models.ForeignKey("SalesOrderLine", on_delete=models.CASCADE, related_name="reservations")
+    inventory_level = models.ForeignKey("catalog.InventoryLevel", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    quantity = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
 
 
 class Delivery(models.Model):
@@ -652,6 +709,10 @@ class Delivery(models.Model):
     tracking_number = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_SHIPPED)
+    # The location the parcel left from ("Kirim dari gudang"); empty: the locations in priority order.
+    # Cancelling puts the units back there.
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
     invoice = models.ForeignKey(Invoice, on_delete=models.SET_NULL, null=True, blank=True, related_name="deliveries")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -672,6 +733,8 @@ class DeliveryLine(models.Model):
     delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name="lines")
     order_line = models.ForeignKey(SalesOrderLine, on_delete=models.PROTECT, related_name="deliveries")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
 

@@ -1,0 +1,32 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Karyawan{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-payroll' %}">Penggajian</a> › <span>Karyawan</span></nav>
+<div class="pg-head"><div><span class="pg-kicker">Penggajian</span><h1>Karyawan</h1>
+  <p>Gaji pokok, tunjangan tetap, status PTKP, dan tarif PPh 21 (TER) yang dipakai saat menyusun penggajian.</p></div>
+  <div class="dp-actions">{% if can_edit %}<button type="button" class="btn-primary" data-open="emp-new">{% icon "plus" %} Tambah karyawan</button>{% endif %}</div></div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Karyawan aktif</small><strong>{{ active }}</strong><span>masuk penggajian berikutnya</span></div>
+  <div class="tile"><small>Gaji tetap per bulan</small><strong>{{ monthly|rp }}</strong><span>gaji pokok + tunjangan karyawan aktif</span></div>
+</div>
+
+<div class="notice info">{% icon "info" %}<span><b>PPh 21 otomatis.</b> Januari–November memakai tarif efektif (TER) PP 58/2023: kategori A untuk TK/0, TK/1, K/0; B untuk TK/2, TK/3, K/1, K/2; C untuk K/3, atas bruto sebulan ditambah premi BPJS Kesehatan, JKK, dan JKM yang dibayar perusahaan. Desember dihitung ulang setahun dengan tarif Pasal 17 (biaya jabatan, iuran JHT dan JP karyawan, PTKP) dikurangi PPh Januari–November; lebih potong dikembalikan ke karyawan. Isi tarif manual hanya bila perlu menyimpang dari tabel.</span></div>
+
+<section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Nama</th><th>PTKP · TER</th><th class="num">Gaji pokok</th><th class="num">Tunjangan</th><th class="num">Tarif PPh 21</th><th>BPJS</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>
+  {% for e in employees %}<tr>
+    <td><b>{{ e.name }}</b>{% if e.position %}<small>{{ e.position }}</small>{% endif %}</td>
+    <td>{{ e.ptkp_status }} · {{ e.ter_category }}</td>
+    <td class="num">{{ e.base_salary|rp }}</td><td class="num">{{ e.allowance|rp }}</td><td class="num">{% if e.pph21_rate == None %}otomatis{% else %}{{ e.pph21_rate|floatformat:"-2" }}% <small>manual</small>{% endif %}</td>
+    <td>{% if e.bpjs %}Ya{% else %}Tidak{% endif %}</td>
+    <td>{% if e.left_on %}<span class="pill pill-void">Berhenti {{ e.left_on|date:"d M Y" }}</span>{% elif e.is_active %}<span class="pill pill-paid">Aktif</span>{% else %}<span class="pill pill-void">Tidak aktif</span>{% endif %}</td>
+    {% if can_edit %}<td data-no-row><button type="button" class="btn" data-open="emp-{{ e.pk }}">Ubah</button></td>{% endif %}</tr>
+  {% empty %}<tr><td colspan="8"><div class="empty-box"><strong>Belum ada karyawan</strong>Tambahkan karyawan untuk mulai menyusun penggajian.</div></td></tr>{% endfor %}
+</tbody></table></div></section>
+
+{% if can_edit %}
+{% include "merchant/_employee_dialog.html" with e=None %}
+{% for e in employees %}{% include "merchant/_employee_dialog.html" %}{% endfor %}
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

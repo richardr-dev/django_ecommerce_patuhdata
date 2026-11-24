@@ -59,6 +59,16 @@
     toast.classList.add("is-leaving");
     setTimeout(function () { toast.remove(); }, 220);
   }
+  // Amounts in the company's book currency (apps/shops/currency.py, read from <body data-currency-*>):
+  // pdMoney(1250000) -> "Rp1.250.000"; a real minus sign. New scripts use this instead of typing "Rp".
+  window.pdMoney = function (value) {
+    var d = document.body.dataset, places = parseInt(d.currencyDecimals || "0", 10) || 0;
+    var n = Number(value) || 0, fixed = Math.abs(n).toFixed(places).split(".");
+    var whole = fixed[0].replace(/\B(?=(\d{3})+(?!\d))/g, d.currencyThousands || ".");
+    var text = whole + (places ? (d.currencyDecimal || ",") + fixed[1] : "");
+    return (n < 0 && Number(fixed.join(".")) ? "\u2212" : "") + (d.currencySymbol || "Rp") + text;
+  };
+
   window.pdToast = function (text, kind) {
     var stack = document.querySelector(".pd-messages");
     if (!stack) {

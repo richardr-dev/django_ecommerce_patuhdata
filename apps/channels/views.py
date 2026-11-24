@@ -1,4 +1,5 @@
 import csv
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -9,8 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.billing.plans import channel_limit_error
 from apps.catalog.views import paginate
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
-from apps.shops.permissions import roles
 from apps.shops.models import AuditLog
+from apps.shops.permissions import roles
 
 from .adapters import PLATFORMS
 from .forms import OrdersImportForm, SalesChannelForm
@@ -22,6 +23,8 @@ from .services import (
     import_orders,
     match_listings,
 )
+
+logger = logging.getLogger(__name__)
 
 # Keep old alias used in a few tests.
 OrdersCsvForm = OrdersImportForm
@@ -263,24 +266,18 @@ def merchant_sales_invoices(request):
                     _, created = issue_invoice_for_order(_o)
                     if created:
                         count += 1
-                except Exception:
-                    pass
+                except Exception:  # one bad order must not stop the batch; it stays without invoice
+                    logger.exception("issuing invoice for order %s failed", _o.pk)
             messages.success(request, f"{count} invoice berhasil diterbitkan.")
             return redirect("merchant-sales-invoices")
 
-    # Mark overdue invoices at view time
+    # Keep "Jatuh tempo" current even if the books worker has not run today
     import datetime as _dt
 
     from apps.tax.models import Invoice as _Inv
-    _Inv.objects.filter(
-        store=store, status=_Inv.STATUS_ISSUED,
-        due_date__lt=_dt.date.today(),
-    ).update(status=_Inv.STATUS_OVERDUE)
+    from apps.tax.posting import mark_overdue
+    mark_overdue(store)
 
-    from django.db.models import Count as _Count
-    from django.db.models import Sum as _Sum
-    invoice_stats = list(_Inv.objects.filter(store=store).values("status").annotate(
-        count=_Count("id"), total=_Sum("total")).order_by("status"))
 
     REVENUE_STATUSES = {"paid", "confirmed", "allocated", "picking", "packed",
                         "shipped", "delivered", "completed",
@@ -313,8 +310,9 @@ def merchant_sales_invoices(request):
     invoice_tabs = [(code, label, tab_base.filter(cond).count() if cond is not None
         else tab_base.count()) for code, label, cond in TABS]
     qs = apply_sort(apply_tab(qs, inv_filter), params.get("sort", ""))
-    if inv_filter and inv_filter in dict((code, label) for code, label, _ in TABS):
-        active_filters.append({"label": dict((code, label) for code, label, _ in TABS)[inv_filter],
+    tab_labels = {code: label for code, label, _ in TABS}
+    if inv_filter and inv_filter in tab_labels:
+        active_filters.append({"label": tab_labels[inv_filter],
             "keys": ["inv"]})
 
     # Money still owed on the invoices in view, and how much of it is late.
@@ -350,6 +348,8 @@ def merchant_sales_invoices(request):
                       .select_related("channel").order_by("-imported_at")[:5])
 
     qs = qs.annotate(inv_paid=Coalesce(Sum("invoice__payments__amount"), Value(Decimal(0))))
+    # Each row shows amount_due, which reads the invoice's payments and credit notes: load them once per page.
+    qs = qs.prefetch_related("invoice__payments", "invoice__credit_notes")
     page, page_range, page_query = paginate(request, qs, 50)
     today = _dt.date.today()
     for order in page.object_list:
@@ -482,6 +482,7 @@ def merchant_invoice_issue(request, order_id):
                 messages.info(request, f"Invoice {invoice.number} sudah ada.")
             return redirect("merchant-invoice-detail", invoice_id=invoice.id)
         except Exception as exc:
+            logger.exception("issuing invoice for order %s failed", order.pk)
             messages.error(request, f"Gagal menerbitkan invoice: {exc}")
             return redirect("merchant-sales-invoices")
 
@@ -512,7 +513,9 @@ def merchant_invoice_detail(request, invoice_id):
 
         if action == "pay":
             import datetime
-            from decimal import Decimal
+            from decimal import Decimal, InvalidOperation
+
+            from apps.tax.services import InvoiceError
             try:
                 amount = Decimal(request.POST.get("amount", "0").replace(",", ""))
                 paid_on_str = request.POST.get("paid_on", "")
@@ -529,12 +532,13 @@ def merchant_invoice_detail(request, invoice_id):
                 from apps.shops.audit import log as audit_log
                 audit_log(store, request.user, "invoice.paid", invoice, amount=amount, method=method)
                 messages.success(request, "Pembayaran berhasil dicatat.")
-            except Exception as exc:
-                messages.error(request, f"Gagal: {exc}")
+            except (InvoiceError, InvalidOperation, ValueError) as exc:
+                messages.error(request, f"Gagal: {exc}" if str(exc) else "Jumlah atau tanggal tidak valid.")
             return redirect("merchant-invoice-detail", invoice_id=invoice.id)
 
         if action == "writeoff":
             import datetime
+
             from apps.accounting import approvals
             from apps.tax.services import InvoiceError
             from apps.tax.writeoff import write_off_invoice
@@ -559,9 +563,9 @@ def merchant_invoice_detail(request, invoice_id):
             return redirect("merchant-invoice-detail", invoice_id=invoice.id)
 
         if action == "void":
+            from apps.accounting import approvals
             from apps.accounting.ledger import LedgerError
             from apps.tax.posting import void_invoice
-            from apps.accounting import approvals
             if approvals.required(store, "invoice_void", invoice.total, request.user):
                 approvals.submit(store, "invoice_void", invoice.total, f"Batalkan invoice {invoice.number}",
                     {"invoice_id": str(invoice.pk)}, request.user, subject=invoice)
@@ -733,11 +737,7 @@ def merchant_invoices_csv(request):
                      "No. Invoice", "Status Invoice"])
     channel_map = dict(Order.CHANNELS)
     for order in qs:
-        inv = None
-        try:
-            inv = order.invoice
-        except Exception:
-            pass
+        inv = getattr(order, "invoice", None)  # a missing reverse one-to-one raises an AttributeError subclass
         writer.writerow([
             localtime(order.created_at).strftime("%Y-%m-%d %H:%M"),
             order.invoice_number or str(order.id)[:8],
@@ -1120,7 +1120,6 @@ def merchant_invoices_xlsx(request):
     hdr_font   = Font(bold=True, color="FFFFFF", size=10)
     hdr_fill   = PatternFill("solid", fgColor="111827")
     sub_fill   = PatternFill("solid", fgColor="F3F4F6")
-    bold_font  = Font(bold=True, size=10)
     money_fmt  = '#,##0'
     date_fmt   = 'DD-MMM-YYYY'
     thin_side  = Side(border_style="thin", color="E5E7EB")

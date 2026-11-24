@@ -1,7 +1,8 @@
 {% extends "merchant/base.html" %}{% load icons books %}{% block title %}Kelola stok{% endblock %}{% block content %}
 <div class="pg-head"><div><span class="pg-kicker">Inventori</span><h1>Kelola stok</h1>
-  <p>Perbarui jumlah fisik per gudang dan varian tanpa mengubah reservasi pesanan. Setiap perubahan tercatat sebagai pergerakan stok dan tidak bisa dihapus.</p></div>
-  <div class="dp-actions"><a class="btn" href="{% url 'merchant-entity-list' 'products' %}">{% icon "box" %} Lihat produk</a></div></div>
+  <p>Perbarui jumlah fisik per gudang dan varian tanpa mengubah reservasi pesanan. Setiap perubahan tercatat sebagai pergerakan stok dan tidak bisa dihapus.{% if books_started %} Karena pembukuan sudah berjalan, setiap perubahan jumlah menjadi Penyesuaian stok bernomor dengan alasan dan dibukukan ke Persediaan pada harga pokok.{% endif %}</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-stock-adjustments' %}">{% icon "layers" %} Penyesuaian stok</a><a class="btn" href="{% url 'merchant-entity-list' 'products' %}">{% icon "box" %} Lihat produk</a></div></div>
+{% if not books_started %}<div class="notice">{% icon "info" %}<span>Pembukuan belum dimulai: stok yang diisi di sini adalah stok awal dan belum dijurnal. Catat <a href="{% url 'merchant-opening-balances' %}">Saldo awal</a> agar nilainya masuk ke Persediaan.</span></div>{% endif %}
 
 <form class="toolbar" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Cari nama produk, varian, atau SKU…" aria-label="Cari stok" style="flex:1;min-width:220px"><button class="btn-primary">Cari</button></form>
 
@@ -15,7 +16,7 @@
   {% for product in unstocked %}<form method="post" class="stk-row simple">{% csrf_token %}<input type="hidden" name="target_type" value="product"><input type="hidden" name="target_id" value="{{ product.id }}"><input type="hidden" name="safety_stock" value="0">
     <div class="stk-name"><b>{{ product.name }}</b><small>{{ product.sku }}</small></div>
     <label class="field"><span>Fisik</span><input type="number" name="stock" min="0" value="0" required></label>
-    <label class="field stk-reason"><span>Alasan</span><input name="reason" value="Stok awal"></label>
+    {% include "merchant/_stock_reason.html" with chosen="opening" note="Stok awal" %}
     <button class="btn-primary">Simpan</button></form>{% endfor %}</div></section>{% endif %}
 
 <section class="panel"><header><div><h2>Stok per gudang</h2><p>Stok tersedia = stok fisik − reservasi − stok pengaman.</p></div></header><div class="stk">
@@ -25,18 +26,48 @@
     <label class="field"><span>Reservasi</span><input value="{{ level.reserved }}" disabled></label>
     <label class="field"><span>Pengaman</span><input type="number" name="safety_stock" min="0" value="{{ level.safety_stock }}" required></label>
     <div class="stk-avail"><small>Tersedia</small><b>{{ level.available }}</b></div>
-    <label class="field stk-reason"><span>Alasan</span><input name="reason" value="Penyesuaian stok dashboard"></label>
-    <button class="btn-primary">Simpan</button></form>
+    {% include "merchant/_stock_reason.html" with chosen="correction" note="Penyesuaian stok dashboard" %}
+    <div class="stk-actions"><button class="btn-primary">Simpan</button>{% if warehouses %}<button type="button" class="btn" data-move data-type="product" data-id="{{ level.product_id }}" data-name="{{ level.product.name }}" data-from="{{ level.warehouse_id }}" data-max="{{ level.available }}">Pindah</button>{% endif %}</div></form>
   {% empty %}<div style="padding:32px;text-align:center;color:var(--ds-faint)">Belum ada lokasi persediaan. Tambahkan gudang dan persediaan terlebih dahulu.</div>{% endfor %}</div>
   {% include "storefront/pagination.html" with page_obj=levels page_range=level_range page_query=level_query label="Halaman stok gudang" %}</section>
 
-{% if variants.paginator.count %}<section class="panel"><header><div><h2>Stok varian</h2><p>Untuk produk dengan pilihan ukuran, warna, atau varian lain.</p></div></header><div class="stk">
-  {% for variant in variants %}<form method="post" class="stk-row">{% csrf_token %}<input type="hidden" name="target_type" value="variant"><input type="hidden" name="target_id" value="{{ variant.id }}"><input type="hidden" name="safety_stock" value="0">
-    <div class="stk-name"><b><a href="{% url 'merchant-entity-edit' 'products' variant.product_id %}#variants">{{ variant.product.name }} · {{ variant.name }}</a></b><small>{{ variant.sku }}</small></div>
-    <label class="field"><span>Fisik</span><input type="number" name="stock" min="{{ variant.reserved }}" value="{{ variant.stock }}" required></label>
-    <label class="field"><span>Reservasi</span><input value="{{ variant.reserved }}" disabled></label>
+{% if variants.paginator.count %}<section class="panel"><header><div><h2>Stok varian</h2><p>Untuk produk dengan pilihan ukuran, warna, atau varian lain. Satu baris per gudang yang menyimpan varian itu; reservasi pesanan berlaku untuk seluruh gudang.</p></div></header><div class="stk">
+  {% for variant in variants %}{% for location, units in variant.location_rows %}<form method="post" class="stk-row var">{% csrf_token %}<input type="hidden" name="target_type" value="variant"><input type="hidden" name="target_id" value="{{ variant.id }}"><input type="hidden" name="warehouse" value="{{ location.pk }}"><input type="hidden" name="safety_stock" value="0">
+    <div class="stk-name"><b><a href="{% url 'merchant-entity-edit' 'products' variant.product_id %}#variants">{{ variant.product.name }} · {{ variant.name }}</a></b><small>{{ location.name }} · {{ variant.sku }}{% if variant.location_rows|length > 1 %} · total {{ variant.stock }}{% endif %}</small></div>
+    <label class="field"><span>Fisik</span><input type="number" name="stock" min="0" value="{{ units }}" required></label>
+    <label class="field"><span>Reservasi</span><input value="{{ variant.reserved }}" disabled title="Untuk seluruh gudang"></label>
     <div class="stk-avail"><small>Tersedia</small><b>{{ variant.available_stock }}</b></div>
-    <label class="field stk-reason"><span>Alasan</span><input name="reason" value="Penyesuaian stok varian"></label>
-    <button class="btn-primary">Simpan</button></form>{% endfor %}</div>
+    {% include "merchant/_stock_reason.html" with chosen="correction" note="Penyesuaian stok varian" %}
+    <div class="stk-actions"><button class="btn-primary">Simpan</button>{% if warehouses %}<button type="button" class="btn" data-move data-type="variant" data-id="{{ variant.id }}" data-name="{{ variant.product.name }} · {{ variant.name }}" data-from="{{ location.pk }}" data-max="{{ units }}">Pindah</button>{% endif %}</div></form>{% endfor %}{% endfor %}</div>
   {% include "storefront/pagination.html" with page_obj=variants page_range=variant_range page_query=variant_query param="vpage" label="Halaman stok varian" %}</section>{% endif %}
+
+{% if warehouses %}<dialog class="pd-dialog" id="move-dialog"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="move"><input type="hidden" name="target_type" id="mv-type"><input type="hidden" name="target_id" id="mv-id">
+  <header><h2>Pindah gudang</h2><p id="mv-name"></p></header>
+  <div class="dp-card-body" style="display:grid;gap:12px">
+    <div class="field-row"><label class="field"><span>Dari</span><select name="source" id="mv-from">{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Ke</span><select name="target" id="mv-to">{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label></div>
+    <label class="field"><span>Jumlah</span><input type="number" name="quantity" id="mv-qty" min="1" value="1" required></label>
+    <label class="field"><span>Keterangan <em>(opsional)</em></span><input name="reason" maxlength="200"></label>
+    <p class="dp-help">Tanpa jurnal: barang tetap milik perusahaan dengan harga pokok yang sama. Untuk kiriman yang perlu disetujui dan diterima, pakai Permintaan stok.</p>
+  </div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Pindahkan</button></footer></form></dialog>
+{% include "merchant/_dialog_js.html" %}
+<script>
+(function () {
+  var box = document.getElementById("move-dialog");
+  box.closest("main").querySelectorAll("[data-move]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.getElementById("mv-type").value = b.dataset.type;
+      document.getElementById("mv-id").value = b.dataset.id;
+      document.getElementById("mv-name").textContent = b.dataset.name;
+      var from = document.getElementById("mv-from"), to = document.getElementById("mv-to");
+      from.value = b.dataset.from;
+      var other = Array.prototype.find.call(to.options, function (o) { return o.value !== b.dataset.from; });
+      if (other) to.value = other.value;
+      var qty = document.getElementById("mv-qty"); qty.max = b.dataset.max; qty.value = 1;
+      box.showModal();
+    });
+  });
+})();
+</script>{% endif %}
 {% endblock %}

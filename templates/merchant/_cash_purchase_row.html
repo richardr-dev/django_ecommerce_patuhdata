@@ -1,0 +1,5 @@
+{% load books %}<tr><td><input type="text" name="sku[]" list="cp-catalog" class="cp-sku" value="{{ r.sku }}" placeholder="Nama, SKU, atau barcode" aria-label="Barang" autocomplete="off"><input type="hidden" name="description[]" class="cp-desc" value="{{ r.desc }}"><small class="cp-name">{{ r.desc }}</small></td>
+  <td><input type="number" name="qty[]" value="{{ r.qty|default:'1' }}" min="1" step="1" class="qty-input num" aria-label="Jumlah"></td>
+  <td><input type="text" name="unit_price[]" data-rupiah inputmode="numeric" value="{{ r.price }}" class="price-input num" placeholder="Harga" aria-label="Harga satuan"></td>
+  <td class="num cp-line"><b class="line-total">{{ 0|rp }}</b></td>
+  <td data-no-row><button type="button" class="remove-row" aria-label="Hapus baris" style="border:0;background:none;color:var(--ds-faint);font-size:20px;cursor:pointer">&times;</button></td></tr>

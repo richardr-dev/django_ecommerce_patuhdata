@@ -1,0 +1,60 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Piutang saldo awal{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-opening-balances' %}">Saldo awal</a> › <span>Piutang per invoice</span></nav>
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Piutang saldo awal per invoice</h1>
+    <p>Invoice lama yang belum lunas: bisa dibayar, diingatkan, dan masuk umur piutang, tanpa dihitung lagi sebagai penjualan atau PPN.</p></div>
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Masih harus dibayar</small><strong>{{ owed|rp }}</strong><span>{{ count }} invoice saldo awal</span></div>
+  <div class="tile"><small>Nilai saat dicatat</small><strong>{{ original|rp }}</strong><span>Piutang usaha / Modal pemilik{% if start %} per {{ start|date:"d M Y" }}{% endif %}</span></div>
+  <div class="tile {% if lump and count %}warn{% endif %}"><small>Piutang total di Saldo awal</small><strong>{{ lump|rp }}</strong><span>{% if lump %}diisi sebagai satu angka, tidak dirinci{% else %}tidak ada: semua piutang dirinci di sini{% endif %}</span></div>
+</div>
+
+{% if lump and count %}<div class="notice">{% icon "alert" %}<span><b>Jangan dihitung dua kali.</b> Saldo awal sudah memuat piutang {{ lump|rp }} sebagai satu angka. Bila invoice di bawah termasuk di dalamnya, batalkan Saldo awal lalu catat lagi dengan piutang hanya untuk sisa yang tidak dirinci di sini.</span></div>{% endif %}
+
+{% if can_edit %}
+<div class="grid gap-5 lg:grid-cols-2">
+  <form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+    <header><div><h2>Tambah satu invoice</h2><p>Isi sisa yang belum dibayar, bukan nilai awal invoice bila sudah dicicil.</p></div></header>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <label class="field" style="grid-column:1/-1"><span>Pelanggan</span><input name="customer" list="op-customers" value="{{ post.customer }}" required autocomplete="off" placeholder="Ketik nama; nama baru langsung ditambahkan"></label>
+      <label class="field"><span>No. invoice lama</span><input name="number" value="{{ post.number }}" required maxlength="40" placeholder="INV-0912"></label>
+      <label class="field"><span>Sisa tagihan</span><input name="amount" inputmode="numeric" data-rupiah value="{{ post.amount }}" required placeholder="0"></label>
+      <label class="field"><span>Tanggal invoice</span><input type="date" name="issued_on" value="{{ post.issued_on }}" required{% if start %} max="{{ start|date:'Y-m-d' }}"{% endif %}></label>
+      <label class="field"><span>Jatuh tempo</span><input type="date" name="due_date" value="{{ post.due_date }}"></label>
+    </div>
+    <div class="form-actions-bar"><button class="btn-primary">{% icon "plus" %} Tambah invoice</button></div>
+  </form>
+
+  <form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}"><input type="hidden" name="action" value="paste">
+    <header><div><h2>Tempel dari Excel</h2><p>Salin lima kolom dari daftar piutang lama: <b>pelanggan, no. invoice, tanggal, jatuh tempo, sisa tagihan</b>. Semua baris dicatat sekaligus, atau tidak sama sekali bila ada yang salah.</p></div></header>
+    <div class="form-grid" style="grid-template-columns:1fr"><label class="field"><span>Baris</span><textarea name="rows" rows="7" spellcheck="false" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px" placeholder="CV Maju Jaya&#9;INV-0912&#9;15/10/2026&#9;14/11/2026&#9;2.500.000&#10;Toko Sinar;INV-0930;20/10/2026;;750000">{{ post.rows }}</textarea></label></div>
+    <div class="form-actions-bar"><button class="btn-primary">{% icon "upload" %} Catat semua baris</button></div>
+  </form>
+</div>
+<datalist id="op-customers">{% for name in customers %}<option value="{{ name }}">{% endfor %}</datalist>
+{% endif %}
+
+<section class="panel">
+  <header><div><h2>Invoice saldo awal</h2><p>Pelunasan dicatat seperti invoice biasa: Terima pembayaran, atau buka invoice-nya.</p></div></header>
+  {% if invoices %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>No. invoice</th><th>Pelanggan</th><th>Tanggal</th><th>Jatuh tempo</th><th class="num">Dicatat</th><th class="num">Sisa</th><th>Status</th></tr></thead>
+    <tbody>{% for inv in invoices %}<tr>
+      <td><a href="{% url 'merchant-invoice-detail' inv.id %}" style="color:var(--pd-primary);font-weight:600">{{ inv.number }}</a></td>
+      <td>{{ inv.buyer_name }}</td>
+      <td>{{ inv.issued_on|date:"d M Y" }}</td>
+      <td>{{ inv.due_date|date:"d M Y"|default:"—" }}</td>
+      <td class="num">{{ inv.total|rp }}</td>
+      <td class="num"><b>{% if inv.status == void %}—{% else %}{{ inv.amount_due|rp }}{% endif %}</b></td>
+      <td><span class="pill pill-{{ inv.status }}">{{ inv.get_status_display }}</span></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="empty-box"><strong>Belum ada invoice saldo awal</strong>Tambahkan satu per satu atau tempel daftar piutang dari Excel.</div>
+  {% endif %}
+</section>
+{% endblock %}

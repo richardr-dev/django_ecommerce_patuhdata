@@ -35,6 +35,8 @@ class StoreResolverMiddleware:
     def __init__(self, get_response): self.get_response = get_response
 
     def __call__(self, request):
+        from . import currency
+        currency.reset()  # a worker thread must not carry the previous request's currency
         host = request.get_host().split(":")[0].lower()
         request.is_platform = platform_host(host)
         if settings.PLATFORM_DOMAIN:
@@ -43,6 +45,8 @@ class StoreResolverMiddleware:
                 return redirect(platform_url(request.get_full_path()), permanent=True)
             request.store = self._platform_store(request, host)
             store = request.store
+            if store:
+                currency.activate(store.currency)
             if not store and not request.is_platform:
                 # Custom domains need ALLOWED_HOSTS=*, so this is the host check: an unknown
                 # Host header must never reach views that build absolute links from it.

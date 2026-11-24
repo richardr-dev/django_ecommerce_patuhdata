@@ -91,6 +91,39 @@ def _product_lines(request, store):
     return lines
 
 
+def _goods_items(store):
+    """What the quote and sales order forms offer: products without variants, and each active variant as its own row
+    (value ``v<id>``), so a size is ordered, delivered and invoiced as itself."""
+    from apps.catalog.models import Product, ProductVariant
+    found, sizes = [], {}
+    for variant in ProductVariant.objects.filter(product__store=store, product__is_active=True,
+            is_active=True).order_by("name"):
+        sizes.setdefault(variant.product_id, []).append(variant)
+    for product in Product.objects.filter(store=store, is_active=True).order_by("name"):
+        if product.pk not in sizes:
+            found.append({"id": str(product.pk), "sku": product.sku, "name": product.name, "price": product.price})
+        for v in sizes.get(product.pk, []):
+            found.append({"id": f"v{v.pk}", "sku": v.sku, "name": f"{product.name} / {v.name}",
+                "price": v.effective_price})
+    return found
+
+
+def _goods_lines(request, store):
+    """The submitted rows: ``product[]`` is a product id or ``v<id>`` for a variant."""
+    from .invoice_form_views import _item
+    lines = []
+    for value, qty, price in zip(request.POST.getlist("product[]"), request.POST.getlist("qty[]"),
+            request.POST.getlist("unit_price[]"), strict=False):
+        if not value:
+            continue
+        product, variant = _item(store, value)
+        quantity = int(Decimal(qty or 0))
+        if product is None or quantity <= 0:
+            continue
+        lines.append({"product": product, "variant": variant, "qty": quantity, "unit_price": _amount(price)})
+    return lines
+
+
 def _posted(request):
     """The submitted values with "" for anything missing, so a template can use one as the
     argument of a filter (``|default:post.name``) without failing on a first visit."""
@@ -227,7 +260,8 @@ def merchant_receive_payment(request):
                 reference=request.POST.get("reference", ""),
                 bank_account=_bank(store, request.POST.get("bank_account")),
                 note=request.POST.get("note", ""), allocations=allocations,
-                keep_rest=request.POST.get("keep_rest") == "1", actor=request.user)
+                keep_rest=request.POST.get("keep_rest") == "1",
+                advance_vat=request.POST.get("advance_vat") == "1", actor=request.user)
         except (receipts.ReceiptError, LedgerError, InvalidOperation, ValueError) as error:
             messages.error(request, f"Gagal: {error}" if str(error) else "Jumlah tidak valid.")
         else:
@@ -240,7 +274,9 @@ def merchant_receive_payment(request):
         methods=[m for m in InvoicePayment.METHOD_CHOICES if m[0] not in {"credit", "cod", "writeoff"}],
         credit=receipts.credit_balance(store, customer, buyer) if (customer or buyer) else 0,
         owed=sum((i.amount_due for i in invoices), Decimal(0)),
-        today=timezone.localdate().isoformat(), post=request.POST))
+        today=timezone.localdate().isoformat(), post=request.POST,
+        is_pkp=__import__("apps.tax.services", fromlist=["tax_profile"]).tax_profile(store).is_pkp,
+        tax_rate=store.tax_rate))
 
 
 @login_required(login_url=LOGIN)
@@ -267,6 +303,19 @@ def merchant_receipt_detail(request, receipt_id):
         else:
             _audit(request, store, "receipt.voided", receipt)
             messages.success(request, "Penerimaan dibatalkan dan jurnalnya dibalik.")
+        return redirect("merchant-receipt-detail", receipt.pk)
+    if request.method == "POST" and request.POST.get("action") == "release":
+        _require_roles(request, store, EDIT_ROLES)
+        numbers = [p.invoice.number for p in receipt.allocations.select_related("invoice")]
+        try:
+            released = receipts.release_to_credit(receipt, actor=request.user)
+        except (receipts.ReceiptError, LedgerError) as error:
+            messages.error(request, str(error))
+        else:
+            _audit(request, store, "receipt.released_to_credit", receipt, amount=str(released),
+                invoices=numbers)
+            messages.success(request, "Alokasi dilepas: invoice dibuka lagi dan uangnya menjadi kredit "
+                "pelanggan. Pakai kredit itu di invoice yang benar.")
         return redirect("merchant-receipt-detail", receipt.pk)
     allocations = list(receipt.allocations.select_related("invoice"))
     journal = entries_for(store, [("invoice_payment", p.pk) for p in allocations]
@@ -330,9 +379,9 @@ def merchant_quotes(request):
         can_edit=_can_edit(request, store)))
 
 
-def _doc_form_context(request, store, **extra):
+def _doc_form_context(request, store, products=None, **extra):
     return _merchant_context(request, store,
-        products=Product.objects.filter(store=store, is_active=True).order_by("name"),
+        products=products if products is not None else Product.objects.filter(store=store, is_active=True).order_by("name"),
         customers=Customer.objects.filter(store=store).order_by("name")[:500],
         today=timezone.localdate().isoformat(), post=_posted(request), **extra)
 
@@ -348,7 +397,7 @@ def merchant_quote_edit(request, quote_id=None):
         try:
             customer = _customer(store, request.POST.get("customer_id"))
             valid_until = _date(request.POST.get("valid_until"))
-            quote = quotes.save_quote(store, quote=quote, lines=_product_lines(request, store),
+            quote = quotes.save_quote(store, quote=quote, lines=_goods_lines(request, store),
                 buyer_name=request.POST.get("buyer_name") or (customer.name if customer else ""),
                 customer=customer, issued_on=_date(request.POST.get("issued_on")),
                 valid_until=valid_until, company_name=request.POST.get("company_name", ""),
@@ -364,7 +413,8 @@ def merchant_quote_edit(request, quote_id=None):
             return redirect("merchant-quote-detail", quote.pk)
     prefill = _customer(store, request.GET.get("customer"))
     return render(request, "merchant/quote_form.html", _doc_form_context(request, store,
-        quote=quote, prefill=prefill or defaultdict(str), kind="quote", items=quote.items.all() if quote else []))
+        quote=quote, prefill=prefill or defaultdict(str), kind="quote", products=_goods_items(store),
+        items=quote.items.select_related("variant") if quote else []))
 
 
 @login_required(login_url=LOGIN)

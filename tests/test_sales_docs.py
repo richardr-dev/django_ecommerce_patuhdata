@@ -577,9 +577,14 @@ class OneWayToCreateTests(Base):
             page = self.client.get(url)
             self.assertEqual(page.status_code, 200)
             self.assertTemplateUsed(page, "merchant/invoice_form.html")
-        from django.urls import NoReverseMatch
-        with self.assertRaises(NoReverseMatch):
-            reverse("merchant-invoice-batch")
+        # "Buat banyak invoice" is not a second invoice form: it is a paste/bulk page with no pricing or posting
+        # of its own, and every invoice it makes goes through create_sales_invoice (tests/test_invoice_batch.py).
+        import inspect
+
+        from apps.tax import invoice_batch
+        page = self.client.get(reverse("merchant-invoice-batch"))
+        self.assertTemplateNotUsed(page, "merchant/invoice_form.html")
+        self.assertIn("create_sales_invoice(", inspect.getsource(invoice_batch.create_all))
 
     def test_orders_without_an_invoice_get_a_banner_only_when_there_are_some(self):
         from apps.orders.models import Order

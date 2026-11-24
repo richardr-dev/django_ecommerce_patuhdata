@@ -1,5 +1,6 @@
 """Back office: customer segments, tags and email broadcasts; storefront: unsubscribe."""
 import datetime
+from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -8,7 +9,7 @@ from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from apps.shops.permissions import roles
+from apps.shops.permissions import can, roles
 
 from .models import AuditLog, Customer, EmailBroadcast
 from .segments import (
@@ -160,11 +161,20 @@ def merchant_customer_terms(request, customer_id):
     customer.payment_terms_days = int(days) if days.isdigit() else None
     list_id = request.POST.get("price_list", "").strip()
     customer.price_list = PriceList.objects.filter(store=store, pk=list_id).first() if list_id.isdigit() else None
-    customer.save(update_fields=["payment_terms_days", "price_list"])
+    fields = ["payment_terms_days", "price_list"]
+    if "credit_limit" in request.POST and can(request.user, store, "sales.credit"):
+        raw = request.POST.get("credit_limit", "").strip().replace(".", "").replace(",", "")
+        if raw and not raw.isdigit():
+            messages.error(request, "Batas kredit harus berupa angka.")
+            return redirect("merchant-customer-detail", customer_id=customer.id)
+        customer.credit_limit = Decimal(raw) if raw else None
+        fields.append("credit_limit")
+    customer.save(update_fields=fields)
     AuditLog.objects.create(store=store, actor=request.user, action="customer.terms_updated",
         object_type="Customer", object_id=str(customer.pk), details={
             "payment_terms_days": customer.payment_terms_days,
-            "price_list": customer.price_list.name if customer.price_list else ""})
+            "price_list": customer.price_list.name if customer.price_list else "",
+            "credit_limit": str(customer.credit_limit) if customer.credit_limit is not None else ""})
     messages.success(request, "Ketentuan penjualan disimpan.")
     return redirect("merchant-customer-detail", customer_id=customer.id)
 
@@ -268,14 +278,22 @@ def merchant_customer_search(request):
 
     # Try to get last shipping address from most recent order
     from apps.orders.models import Order
+    from apps.tax.credit_limit import hold_days, hold_text, overdue_hold
+    from apps.tax.credit_limit import position as credit_position
+    holding = hold_days(store) is not None
     results = []
     for c in qs:
         last_order = Order.objects.filter(
             store=store, customer=c
         ).exclude(shipping_address="").exclude(shipping_address="-").order_by("-created_at").first()
+        # Only a customer with a limit costs the extra query for what they owe.
+        credit = credit_position(c) if c.credit_limit is not None else None
         results.append({
             "id": str(c.id),
             "name": c.name,
+            "credit_limit": str(credit.limit) if credit else None,
+            "credit_owed": str(credit.owed) if credit else None,
+            "credit_hold": hold_text(hold) if holding and (hold := overdue_hold(c)) else "",
             "price_list_id": str(c.price_list_id) if c.price_list_id else "",
             "payment_terms_days": c.payment_terms_days,
             "company_name": c.company_name,

@@ -4,7 +4,7 @@
 <div class="pg-head">
   <div><span class="pg-kicker">Penjualan</span><h1>Piutang pelanggan</h1>
     <p>Siapa yang belum membayar dan sudah berapa lama, dihitung dari tanggal jatuh tempo invoice. Angka ini sama dengan akun Piutang usaha di pembukuan.</p></div>
-  <div class="dp-actions"><button type="button" class="btn" data-open="reminder-dialog">{% icon "clock" %} Pengingat otomatis{% if reminder_policy.enabled %} · aktif{% endif %}</button><a class="btn" href="{% url 'merchant-customer-credit' %}">{% icon "wallet" %} Kredit pelanggan</a><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "cash" %} Terima pembayaran</a></div>
+  <div class="dp-actions"><button type="button" class="btn" data-open="reminder-dialog">{% icon "clock" %} Pengingat otomatis{% if reminder_policy.enabled %} · aktif{% endif %}</button>{% if may_set_credit or reminder_policy.credit_hold_days != None %}<button type="button" class="btn" data-open="hold-dialog">{% icon "lock" %} Tahan kredit{% if reminder_policy.credit_hold_days != None %} · {{ held|length }} pelanggan{% endif %}</button>{% endif %}<a class="btn" href="{% url 'merchant-customer-credit' %}">{% icon "wallet" %} Kredit pelanggan</a><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "cash" %} Terima pembayaran</a></div>
 </div>
 <form class="toolbar" method="get"><label class="field"><span style="font-size:12.5px;color:var(--pd-muted)">Per tanggal</span><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label><button class="btn">Terapkan</button></form>
 {% if unitemised > 1 or unitemised < -1 %}
@@ -60,6 +60,25 @@
       <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="use_whatsapp" value="1"{% if reminder_policy.use_whatsapp %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> WhatsApp (akun toko di Pengaturan › WhatsApp)</label>
     </div>
     <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan</button></footer>
+  </form>
+</dialog>
+<dialog id="hold-dialog" class="pd-dialog" aria-labelledby="hold-title" style="max-width:560px">
+  <form method="post" action="{% url 'merchant-credit-hold-policy' %}">{% csrf_token %}
+    <header><h2 id="hold-title">Tahan kredit pelanggan terlambat</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <p class="dp-help" style="margin:0">Pelanggan yang punya invoice lewat jatuh tempo lebih dari batas ini tidak bisa dibuatkan invoice kredit baru sampai invoice itu dilunasi; penjualan tunai tetap jalan. Manajer dan keuangan bisa menyetujui satu penjualan kredit di formulir invoice (tercatat di riwayat). Kasir, impor marketplace, dan invoice berulang tidak ditahan.</p>
+      {% if may_set_credit %}
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="hold" value="1"{% if reminder_policy.credit_hold_days != None %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> Aktifkan tahan kredit</label>
+      <label class="field"><span>Tahan bila terlambat lebih dari (hari)</span><input type="number" name="credit_hold_days" min="0" max="365" value="{{ reminder_policy.credit_hold_days|default_if_none:'30' }}"><small style="color:var(--ds-muted)">0 = tahan begitu ada invoice lewat jatuh tempo</small></label>
+      {% endif %}
+      {% if held %}
+      <div><h3 style="font-size:13px;font-weight:600;margin:4px 0 6px">Ditahan hari ini</h3>
+        <ul style="display:grid;gap:6px;margin:0;padding:0;list-style:none">{% for customer, invoice, late in held|slice:":12" %}
+          <li style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><a href="{% url 'merchant-customer-detail' customer.pk %}" style="color:var(--ds-primary);font-weight:600">{{ customer.name }}</a><span style="color:var(--ds-muted)">{{ invoice.number }} · terlambat {{ late }} hari</span></li>{% endfor %}</ul>
+        {% if held|length > 12 %}<p class="dp-help" style="margin:6px 0 0">dan {{ held|length|add:"-12" }} pelanggan lain.</p>{% endif %}</div>
+      {% elif reminder_policy.credit_hold_days != None %}<p class="dp-help" style="margin:0">Tidak ada pelanggan yang ditahan hari ini.</p>{% endif %}
+    </div>
+    <footer><button type="button" class="btn" data-close>{% if may_set_credit %}Batal{% else %}Tutup{% endif %}</button>{% if may_set_credit %}<button class="btn-primary">Simpan</button>{% endif %}</footer>
   </form>
 </dialog>
 {% include "merchant/_dialog_js.html" %}

@@ -18,7 +18,7 @@
 </div>
 
 <div class="tiles">
-  <div class="tile accent"><small>Total kas & bank</small><strong>Rp{{ total|floatformat:"0g" }}</strong><span>{{ accounts|length }} rekening aktif</span></div>
+  <div class="tile accent"><small>Total kas & bank</small><strong>{{ total|rp }}</strong><span>{{ accounts|length }} rekening aktif</span></div>
 </div>
 
 <div class="acct-grid">
@@ -31,9 +31,9 @@
         <small>{% if account.bank_name %}{{ account.bank_name }}{% if account.account_number %} · {{ account.account_number }}{% endif %} · {% endif %}Akun {{ account.account.code }}</small>
       </div>
     </div>
-    <div class="acct-bal"><span>Saldo pembukuan</span><b>Rp{{ account.book_balance|floatformat:"0g" }}</b></div>
+    <div class="acct-bal"><span>Saldo pembukuan</span><b>{{ account.book_balance|rp }}</b></div>
     {% if account.summary.statement_balance is not None %}
-    <div class="acct-bal"><span>Saldo bank {{ account.summary.statement_date|date:"d M" }}</span><span>Rp{{ account.summary.statement_balance|floatformat:"0g" }}</span></div>
+    <div class="acct-bal"><span>Saldo bank {{ account.summary.statement_date|date:"d M" }}</span><span>{{ account.summary.statement_balance|rp }}</span></div>
     {% endif %}
     <div class="acct-foot">
       {% if account.summary.unmatched_count %}
@@ -65,8 +65,8 @@
         <td><a class="rowlink" href="{% url 'merchant-cash-detail' txn.id %}">{{ txn.get_kind_display }}</a></td>
         <td>{{ txn.bank_account.name }}{% if txn.to_bank_account %} → {{ txn.to_bank_account.name }}{% endif %}</td>
         <td>{{ txn.contact|default:"" }}{% if txn.contact and txn.description %} · {% endif %}{{ txn.description|truncatechars:60 }}</td>
-        <td class="num">{% if txn.kind == 'receive' %}Rp{{ txn.total|floatformat:"0g" }}{% endif %}</td>
-        <td class="num">{% if txn.kind == 'spend' %}Rp{{ txn.total|floatformat:"0g" }}{% elif txn.kind == 'transfer' %}<span class="muted">Rp{{ txn.total|floatformat:"0g" }}</span>{% endif %}</td>
+        <td class="num">{% if txn.kind == 'receive' %}{{ txn.total|rp }}{% endif %}</td>
+        <td class="num">{% if txn.kind == 'spend' %}{{ txn.total|rp }}{% elif txn.kind == 'transfer' %}<span class="muted">{{ txn.total|rp }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

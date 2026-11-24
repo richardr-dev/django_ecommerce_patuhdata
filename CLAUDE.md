@@ -23,7 +23,7 @@ All user-facing text is Indonesian. Code, comments and tests are English.
 .venv/bin/python manage.py stock_audit   # stock vs movements; --fix
 ```
 
-The full suite passes (1414 tests, 2026-11-20); the four files that used to fail (`test_digital_products`,
+The full suite passes (1615 tests, 2026-11-23); the four files that used to fail (`test_digital_products`,
 `test_segments`, `test_smoke_urls`, `test_stock_editing`) are green.
 
 ## Architecture rules
@@ -43,6 +43,39 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   figures). When you add a ledger tie, add its check.
 - **Stock changes go through `apps/orders/stock.py` or `inventory.py`** and always leave an
   `InventoryMovement`. Cost is moving average.
+- **Variant stock per warehouse** (`orders/variant_stock.py`, model `catalog.VariantStock`, `InventoryMovement.warehouse`;
+  tests `tests/test_variant_warehouse.py`; built 2026-11-22). `ProductVariant.stock` / `reserved` stay the store-wide
+  total and reservation that every screen and the storefront read; `VariantStock` rows say where the units are and always
+  add up to `stock`. Only `record_movement` changes them (`variant_stock.apply`): units added go to the named warehouse
+  (else the first active one), units taken leave the named warehouse (refused if short) or the warehouses in priority order,
+  one movement per location touched, each with its `warehouse`. `stock_in`/`stock_out`/`receive_goods(warehouse=)`,
+  `transfer_stock(variant=)`, `deduct_invoice_stock(warehouse=)` (commits the variant line at that location at once) and
+  Penyesuaian stok act per location; a returned order line goes back to the warehouses its commit movements name. Variants
+  stocked before this have no rows: `heal` puts unlocated units in the first warehouse before the first change, so no data
+  migration. Kelola stok shows one variant row per location and has "Pindah gudang" (product or variant, `stock.send`, no
+  journal). `controls.stock_movements` warns when rows do not add up (`variant_stock.drift`). Never write `variant.stock`
+  without `record_movement`. Stok opname (`StockCountLine.variant`, one line per variant row in the warehouse counted) and
+  stock requests (`StockRequestLine.variant`, sent from the source's row, received into the target's) handle variants too
+  (2026-11-23, `tests/test_count_request_variants.py`); an approved count moves stock at the warehouse counted only.
+  `deduct_invoice_stock` rolls its own savepoint back when anything is short (its one caller refuses the invoice).
+- **Standard inventory flow: every quantity comes from a document, and every document moves Persediaan with it**
+  (receipt/bill/Beli tunai → Persediaan; invoice/surat jalan/POS → HPP; transfer and stock request → no entry; stok
+  opname → 6960; **Penyesuaian stok** for everything else). Penyesuaian stok (`accounting/stock_adjustments.py`,
+  `StockAdjustment`/`StockAdjustmentLine`, pages Persediaan › Penyesuaian stok at `/books/accounting/penyesuaian-stok/`,
+  `views_stock_adjust.py`; permissions `stock.adjust`, `stock.adjust_void`; tests `tests/test_stock_adjustments.py` with
+  the worked example) is numbered `PS/<year>/0001`, has one reason per document and each reason one direction and
+  account (`REASONS`): rusak 6965, hilang 6960, sampel 6250, diambil pemilik 3200, ditemukan 6960, stok lama belum
+  tercatat 3100, koreksi 6960 (both ways). Units leaving are valued at the moving average; units added at the typed cost,
+  which joins the average. No cost price is refused. Posting is `("stock_adjustment", id)`, strict, in the same
+  transaction as the `adjust` movements (source `stock_adjustment`); above the threshold it is an approval of kind
+  `stock_adjustment`. Void puts the stock back and reverses the entry (refused if the units already left again).
+  **Before the books start** (`books_started`: no journal entry yet) Kelola stok, the product form, variant rows, Lokasi
+  stok and the CSV import set quantities with a movement only (source `setup` / `product_import`), and Saldo awal books
+  the stock (`inventory.opening_stock`: shelf value less what Persediaan already holds, so nothing is booked twice).
+  **Afterwards** each of them goes through `set_quantity` / `book_moved` and makes a Penyesuaian (Kelola stok asks the
+  reason; first stock of a product is "stok lama belum tercatat", a later change "koreksi"). `controls.stock_changes_booked`
+  warns about any `adjust`/`opname` movement without a document after the first entry, and any penyesuaian whose
+  Persediaan line differs from its value. New code that changes a quantity must use one of these documents.
 - **Services hold the logic, views stay thin.** A view parses the form, calls one service
   function, and turns its domain error (`BankError`, `CreditNoteError`, `ReceiptError`…) into a
   message. Services raise; they never swallow.
@@ -51,6 +84,33 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   never add a second invoice page. Lines may be goods (stock + HPP) or services (revenue only).
   Editing goods returns the old stock, takes the new and swaps the order (the old order is kept,
   cancelled); amounts lock once paid, credited or imported, and are corrected by credit note.
+  An invoice remembers where it was sold from (`Invoice.warehouse`, set by `create_sales_invoice(warehouse=)`, shown as
+  "Dijual dari"); an edit takes the new goods from that location and keeps only the `rounding` of the new lines
+  (`tests/test_invoice_edit.py`). `controls.invoice_open_balance` counts reversal entries for the document they reverse,
+  so an edited invoice is not reported twice.
+  **Variants on an invoice** (tests `tests/test_invoice_variants.py`, built 2026-11-23): a line may carry `variant` (its
+  `product` is the parent); `InvoiceItem.variant` and `OrderItem.variant` keep it, so stock, the warehouse rows, HPP
+  (the variant's cost), edit, void and credit-note restock all act on that size. The form's picker lists each active
+  variant as its own entry (`product[]` = `v<id>`, `_catalog` / `_item` in `invoice_form_views.py`) and hides a parent
+  that has variants; the batch takes a variant SKU or barcode and refuses a parent SKU. A variant is never sold short
+  (`sales._variant_shortages`), whatever the stok minus switch says.
+- **Buat banyak invoice** (`tax/invoice_batch.py`, page `/books/sales/invoices/banyak/`, `tax/batch_views.py`,
+  `templates/merchant/invoice_batch.html`; tests `tests/test_invoice_batch.py`; built 2026-11-22). Not a second invoice
+  form: it has no pricing or posting of its own. Two ways in: paste from Excel (`No. ref; pelanggan; tanggal; jatuh tempo;
+  SKU atau jasa; jumlah; harga; diskon`, "Harga sudah termasuk PPN" applies to the whole paste, rows sharing a ref are one invoice, the ref becomes Referensi; a SKU is a goods
+  line, other text a service line that needs a price; empty price = customer's price list else retail; empty due = the
+  customer's terms), or the same lines ticked to many customers. "Periksa" plans without writing (`parse_paste` /
+  `for_customers` → `Planned` with errors per invoice); "Buat" plans again on the server and `create_all` makes every
+  invoice through `create_sales_invoice(on_credit=True, credit_check=…)` in one transaction, or none (numbers roll back
+  too). Unknown customer names are added. Idempotency scope `invoice_batch`; max 300 per run; permission `sales.edit`.
+- **The invoice form takes PPN-inclusive prices and a sales location**: "Harga sudah termasuk PPN"
+  (`prices_include_tax=1`) runs `tax/sales.py:from_inclusive`, which backs each price and discount out to before PPN with
+  `exclusive_price` and returns the leftover cents as `rounding` (Pembulatan 4950), so the total is what was typed. The
+  invoice keeps `Invoice.prices_include_tax`; edit and duplicate show the prices with PPN again
+  (`invoice_form_views._typed_with_tax`) and an edit passes `rounding=` / `prices_include_tax=` to `update_sales_invoice`
+  (saved unchanged: nothing is rebooked). "Jual dari gudang" (new invoices, shown with two or more active warehouses) passes
+  `warehouse=` to `create_sales_invoice`. The invoice list and
+  receivables prefetch `payments` and `credit_notes` (`amount_due` reads both); `tests/test_invoice_query_counts.py` pins it.
 - **An invoice that asks for more than the shelf holds is refused** (`StockShortage` in
   `tax/sales.py`): stock leaves and HPP is booked in the same transaction, so the shelf and
   Persediaan cannot disagree. Products with no inventory level are untracked and not blocked.
@@ -78,8 +138,8 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   `stock_shortages(store, wants, warehouse)`; tests `tests/test_sale_from_warehouse.py`): the units come from that
   warehouse's shelf only, what another branch holds does not count, a tracked product with no row there is short
   (0 available, not untracked), and stok minus, when allowed, is recorded on that location's level. Without
-  `warehouse` the store's locations are drawn in priority order as before. Variants still have one stock figure
-  for the whole store, so the parameter does not apply to them yet. This is POS phase 0 (`docs/pos-architecture.md`),
+  `warehouse` the store's locations are drawn in priority order as before. Variants follow the same rule
+  through their per-warehouse rows (see "Variant stock per warehouse"). This is POS phase 0 (`docs/pos-architecture.md`),
   together with: `create_sales_invoice(number_series="POS")` (own gapless `POS/<year>/000001` series through
   `numbering.next_number`, never the INV series), `tax/services.py:exclusive_price` (PPN backed out of a shelf price
   that includes it), the register accounts 1210 / 4950 / 6155 / 6980 / 7250 in every chart, role `cashier`
@@ -144,14 +204,38 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   the source lacks free stock (it never creates stok minus). Outlets are `Warehouse` rows with
   `is_outlet`. Not built yet: a request → approve → send → receive screen (only the service exists) and
   variant stock per location. Goods moving to a *different brand* are an intercompany transfer instead.
-- Opening receivables/payables are totals in the books (not itemised by invoice); the aging
-  pages show the difference. Itemised opening invoices need `Invoice.order` to be optional.
+- **Saldo awal piutang per invoice** (`tax/opening_invoices.py`, page Saldo awal › Piutang per invoice at
+  `/books/accounting/opening/piutang/`, `accounting/views_opening.py`; tests `tests/test_opening_invoices.py`): an
+  unpaid invoice from the old system is an ordinary `Invoice` (old number kept, one line, tax 0) carried by an order of
+  `order_type="opening"`. `posting.post_invoice` books only Piutang usaha / Modal pemilik (3100), on the Saldo awal
+  date (else its own date); no sale, PPN, stock or HPP. It is paid, aged, reminded, written off and on the customer
+  statement like any invoice; edit, duplicate, credit note and surat jalan are refused or hidden (a wrong amount is
+  voided and entered again). Dated after the Saldo awal date it is refused (that is a new sale). Pesanan, sales
+  summary, analytics, `sales_report`, the channel recap and the sales export exclude `order_type="opening"`; SPT and
+  faktur skip it because tax is 0. A new order-based sales report must exclude it too. Paste from Excel (tab or `;`,
+  `pelanggan, nomor, tanggal, jatuh tempo, sisa`) is all-or-nothing and adds unknown customers by name. The
+  Piutang total typed on Saldo awal is only for what is not itemised; the page warns when both exist. Opening payables have the same twin: **Saldo awal utang per tagihan** (`accounting/opening_bills.py`, page
+  `/books/accounting/opening/utang/`, `Bill.is_opening`; tests `tests/test_opening_bills.py`): `payables.post_bill` books only
+  Modal pemilik / Utang usaha on the Saldo awal date; no purchase, stock or PPN masukan; paid and aged like any bill; debit
+  note refused; same supplier + number refused unless voided. Both pastes share `accounting/opening_paste.py`, and
+  `controls.backdated_entries` ignores both kinds of opening document.
 - **Marketplace orders are dated by the marketplace's order time** (`MarketplaceOrder.placed_at` /
   `paid_at`, read by each parser; applied in `channels/services.py:apply_marketplace_dates`), never
   by the import day: the order, its payment, its journal entry (`ledger.redate_payment`) and its
   invoice follow it, and re-importing the same file corrects older imports. A new parser must set
   `placed_at`. Marketplace fees are split by charge into accounts 6110–6150 (`ledger.FEE_ACCOUNTS`,
   `Payout.fee_breakdown`); a missing invoice is issued later by the books worker.
+- **PPh 22 collected by a marketplace (PMK 37/2025, 0,5% of gross turnover) is tax, never a fee**: the income-report parser
+  reads it into `ChannelOrderIncome.pph22` (headers "PPh 22", "pajak penghasilan", "withholding tax"; such a column is
+  never taken as the amount released) and `income.pph22_account` books it in the payout entry to 6990 Beban PPh final
+  under PPh Final UMKM (it settles part of the month's 0,5%: `MonthlyTax.marketplace_pph22`, `pph_to_deposit`, used by
+  the tax page and the tax calendar) or to 1525 PPh 22 dipungut marketplace under the general rates (a credit in the SPT
+  Tahunan, `fiscal.worksheet["marketplace_withheld"]`). `controls.marketplace_pph22_tie` checks 1525.
+  **Paket pajak marketplace** (`channels/marketplace_tax.py:build`, page Pajak › Pajak marketplace at `/books/tax/marketplace/`,
+  Excel `exports.marketplace_tax_workbook`; tests `tests/test_marketplace_tax.py`): per shop, sales by invoice date (DPP,
+  PPN, retur) and payouts by release date (fees by kind, PPh 22, money to the bank), what was sold but not yet released,
+  every order, and what to fix before handing the month over (orders without invoice, invoices without income report,
+  unmapped SKUs, products without cost, month not closed).
 - **A return is settled in one step** (`tax/returns.py`): inspection records the condition; settling
   creates the credit note (refund or customer credit) and moves stock together. Good goods go back
   on the shelf and to Persediaan at their cost; damaged goods stay out and their cost stays in HPP.
@@ -283,6 +367,25 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
+- **Siapkan pembukuan** (`orders/onboarding.py:books_setup_steps`, Beranda; tests `tests/test_books_setup.py`): five steps in a
+  shop's order (tax profile, kas & bank, products with cost price, saldo awal, first sale), each ticked from data with a hint
+  saying what is missing. The automatic "Kas & bank utama" alone does not tick the bank step. The CSV product import
+  (`setup_views.import_products(actor=)`) leaves an `adjust` movement for every stock change, like Kelola stok; once the
+  books run it also records Penyesuaian stok documents (`stock_adjustments.book_moved`) that book the value.
+- **Beli tunai** (`accounting/cash_purchase.py:buy_for_cash`, page Pembelian › Beli tunai at `/books/accounting/beli-tunai/`,
+  permission `purchase.cash`; tests `tests/test_cash_purchase.py`): goods bought and paid on the spot, for retail SMEs. One
+  transaction runs `create_bill` → `receive_bill` → `pay_bill` for the full total, so it writes no journal lines of its own
+  and is an ordinary paid bill everywhere (Persediaan / Utang usaha, then Utang usaha / Kas). Every line must be a catalog
+  product or variant in whole units (an expense paid in cash is Biaya operasional). The buyer records and pays by nature,
+  so `maker_may_not_check` does not apply; above the `bill_payment` approval threshold the page refuses and sends the
+  person to an ordinary bill. The picker takes a name, SKU or variant barcode (resolved in the browser) and Enter adds a
+  row, so a scanner works; an optional nota photo is attached to the bill. Rows stack on phones.
+- **Ringkasan pembelian** (`accounting/views_purchase_hub.py`, `templates/merchant/purchasing.html`, first link of the
+  Pembelian sidebar group, `/books/accounting/pembelian/`; tests `tests/test_purchasing_hub.py`): the flow usulan → pesanan →
+  penerimaan → tagihan → bayar as five step cards with what waits at each (late POs, receipts not billed, bills past due or
+  due in 7 days, each with a "Bayar" link to the supplier's multi-bill payment), tiles, and a shortcut to every purchasing
+  document. Reads only. Without `books.view` (warehouse) it shows the first three steps and no payables. The sidebar group
+  lists the documents in that flow order; "Buat tagihan" is in Buat baru and the bill list's header, not the sidebar.
 - **Purchasing documents** (`accounting/purchasing.py`, `supplier_notes.py`, `stock_counts.py`,
   `orders/stock_requests.py`; permissions `purchase.order`, `stock.count`, `stock.count_approve`,
   `stock.request`, `stock.request_approve`, `stock.send`): a purchase order books nothing; each goods receipt
@@ -293,6 +396,40 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   request moves stock out at *send* (in transit, counted by `inventory.reconciliation`) and in at *receive*;
   missing units are a loss in transit at cost. None of these edit or delete a posted document: correct with
   a new document.
+- **Odoo-style inventory additions (built 2026-11-23)**:
+  - **Aturan stok minimum / Usulan pembelian** (`accounting/reordering.py`, model `ReorderRule`, page Pembelian ›
+    Usulan pembelian at `/books/accounting/usulan-pembelian/`, `views_reorder.py`; tests `tests/test_reordering.py` with
+    the worked example). A rule per product or variant, store-wide or per warehouse: minimum, maximum, multiple,
+    supplier, lead days. Forecast = on hand − reserved + open PO lines (only POs bound for the rule's warehouse when it has
+    one: `PurchaseOrder.warehouse`, which the receive dialog starts on) − open sales order backorder (store-wide rules
+    only). Below the minimum it proposes maximum − forecast rounded up to the multiple; supplier = rule, else last PO/bill;
+    price = last PO price, else cost. "Buat pesanan pembelian" makes one ordinary PO per supplier and warehouse through
+    `create_po` (idem scope `reorder`). Beranda row "barang di bawah stok minimum". Permission `purchase.order`.
+  - **Satuan barang** (`catalog/units.py`, `Product.base_unit`, `ProductUnit` name + factor ≥ 2, page Persediaan › Satuan
+    barang at `/books/stock/satuan/`; tests `tests/test_units.py`). Stock, cost and movements stay in the base unit. An
+    invoice line whose unit names a `ProductUnit` keeps "2 dus × price per dus" (`InvoiceItem.unit_factor`) while its
+    order line moves 24 pcs at price / 12 (`sales._units`, `per_base`); edit compares the factor too. A credit note counts
+    in the line's unit and restocks quantity × factor (refused when not whole pcs); a customer return (pcs) maps to a dus
+    line only in whole dus. A PO line may be typed per dus: stored in pcs at cost / 12 with `unit_name`/`unit_factor` for
+    display. A unit's factor never changes once made (old lines read it again on edit); removing a unit only hides it.
+    Not for products with variants; batch invoices, POS and Beli tunai take base units only.
+  - **Biaya perolehan / landed cost** (`accounting/landed_costs.py`, `LandedCost`/`LandedCostLine`, account 1460, bill
+    category "1460", pages Pembelian › Biaya perolehan at `/books/accounting/biaya-perolehan/`, permission
+    `purchase.landed_cost`; tests `tests/test_landed_costs.py` with the worked example). The freight/duty bill is an
+    ordinary bill (paid, aged, withheld as usual) debiting 1460; an allocation spreads it (net of creditable PPN, whole or
+    in parts) over goods receipt lines by value or quantity. The share of units still held (shelf + mitra, at most the
+    units received) goes to Persediaan and the moving-average cost; the rest to HPP. Entry `("landed_cost", id)`.
+    Void reverses and takes the cost back off, refused once fewer units are held. `controls.landed_cost_tie` ties 1460.
+  - **Lot & kedaluwarsa** (`orders/lots.py`, `Product.tracks_lots`, `StockLot`, `StockLotMove`, pages Persediaan › Lot &
+    kedaluwarsa at `/books/stock/lot/`; tests `tests/test_lots.py`). Lots are store-wide per product/variant and follow
+    every quantity change from `inventory.record_movement` (`_follow_lots`), except transfers, mitra moves, reservations and
+    stok minus. Receipts open lots (`GoodsReceiptLine.lot_code` / `expiry_date`, `with lots.receiving(code, expiry)`;
+    a tracked line without a code gets `<receipt no>-<yymmdd>-<n>`); units leaving draw the soonest expiry first (FEFO
+    among good lots, then undated, expired last so expired stock waits for Penyesuaian stok "rusak"); units coming back without a lot return to the lot drawn last, else `TANPA-LOT`. Switching on puts what
+    is held into lot `AWAL`. A lot traces to its documents (recall). `controls.lots_tie` warns when lots ≠ held or an
+    expired lot is still in stock; Beranda rows for expired and ≤ 30 days. Not built: choosing a lot by hand on a sale,
+    lots per warehouse, serial numbers, a lot field on Beli tunai and bill "Terima barang" (their units join the lot drawn
+    last, else `TANPA-LOT`; receive through Penerimaan barang to name the lot).
 - **The product is the books; the online shop is one optional sales channel** (decided 2026-11-16). What a
   partner installs is a *Perusahaan* (PT, CV, UD, distributor, personal trading business): say "perusahaan" on
   screen wherever the business is meant, and "toko online" only for the storefront. Code keeps `Store`,
@@ -320,6 +457,57 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   withheld, credits Piutang for the whole; the invoice is paid. The multi-invoice receipt takes it per invoice
   (`receive_payment` allocations `(invoice, amount, withheld)`, inputs `pph_<id>`). The SPT Tahunan worksheet reads it as a
   credit (`fiscal.buyer_withholdings`, row "PPh dipotong pembeli"), so it is never typed as a manual credit too.
+- **Jatuh tempo** (`tax/posting.py:status_for`, `mark_overdue`): an invoice with an unpaid balance past its due date is
+  `overdue` whether part paid or not; a payment keeps it overdue until paid in full, and moving the due date later puts it
+  back to open or part paid. `run_books` sweeps every store daily (before reminders); the invoice list sweeps its store.
+- **Batas kredit** (`tax/credit_limit.py`, `Customer.credit_limit`: empty no limit, 0 cash only; tests `tests/test_credit_limit.py`):
+  `create_sales_invoice` / `update_sales_invoice(credit_check=True)` refuse a credit sale that takes the customer's open
+  balance past the limit (`CreditLimitExceeded`). Only the invoice form passes it; kasir, imports, recurring and delivery
+  invoicing never do. Permission `sales.credit` (admin, manager, finance) sets the limit on the customer page and may tick
+  "Setujui melewati batas kredit" on the form, logged as `invoice.credit_limit_override`. The form's customer picker gets
+  `credit_limit`/`credit_owed` and warns before saving; the server decides.
+  **Tahan kredit** (`ReminderPolicy.credit_hold_days`, empty off; dialog on Piutang pelanggan, `merchant-credit-hold-policy`,
+  permission `sales.credit`; tests `tests/test_credit_hold.py`): a customer with an open invoice more than N days past due
+  gets no new credit invoice (`CreditHold`, raised by the same `credit_limit.check`), whatever the limit; cash sales and
+  automatic flows are never held. The same "Setujui" tick overrides it, logged as `invoice.credit_hold_override`; the
+  picker sends `credit_hold`, the customer page shows the pill, `held_customers(store)` lists who is held.
+- **Uang muka kena PPN** (`tax/receipts.py`, tick "uang muka" on Terima pembayaran, PKP only; tests `tests/test_advance_vat.py`):
+  a down payment before delivery is a PPN moment. `receive_payment(advance_vat=True)` backs the PPN out of the leftover
+  deposit (`exclusive_price`) into `CustomerReceipt.deposit_vat`; the entry is Bank / Kredit pelanggan 2400 (DPP) + PPN
+  keluaran 2100. `CustomerCredit.vat` carries that PPN; `apply_credit` and `refund_credit` take their share in proportion
+  (`InvoicePayment.vat_settled` debits 2100 back), so the sale's PPN counts once. `controls.customer_credit` compares 2400
+  with amount − vat. SPT Masa PPN lists `advances` and `advances_used`. Not built: the faktur uang muka itself in the
+  Coretax XML (the worksheet only lists it); a refunded uang muka needs its faktur cancelled in Coretax by hand.
+- **Penggajian** (`accounting/payroll.py`, `views_payroll.py`, pages Kas & bank › Penggajian at `/books/penggajian/`,
+  models `Employee`, `PayrollSettings`, `PayrollRun`, `PayrollLine`; permissions `payroll.view` / `payroll.edit`; tests
+  `tests/test_payroll.py` with a worked example). A run is drafted from active employees (one live run per month), edited
+  per line (lembur/bonus in `extra`, TER rate), then posted as `("payroll", run)`: Gaji & upah 6200 + Beban BPJS perusahaan
+  6210 against Utang BPJS 2160, Utang PPh 2150 and Utang gaji 2170, on `default_post_date` (a past month: its last day; the
+  current month: the posting day). Each PPh 21 becomes a `Withholding` (`source_type="payroll_line"`), deposited from Setor
+  PPh. Paying is `("payroll_pay", run)`, BPJS `("payroll_bpjs", run)`. BPJS rates and the Kesehatan/JP wage caps are
+  per-store settings (2025 defaults) on gaji pokok + tunjangan tetap.
+  **PPh 21** (`accounting/pph21.py`, tests `tests/test_pph21.py`): the three monthly TER tables are the Lampiran of PP 58/2023,
+  every row checked against the official scan (2026-11-21; some websites misprint C 9,8–10,95 jt as 2%, it is 1,5%).
+  January–November: TER of the PTKP category for bruto + company Kesehatan, JKK, JKM. December (`pph21_method="annual"`):
+  Pasal 17 on the year's PKP (biaya jabatan 5% max 500 rb/month, employee JHT + JP, PTKP, rounded down to thousands) minus the
+  year's earlier posted lines; negative is lebih potong, paid back in the net and recorded as a negative `Withholding`
+  (`record(amount=)`). DJP's leaflet example (Tuan R, December 1.155.000) is pinned. `Employee.pph21_rate` / line
+  `pph21_manual` override the table (empty: automatic). An employee who leaves (`Employee.left_on`) gets the same
+  recalculation in the month they leave (`payroll.last_period`: biaya jabatan capped by months paid, full PTKP, no
+  annualising) and is left out of later runs (`payable_employees`, which also skips anyone joining after the month).
+  Every employee is treated as pegawai tetap; pegawai tidak tetap, the daily TER and bukti potong 1721-A1 are not built.
+  Posting goes through `approvals.required(store, "payroll", gross, …)`. Void reverses while unpaid and the PPh 21 is not
+  deposited. `controls.payroll_tie` ties 2160 + 2170 to the runs; Beranda asks to pay a posted run and to draft last
+  month's. Slip gaji: `merchant-payroll-slip` (branded print page).
+- **Laporan rekening pelanggan** (`tax/customer_statement.py:build`, `/books/customers/<id>/rekening/`, branded print page
+  `tax/customer_statement.html`; tests `tests/test_customer_statement.py`): opening balance, invoices, payments, write-offs and
+  credit notes (applied part) with a running balance, closing balance; void invoices left out; an invoice paid through a
+  gateway or marketplace gets a "Lunas lewat" line. The closing balance equals `credit_limit.owed` (pinned). Unused customer
+  credit is shown beside it, not netted. The open-item surat tagihan on Piutang pelanggan stays as it is.
+- **Lepas ke kredit pelanggan** (`tax/receipts.py:release_to_credit`, button on the receipt page; tests
+  `tests/test_receipt_release.py`): money put on the wrong invoices stays in the bank; each payment entry is reversed, the
+  invoices reopen, and the receipt's `receipt_deposit` entry is booked again for the larger deposit with a `CustomerCredit`
+  row. Refused for a voided receipt, one matched in bank reconciliation, or one with PPh withheld (void and re-record it).
 - **Writing off a bad invoice** (`tax/writeoff.py:write_off_invoice`, button "Hapus piutang" on the invoice): the unpaid
   balance is an `InvoicePayment` of method `writeoff` (never money; `record_payment` refuses that method), so status, aging and
   voiding keep working. It debits Cadangan kerugian piutang 1255 as far as it holds a balance, the rest Beban piutang tak
@@ -351,15 +539,32 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
   says it is neither a faktur pajak nor a receipt, shows the bank accounts. Books nothing. Surat jalan prints from
   an invoice (`merchant-delivery-note`); a goods-issue document of its own is still missing (architecture item 2).
 - **Sales order → surat jalan → invoice** (`tax/sales_orders.py`, `SalesOrder`/`Delivery`; pages Penjualan › Pesanan
-  penjualan and Surat jalan): an order books nothing and holds no stock (goods only; services are invoiced
-  directly). A delivery takes the units off the shelf (`stock_out`, movement kind `issue`) and posts
+  penjualan and Surat jalan): an order books nothing (goods only; services are invoiced directly) and **reserves** the
+  free stock it promised (`reserve`, `SalesOrderReservation`, 2026-11-23, `tests/test_sales_order_reservation.py`): a
+  product on its warehouse levels in priority order, a variant store-wide, each a `reserve` movement with source
+  `sales_order`; short stock holds what there is and "Cadangkan stok" tops it up. A delivery releases its units before
+  `stock_out`; closing releases the rest; cancelling a delivery holds the units again. The reorder forecast subtracts held
+  units once (as reserved, not again as backorder). A delivery takes the units off the shelf (`stock_out`, movement kind `issue`) and posts
   1410 Barang terkirim belum ditagih / Persediaan at the product's cost. An invoice made from deliveries
   (`invoice_deliveries` → `create_sales_invoice(delivered_costs=…)`, `Invoice.from_deliveries`) books the sale and HPP
   against **1410**, takes no stock, locks its amounts, and when voided only releases its deliveries (the goods
   stay with the buyer). Cancelling a delivery needs it uninvoiced; it returns the stock and reverses the entry.
   Partial deliveries leave a backorder (`backorder()`), "Tutup pesanan" drops it. `controls.delivered_tie`
   checks 1410 against uninvoiced deliveries. A quote becomes an order with "Jadikan pesanan penjualan".
-  Not built: reserving stock on an order, delivering from a chosen warehouse, variants on an order.
+  Variants and locations (2026-11-23, `tests/test_sales_order_variants.py`): an order line may be a variant
+  (`SalesOrderLine.variant`, form value `v<id>` from `sales_views._goods_items` / `_goods_lines`, shared with the quote form;
+  parents with variants not offered);
+  its surat jalan takes that variant's units at its cost (`DeliveryLine.variant`), and the invoice keys HPP by product and
+  variant (`delivered_costs` accepts `(product_id, variant_id)`). "Kirim dari gudang" (`create_delivery(warehouse=)`,
+  `Delivery.warehouse`, shown with two or more warehouses) ships from that location only; cancelling returns the units
+  there. A quote line keeps its variant too (`QuoteItem.variant`, `pick_id` for the editor), so quote → invoice and
+  quote → order → surat jalan → invoice carry the size. Recurring invoices stay product only (no variant field). Not
+  built: picking which warehouse an order reserves in (it takes priority order; the delivery may ship from elsewhere).
+  **Detail pages with real data**: the URL smoke test only reaches 404s for detail routes. On 2026-11-23 a diagnostic
+  sweep (a pytest plugin that opened 48 detail/print/PDF routes for the documents every test had made, as owner,
+  accountant and warehouse) found the surat jalan page broken (`entries_for` called wrongly, journal never shown) and
+  `?store=<text>` raising a 500 in `_staff_store`; both fixed and pinned in `tests/test_detail_pages.py` /
+  `test_sales_order_variants.py`. Add a page-level test with a real document whenever you add a detail page.
 - Mitra stock is on consignment: it stays the store's property (account 1450) until sold.
 
 ### Where things live
@@ -386,14 +591,16 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
 | Who may do what (matrix, Hak akses page, segregation of duties) | `shops/permissions.py` | `shops/staff_views.py:merchant_access` |
 | Stok minus: switch, open list, cover on receipt, HPP correction | `orders/deficits.py` | `orders/deficit_views.py`, `templates/merchant/stock_minus.html` |
 | Purchase orders, debit notes, multi-bill payment | `accounting/purchasing.py`, `supplier_notes.py` | `views_purchasing.py`, `views_supplier.py` |
+| Penyesuaian stok (rusak, hilang, sampel, prive, ditemukan, koreksi) | `accounting/stock_adjustments.py` | `views_stock_adjust.py`, `templates/merchant/stock_adjustment*.html` |
 | Stok opname document, outlet stock requests | `accounting/stock_counts.py`, `orders/stock_requests.py` | `views_counts.py`, `orders/stock_request_views.py` |
-| Stock card, slow-moving stock, inventory close picture | `accounting/inventory_reports.py` | `views_inventory.py` |
+| Stock card (each row links its document, `document_url`), slow-moving stock, inventory close picture, **Mutasi persediaan** (`mutation`: units per item by movement kind + Persediaan 1400 per source document, voids grouped with their document; Excel `exports.inventory_mutation`, also in `REPORTS`) | `accounting/inventory_reports.py` | `views_inventory.py`, `templates/merchant/inventory_mutation.html` |
 | Adjusting entries, quarter report, quarter close, loans | `accounting/adjustments.py`, `reports.py`, `closing.py`, `loans.py` | `views_adjust.py`, `views_quarter.py`, `views_loans.py` |
 | Annual badan worksheet, tax calendar | `tax/fiscal.py`, `tax/tax_calendar.py` | `tax/views_annual.py` |
 | Duplicate-submit guard for money forms | `accounting/idempotency.py` | invoice form, bill form, receipts, transfers |
 | Supplier bills, payables aging | `accounting/payables.py` | `accounting/views.py` |
 | Invoice posting and status | `tax/posting.py`, `tax/services.py` | `channels/views.py` |
 | **The one invoice form** (new, edit, duplicate; add customer inline) | `tax/sales.py` | `tax/invoice_form_views.py`, `templates/merchant/invoice_form.html` |
+| Buat banyak invoice (paste from Excel, same lines to many customers) | `tax/invoice_batch.py` | `tax/batch_views.py`, `templates/merchant/invoice_batch.html` |
 | Credit notes | `tax/credit_notes.py` | `tax/sales_views.py` |
 | Store logo, accent colour and footer on every buyer document (Tampilan invoice) | `tax/branding.py` (`{% brand store invoice as b %}`) | `tax/sales_views.py:merchant_invoice_style`, `templates/merchant/invoice_style.html` |
 | Send an invoice (link, WhatsApp, email, reminder) and the buyer's page | `tax/sharing.py`, `tax/public_views.py` | `channels/views.py:merchant_invoice_detail/_email/_sent`, `templates/tax/public_invoice.html` |
@@ -408,18 +615,20 @@ The full suite passes (1414 tests, 2026-11-20); the four files that used to fail
 | Invoice recap per channel (Shopee, Tokopedia…) | `channels/invoice_recap.py` | `channels/report_views.py` |
 | Order-based margin per channel | `channels/reporting.py` | `channels/report_views.py` |
 | Marketplace import, SKU map, income | `channels/services.py`, `mapping.py`, `income.py` | `channels/` |
+| Paket pajak marketplace (month for the accountant, PPh 22) | `channels/marketplace_tax.py` | `tax/views.py:merchant_marketplace_tax` |
 | Kasir (POS): registers, shifts, receipts, Z report, e-receipt | `pos/services.py` | `pos/views.py`, `templates/merchant/pos*.html`, `templates/pos/receipt.html` |
 | Consignment (mitra) | `settlements/consignment.py` | `settlements/views.py` |
+| Penggajian: employees, payroll run, BPJS, PPh 21 (TER), slip gaji | `accounting/payroll.py` | `accounting/views_payroll.py`, `templates/merchant/payroll*.html` |
 
 ### Account codes
 
 1100–1199 cash and bank (one per `BankAccount`), 1200 gateway, 1250 piutang usaha,
-1300 marketplace, 1400 persediaan, 1450 persediaan di mitra, 1500 PPN masukan, 1600/1690 aset
+1300 marketplace, 1400 persediaan, 1450 persediaan di mitra, 1500 PPN masukan, 1520 PPh dibayar di muka, 1525 PPh 22 dipungut marketplace, 1600/1690 aset
 tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang usaha,
 2400 kredit pelanggan, 2500 pinjaman, 3100 modal, 3200 prive, 4100 penjualan, 4200 ongkir,
 4800 retur, 4900 potongan, 4950 pembulatan kasir, 5100 HPP, 6100 biaya gateway, 6155 MDR EDC/QRIS,
-62xx–69xx biaya operasional, 6950 penyusutan, 6980 selisih kas kasir, 7100/7200 pendapatan lain,
-7250 lebih kas kasir, 8100 biaya bank, 1210 piutang EDC/QRIS (POS, `docs/pos-architecture.md`).
+62xx–69xx biaya operasional, 6250 sampel & promosi barang, 6950 penyusutan, 6960 selisih persediaan, 6965 persediaan rusak, 6990 beban PPh final, 6980 selisih kas kasir, 7100/7200 pendapatan lain,
+7250 lebih kas kasir, 8100 biaya bank, 2160 utang BPJS, 2170 utang gaji, 6200 gaji, 6210 beban BPJS perusahaan, 1210 piutang EDC/QRIS (POS, `docs/pos-architecture.md`).
 
 ## UI conventions
 
@@ -441,7 +650,12 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
 - New pages use the component classes in `merchant-shell.css`, not ad-hoc Tailwind:
   `pg-head`, `toolbar`, `tiles`, `panel`, `tbl`, `stmt` (statements), `editor` (line items),
   `dp-*` (detail/document pages), `pd-dialog`, `pill pill-{status}`, `btn`, `btn-primary`.
-- Amounts: `{% load books %}` then `{{ value|rp }}`, `|signed_rp`, `|abs`.
+- Amounts: `{% load books %}` then `{{ value|rp }}`, `|signed_rp`, `|abs`. They print in the company's **book currency**
+  (`apps/shops/currency.py`, `Store.currency`, page Pengaturan › Mata uang): Rupiah today; USD and EUR are defined but not in
+  `currency.ENABLED`. The currency is activated per request (`_staff_store`, `StoreResolverMiddleware`, `{% brand %}`), Excel
+  uses `exports.money_format()`, scripts use `pdMoney(n)` (reads `<body data-currency-*>`). It can only be set before the
+  books have a journal entry (`currency.can_change`). Never type "Rp" in new markup. Every template amount goes through `|rp` and every back-office script through `pdMoney` (2026-11-20); the only typed "Rp" left is the platform's own subscription fee (`_plan_banner`, `billing_demo_pay`), which is billed in Rupiah whatever the books use, and the storefront's cart script. This is a book currency only:
+  foreign-currency invoices (rates, revaluation) are not built.
 - Detail pages show the journal behind the document with `{% include "merchant/_journal_card.html" %}`.
 - Dialogs use `<dialog class="pd-dialog">` with `data-open` / `data-close` and
   `{% include "merchant/_dialog_js.html" %}`.
@@ -472,6 +686,11 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
   (`_bills_table.html`); the form has `hx-get`, `hx-target="#list"`, `hx-push-url="true"`; the
   view returns the partial through `render_partial()` in `accounting/views.py` (full page on a
   normal or history-restore request). Copy `merchant_bills` for new lists.
+- **Filter card** (reference: the invoice list, `sales_invoices.html`): a list's filters sit in one white `bb-filter`
+  card: status tabs on top (`bb-track` scrolls with a fade instead of running off the page), then search and the pill
+  menus (`bb-filter-top`), then labelled rows (`bb-filter-rows` > `bb-filter-row` = `bb-filter-label` + `bb-chips`)
+  whose chips are `input.peer.sr-only + span.bb-chip` (solid blue when chosen). A date range is `bb-range` with
+  visible "Dari" / "Sampai" labels, never bare date boxes. No per-channel colour dots (identity by label).
 - Legacy pages (`.bo-card`, `.kpi-grid`, `.data-table`, entity forms) are restyled by the
   "Legacy bridge" block of `merchant-shell.css`. Rebuild them with the components above rather
   than adding to the bridge.
@@ -591,7 +810,7 @@ interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layo
   (freight, duty). A returned item leaves at the bill's price without recomputing the average.
 - Debit note: only up to what is unpaid on the bill (money already paid is a cash entry, no supplier
   credit balance); goods lines without variants only; no void (correct with a manual journal).
-- Stock count and request flows: product (not variant) level, one warehouse level per product.
+- Stock count and request flows: variants included (2026-11-23); lots are store-wide, not per warehouse.
 - Idempotency: forms only; the JSON API and stock services have no key of their own.
 - Isolation between stores: enforced in views and services; no composite keys or Row-Level Security.
 - Fiscal periods: one lock date per store, not a period table; account codes are constants, not a
@@ -604,7 +823,7 @@ interface, Celery/Redis, microservices, the `core/ master_data/ ...` folder layo
    and "backordered" are not tracked).
 2. Goods issue / surat jalan as its own stock-moving document.
 3. Units of measure and conversions (box/pcs), decimal quantities, lots/batches, serial numbers, bins.
-4. Variant stock per warehouse.
+4. ~~Variant stock per warehouse~~ (built 2026-11-22; stok opname and stock requests for variants 2026-11-23).
 5. Database-level tenant isolation (RLS or composite keys); branches as an entity under a company.
 6. Consolidation: group reports with intercompany elimination; PPN on intercompany sales.
 7. Monitoring (Sentry needs a DSN), S3 media in production, a backup restore drill.
@@ -661,10 +880,10 @@ replaces the whole page).
       payout reference ranks that payout first. All money can now be reconciled per account.
 - [ ] Supplier side has no multi-bill payment, supplier credit, debit note or purchase return. Mirror
       `tax/receipts.py` and `tax/credit_notes.py` in `accounting/`.
-- [ ] Voiding a receipt reverses the cash. Offer "keep as customer credit" instead.
+- [x] Voiding a receipt reverses the cash; "Lepas ke kredit pelanggan" now keeps the money as customer credit.
 - [x] Marketplace payouts land in a chosen bank account and are matched to the statement line.
 - [x] Year-end closing to Laba ditahan (3300) with lock, reopen and a monthly checklist (`accounting/closing.py`).
-- [ ] Product variants per warehouse; variants keep a single stock number today.
+- [x] Product variants per warehouse (`VariantStock`, 2026-11-22); stok opname and stock requests for variants 2026-11-23.
 - [x] One scheduled worker: `manage.py run_books` (ledger backlog, recurring invoices,
       monthly depreciation). It still has to be scheduled (cron) in deployment.
 - [x] The suite passes on SQLite and PostgreSQL (CI has a `postgres` job). Local dev now runs on PostgreSQL too (`.env` `DATABASE_URL`); `db.sqlite3` is kept untouched as the fallback.
@@ -692,7 +911,7 @@ Inventory:
 Accounting:
 - [x] Budgets vs actuals; cost centres or tags per brand/outlet.
 - [x] Attachments on bills, cash transactions and journals; maker-checker approval.
-- [ ] Simple payroll posting to gaji and PPh 21.
+- [x] Simple payroll posting to gaji and PPh 21 (`accounting/payroll.py`, TER tables and December recalculation in `pph21.py`).
 - [ ] Multi-currency for sellers who buy in USD/CNY.
 - [x] Excel export for every financial report, auditor pack and SAK EMKM PDF. (Other lists still CSV only.)
 - [~] POS module: phases 0, 1 and 2 built 2026-11-17/18 (`apps/pos/`); phases 3 to 4 open, see the Kasir (POS) rule above. Architecture decided in `docs/pos-architecture.md`: outlet = `Warehouse.is_outlet`, register = drawer with its own cash account, shift with variance to 6980 (now with approval above threshold, §12), one invoice per receipt through `create_sales_invoice(warehouse=)`, tenders as `InvoicePayment` (EDC/QRIS to 1210), per-outlet cost centre; prerequisites in its §4.

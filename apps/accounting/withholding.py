@@ -36,10 +36,16 @@ def compute(kind, base, rate=None):
     return rate, (Decimal(base) * rate / 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
 
 
-def record(store, *, kind, date, base, rate, payee_name, payee_npwp="", source_type, source_id, actor=None):
-    """Create the withholding and its bukti potong number. Returns it."""
+def record(store, *, kind, date, base, rate, payee_name, payee_npwp="", source_type, source_id, actor=None,
+        amount=None):
+    """Create the withholding and its bukti potong number. Returns it. ``amount`` is given only when it is not
+    rate × base: PPh 21 of December, recalculated over the year, which is negative when too much was withheld
+    (lebih potong, returned to the employee and set off in the same month's deposit)."""
     from apps.tax.numbering import next_number
-    rate, amount = compute(kind, base, rate)
+    if amount is None:
+        rate, amount = compute(kind, base, rate)
+    else:
+        rate, amount = Decimal(rate or 0), Decimal(amount)
     withholding = Withholding.objects.create(store=store, kind=kind, date=date, base=base, rate=rate,
         amount=amount, payee_name=payee_name[:160], payee_npwp=(payee_npwp or "")[:20],
         number=next_number(store, "BP", date), source_type=source_type, source_id=str(source_id))

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, F, Sum
 from django.urls import reverse
 from django.utils import timezone
 
@@ -154,9 +154,14 @@ def invoice_open_balance(store, today, ledger):
     for pk, inv_id in Refund.objects.filter(order__invoice__in=ids).values_list("pk", "order__invoice"):
         owner[("refund", str(pk))] = inv_id
     moved = defaultdict(Decimal)
-    rows = JournalLine.objects.filter(entry__store=store, account__code=RECEIVABLE,
-        entry__source_type__in={t for t, _ in owner}).values_list(
-        "entry__source_type", "entry__source_id", "debit", "credit")
+    kinds = {t for t, _ in owner}
+    lines = JournalLine.objects.filter(entry__store=store, account__code=RECEIVABLE)
+    rows = list(lines.filter(entry__source_type__in=kinds).values_list(
+        "entry__source_type", "entry__source_id", "debit", "credit"))
+    # An edited invoice or a corrected payment is reversed and booked again: the reversal counts for the
+    # document it reverses, or the invoice would show its old amount twice.
+    rows += list(lines.filter(entry__source_type="reversal", entry__reverses__source_type__in=kinds).values_list(
+        "entry__reverses__source_type", "entry__reverses__source_id", "debit", "credit"))
     for source_type, source_id, debit, credit in rows:
         inv_id = owner.get((source_type, source_id))
         if inv_id is not None:
@@ -251,7 +256,14 @@ def negative_inventory(store, today, ledger):
 
 def stock_movements(store, today, ledger):
     from apps.orders.stock import stock_audit
+    from apps.orders.variant_stock import drift as location_drift
     drift = stock_audit(store)
+    spread = location_drift(store)
+    if spread and not drift:
+        return Check("stock_movements", "Stok varian per gudang tidak sama dengan totalnya", WARN,
+            f"{len(spread)} varian punya jumlah per gudang yang tidak sama dengan stok totalnya (diubah di luar "
+            "pergerakan stok).", url=reverse("merchant-stock"), action="Buka stok gudang",
+            items=[f"{variant}: total {total}, per gudang {held}" for variant, total, held in spread[:10]])
     if not drift:
         return Check("stock_movements", "Stok sama dengan pergerakannya", OK,
             "Setiap angka stok dijelaskan oleh pergerakan stoknya.")
@@ -261,6 +273,38 @@ def stock_movements(store, today, ledger):
         action="Buka stok gudang",
         items=[f"{getattr(item, 'product', item)}: stok {recorded}, pergerakan {explained}"
             for item, recorded, explained in drift[:10]])
+
+
+def stock_changes_booked(store, today, ledger):
+    """Standard inventory flow: once the books run, every stock change comes from a document that books its value
+    (receipt, sale, transfer, stok opname, Penyesuaian stok). Flags quantities typed in without one, and
+    adjustments whose journal is missing or does not carry their value."""
+    from apps.orders.models import InventoryMovement
+
+    from .models import JournalEntry, StockAdjustment
+    first = JournalEntry.objects.filter(store=store).order_by("created_at").values_list("created_at", flat=True).first()
+    loose = InventoryMovement.objects.none()
+    if first is not None:
+        loose = InventoryMovement.objects.filter(store=store, kind__in=("adjust", "opname"), created_at__gt=first,
+            source_type__in=("", "setup", "product_import")).exclude(new_on_hand=F("previous_on_hand"))
+    posted = StockAdjustment.objects.filter(store=store, status=StockAdjustment.POSTED).exclude(value=0)
+    booked = dict(JournalLine.objects.filter(entry__store=store, entry__source_type="stock_adjustment",
+        entry__superseded=False, account__code=INVENTORY).values("entry__source_id")
+        .annotate(total=Sum("debit") - Sum("credit")).values_list("entry__source_id", "total"))
+    wrong = [a.number for a in posted if booked.get(str(a.pk), ZERO) != a.value]
+    count = loose.count()
+    if not count and not wrong:
+        return Check("stock_changes_booked", "Setiap perubahan stok lewat dokumen", OK,
+            "Sejak pembukuan berjalan, setiap perubahan stok berasal dari dokumen yang ikut membukukan Persediaan.")
+    items = [f"Penyesuaian {number}: jurnal Persediaan tidak sama dengan nilainya" for number in wrong[:10]]
+    items += [f"{move.created_at:%d %b %Y} · {move.inventory_level.product.name if move.inventory_level_id else move.variant}: "
+        f"{move.previous_on_hand} → {move.new_on_hand} ({move.reason})" for move in loose.select_related(
+            "inventory_level__product", "variant")[:10]]
+    return Check("stock_changes_booked", "Perubahan stok tanpa jurnal", WARN,
+        (f"{count} perubahan stok diketik langsung tanpa dokumen setelah pembukuan berjalan" if count else "")
+        + ("; " if count and wrong else "") + (f"{len(wrong)} penyesuaian stok tanpa jurnal yang cocok" if wrong else "")
+        + ". Nilainya tampil sebagai selisih di Nilai persediaan; catat perubahan berikutnya lewat Penyesuaian stok.",
+        url=reverse("merchant-stock-adjustments"), action="Buka penyesuaian stok", items=items)
 
 
 def cash_accounts(store, today, ledger):
@@ -304,8 +348,9 @@ def held_by_providers(store, today, ledger):
 
 def customer_credit(store, today, ledger):
     from apps.tax.models import CustomerCredit
-    docs = CustomerCredit.objects.filter(store=store, voided=False).aggregate(
-        total=Sum("amount", default=0))["total"]
+    totals = CustomerCredit.objects.filter(store=store, voided=False).aggregate(
+        total=Sum("amount", default=0), vat=Sum("vat", default=0))
+    docs = totals["total"] - totals["vat"]  # PPN inside a taxed uang muka sits in PPN keluaran, not 2400
     return _tie("customer_credit", "Kredit pelanggan sama dengan rinciannya",
         ledger.get(CUSTOMER_CREDIT, ZERO), docs, "Rincian per pelanggan",
         url=reverse("merchant-customer-credit"), action="Lihat kredit pelanggan",
@@ -405,6 +450,47 @@ def withholding_tie(store, today, ledger):
     return check
 
 
+def payroll_tie(store, today, ledger):
+    """Utang gaji equals the take-home pay of posted runs not yet paid; Utang BPJS what is not yet paid to BPJS."""
+    from .ledger import BPJS_PAYABLE, WAGES_PAYABLE
+    from .payroll import owed
+    wages, bpjs = owed(store)
+    check = _tie("payroll", "Utang gaji dan BPJS sama dengan penggajian", ledger.get(WAGES_PAYABLE, ZERO)
+        + ledger.get(BPJS_PAYABLE, ZERO), wages + bpjs, "Gaji dan BPJS belum dibayar di penggajian",
+        url=reverse("merchant-payroll"), action="Buka penggajian",
+        ok="Utang gaji dan Utang BPJS di buku sama dengan yang belum dibayar di penggajian.",
+        off="Utang gaji atau Utang BPJS berbeda dari penggajian (ada jurnal manual ke akun 2160/2170).")
+    from .models import PayrollRun
+    late = list(PayrollRun.objects.filter(store=store, status=PayrollRun.POSTED, posted_on__lt=today - timedelta(days=7)))
+    if late and check.status == OK:
+        check.status = INFO
+        check.summary = f"{len(late)} penggajian sudah diposting lebih dari seminggu tetapi gajinya belum dibayar."
+        check.items = [f"{run.number} ({run.period:%m/%Y})" for run in late][:10]
+    return check
+
+
+def marketplace_pph22_tie(store, today, ledger):
+    """PPh 22 dipungut marketplace (1525) equals what the imported income reports say the marketplaces collected,
+    for a store on the general rates (under PPh Final UMKM it is an expense, 6990, and nothing is carried)."""
+    from apps.channels.models import ChannelOrderIncome
+    from apps.tax.services import tax_profile
+
+    from .ledger import MARKETPLACE_PPH22
+    collected = ChannelOrderIncome.objects.filter(channel_order__channel__store=store).exclude(
+        payout_reference="").aggregate(total=Sum("pph22"))["total"] or ZERO
+    book = ledger.get(MARKETPLACE_PPH22, ZERO)
+    if tax_profile(store).pph_regime == "umkm_final":
+        if not book:
+            return Check("marketplace_pph22", "PPh 22 dipungut marketplace", OK,
+                "PPh Final UMKM: PPh 22 dari marketplace dicatat sebagai bagian PPh final (6990), bukan kredit pajak.")
+        collected = ZERO  # whatever sits in 1525 came from a time on the general rates or a manual journal
+    return _tie("marketplace_pph22", "PPh 22 dipungut marketplace sama dengan laporan penghasilan", book, collected,
+        "PPh 22 di laporan penghasilan marketplace", url=reverse("merchant-marketplace-tax"),
+        action="Buka paket pajak marketplace",
+        ok="Akun 1525 sama dengan PPh 22 yang dipungut marketplace menurut laporan penghasilan.",
+        off="Akun 1525 berbeda dari PPh 22 di laporan penghasilan (jurnal manual, atau rezim pajak berubah setelah impor).")
+
+
 def intercompany_tie(store, today, ledger):
     """Between the Organization's brands, what one is owed equals what the other owes."""
     from .intercompany import group_balances
@@ -429,6 +515,25 @@ def negative_stock(store, today, ledger):
         f"{minus['units']} unit dari {minus['items']} barang dijual melebihi stok (nilai sementara "
         f"Rp{minus['value']:,.0f}). HPP-nya dikoreksi saat barang diterima.".replace(",", "."),
         url=reverse("merchant-stock-minus"), action="Buka stok minus")
+
+
+def lots_tie(store, today, ledger):
+    """Lot-tracked items: the units in their lots equal the units held, and no lot still held is past its date."""
+    from apps.orders import lots
+    off = lots.mismatches(store)
+    expired = lots.expiring(store, today=today)["expired"]
+    if off:
+        names = ", ".join(f"{variant or product.name} (lot {lotted}, stok {held})" for product, variant, lotted, held
+            in off[:5])
+        return Check("lots", "Lot tidak sama dengan stok", WARN, f"Jumlah di lot berbeda dari stok untuk {names}. "
+            "Biasanya karena stok berubah sebelum pelacakan lot dinyalakan; koreksi lewat stok opname.",
+            url=reverse("merchant-lots"), action="Buka lot & kedaluwarsa")
+    if expired:
+        units = sum(lot.quantity for lot in expired)
+        return Check("lots", "Ada lot yang sudah kedaluwarsa", WARN, f"{len(expired)} lot ({units} unit) sudah lewat "
+            "tanggal kedaluwarsa dan masih tercatat di stok. Pisahkan lalu catat lewat Penyesuaian stok (rusak).",
+            url=reverse("merchant-lots") + "?status=expired", action="Lihat lot kedaluwarsa")
+    return Check("lots", "Lot sama dengan stok", OK, "Lot setiap barang yang dilacak sama dengan stoknya.")
 
 
 def purchase_orders_late(store, today, ledger):
@@ -459,6 +564,17 @@ def grni_tie(store, today, ledger):
     if old and check.status == OK:
         check.status, check.summary = INFO, f"{old} penerimaan barang lebih dari 30 hari belum ada tagihannya."
     return check
+
+
+def landed_cost_tie(store, today, ledger):
+    """Biaya perolehan belum dialokasikan (1460) equals the freight/duty bills not yet spread over receipts."""
+    from .landed_costs import waiting
+    return _tie("landed_cost", "Biaya perolehan belum dialokasikan sama dengan tagihan ongkos angkut yang menunggu",
+        ledger.get("1460", ZERO), waiting(store), "Tagihan belum dialokasikan", url=reverse("merchant-landed-costs"),
+        action="Alokasikan ke penerimaan",
+        ok="Saldo 1460 sama dengan tagihan ongkos angkut / bea masuk yang belum dialokasikan.",
+        off="Saldo 1460 berbeda dari tagihan ongkos angkut yang belum dialokasikan (jurnal manual ke akun 1460, "
+            "atau tagihan dibatalkan setelah dialokasikan).")
 
 
 def delivered_tie(store, today, ledger):
@@ -574,7 +690,13 @@ def backdated_entries(store, today, ledger):
     from .models import JournalEntry
     week = today - timedelta(days=7)
     old = JournalEntry.objects.filter(store=store, created_at__date__gte=week,
-        date__lt=today - timedelta(days=37)).exclude(source_type__in=["year_close", "opening"]).count()
+        date__lt=today - timedelta(days=37)).exclude(source_type__in=["year_close", "opening"])
+    # Saldo awal per invoice / per tagihan sit on the books' first day by design.
+    from apps.tax.models import Invoice
+    old = old.exclude(source_type="invoice", source_id__in=[str(pk) for pk in Invoice.objects.filter(
+        store=store, order__order_type="opening").values_list("pk", flat=True)])
+    old = old.exclude(source_type="bill", source_id__in=[str(pk) for pk in Bill.objects.filter(
+        store=store, is_opening=True).values_list("pk", flat=True)]).count()
     if not old:
         return Check("backdated", "Jurnal bertanggal mundur", OK, "Tidak ada jurnal baru yang bertanggal jauh ke belakang.")
     return Check("backdated", "Jurnal bertanggal mundur", INFO,
@@ -689,12 +811,12 @@ def pos_variance_trend(store, today, ledger):
 
 
 CHECKS = [trial_balance, unposted_documents, invoice_vs_journal, invoice_open_balance, invoice_paid_status, receivable, payable,
-    inventory_value, negative_inventory, stock_movements, cash_accounts, held_by_providers,
+    inventory_value, negative_inventory, stock_movements, stock_changes_booked, cash_accounts, held_by_providers,
     customer_credit, unidentified, paid_orders_without_invoice, unmapped_skus, sold_without_cost,
     marketplace_income, period_lock, budget_control, duplicate_bills, unusual_expenses,
     large_manual_journals, backdated_entries, voids_after_payment, withholding_tie, year_close_tie, grni_tie,
-    delivered_tie, intercompany_tie, negative_stock, purchase_orders_late, pos_receipts, pos_shifts, pos_voids,
-    pos_variance_trend]
+    delivered_tie, landed_cost_tie, lots_tie, intercompany_tie, negative_stock, purchase_orders_late, pos_receipts, pos_shifts, pos_voids,
+    pos_variance_trend, payroll_tie, marketplace_pph22_tie]
 
 
 def run_checks(store, today):

@@ -1,11 +1,11 @@
-{% load icons %}<p class="muted">{{ page_obj.paginator.count }} pelanggan aktif · {{ segment_label }}</p>
+{% load icons books %}<p class="muted">{{ page_obj.paginator.count }} pelanggan aktif · {{ segment_label }}</p>
 {% if merchant_role != 'viewer' and merchant_role != 'ops' %}<form method="post" class="segment-tag-form">{% csrf_token %}{% for key, value in segment.items %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}<input class="control" name="add_tag" placeholder="Tag baru untuk semua hasil ini" list="customer-tags" required><button class="btn">Tambahkan tag</button></form>{% endif %}
 <section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Pelanggan</th><th>Lokasi &amp; channel</th><th class="num">Pesanan</th><th class="num">Total belanja</th><th>Terakhir belanja</th><th>Tag</th><th></th></tr></thead><tbody>
 {% for customer in customers %}<tr>
   <td><div style="display:flex;align-items:center;gap:10px"><span class="bb-avatar">{{ customer.name|slice:":1"|upper }}</span><div><b>{{ customer.name }}</b><br><small class="muted">{{ customer.phone }}{% if customer.email %} · {{ customer.email }}{% endif %}{% if customer.accepts_marketing %} · setuju promo{% endif %}</small>{% if customer.status == "pending" %} <span class="pill pill-pending">Menunggu persetujuan</span>{% endif %}</div></div></td>
   <td>{% if customer.place.where %}<b>{{ customer.place.where }}</b>{% else %}<span class="muted">—</span>{% endif %}<br>{% for code, label in customer.place.channels %}<span class="pill pill-info">{{ label }}</span> {% endfor %}</td>
   <td class="num">{{ customer.order_count }}</td>
-  <td class="num">Rp{{ customer.total_spent|floatformat:"0g" }}</td>
+  <td class="num">{{ customer.total_spent|rp }}</td>
   <td>{% if customer.last_order_at %}{{ customer.last_order_at|date:"d M Y" }}{% else %}—{% endif %}</td>
   <td>{% for tag in customer.tag_list %}<span class="pill pill-info">{{ tag }}</span> {% endfor %}</td>
   <td><a href="{% url 'merchant-customer-detail' customer.id %}">Profil →</a></td></tr>

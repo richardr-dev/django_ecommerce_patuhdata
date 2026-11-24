@@ -30,7 +30,7 @@
  <section class="panel !mb-0">
   <header><div class="flex items-center gap-3"><span class="bb-bubble step">2</span><div><h2>Barang & jasa</h2><p>Pilih produk; harga terisi dari katalog dan bisa diubah.</p></div></div></header>
   <div class="scroll-x"><table class="editor"><thead><tr><th>Produk</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:160px">Harga satuan</th><th class="num" style="width:150px">Jumlah</th><th class="x"></th></tr></thead>
-    <tbody id="rows">{% for item in items %}<tr>{% include "merchant/_quote_line.html" with selected=item.product_id qty=item.quantity price=item.unit_price %}</tr>{% empty %}<tr>{% include "merchant/_quote_line.html" %}</tr>{% endfor %}</tbody></table></div>
+    <tbody id="rows">{% for item in items %}<tr>{% include "merchant/_quote_line.html" with selected=item.pick_id|default:item.product_id qty=item.quantity price=item.unit_price %}</tr>{% empty %}<tr>{% include "merchant/_quote_line.html" %}</tr>{% endfor %}</tbody></table></div>
   <footer><button type="button" class="btn" id="add-line">+ Tambah baris</button><span></span></footer>
  </section>
  </div>
@@ -55,7 +55,7 @@
 <script>
 (function(){
   function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
-  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}  // book currency
   var rows=document.getElementById("rows");
   function calc(){var s=0;rows.querySelectorAll("tr").forEach(function(tr){var q=num(tr.querySelector("[data-qty]").value),p=num(tr.querySelector("[data-price]").value);tr.querySelector("[data-line]").textContent=q&&p?fmt(q*p):"";s+=q*p;});
     document.getElementById("sub").textContent=fmt(s);document.getElementById("grand").textContent=fmt(Math.max(s-num(document.querySelector("[data-disc]").value),0)+num(document.querySelector("[data-ship]").value));}

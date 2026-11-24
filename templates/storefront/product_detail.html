@@ -1,4 +1,4 @@
-{% extends "storefront/base.html" %}
+{% extends "storefront/base.html" %}{% load books %}
 {% block title %}{{ product.seo_title|default:product.name }} · {{ store.name }}{% endblock %}
 {% block meta_description %}{{ product.seo_description|default:product.description|default:store.description|truncatechars:160 }}{% endblock %}
 {% block head_extra %}<meta property="og:type" content="product"><meta property="og:title" content="{{ product.seo_title|default:product.name }}">{% if product.primary_image_url %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ product.primary_image_url }}">{% endif %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
@@ -47,15 +47,15 @@
     </div>
 
     <div class="product-price-panel">
-      {% if product.display_has_discount %}<del>Rp{{ product.display_compare_at|floatformat:"0g" }}</del>{% endif %}
-      <strong id="product-price">Rp{{ product.display_price|floatformat:"0g" }}</strong>
+      {% if product.display_has_discount %}<del>{{ product.display_compare_at|rp }}</del>{% endif %}
+      <strong id="product-price">{{ product.display_price|rp }}</strong>
       {% if product.display_has_discount %}<span class="discount-pill">Hemat {{ product.display_discount_percent }}%</span>{% endif %}
     </div>
 
     {% with tiers=product.wholesale_prices.all %}{% if tiers %}
     <div class="wholesale-table" id="harga-grosir">
       <strong>Harga grosir</strong>
-      <ul>{% for tier in tiers %}<li><span>Beli ≥ {{ tier.min_quantity }}</span><b>Rp{{ tier.price|floatformat:"0g" }}</b><small>/pcs</small></li>{% endfor %}</ul>
+      <ul>{% for tier in tiers %}<li><span>Beli ≥ {{ tier.min_quantity }}</span><b>{{ tier.price|rp }}</b><small>/pcs</small></li>{% endfor %}</ul>
       <small>{% if product.active_sale_offer %}Tidak berlaku selama flash sale berlangsung.{% else %}Jumlah dihitung dari semua varian produk ini di keranjang.{% if product.variants.all %} Varian dengan harga berbeda turun dengan persentase yang sama.{% endif %}{% endif %}</small>
     </div>
     {% endif %}{% endwith %}

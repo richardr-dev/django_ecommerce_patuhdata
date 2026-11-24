@@ -5,6 +5,7 @@
 <div class="dp-head"><div><h1 class="dp-title">{{ receipt.number }} {% if receipt.voided %}<span class="pill pill-void">Dibatalkan</span>{% else %}<span class="pill pill-paid">Diterima</span>{% endif %}</h1>
   <p class="dp-sub">{{ receipt.buyer_name }} · {{ receipt.date|date:"d M Y" }} · <b>{{ receipt.amount|rp }}</b></p></div>
   <div class="dp-actions"><button class="btn" onclick="window.print()">{% icon "printer" %} Cetak</button>
+  {% if can_edit and not receipt.voided and allocations %}<form method="post" data-confirm="Lepas alokasi ke kredit pelanggan? Uangnya tetap di rekening, invoice dibuka lagi, dan jumlahnya menjadi kredit pelanggan." data-confirm-ok="Lepas ke kredit" data-confirm-tone="neutral">{% csrf_token %}<input type="hidden" name="action" value="release"><button class="btn">Lepas ke kredit pelanggan</button></form>{% endif %}
   {% if can_edit and not receipt.voided %}<form method="post" data-confirm="Batalkan penerimaan ini? Pembayaran di setiap invoice dihapus dan jurnalnya dibalik.">{% csrf_token %}<input type="hidden" name="action" value="void"><button class="btn btn-danger">Batalkan</button></form>{% endif %}</div></div>
 <div class="dp-grid"><article class="dp-paper">
   <div class="dp-paper-head"><div class="dp-seller"><span class="mark">{{ receipt.store.name|slice:':1' }}</span><div><strong>{{ receipt.store.name }}</strong></div></div><div class="dp-doc-type"><span>BUKTI PENERIMAAN</span><small>{{ receipt.number }}</small></div></div>
@@ -12,7 +13,8 @@
   <div class="dp-parties" style="grid-template-columns:1fr"><div><h4>Diterima dari</h4><strong>{{ receipt.buyer_name }}</strong></div></div>
   <div class="scroll-x"><table class="dp-items"><thead><tr><th>Dialokasikan ke</th><th class="num">Jumlah</th></tr></thead><tbody>
     {% for p in allocations %}<tr><td><strong><a href="{% url 'merchant-invoice-detail' p.invoice_id %}" style="color:inherit">{{ p.invoice.number }}</a></strong></td><td class="num"><strong>{{ p.amount|rp }}</strong>{% if p.withheld %}<small>diterima {{ p.received|rp }} · PPh dipotong {{ p.withheld|rp }}</small>{% endif %}</td></tr>{% endfor %}
-    {% if receipt.deposit %}<tr><td><strong>Kredit pelanggan (uang muka)</strong><small>Dapat dipakai untuk invoice berikutnya</small></td><td class="num"><strong>{{ receipt.deposit|rp }}</strong></td></tr>{% endif %}</tbody></table></div>
+    {% if receipt.deposit %}<tr><td><strong>Kredit pelanggan (uang muka)</strong><small>Dapat dipakai untuk invoice berikutnya</small></td><td class="num"><strong>{{ receipt.deposit|rp }}</strong></td></tr>
+    {% if receipt.deposit_vat %}<tr><td><strong>PPN uang muka</strong><small>Termasuk di atas; sudah dicatat sebagai PPN keluaran ({{ receipt.date|date:"F Y" }}). Terbitkan faktur pajak uang muka.</small></td><td class="num">{{ receipt.deposit_vat|rp }}</td></tr>{% endif %}{% endif %}</tbody></table></div>
   <div class="dp-foot"><div class="dp-notes">{% if receipt.note %}<h4>Catatan</h4><p>{{ receipt.note }}</p>{% endif %}</div><div class="dp-totals"><div class="grand"><span>Total diterima</span><span>{{ receipt.amount|rp }}</span></div></div></div>
   {% if receipt.voided %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}</article>
   <aside class="dp-stack">{% include "merchant/_journal_card.html" %}</aside></div>

@@ -31,7 +31,7 @@ No. resi: {{ delivery.tracking_number|default:"—" }}{% if delivery.notes %}
 {{ delivery.notes }}{% endif %}</p></div>
   </section>
   <table><thead><tr><th>#</th><th>Barang</th><th class="n">Jumlah</th></tr></thead><tbody>
-    {% for l in lines %}<tr><td>{{ forloop.counter }}</td><td><b>{{ l.product.name }}</b><small>{{ l.product.sku }}</small></td><td class="n">{{ l.quantity }}</td></tr>{% endfor %}
+    {% for l in lines %}<tr><td>{{ forloop.counter }}</td><td><b>{{ l.order_line.description }}</b><small>{{ l.order_line.sku }}</small></td><td class="n">{{ l.quantity }}</td></tr>{% endfor %}
   </tbody></table>
   <div class="sign"><div>Pengirim</div><div>Kurir / ekspedisi</div><div>Penerima</div></div>
   <p class="note">Barang telah diterima dalam keadaan baik dan lengkap. Harga tidak dicantumkan; tagihan menyusul pada invoice.</p>

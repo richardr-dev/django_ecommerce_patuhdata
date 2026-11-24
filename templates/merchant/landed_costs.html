@@ -1,0 +1,31 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Biaya perolehan{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Biaya perolehan (landed cost)</h1>
+    <p>Ongkos angkut, bea masuk dan biaya bongkar yang ikut menjadi harga pokok barang. Catat tagihannya seperti biasa di Buat tagihan dengan kategori "Ongkos angkut / bea masuk barang", lalu alokasikan ke penerimaan barangnya di sini. Bagian untuk barang yang masih ada masuk Persediaan dan harga pokok rata-rata; bagian untuk barang yang sudah terjual masuk HPP.</p></div>
+  <div class="dp-actions">{% if can_allocate and bills %}<button type="button" class="btn-primary" data-open="allocate-dialog">{% icon "plus" %} Alokasikan tagihan</button>{% endif %}</div>
+</div>
+<div class="tiles">
+  <div class="tile accent"><small>Belum dialokasikan</small><strong>{{ waiting|rp }}</strong><span>{{ bills|length }} tagihan ongkos angkut / bea masuk</span></div>
+  <div class="tile"><small>Dialokasikan</small><strong>{{ rows|length }}</strong><span>dokumen biaya perolehan</span></div>
+</div>
+{% if bills %}<section class="panel"><header><div><h2>Menunggu dialokasikan</h2><p>Saldo akun 1460 sampai tagihan ini dibagi ke penerimaan barang.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tagihan</th><th>Supplier</th><th>Tanggal</th><th class="num">Sisa</th></tr></thead><tbody>
+  {% for bill, left in bills %}<tr><td><a class="rowlink" href="{% url 'merchant-bill-detail' bill.pk %}"><b>{{ bill.number|default:"(tanpa nomor)" }}</b></a></td><td>{{ bill.supplier.name }}</td><td>{{ bill.bill_date|date:"d M Y" }}</td><td class="num"><b>{{ left|rp }}</b></td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+<section class="panel"><header><h2>Dokumen biaya perolehan</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Tagihan</th><th class="num">Ke persediaan</th><th class="num">Ke HPP</th><th class="num">Jumlah</th><th>Status</th></tr></thead><tbody>
+  {% for c in rows %}<tr><td><a class="rowlink" href="{% url 'merchant-landed-cost' c.pk %}"><b>{{ c.number }}</b></a></td><td>{{ c.date|date:"d M Y" }}</td><td>{{ c.bill.supplier.name }} {{ c.bill.number }}</td><td class="num">{{ c.to_stock|rp }}</td><td class="num">{{ c.to_cogs|rp }}</td><td class="num"><b>{{ c.amount|rp }}</b></td><td><span class="pill {% if c.status == 'posted' %}pill-paid{% else %}pill-cancelled{% endif %}">{{ c.get_status_display }}</span></td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada biaya perolehan yang dialokasikan.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% if can_allocate and bills %}<dialog id="allocate-dialog" class="pd-dialog" style="max-width:640px"{% if preselect %} data-autoopen{% endif %}><form method="post" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <header><h2>Alokasikan tagihan ke penerimaan barang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Tagihan ongkos angkut / bea masuk</span><select name="bill" required>{% for bill, left in bills %}<option value="{{ bill.pk }}"{% if preselect == bill.pk|stringformat:'s' %} selected{% endif %}>{{ bill.supplier.name }} {{ bill.number }} · sisa {{ left|rp }}</option>{% endfor %}</select></label>
+    <fieldset class="field"><legend style="font-size:12px;font-weight:600">Penerimaan barang yang menanggung biaya ini</legend>
+      <div style="max-height:220px;overflow:auto;display:grid;gap:6px;padding:4px 0">{% for r in receipts %}<label style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="receipt" value="{{ r.pk }}" style="width:16px;height:16px;accent-color:var(--ds-primary)"><span><b>{{ r.number|default:"Penerimaan" }}</b> · {{ r.supplier.name }} · {{ r.received_on|date:"d M Y" }} · {{ r.value|rp }}</span></label>{% empty %}<span style="color:var(--ds-muted)">Belum ada penerimaan barang.</span>{% endfor %}</div></fieldset>
+    <div class="field-row"><label class="field"><span>Dibagi</span><select name="method">{% for code, label in methods %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Tanggal</span><input type="date" name="date" value="{{ today }}" required></label></div>
+    <label class="field"><span>Catatan <em>(opsional)</em></span><input name="notes" maxlength="300"></label></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Alokasikan &amp; bukukan</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% if preselect %}<script>(function () { var d = document.getElementById("allocate-dialog"); if (d && d.showModal) d.showModal(); })();</script>{% endif %}
+{% endblock %}

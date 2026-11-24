@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}{{ supplier.name }} · Supplier{% endblock %}
 {% block content %}
 
@@ -21,10 +21,10 @@
 </div>
 
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sisa utang</p><div class="dp-amount {% if total_owed %}alert{% endif %}" style="font-size:22px">Rp{{ total_owed|floatformat:"0g" }}</div></div>
-  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Lewat jatuh tempo</p><div class="dp-amount {% if overdue %}alert{% endif %}" style="font-size:22px">Rp{{ overdue|floatformat:"0g" }}</div></div>
-  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Total pembelian</p><div class="dp-amount" style="font-size:22px">Rp{{ total_billed|floatformat:"0g" }}</div></div>
-  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sudah dibayar</p><div class="dp-amount" style="font-size:22px">Rp{{ total_paid|floatformat:"0g" }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sisa utang</p><div class="dp-amount {% if total_owed %}alert{% endif %}" style="font-size:22px">{{ total_owed|rp }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Lewat jatuh tempo</p><div class="dp-amount {% if overdue %}alert{% endif %}" style="font-size:22px">{{ overdue|rp }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Total pembelian</p><div class="dp-amount" style="font-size:22px">{{ total_billed|rp }}</div></div>
+  <div class="dp-card dp-card-body"><p class="dp-help" style="margin:0">Sudah dibayar</p><div class="dp-amount" style="font-size:22px">{{ total_paid|rp }}</div></div>
 </div>
 
 <div class="dp-grid">
@@ -40,8 +40,8 @@
           <td class="whitespace-nowrap">{{ b.bill_date|date:"d M Y" }}</td>
           <td class="whitespace-nowrap">{{ b.due_date|date:"d M Y"|default:"—" }}</td>
           <td><span class="pill pill-{{ b.status }}">{{ b.get_status_display }}</span></td>
-          <td class="num">Rp{{ b.total|floatformat:"0g" }}</td>
-          <td class="num"><strong {% if b.amount_due > 0 and b.status != 'void' %}style="color:#b42318"{% endif %}>{% if b.status == 'void' %}—{% else %}Rp{{ b.amount_due|floatformat:"0g" }}{% endif %}</strong></td>
+          <td class="num">{{ b.total|rp }}</td>
+          <td class="num"><strong {% if b.amount_due > 0 and b.status != 'void' %}style="color:#b42318"{% endif %}>{% if b.status == 'void' %}—{% else %}{{ b.amount_due|rp }}{% endif %}</strong></td>
         </tr>
       {% empty %}
         <tr><td colspan="6" class="dp-empty">Belum ada tagihan dari supplier ini. <a href="{% url 'merchant-bill-new' %}" class="text-indigo-700">Catat tagihan pertama →</a></td></tr>

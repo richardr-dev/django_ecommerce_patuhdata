@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons branding %}
+{% extends "merchant/base.html" %}{% load icons branding books %}
 {% block title %}Invoice {{ invoice.number }}{% endblock %}
 {% block content %}
 
@@ -11,7 +11,7 @@
     <h1 class="dp-title">{{ invoice.number }} <span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span></h1>
     <p class="dp-sub">
       Kepada <b>{{ invoice.buyer_name }}</b>
-      {% if invoice.status != 'void' %} · Sisa tagihan <b>Rp{{ amount_due|floatformat:"0g" }}</b>{% endif %}
+      {% if invoice.status != 'void' %} · Sisa tagihan <b>{{ amount_due|rp }}</b>{% endif %}
       {% if invoice.due_date %} · Jatuh tempo <b>{{ invoice.due_date|date:"d M Y" }}</b>{% endif %}
     </p>
     {% if invoice.sent_at or invoice.viewed_at %}<p class="dp-sub">{% if invoice.sent_at %}{% icon "check" %} Terkirim {{ invoice.sent_at|date:"d M H:i" }}{% endif %}{% if invoice.viewed_at %} · {% icon "eye" %} Dibuka pembeli {{ invoice.viewed_at|date:"d M H:i" }}{% endif %}</p>{% endif %}
@@ -37,13 +37,15 @@
     </details>
     {% endif %}
     <a class="btn" href="{% url 'merchant-invoice-pdf' invoice.id %}">{% icon "download" %} PDF</a>
-    {% if invoice.status != 'void' %}<a class="btn" href="{% url 'merchant-invoice-edit' invoice.id %}">Edit</a>{% endif %}
+    {% if invoice.status != 'void' and invoice.order.order_type != 'opening' %}<a class="btn" href="{% url 'merchant-invoice-edit' invoice.id %}">Edit</a>{% endif %}
     <details class="dp-more">
       <summary class="btn" aria-label="Tindakan lain">Lainnya ▾</summary>
       <div class="menu-panel">
+        {% if invoice.order.order_type != 'opening' %}
         {% if invoice.status != 'void' and invoice.status != 'draft' %}<a href="{% url 'merchant-credit-note-new' %}?invoice={{ invoice.id }}">{% icon "undo" %}<span>Buat nota kredit</span></a>{% endif %}
         <a href="{% url 'merchant-invoice-duplicate' invoice.id %}">{% icon "copy" %}<span>Duplikat</span></a>
         {% if invoice.status != 'void' and invoice.status != 'draft' %}<a href="{% url 'merchant-delivery-note' invoice.id %}" target="_blank" rel="noopener" data-no-soft>{% icon "truck" %}<span>Cetak surat jalan</span></a>{% endif %}
+        {% endif %}
         <a href="{% url 'merchant-invoices-xlsx' %}?ids={{ invoice.id }}">{% icon "file" %}<span>Unduh Excel</span></a>
         <button type="button" onclick="window.print()">{% icon "printer" %}<span>Cetak</span></button>
         {% if invoice.status != 'void' %}
@@ -61,6 +63,7 @@
 
 <div class="dp-grid">
   {# ── The invoice as the customer sees it ─────────────────────────────── #}
+  {% if invoice.order.order_type == 'opening' %}<div class="notice" style="margin-bottom:16px;display:flex;align-items:center;gap:10px"><span class="bb-bubble">{% icon "book" %}</span><span><b>Saldo awal dari pembukuan lama.</b> Penjualan dan PPN-nya sudah dibukukan di sistem lama, jadi di sini hanya piutangnya yang dicatat. Terima pembayaran, kirim pengingat, atau hapus piutangnya seperti invoice lain.</span></div>{% endif %}
   {% if invoice.transfer_claimed_at and amount_due > 0 and invoice.status != 'void' %}<div class="notice" style="margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px"><span class="bb-bubble warn">{% icon "cash" %}</span><span style="flex:1"><b>Pembeli menyatakan sudah transfer</b> pada {{ invoice.transfer_claimed_at|date:"d M Y H:i" }}{% if invoice.transfer_claim_note %}: {{ invoice.transfer_claim_note }}{% endif %}. Cek mutasi rekening, lalu catat pembayarannya.</span><button type="button" class="btn-primary" data-open="pay-dialog">Catat pembayaran</button></div>{% endif %}
   {% if invoice.from_deliveries and invoice.sales_order %}<p class="dp-help" style="margin:0 0 12px">Dibuat dari surat jalan pesanan <a href="{% url 'merchant-sales-order-detail' invoice.sales_order.pk %}">{{ invoice.sales_order.number }}</a>: stok sudah keluar saat surat jalan, HPP dibukukan dari Barang terkirim belum ditagih.</p>{% endif %}
   {% if reminder_rows %}<details class="panel" style="margin-bottom:16px"><summary style="padding:12px 18px;cursor:pointer;font-weight:600">Pengingat otomatis ({{ reminder_rows|length }})</summary><div class="dp-card-body" style="padding-top:0">{% for r in reminder_rows %}<p style="margin:4px 0;font-size:13px"><span class="pill {% if r.status == 'sent' %}pill-ok{% elif r.status == 'failed' %}pill-fail{% else %}pill-void{% endif %}">{{ r.get_channel_display|default:r.channel }}</span> {{ r.created_at|date:"d M Y H:i" }} · {% if r.kind == 'before' %}{{ r.offset }} hari sebelum jatuh tempo{% else %}{{ r.offset }} hari setelah jatuh tempo{% endif %} · ke {{ r.to }}{% if r.error %} · <span style="color:var(--ds-bad)">{{ r.error }}</span>{% endif %}</p>{% endfor %}</div></details>{% endif %}
@@ -86,6 +89,7 @@
       <div><dt>Jatuh tempo</dt><dd>{{ invoice.due_date|date:"d M Y"|default:"Saat diterima" }}</dd></div>
       <div><dt>Referensi</dt><dd>{{ order.external_order_id|default:"—" }}</dd></div>
       <div><dt>Channel</dt><dd>{{ order.get_channel_display }}{% if order.ab_shop_source %} · {{ order.get_ab_shop_source_display }}{% endif %}</dd></div>
+      {% if invoice.warehouse %}<div><dt>Dijual dari</dt><dd>{{ invoice.warehouse.name }}</dd></div>{% endif %}
       {% if order.courier_code or order.tracking_number %}<div><dt>Kurir</dt><dd>{{ order.courier_code|upper|default:"—" }}</dd></div><div><dt>No. resi</dt><dd>{{ order.tracking_number|default:"—" }}</dd></div>{% endif %}
     </dl>
 
@@ -116,8 +120,8 @@
         <tr>
           <td><strong>{{ item.description }}</strong>{% if item.sku or item.dimension %}<small>{% if item.sku %}SKU {{ item.sku }}{% endif %}{% if item.sku and item.dimension %} · {% endif %}{{ item.dimension }}</small>{% endif %}{% if item.note %}<small>{{ item.note }}</small>{% endif %}</td>
           <td class="num">{{ item.quantity|floatformat:"-2" }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
-          <td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td>
-          <td class="num"><strong>Rp{{ item.line_total|floatformat:"0g" }}</strong></td>
+          <td class="num">{{ item.unit_price|rp }}</td>
+          <td class="num"><strong>{{ item.line_total|rp }}</strong></td>
         </tr>
       {% empty %}
         <tr><td colspan="4" class="dp-empty">Invoice ini belum punya baris barang.</td></tr>
@@ -131,19 +135,19 @@
         {% if invoice.notes %}<h4>Catatan</h4><p>{{ invoice.notes }}</p>{% endif %}
       </div>
       <div class="dp-totals">
-        <div><span>Subtotal</span><span>Rp{{ invoice.subtotal|floatformat:"0g" }}</span></div>
-        {% if invoice.discount %}<div><span>Diskon</span><span>−Rp{{ invoice.discount|floatformat:"0g" }}</span></div>{% endif %}
+        <div><span>Subtotal</span><span>{{ invoice.subtotal|rp }}</span></div>
+        {% if invoice.discount %}<div><span>Diskon</span><span>−{{ invoice.discount|rp }}</span></div>{% endif %}
         {% if invoice.tax %}
-        <div><span>DPP</span><span>Rp{{ invoice.tax_base|floatformat:"0g" }}</span></div>
-        <div><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span>Rp{{ invoice.tax|floatformat:"0g" }}</span></div>
+        <div><span>DPP</span><span>{{ invoice.tax_base|rp }}</span></div>
+        <div><span>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</span><span>{{ invoice.tax|rp }}</span></div>
         {% endif %}
-        {% if invoice.shipping %}<div><span>Ongkos kirim</span><span>Rp{{ invoice.shipping|floatformat:"0g" }}</span></div>{% endif %}
-        {% if invoice.other_charges %}<div><span>Biaya lain</span><span>Rp{{ invoice.other_charges|floatformat:"0g" }}</span></div>{% endif %}
-        <div class="grand"><span>Total</span><span>Rp{{ invoice.total|floatformat:"0g" }}</span></div>
-        {% if credited %}<div><span>Nota kredit</span><span>−Rp{{ credited|floatformat:"0g" }}</span></div>{% endif %}
-        {% if amount_paid %}<div><span>Sudah dibayar</span><span>−Rp{{ amount_paid|floatformat:"0g" }}</span></div>{% endif %}
+        {% if invoice.shipping %}<div><span>Ongkos kirim</span><span>{{ invoice.shipping|rp }}</span></div>{% endif %}
+        {% if invoice.other_charges %}<div><span>Biaya lain</span><span>{{ invoice.other_charges|rp }}</span></div>{% endif %}
+        <div class="grand"><span>Total</span><span>{{ invoice.total|rp }}</span></div>
+        {% if credited %}<div><span>Nota kredit</span><span>−{{ credited|rp }}</span></div>{% endif %}
+        {% if amount_paid %}<div><span>Sudah dibayar</span><span>−{{ amount_paid|rp }}</span></div>{% endif %}
         {% if invoice.status != 'void' %}
-        <div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa tagihan{% endif %}</span><span>Rp{{ amount_due|floatformat:"0g" }}</span></div>
+        <div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa tagihan{% endif %}</span><span>{{ amount_due|rp }}</span></div>
         {% endif %}
       </div>
     </div>
@@ -157,12 +161,12 @@
       <header><h2>Pembayaran</h2><small>{{ paid_pct }}% terselesaikan</small></header>
       <div class="dp-card-body">
         <p class="dp-help" style="margin:0 0 2px">{% if invoice.status == 'void' %}Invoice dibatalkan{% elif amount_due <= 0 %}Sudah lunas{% else %}Sisa tagihan{% endif %}</p>
-        <div class="dp-amount {% if amount_due <= 0 %}ok{% elif invoice.status == 'overdue' %}alert{% endif %}">Rp{{ amount_due|floatformat:"0g" }}</div>
+        <div class="dp-amount {% if amount_due <= 0 %}ok{% elif invoice.status == 'overdue' %}alert{% endif %}">{{ amount_due|rp }}</div>
         <div class="progress{% if paid_pct >= 100 %} done{% endif %}"><span style="width:{{ paid_pct }}%"></span></div>
         <div class="kv">
-          <div><span>Total invoice</span><span>Rp{{ invoice.total|floatformat:"0g" }}</span></div>
-          {% if credited %}<div><span>Nota kredit</span><span>−Rp{{ credited|floatformat:"0g" }}</span></div>{% endif %}
-          <div><span>Sudah dibayar</span><span>Rp{{ amount_paid|floatformat:"0g" }}</span></div>
+          <div><span>Total invoice</span><span>{{ invoice.total|rp }}</span></div>
+          {% if credited %}<div><span>Nota kredit</span><span>−{{ credited|rp }}</span></div>{% endif %}
+          <div><span>Sudah dibayar</span><span>{{ amount_paid|rp }}</span></div>
           {% if invoice.due_date %}<div><span>Jatuh tempo</span><span>{{ invoice.due_date|date:"d M Y" }}</span></div>{% endif %}
         </div>
         {% if invoice.status != 'void' and amount_due > 0 %}
@@ -179,10 +183,10 @@
         <div class="kv">
           <div><span>No. pesanan</span><span>{{ marketplace.external_id }}</span></div>
           {% if marketplace.status_text %}<div><span>Status di marketplace</span><span>{{ marketplace.status_text }}</span></div>{% endif %}
-          <div><span>Dibayar pembeli</span><span>Rp{{ marketplace.paid_by_buyer|floatformat:"0g" }}</span></div>
-          {% for label, amount in marketplace.fees %}<div><span>{{ label }}</span><span>−Rp{{ amount|floatformat:"0g" }}</span></div>{% endfor %}
+          <div><span>Dibayar pembeli</span><span>{{ marketplace.paid_by_buyer|rp }}</span></div>
+          {% for label, amount in marketplace.fees %}<div><span>{{ label }}</span><span>−{{ amount|rp }}</span></div>{% endfor %}
           {% if marketplace.income %}
-          <div style="border-top:1px solid var(--pd-line);padding-top:8px"><span><b>Dana diterima</b></span><span><b>Rp{{ marketplace.income.net_released|floatformat:"0g" }}</b></span></div>
+          <div style="border-top:1px solid var(--pd-line);padding-top:8px"><span><b>Dana diterima</b></span><span><b>{{ marketplace.income.net_released|rp }}</b></span></div>
           {% if marketplace.income.released_on %}<div><span>Dicairkan</span><span>{{ marketplace.income.released_on|date:"d M Y" }}</span></div>{% endif %}
           {% if marketplace.payout %}<div><span>Pencairan</span><span><a href="{% url 'merchant-payout-detail' marketplace.payout.id %}" style="color:var(--pd-primary)">{{ marketplace.payout.reference|truncatechars:22 }}</a></span></div>{% endif %}
           {% endif %}
@@ -196,15 +200,15 @@
     <section class="dp-card">
       <header><h2>Riwayat</h2><small>{{ payments|length }} pembayaran{% if credit_notes %} · {{ credit_notes|length }} nota kredit{% endif %}</small></header>
       <ul class="timeline">
-        <li><strong>Invoice diterbitkan</strong><small>{{ invoice.issued_on|date:"d M Y" }} · Rp{{ invoice.total|floatformat:"0g" }}</small></li>
+        <li><strong>Invoice diterbitkan</strong><small>{{ invoice.issued_on|date:"d M Y" }} · {{ invoice.total|rp }}</small></li>
         {% for pmt in payments %}
-        <li class="ok"><strong><span>{% if pmt.method == "writeoff" %}Piutang dihapus{% else %}Pembayaran diterima{% endif %}</span><span>Rp{{ pmt.amount|floatformat:"0g" }}</span></strong>
-          {% if pmt.withheld %}<small>Diterima Rp{{ pmt.received|floatformat:"0g" }} · PPh dipotong pembeli Rp{{ pmt.withheld|floatformat:"0g" }}</small>{% endif %}
+        <li class="ok"><strong><span>{% if pmt.method == "writeoff" %}Piutang dihapus{% else %}Pembayaran diterima{% endif %}</span><span>{{ pmt.amount|rp }}</span></strong>
+          {% if pmt.withheld %}<small>Diterima {{ pmt.received|rp }} · PPh dipotong pembeli {{ pmt.withheld|rp }}</small>{% endif %}
           <small>{{ pmt.paid_on|date:"d M Y" }} · {{ pmt.get_method_display }}{% if pmt.reference %} · {{ pmt.reference }}{% endif %}</small>
           {% if pmt.note %}<small>{{ pmt.note }}</small>{% endif %}</li>
         {% endfor %}
         {% for note in credit_notes %}
-        <li class="{% if note.status == 'void' %}{% else %}ok{% endif %}"><strong><span><a href="{% url 'merchant-credit-note-detail' note.id %}" style="color:inherit">Nota kredit {{ note.number }}</a>{% if note.status == 'void' %} <span class="tag" style="background:#f2f4f7;color:#667085;padding:0 6px;border-radius:4px;font-size:10.5px">batal</span>{% endif %}</span><span>−Rp{{ note.total|floatformat:"0g" }}</span></strong>
+        <li class="{% if note.status == 'void' %}{% else %}ok{% endif %}"><strong><span><a href="{% url 'merchant-credit-note-detail' note.id %}" style="color:inherit">Nota kredit {{ note.number }}</a>{% if note.status == 'void' %} <span class="tag" style="background:#f2f4f7;color:#667085;padding:0 6px;border-radius:4px;font-size:10.5px">batal</span>{% endif %}</span><span>−{{ note.total|rp }}</span></strong>
           <small>{{ note.issued_on|date:"d M Y" }} · {{ note.get_reason_display }}</small></li>
         {% endfor %}
         {% if invoice.status == 'void' %}<li><strong>Invoice dibatalkan</strong><small>Pembukuannya dibalik.</small></li>{% endif %}
@@ -217,7 +221,7 @@
       <a href="{% url 'merchant-order-detail' order.id %}"><span>Pesanan {{ order.invoice_number|default:"terkait" }}</span><small>{{ order.get_status_display }} →</small></a>
       {% if order.customer %}<a href="{% url 'merchant-receivables' %}?customer={{ order.customer.id }}"><span>Tagihan {{ order.customer.name }}</span><small>Piutang →</small></a>{% endif %}
       {% if invoice.status != 'void' and amount_due > 0 %}<a href="{% url 'merchant-receive-payment' %}?{% if order.customer %}customer={{ order.customer.id }}{% else %}buyer={{ invoice.buyer_name|urlencode }}{% endif %}"><span>Satu pembayaran untuk beberapa invoice</span><small>Terima pembayaran →</small></a>{% endif %}
-      {% if credit_available and amount_due > 0 %}<a href="{% url 'merchant-customer-credit' %}"><span>Kredit pelanggan tersedia</span><small>Rp{{ credit_available|floatformat:"0g" }} →</small></a>{% endif %}
+      {% if credit_available and amount_due > 0 %}<a href="{% url 'merchant-customer-credit' %}"><span>Kredit pelanggan tersedia</span><small>{{ credit_available|rp }} →</small></a>{% endif %}
       <a href="{% url 'merchant-sales-invoices' %}?channel={{ order.channel }}"><span>Invoice {{ order.get_channel_display }} lainnya</span><small>→</small></a>
     </section>
     {% include "merchant/_attachments_card.html" %}
@@ -231,7 +235,7 @@
     {% csrf_token %}<input type="hidden" name="action" value="writeoff">
     <header><h2 id="writeoff-title">Hapus piutang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
     <div>
-      <p class="dp-help">Sisa tagihan <b>Rp{{ amount_due|floatformat:"0g" }}</b> dikeluarkan dari piutang usaha karena pembeli tidak akan membayar. Diambil dari cadangan kerugian piutang lebih dulu; sisanya menjadi beban piutang tak tertagih. Bisa dibatalkan dengan membatalkan pembayaran ini.</p>
+      <p class="dp-help">Sisa tagihan <b>{{ amount_due|rp }}</b> dikeluarkan dari piutang usaha karena pembeli tidak akan membayar. Diambil dari cadangan kerugian piutang lebih dulu; sisanya menjadi beban piutang tak tertagih. Bisa dibatalkan dengan membatalkan pembayaran ini.</p>
       <label class="field"><span>Tanggal penghapusan</span><input type="date" name="date" value="{{ today }}" required></label>
       <label class="field"><span>Alasan</span><input type="text" name="reason" maxlength="200" required placeholder="Contoh: pembeli tidak dapat dihubungi, pailit"></label>
     </div>

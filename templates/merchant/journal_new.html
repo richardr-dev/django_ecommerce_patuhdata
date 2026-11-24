@@ -32,7 +32,7 @@
 (function(){
   var rows=document.getElementById("rows");
   function num(t){return parseFloat(String(t||"").replace(/\./g,"").replace(",","."))||0;}
-  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}
   function calc(){var d=0,c=0;rows.querySelectorAll("tr").forEach(function(tr){d+=num(tr.querySelector("[data-debit]").value);c+=num(tr.querySelector("[data-credit]").value);});
     document.getElementById("td").textContent=fmt(d);document.getElementById("tc").textContent=fmt(c);
     var diff=d-c,el=document.getElementById("diff"),st=document.getElementById("state");

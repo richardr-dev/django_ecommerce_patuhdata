@@ -123,7 +123,8 @@ class ProductForm(StyledModelForm):
     # Product fields the product page has no input for. A ModelForm treats a field missing from the
     # post as empty, so keeping them would wipe their saved value (or, for a required number, refuse
     # every save without showing why). They are left out and keep what is stored.
-    NOT_ON_PAGE = ("ab_shop_price", "image_url", "photo", "seo_title", "is_preorder", "preorder_daily_quota")
+    NOT_ON_PAGE = ("ab_shop_price", "image_url", "photo", "seo_title", "is_preorder", "preorder_daily_quota",
+        "base_unit", "tracks_lots")
     DIMENSIONS = ("weight_grams", "length_cm", "width_cm", "height_cm")
 
     def __init__(self, *args, **kwargs):
@@ -233,21 +234,22 @@ class ProductForm(StyledModelForm):
             return
         from django.db import transaction
 
-        from .inventory import record_movement
+        from apps.accounting import stock_adjustments
 
         new_stock = self.cleaned_data["stock"]
         with transaction.atomic():
-            level, _ = InventoryLevel.objects.select_for_update().get_or_create(
+            level, created = InventoryLevel.objects.select_for_update().get_or_create(
                 warehouse=self.stock_warehouse, product=product)
-            previous = level.on_hand
-            if previous == new_stock or new_stock < level.reserved:
+            if level.on_hand == new_stock or new_stock < level.reserved:
                 return
-            level.on_hand = new_stock
-            level.save(update_fields=["on_hand", "updated_at"])
-            record_movement(store=product.store, inventory_level=level, kind="adjust",
-                quantity=abs(new_stock - previous), reason="Ubah stok di halaman produk",
-                actor=actor, previous_on_hand=previous, new_on_hand=new_stock,
-                previous_reserved=level.reserved, new_reserved=level.reserved)
+            # The first stock of a product is goods already held; a change later is a correction. Once the
+            # books run, either one is a Penyesuaian stok booked to Persediaan (see stock_adjustments).
+            try:
+                stock_adjustments.set_quantity(product.store, level=level, new_quantity=new_stock,
+                    reason="opening" if created or not level.movements.exists() else "correction",
+                    notes="Ubah stok di halaman produk", actor=actor)
+            except stock_adjustments.AdjustmentError as error:
+                raise forms.ValidationError(str(error)) from error
 
     def clean_digital_file(self):
         upload = self.cleaned_data.get("digital_file")
@@ -512,7 +514,7 @@ class BaseProductVariantFormSet(forms.BaseInlineFormSet):
         from django.db import transaction
         from django.db.models.deletion import ProtectedError
 
-        from .inventory import record_movement
+        from apps.accounting import stock_adjustments
 
         self.instance = product
         kept = 0
@@ -538,18 +540,21 @@ class BaseProductVariantFormSet(forms.BaseInlineFormSet):
                             "weight_grams", "is_active"):
                         setattr(locked, name, data.get(name))
                     new_stock = max(data["stock"], locked.reserved)
-                    locked.stock = new_stock
-                    locked.save()
+                    locked.save()  # the stock itself changes below, as a movement
+                    reason = "correction"
                 else:
                     locked = form.save(commit=False)
                     locked.product = product
                     previous, new_stock = 0, locked.stock
+                    locked.stock = 0
                     locked.save()
+                    reason = "opening"
                 if new_stock != previous:
-                    record_movement(store=product.store, variant=locked, kind="adjust",
-                        quantity=abs(new_stock - previous), reason="Ubah stok varian di halaman produk",
-                        actor=actor, previous_on_hand=previous, new_on_hand=new_stock,
-                        previous_reserved=locked.reserved, new_reserved=locked.reserved)
+                    try:
+                        stock_adjustments.set_quantity(product.store, variant=locked, new_quantity=new_stock,
+                            reason=reason, notes="Ubah stok varian di halaman produk", actor=actor)
+                    except stock_adjustments.AdjustmentError as error:
+                        raise forms.ValidationError(f"{locked.name}: {error}") from error
         return kept
 
 
@@ -615,7 +620,7 @@ class StoreSettingsForm(StyledModelForm):
         fields = ("name", "logo", "logo_size", "show_store_name", "domain", "description", "theme",
             "primary_color", "background_color", "font_family", "catalog_title",
             "announcement_text", "announcement_link_label", "announcement_link_url",
-            "currency", "tax_rate",
+            "tax_rate",
             "support_phone", "instagram", "support_email", "terms_url", "privacy_url", "return_policy",
             "listed_in_directory")
         fields = fields + ("loyalty_enabled", "loyalty_points_per_step", "loyalty_spend_step",

@@ -78,8 +78,8 @@ class BudgetTests(Base):
 
     def test_bills_and_manual_journals_carry_the_cost_centre(self):
         supplier = Supplier.objects.create(store=self.store, name="Pemasok")
-        from apps.accounting.models import BILL_CATEGORIES
-        category = next(code for code, _ in BILL_CATEGORIES if code not in {"1400", "1600"})
+        from apps.accounting.models import EXPENSE_CATEGORIES
+        category = next(code for code, _ in EXPENSE_CATEGORIES if code not in {"1400", "1600"})   # an expense account
         self.rent = Account.objects.get(store=self.store, code=category)
         bill = create_bill(self.store, supplier=supplier, lines=[{"description": "x", "qty": 1,
             "unit_price": Decimal(200_000)}], bill_date=self.today, category=category,

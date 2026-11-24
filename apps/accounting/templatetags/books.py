@@ -1,8 +1,10 @@
-"""Amounts in the books: {{ value|rp }} prints Rp1.250.000 or −Rp1.250.000, {{ value|abs }}."""
+"""Amounts in the books: {{ value|rp }} prints Rp1.250.000 or −Rp1.250.000 in the company's book currency
+(apps/shops/currency.py; $1,250.00 once USD is switched on), {{ value|abs }}."""
 from decimal import Decimal, InvalidOperation
 
 from django import template
-from django.template.defaultfilters import floatformat
+
+from apps.shops import currency
 
 register = template.Library()
 
@@ -28,8 +30,7 @@ def rp(value, blank_zero=""):
         return ""
     if not number and blank_zero:
         return "–"
-    sign = "−" if number < 0 else ""
-    return f"{sign}Rp{floatformat(abs(number), '0g')}"
+    return currency.current().format(number)
 
 
 @register.filter
@@ -38,7 +39,7 @@ def signed_rp(value):
     number = _number(value)
     if number is None:
         return ""
-    return f"{'+' if number > 0 else '−' if number < 0 else ''}Rp{floatformat(abs(number), '0g')}"
+    return currency.current().format(number, signed=True)
 
 
 @register.filter

@@ -54,8 +54,8 @@ def obligations(store, year, month, today):
             "Buat dari bukti potong bulan itu di Coretax.")
     if profile.pph_regime == "umkm_final" and profile.taxpayer_type:
         tax = monthly_tax(store, py, pm, profile)
-        if tax.pph:
-            add(f"pph_final:{period}", "Setor PPh Final UMKM 0,5%", date(year, month, 15), tax.pph, reverse("merchant-tax") + f"?month={period}")
+        if tax.pph_to_deposit:
+            add(f"pph_final:{period}", "Setor PPh Final UMKM 0,5%", date(year, month, 15), tax.pph_to_deposit, reverse("merchant-tax") + f"?month={period}")
     elif profile.taxpayer_type == "company":
         last_year = fiscal.worksheet(store, year - 1)
         if last_year["pph25_monthly"]:

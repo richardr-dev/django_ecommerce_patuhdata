@@ -210,7 +210,8 @@ class Supplier(models.Model):
 
 
 # What a supplier bill buys: stock for resale, or one of the operating expense accounts.
-BILL_CATEGORIES = [("1400", "Pembelian barang dagang (persediaan)")] + EXPENSE_CATEGORIES
+BILL_CATEGORIES = [("1400", "Pembelian barang dagang (persediaan)"),
+    ("1460", "Ongkos angkut / bea masuk barang (dialokasikan ke persediaan)")] + EXPENSE_CATEGORIES
 
 
 class Bill(models.Model):
@@ -242,6 +243,8 @@ class Bill(models.Model):
     tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
+    # Saldo awal: an unpaid bill carried over from the old books (books Utang usaha / Modal pemilik only).
+    is_opening = models.BooleanField(default=False)
     cost_center = models.ForeignKey("CostCenter", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="bills", verbose_name="Pusat biaya")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
@@ -532,7 +535,8 @@ class ApprovalPolicy(models.Model):
     """From what amount an action needs a second person to approve it (maker and checker)."""
     KINDS = [("bill_payment", "Pembayaran tagihan supplier"), ("expense", "Biaya operasional"),
         ("journal", "Jurnal manual"), ("invoice_void", "Pembatalan invoice"),
-        ("bill_void", "Pembatalan tagihan supplier"), ("invoice_writeoff", "Hapus piutang invoice"), ("pos_shift_variance", "Selisih kas tutup shift kasir")]
+        ("bill_void", "Pembatalan tagihan supplier"), ("invoice_writeoff", "Hapus piutang invoice"), ("pos_shift_variance", "Selisih kas tutup shift kasir"),
+        ("payroll", "Posting penggajian"), ("stock_adjustment", "Penyesuaian stok")]
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="approval_policies")
     kind = models.CharField(max_length=20, choices=KINDS)
     threshold = models.DecimalField(max_digits=16, decimal_places=2, default=0,
@@ -566,11 +570,11 @@ class ApprovalRequest(models.Model):
 
 
 WITHHOLDING_KINDS = [
-    ("pph23_jasa", "PPh 23 · jasa (2%)", "PPh 23", Decimal("2")),
-    ("pph23_royalti", "PPh 23 · royalti, bunga, hadiah (15%)", "PPh 23", Decimal("15")),
-    ("pph4_2_sewa", "PPh 4(2) · sewa tanah/bangunan (10%)", "PPh 4(2)", Decimal("10")),
+    ("pph23_jasa", "PPh 23 · jasa (2%)", "PPh 23", Decimal(2)),
+    ("pph23_royalti", "PPh 23 · royalti, bunga, hadiah (15%)", "PPh 23", Decimal(15)),
+    ("pph4_2_sewa", "PPh 4(2) · sewa tanah/bangunan (10%)", "PPh 4(2)", Decimal(10)),
     ("pph4_2_konstruksi", "PPh 4(2) · jasa konstruksi kecil (1,75%)", "PPh 4(2)", Decimal("1.75")),
-    ("pph21", "PPh 21 · gaji, honorarium, jasa perorangan", "PPh 21", Decimal("5")),
+    ("pph21", "PPh 21 · gaji, honorarium, jasa perorangan", "PPh 21", Decimal(5)),
 ]
 
 
@@ -655,6 +659,9 @@ class GoodsReceiptLine(models.Model):
     description = models.CharField(max_length=200)
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    # The lot (batch) and expiry date of a lot-tracked product (``orders/lots.py``).
+    lot_code = models.CharField(max_length=60, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
     po_line = models.ForeignKey("PurchaseOrderLine", on_delete=models.PROTECT, null=True, blank=True,
         related_name="receipt_lines")
 
@@ -743,6 +750,10 @@ class PurchaseOrder(models.Model):
     expected_on = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=OPEN)
     notes = models.TextField(blank=True)
+    # Where the goods are going (a reorder rule for that warehouse counts them as on the way); the receipt
+    # dialog starts on it. Empty: decided when the goods arrive.
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+")
     created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -769,14 +780,24 @@ class PurchaseOrderLine(models.Model):
     variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
         related_name="+")
     description = models.CharField(max_length=200)
-    quantity = models.PositiveIntegerField()
-    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    quantity = models.PositiveIntegerField()      # base units (pcs), what receipts count
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)   # per base unit
     received_quantity = models.PositiveIntegerField(default=0)
+    # Ordered in a larger unit (2 dus of 12): shown to the supplier that way; the figures above are in pcs.
+    unit_name = models.CharField(max_length=20, blank=True)
+    unit_factor = models.PositiveIntegerField(default=1)
 
     class Meta:
         ordering = ["id"]
         constraints = [models.CheckConstraint(condition=models.Q(received_quantity__lte=models.F("quantity")),
             name="po_received_lte_ordered")]
+
+    @property
+    def ordered_in_unit(self):
+        """"2 dus" when ordered by the dus, else ""."""
+        if self.unit_factor > 1 and self.unit_name:
+            return f"{self.quantity // self.unit_factor} {self.unit_name}"
+        return ""
 
     @property
     def remaining(self):
@@ -852,9 +873,20 @@ class StockCount(models.Model):
 class StockCountLine(models.Model):
     count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    # A size or colour counted in that warehouse (its ``VariantStock`` row); ``product`` is its parent.
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
     system_qty = models.IntegerField()
     counted_qty = models.IntegerField(null=True, blank=True)
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # frozen at approval
+
+    @property
+    def label(self):
+        return f"{self.product.name} / {self.variant.name}" if self.variant_id else self.product.name
+
+    @property
+    def sku(self):
+        return self.variant.sku if self.variant_id else self.product.sku
 
     class Meta:
         ordering = ["product__name", "id"]
@@ -862,6 +894,60 @@ class StockCountLine(models.Model):
     @property
     def difference(self):
         return None if self.counted_qty is None else self.counted_qty - self.system_qty
+
+
+class StockAdjustment(models.Model):
+    """Penyesuaian stok: a stock change that no purchase, sale, transfer or count explains (goods damaged,
+    lost, given away as samples, taken by the owner, found, or stock that was never recorded), as a numbered
+    document with a reason. Posting moves the stock (``adjust`` movements) and books its value at cost against
+    the reason's account in one transaction, so the shelf and Persediaan never disagree. Never edited; a
+    mistake is voided (stock back, entry reversed) and entered again."""
+    POSTED, VOID = "posted", "void"
+    STATUS_CHOICES = [(POSTED, "Dibukukan"), (VOID, "Dibatalkan")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="stock_adjustments")
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, related_name="+")
+    number = models.CharField(max_length=40)
+    adjusted_on = models.DateField()
+    reason = models.CharField(max_length=20)
+    account_code = models.CharField(max_length=10)
+    notes = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=POSTED)
+    value = models.DecimalField(max_digits=16, decimal_places=2, default=0)  # signed: minus = stock written off
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    voided_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    voided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-adjusted_on", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_stock_adjustment_number")]
+
+    def __str__(self):
+        return self.number
+
+    @property
+    def reason_label(self):
+        from .stock_adjustments import REASONS
+        return REASONS[self.reason].label if self.reason in REASONS else self.reason
+
+
+class StockAdjustmentLine(models.Model):
+    adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    quantity = models.IntegerField()  # signed: plus = units added to the shelf, minus = taken off
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    value = models.DecimalField(max_digits=16, decimal_places=2)  # quantity × unit_cost, signed
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.CheckConstraint(condition=~models.Q(quantity=0), name="adjustment_line_not_zero")]
+
+    @property
+    def name(self):
+        return f"{self.product.name} · {self.variant.name}" if self.variant_id else self.product.name
 
 
 class PrepaidExpense(models.Model):
@@ -994,3 +1080,225 @@ class MarketplaceAdjustment(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} {self.provider} {self.amount}"
+
+
+# ---------------------------------------------------------------------------
+# Penggajian (accounting/payroll.py)
+# ---------------------------------------------------------------------------
+
+PTKP_STATUSES = [("TK/0", "TK/0"), ("TK/1", "TK/1"), ("TK/2", "TK/2"), ("TK/3", "TK/3"),
+    ("K/0", "K/0"), ("K/1", "K/1"), ("K/2", "K/2"), ("K/3", "K/3")]
+
+
+class Employee(models.Model):
+    """A person on the payroll. PPh 21 is looked up in the TER tables (``accounting/pph21.py``) from the PTKP
+    status; ``pph21_rate`` is only a manual override (empty: automatic)."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="employees")
+    name = models.CharField(max_length=120)
+    nik = models.CharField(max_length=16, blank=True)
+    npwp = models.CharField(max_length=20, blank=True)
+    ptkp_status = models.CharField(max_length=4, choices=PTKP_STATUSES, default="TK/0")
+    position = models.CharField(max_length=80, blank=True)
+    base_salary = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allowance = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # tunjangan tetap
+    pph21_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    bpjs = models.BooleanField(default=True)
+    bank_name = models.CharField(max_length=60, blank=True)
+    bank_account_number = models.CharField(max_length=40, blank=True)
+    joined_on = models.DateField(null=True, blank=True)
+    # Last working day. Its month is the employee's last tax period (masa pajak terakhir): PPh 21 is
+    # recalculated over the year there, and later runs leave the employee out.
+    left_on = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def ter_category(self):
+        """TER category from the PTKP status (PP 58/2023): A, B or C."""
+        return {"TK/0": "A", "TK/1": "A", "K/0": "A", "TK/2": "B", "TK/3": "B", "K/1": "B", "K/2": "B",
+            "K/3": "C"}[self.ptkp_status]
+
+
+class PayrollSettings(models.Model):
+    """BPJS rates and wage caps for a store. The defaults are the 2025 rules; caps change yearly."""
+    store = models.OneToOneField(Store, on_delete=models.CASCADE, related_name="payroll_settings")
+    kes_company = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(4))
+    kes_employee = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(1))
+    kes_cap = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(12_000_000))
+    jht_company = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("3.7"))
+    jht_employee = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(2))
+    jkk = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.24"))
+    jkm = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.3"))
+    jp_company = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(2))
+    jp_employee = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(1))
+    jp_cap = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(10_547_400))
+
+
+class PayrollRun(models.Model):
+    """One month's payroll: drafted, posted (Gaji & BPJS against Utang gaji, Utang BPJS, Utang PPh 21),
+    then paid from a bank account. BPJS and PPh 21 are paid on their own."""
+    DRAFT, POSTED, PAID, VOID = "draft", "posted", "paid", "void"
+    STATUS = [(DRAFT, "Draf"), (POSTED, "Diposting"), (PAID, "Dibayar"), (VOID, "Dibatalkan")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="payroll_runs")
+    number = models.CharField(max_length=40, blank=True)
+    period = models.DateField()  # first day of the month paid for
+    status = models.CharField(max_length=8, choices=STATUS, default=DRAFT)
+    approval_pending = models.BooleanField(default=False)
+    posted_on = models.DateField(null=True, blank=True)
+    paid_on = models.DateField(null=True, blank=True)
+    paid_from = models.ForeignKey("BankAccount", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    bpjs_paid_on = models.DateField(null=True, blank=True)
+    notes = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-period", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["store", "period"], condition=~models.Q(status="void"),
+            name="one_live_payroll_per_month")]
+
+    def __str__(self):
+        return f"Penggajian {self.period:%m/%Y}"
+
+    def _sum(self, field):
+        return sum((getattr(line, field) for line in self.lines.all()), Decimal(0))
+
+    @property
+    def gross(self):
+        return self._sum("gross")
+
+    @property
+    def net(self):
+        return self._sum("net")
+
+    @property
+    def pph21(self):
+        return self._sum("pph21")
+
+    @property
+    def bpjs_employee(self):
+        return self._sum("bpjs_employee")
+
+    @property
+    def bpjs_company(self):
+        return self._sum("bpjs_company")
+
+    @property
+    def bpjs_total(self):
+        return self.bpjs_employee + self.bpjs_company
+
+
+class PayrollLine(models.Model):
+    """One employee in one payroll run. Amounts are worked out by ``payroll.compute_line``."""
+    run = models.ForeignKey(PayrollRun, on_delete=models.CASCADE, related_name="lines")
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="payroll_lines")
+    salary = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allowance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    extra = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # lembur, bonus, THR
+    bpjs_employee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bpjs_company = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bpjs_taxable = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # JKK + JKM + Kesehatan (perusahaan)
+    pph21_manual = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)  # override of TER
+    pph21_method = models.CharField(max_length=8, default="ter")  # ter | manual | annual (December)
+    pph21_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # the rate applied
+    pph21_base = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    pension_employee = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # JHT + JP (deductible)
+    pph21 = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    net = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["employee__name"]
+        constraints = [models.UniqueConstraint(fields=["run", "employee"], name="one_line_per_employee")]
+
+    @property
+    def gross(self):
+        return self.salary + self.allowance + self.extra
+
+
+class ReorderRule(models.Model):
+    """Aturan stok minimum (Odoo's reordering rule): when the forecast of a product or variant, for the whole
+    store or one warehouse, falls below ``minimum``, Usulan pembelian proposes ordering up to ``maximum``, in
+    multiples of ``multiple``, from ``supplier``. See ``accounting/reordering.py``."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="reorder_rules")
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="+")
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="+")
+    minimum = models.PositiveIntegerField()
+    maximum = models.PositiveIntegerField()
+    multiple = models.PositiveIntegerField(default=1)
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    lead_days = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["product__name", "id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(maximum__gte=models.F("minimum")), name="reorder_max_gte_min"),
+            models.CheckConstraint(condition=models.Q(multiple__gte=1), name="reorder_multiple_positive"),
+        ]
+
+    @property
+    def label(self):
+        return f"{self.product.name} / {self.variant.name}" if self.variant_id else self.product.name
+
+    @property
+    def sku(self):
+        return self.variant.sku if self.variant_id else self.product.sku
+
+
+class LandedCost(models.Model):
+    """Biaya perolehan (landed cost): a freight, duty or handling bill (category 1460) spread over the goods
+    receipts it belongs to, by value or by quantity. Units still held take their share into Persediaan and the
+    moving-average cost; units already sold take it as HPP. See ``accounting/landed_costs.py``."""
+    BY_VALUE, BY_QUANTITY = "value", "quantity"
+    METHODS = [(BY_VALUE, "Menurut nilai barang"), (BY_QUANTITY, "Menurut jumlah unit")]
+    POSTED, VOID = "posted", "void"
+    STATUS_CHOICES = [(POSTED, "Dibukukan"), (VOID, "Dibatalkan")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="landed_costs")
+    number = models.CharField(max_length=40)
+    date = models.DateField()
+    bill = models.ForeignKey(Bill, on_delete=models.PROTECT, related_name="landed_costs")
+    receipts = models.ManyToManyField(GoodsReceipt, related_name="landed_costs")
+    method = models.CharField(max_length=10, choices=METHODS, default=BY_VALUE)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    to_stock = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    to_cogs = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=POSTED)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-number"]
+        constraints = [models.UniqueConstraint(fields=["store", "number"], name="unique_landed_cost_number")]
+
+    def __str__(self):
+        return self.number
+
+
+class LandedCostLine(models.Model):
+    landed_cost = models.ForeignKey(LandedCost, on_delete=models.CASCADE, related_name="lines")
+    receipt_line = models.ForeignKey(GoodsReceiptLine, on_delete=models.PROTECT, related_name="+")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+")
+    quantity = models.PositiveIntegerField()        # received on that line
+    held = models.PositiveIntegerField(default=0)  # of those, still held when allocated (shelf + mitra)
+    share = models.DecimalField(max_digits=14, decimal_places=2)
+    to_stock = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    to_cogs = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["id"]

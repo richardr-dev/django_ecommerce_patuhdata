@@ -46,7 +46,7 @@ def _bars(rows, value, limit=None):
 
 
 def _sales(store, params, today):
-    base = Order.objects.filter(store=store)
+    base = Order.objects.filter(store=store).exclude(order_type="opening")  # saldo awal is not a sale
     scoped, active = apply_filters(base, params, today)
     return scoped.exclude(status__in=NOT_A_SALE), scoped, active
 
@@ -125,7 +125,7 @@ def analyze(store, params, today=None):
 
     # new or returning: had they bought before this period?
     earlier = {_key(c, p, n) for c, p, n in Order.objects.filter(store=store,
-        created_at__date__lt=start).exclude(status__in=NOT_A_SALE).values_list(
+        created_at__date__lt=start).exclude(status__in=NOT_A_SALE).exclude(order_type="opening").values_list(
         "customer_id", "phone", "customer_name")}
     returning = sum(1 for key in buyers if key in earlier)
 

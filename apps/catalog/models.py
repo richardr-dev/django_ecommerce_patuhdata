@@ -64,6 +64,12 @@ class Product(models.Model):
         help_text="Atau link (Google Drive, kelas online). Dibuka pembeli setelah membayar.")
     cost_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
         help_text="Harga pokok (modal) per unit. Dipakai untuk menghitung HPP dan laba.")
+    # The unit stock is counted in (pcs, botol, kg...). Larger units (dus = 12 pcs) are ``ProductUnit`` rows;
+    # stock, cost and every movement stay in this unit.
+    base_unit = models.CharField("Satuan dasar", max_length=20, default="pcs", blank=True)
+    # Lot / batch and expiry tracked (food, cosmetics, medicine): receipts open lots, everything that leaves draws
+    # the lot that expires first (``orders/lots.py``).
+    tracks_lots = models.BooleanField("Lacak lot & kedaluwarsa", default=False)
     # Special wholesale price charged to AB Shop (reseller/partner). Overrides regular price
     # on reseller sell-in orders. Leave blank to use the regular retail price.
     ab_shop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
@@ -259,6 +265,21 @@ class InventoryLevel(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class VariantStock(models.Model):
+    """Where a variant's units are: one row per warehouse. ``ProductVariant.stock`` stays the store-wide total
+    that every screen and the storefront read; these rows break it down by location and always add up to it.
+    They are kept by ``orders/variant_stock.py`` from inside ``record_movement``, never written directly.
+    Reservations stay store-wide on the variant."""
+    variant = models.ForeignKey("ProductVariant", on_delete=models.CASCADE, related_name="locations")
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="variant_stock")
+    on_hand = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["warehouse__priority", "warehouse_id"]
+        constraints = [models.UniqueConstraint(fields=["variant", "warehouse"], name="unique_variant_warehouse")]
 
 
 class ProductImage(models.Model):
@@ -477,3 +498,23 @@ class PriceListItem(models.Model):
         ordering = ["product__name"]
         constraints = [models.UniqueConstraint(fields=["price_list", "product", "variant"],
             name="unique_price_list_product_variant")]
+
+
+class ProductUnit(models.Model):
+    """A larger unit a product is bought or sold in: "dus" holding ``factor`` base units (pcs). A line in this
+    unit moves ``quantity × factor`` base units; its price is per this unit. See ``catalog/units.py``."""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="units")
+    name = models.CharField(max_length=20)
+    factor = models.PositiveIntegerField()
+    barcode = models.CharField(max_length=80, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["factor", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "name"], name="unique_product_unit_name"),
+            models.CheckConstraint(condition=models.Q(factor__gte=2), name="product_unit_factor_gt_one"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.factor} {self.product.base_unit or 'pcs'})"

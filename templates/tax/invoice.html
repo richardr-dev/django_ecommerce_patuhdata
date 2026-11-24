@@ -1,4 +1,4 @@
-{% load branding %}<!doctype html>
+{% load branding books %}<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -57,15 +57,15 @@
   </section>
   <table>
     <thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Jumlah</th></tr></thead>
-    <tbody>{% for item in invoice.order.items.all %}<tr><td>{{ item.name }}{% if item.variant_name %} · {{ item.variant_name }}{% endif %}{% if item.sku %}<br><span class="muted">SKU {{ item.sku }}</span>{% endif %}</td><td class="num">{{ item.quantity }}</td><td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td><td class="num">Rp{{ item.line_total|floatformat:"0g" }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for item in invoice.order.items.all %}<tr><td>{{ item.name }}{% if item.variant_name %} · {{ item.variant_name }}{% endif %}{% if item.sku %}<br><span class="muted">SKU {{ item.sku }}</span>{% endif %}</td><td class="num">{{ item.quantity }}</td><td class="num">{{ item.unit_price|rp }}</td><td class="num">{{ item.line_total|rp }}</td></tr>{% endfor %}</tbody>
   </table>
   <table class="totals">
-    <tr><td>Subtotal</td><td class="num">Rp{{ invoice.subtotal|floatformat:"0g" }}</td></tr>
-    {% if invoice.discount %}<tr><td>Diskon</td><td class="num">−Rp{{ invoice.discount|floatformat:"0g" }}</td></tr>{% endif %}
-    {% if invoice.tax %}<tr><td>Dasar pengenaan pajak (DPP)</td><td class="num">Rp{{ invoice.tax_base|floatformat:"0g" }}</td></tr><tr><td>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</td><td class="num">Rp{{ invoice.tax|floatformat:"0g" }}</td></tr>{% endif %}
-    {% if invoice.shipping %}<tr><td>Ongkos kirim</td><td class="num">Rp{{ invoice.shipping|floatformat:"0g" }}</td></tr>{% endif %}
-    {% if invoice.other_charges %}<tr><td>Biaya lain</td><td class="num">Rp{{ invoice.other_charges|floatformat:"0g" }}</td></tr>{% endif %}
-    <tr class="grand"><td>Total</td><td class="num">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
+    <tr><td>Subtotal</td><td class="num">{{ invoice.subtotal|rp }}</td></tr>
+    {% if invoice.discount %}<tr><td>Diskon</td><td class="num">−{{ invoice.discount|rp }}</td></tr>{% endif %}
+    {% if invoice.tax %}<tr><td>Dasar pengenaan pajak (DPP)</td><td class="num">{{ invoice.tax_base|rp }}</td></tr><tr><td>PPN {{ invoice.tax_rate|floatformat:"-2" }}%</td><td class="num">{{ invoice.tax|rp }}</td></tr>{% endif %}
+    {% if invoice.shipping %}<tr><td>Ongkos kirim</td><td class="num">{{ invoice.shipping|rp }}</td></tr>{% endif %}
+    {% if invoice.other_charges %}<tr><td>Biaya lain</td><td class="num">{{ invoice.other_charges|rp }}</td></tr>{% endif %}
+    <tr class="grand"><td>Total</td><td class="num">{{ invoice.total|rp }}</td></tr>
   </table>
   <p class="muted" style="margin-top:32px">{% if invoice.seller_is_pkp %}Invoice ini bukan Faktur Pajak. Faktur Pajak diterbitkan penjual melalui Coretax DJP atas permintaan pembeli yang memiliki NPWP.{% elif not invoice.tax %}Penjual bukan Pengusaha Kena Pajak; invoice ini tidak memuat PPN.{% endif %}</p>
   {% if b.footer %}<p class="muted" style="margin-top:18px;white-space:pre-line;border-top:1px dashed #d3dcea;padding-top:10px">{{ b.footer }}</p>{% endif %}

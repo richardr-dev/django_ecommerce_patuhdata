@@ -58,9 +58,11 @@ def merchant_purchase_order_new(request):
                 supplier, _ = Supplier.objects.get_or_create(store=store, name=request.POST["supplier_name"].strip()[:160])
             if not supplier:
                 raise purchasing.PurchaseError("Pilih atau isi nama supplier.")
-            lines = [{"sku": sku, "qty": _number(qty), "unit_cost": _number(cost)} for sku, qty, cost in zip(
+            units = request.POST.getlist("unit[]")
+            lines = [{"sku": sku, "qty": _number(qty), "unit_cost": _number(cost),
+                "unit": units[i] if i < len(units) else ""} for i, (sku, qty, cost) in enumerate(zip(
                 request.POST.getlist("sku[]"), request.POST.getlist("qty[]"), request.POST.getlist("unit_cost[]"),
-                strict=False) if sku.strip()]
+                strict=False)) if sku.strip()]
             expected = request.POST.get("expected_on")
             po = purchasing.create_po(store, supplier=supplier, lines=lines, actor=request.user,
                 order_date=datetime.date.fromisoformat(request.POST.get("order_date") or timezone.localdate().isoformat()),
@@ -102,9 +104,15 @@ def merchant_purchase_order(request, po_id):
                     messages.info(request, "Penerimaan ini sudah disimpan.")
                     return redirect("merchant-purchase-order", po_id=po.pk)
                 quantities = {line.pk: int(_number(request.POST.get(f"qty_{line.pk}"))) for line in po.lines.all()}
+                lots = {}
+                for line in po.lines.all():   # lot and expiry of a lot-tracked product (orders/lots.py)
+                    expiry = request.POST.get(f"exp_{line.pk}", "").strip()
+                    lots[line.pk] = (request.POST.get(f"lot_{line.pk}", "").strip(),
+                        datetime.date.fromisoformat(expiry) if expiry else None)
                 warehouse = Warehouse.objects.filter(store=store, pk=request.POST.get("warehouse") or 0).first()
                 try:
                     receipt = purchasing.receive_po(po, quantities=quantities, warehouse=warehouse, actor=request.user,
+                        lots=lots,
                         received_on=datetime.date.fromisoformat(request.POST.get("received_on") or timezone.localdate().isoformat()),
                         number=request.POST.get("number", "")[:40])
                 except Exception:
@@ -117,7 +125,7 @@ def merchant_purchase_order(request, po_id):
         except (purchasing.PurchaseError, InvalidOperation, ValueError) as error:
             messages.error(request, f"Gagal: {error}")
         return redirect("merchant-purchase-order", po_id=po.pk)
-    lines = list(po.lines.all())
+    lines = list(po.lines.select_related("product"))
     for line in lines:
         line.billed = line.billed_quantity
     return render(request, "merchant/purchase_order_detail.html", _merchant_context(request, store, po=po, lines=lines,

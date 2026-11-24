@@ -35,7 +35,7 @@
 (function(){
   var rate={{ invoice.tax_rate|default:0|stringformat:"s" }}||0;
   function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
-  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}  // book currency
   function calc(){var sub=0;document.querySelectorAll("tbody tr").forEach(function(tr){var q=tr.querySelector("[data-qty]"),p=tr.querySelector("[data-price]");if(q&&p)sub+=num(q.value)*num(p.value);});
     var ex=document.querySelector("[data-extra]");sub+=num(ex&&ex.value);var vat=sub*rate/100;
     document.getElementById("sub").textContent=fmt(sub);var v=document.getElementById("vat");if(v)v.textContent=fmt(vat);document.getElementById("grand").textContent=fmt(sub+vat);}

@@ -54,7 +54,8 @@ def _blank(code):
 def invoice_recap(store, start, end, *, today):
     """``{"channels": [...], "totals": {...}, "months": [...], "month_matrix": {...}}``.
     Invoices are grouped by the channel of their order and the month they were issued."""
-    invoices = Invoice.objects.filter(store=store, issued_on__range=(start, end))
+    invoices = Invoice.objects.filter(store=store, issued_on__range=(start, end)).exclude(
+        order__order_type="opening")  # carried over from the old books: not a sale of this period
     rows = defaultdict(lambda: None)
 
     def row(code):

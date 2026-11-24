@@ -68,6 +68,15 @@ def todo_items(store, today, user=None):
         status__in=[Invoice.STATUS_PAID, Invoice.STATUS_VOID]).count()
     add(claimed, "konfirmasi transfer dari pembeli menunggu dicek", reverse("merchant-sales-invoices") + "?crm=&tab=unpaid",
         "Cek mutasi →", "cash", "warn")
+    from apps.orders import lots
+    due = lots.expiring(store, today=today)
+    add(len(due["expired"]), "lot barang sudah kedaluwarsa dan masih di stok", reverse("merchant-lots") + "?status=expired",
+        "Periksa →", "alert", "danger")
+    add(len(due["soon"]), "lot barang kedaluwarsa dalam 30 hari", reverse("merchant-lots") + "?status=soon",
+        "Lihat →", "clock", "warn")
+    from .reordering import to_order_count
+    add(to_order_count(store), "barang di bawah stok minimum perlu dipesan", reverse("merchant-reorder"),
+        "Buat pesanan →", "truck", "warn")
     bills = due_soon(store, today)
     add(len(bills), "tagihan supplier jatuh tempo dalam 7 hari", reverse("merchant-payables"),
         "Bayar →", "truck")
@@ -77,6 +86,13 @@ def todo_items(store, today, user=None):
         "invoice berulang siap diterbitkan", reverse("merchant-recurring"), "Terbitkan →", "file")
     add(UnmappedSku.objects.filter(store=store, resolved=False).count(),
         "SKU marketplace belum dipetakan", reverse("merchant-sku-map"), "Petakan →", "link")
+    from .models import PayrollRun
+    add(PayrollRun.objects.filter(store=store, status=PayrollRun.POSTED).count(),
+        "penggajian sudah diposting tetapi gajinya belum dibayar", reverse("merchant-payroll"), "Bayar →", "users")
+    last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    if (today.day >= 5 and PayrollRun.objects.filter(store=store, period__lt=last_month).exists()
+            and not PayrollRun.objects.filter(store=store, period=last_month).exclude(status="void").exists()):
+        add(1, f"penggajian {last_month:%m/%Y} belum disusun", reverse("merchant-payroll"), "Susun →", "users", "warn")
     due = depreciation_due(store, today)
     if due:
         add(1, f"penyusutan aset belum dicatat (Rp{due:,.0f})".replace(",", "."),

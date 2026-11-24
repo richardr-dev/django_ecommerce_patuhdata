@@ -1,8 +1,8 @@
-{% load icons %}<div id="inv-tabs" {% if oob %}hx-swap-oob="true"{% endif %} class="-mx-1 overflow-x-auto px-1 pb-1">
-  <div class="inline-flex gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-slate-200" role="radiogroup" aria-label="Status invoice">
+{% load icons %}<div id="inv-tabs" {% if oob %}hx-swap-oob="true"{% endif %} class="bb-track">
+  <div class="inline-flex gap-1 rounded-full p-1" style="background:var(--ds-nested,#eaf7fe)" role="radiogroup" aria-label="Status invoice">
     {% for code, label, count in invoice_tabs %}
     <label class="cursor-pointer"><input type="radio" name="inv" value="{{ code }}" class="peer sr-only"{% if inv_filter == code %} checked{% endif %}>
-      <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:shadow-md peer-checked:shadow-blue-600/25 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400"><span class="[&>svg]:h-4 [&>svg]:w-4">{% if code == "" %}{% icon "list" %}{% elif code == "draft" %}{% icon "note" %}{% elif code == "awaiting" %}{% icon "clock" %}{% elif code == "overdue" %}{% icon "alert" %}{% elif code == "paid" %}{% icon "check-circle" %}{% elif code == "void" %}{% icon "undo" %}{% else %}{% icon "file" %}{% endif %}</span>{{ label }}<span class="rounded-full bg-slate-100 px-1.5 text-[11px] font-bold text-slate-500">{{ count }}</span></span></label>
+      <span class="group inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-slate-600 transition hover:bg-white peer-checked:bg-blue-600 peer-checked:text-white peer-checked:shadow-md peer-checked:shadow-blue-600/25 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400"><span class="[&>svg]:h-4 [&>svg]:w-4">{% if code == "" %}{% icon "list" %}{% elif code == "draft" %}{% icon "note" %}{% elif code == "awaiting" %}{% icon "clock" %}{% elif code == "overdue" %}{% icon "alert" %}{% elif code == "paid" %}{% icon "check-circle" %}{% elif code == "void" %}{% icon "undo" %}{% else %}{% icon "file" %}{% endif %}</span>{{ label }}<span class="rounded-full bg-white/70 px-1.5 text-[11px] font-bold text-slate-500">{{ count }}</span></span></label>
     {% endfor %}
   </div>
 </div>

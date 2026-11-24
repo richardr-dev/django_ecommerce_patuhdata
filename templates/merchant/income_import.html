@@ -20,13 +20,14 @@
   <div class="tile accent"><small>Pesanan dicairkan</small><strong>{{ summary.orders }}</strong><span>pesanan pada laporan ini</span></div>
   <div class="tile"><small>Dana masuk</small><strong>{{ summary.net|rp }}</strong><span>setelah biaya marketplace</span></div>
   <div class="tile warn"><small>Biaya marketplace</small><strong>{{ summary.fees|rp }}</strong><span>komisi, layanan, ongkir, voucher</span></div>
+  {% if summary.pph22 %}<div class="tile"><small>PPh 22 dipungut</small><strong>{{ summary.pph22|rp }}</strong><span>pajak, bukan biaya (PMK 37/2025)</span></div>{% endif %}
   <div class="tile"><small>Sudah dicairkan sebelumnya</small><strong>{{ summary.already }}</strong><span>dilewati</span></div>
 </div>
 {% for message in summary.errors %}<div class="notice" style="background:var(--ds-bad-bg);color:var(--ds-bad)">{% icon "alert" %}<span>{{ message }}</span></div>{% endfor %}
 {% for message in summary.warnings %}<div class="notice">{% icon "alert" %}<span>{{ message }}</span></div>{% endfor %}
 {% endif %}
 
-<section class="panel"><header><h2>Terakhir diimpor</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Toko</th><th class="num">Total pesanan</th><th class="num">Biaya</th><th class="num">Dana cair</th><th>Tanggal</th></tr></thead><tbody>
-  {% for row in recent %}<tr><td>{{ row.channel_order.external_order_id }}</td><td>{{ row.channel_order.channel }}</td><td class="num">{{ row.channel_order.order.total|rp }}</td><td class="num">{{ row.total_fees|rp }}</td><td class="num"><b>{{ row.net_released|rp }}</b></td><td>{{ row.released_on|date:"d M Y" }}</td></tr>
-  {% empty %}<tr><td colspan="6" class="!py-10 text-center text-slate-400">Belum ada laporan penghasilan yang diimpor.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel"><header><h2>Terakhir diimpor</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Toko</th><th class="num">Total pesanan</th><th class="num">Biaya</th><th class="num">PPh 22</th><th class="num">Dana cair</th><th>Tanggal</th></tr></thead><tbody>
+  {% for row in recent %}<tr><td>{{ row.channel_order.external_order_id }}</td><td>{{ row.channel_order.channel }}</td><td class="num">{{ row.channel_order.order.total|rp }}</td><td class="num">{{ row.total_fees|rp }}</td><td class="num">{% if row.pph22 %}{{ row.pph22|rp }}{% else %}—{% endif %}</td><td class="num"><b>{{ row.net_released|rp }}</b></td><td>{{ row.released_on|date:"d M Y" }}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada laporan penghasilan yang diimpor.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

@@ -243,6 +243,8 @@ class ChannelOrderIncome(models.Model):
     affiliate = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     # Whatever the marketplace deducted that its report does not itemise.
     other_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # PPh 22 the marketplace collected (PMK 37/2025). Tax, not a fee: never part of FEE_FIELDS or total_fees.
+    pph22 = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     net_released = models.DecimalField(max_digits=14, decimal_places=2)
     released_on = models.DateField(null=True, blank=True)
     payout_reference = models.CharField(max_length=120, blank=True)

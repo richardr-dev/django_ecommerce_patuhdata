@@ -1,13 +1,13 @@
 {% extends "merchant/base.html" %}{% load icons books %}{% block title %}{{ delivery.number }}{% endblock %}{% block content %}
 <nav class="dp-crumb"><a href="{% url 'merchant-deliveries' %}">Surat jalan</a> › <span>{{ delivery.number }}</span></nav>
 <div class="dp-head"><div><h1 class="dp-title">{{ delivery.number }} <span class="pill {% if delivery.status == 'shipped' %}pill-shipped{% else %}pill-cancelled{% endif %}">{{ delivery.get_status_display }}</span></h1>
-  <p class="dp-sub">Pesanan <a href="{% url 'merchant-sales-order-detail' order.pk %}">{{ order.number }}</a> · {{ order.buyer_name }} · {{ delivery.delivered_on|date:"d M Y" }}{% if delivery.courier %} · {{ delivery.courier|upper }}{% endif %}{% if delivery.tracking_number %} · resi {{ delivery.tracking_number }}{% endif %}</p></div>
+  <p class="dp-sub">Pesanan <a href="{% url 'merchant-sales-order-detail' order.pk %}">{{ order.number }}</a> · {{ order.buyer_name }} · {{ delivery.delivered_on|date:"d M Y" }}{% if delivery.courier %} · {{ delivery.courier|upper }}{% endif %}{% if delivery.tracking_number %} · resi {{ delivery.tracking_number }}{% endif %}{% if delivery.warehouse %} · dikirim dari <b>{{ delivery.warehouse.name }}</b>{% endif %}</p></div>
   <div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-delivery-print' delivery.pk %}" target="_blank" rel="noopener" data-no-soft>{% icon "printer" %} Cetak surat jalan</a>
     {% if delivery.invoice %}<a class="btn" href="{% url 'merchant-invoice-detail' delivery.invoice.pk %}">{% icon "file" %} Invoice {{ delivery.invoice.number }}</a>{% elif can_edit and delivery.status == 'shipped' %}<form method="post" data-confirm="Batalkan surat jalan {{ delivery.number }}? Stok kembali ke rak dan jurnalnya dibalik." data-confirm-ok="Batalkan">{% csrf_token %}<input type="hidden" name="action" value="cancel"><button class="btn btn-danger">Batalkan</button></form>{% endif %}</div></div>
 <div class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
 <div class="grid gap-5 content-start">
 <section class="panel !mb-0"><header><h2>Isi kiriman</h2></header><table class="tbl"><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Harga pokok</th><th class="num">Nilai</th></tr></thead><tbody>
-{% for l in lines %}<tr><td><b>{{ l.product.name }}</b><small style="display:block;color:var(--ds-muted)">{{ l.product.sku }}</small></td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_cost|rp }}</td><td class="num">{{ l.value|rp }}</td></tr>{% endfor %}
+{% for l in lines %}<tr><td><b>{{ l.order_line.description }}</b><small style="display:block;color:var(--ds-muted)">{{ l.order_line.sku }}</small></td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unit_cost|rp }}</td><td class="num">{{ l.value|rp }}</td></tr>{% endfor %}
 <tr><td colspan="3"><b>Total harga pokok</b></td><td class="num"><b>{{ delivery.value|rp }}</b></td></tr></tbody></table>{% if delivery.notes %}<p class="dp-card-body" style="margin:0">{{ delivery.notes }}</p>{% endif %}</section>
 {% include "merchant/_journal_card.html" %}
 </div>

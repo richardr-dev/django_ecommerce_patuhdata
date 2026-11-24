@@ -21,6 +21,7 @@
   <tr class="line"><td>Penghasilan kena pajak (PKP)</td><td class="num">{{ w.pkp|rp }}</td></tr>
   {% for label, base, rate in w.detail %}<tr class="line"><td>{{ label }}: {{ base|rp }} × {% widthratio rate 1 100 %}%</td><td class="num"></td></tr>{% endfor %}
   <tr class="total"><td>PPh terutang</td><td class="num">{{ w.tax|rp }}</td></tr>
+  {% if w.marketplace_withheld %}<tr class="line"><td>PPh 22 dipungut marketplace (dari laporan penghasilan, akun 1525)</td><td class="num">({{ w.marketplace_withheld|rp }})</td></tr>{% endif %}
   {% if w.buyer_withheld %}<tr class="line"><td>PPh dipotong pembeli (dari pembayaran invoice, akun 1520)</td><td class="num">({{ w.buyer_withheld|rp }})</td></tr>{% endif %}
   <tr class="line"><td>Kredit pajak lain (PPh 22/23/25, diisi manual)</td><td class="num">({{ w.credits|rp }})</td></tr>
   <tr class="total bottom"><td>PPh 29 {% if w.pph29 < 0 %}lebih bayar{% else %}kurang bayar{% endif %}</td><td class="num">{{ w.pph29|rp }}</td></tr>

@@ -125,6 +125,24 @@ def order_invoice(request, order_id):
 
 
 @login_required(login_url="/login/")
+def merchant_marketplace_tax(request):
+    """Paket pajak marketplace: a month of marketplace sales, fees and PPh 22 for the accountant, with Excel."""
+    from apps.accounting import exports
+    from apps.channels import marketplace_tax
+
+    store = _staff_store(request)
+    _require_roles(request, store, VIEW_ROLES)
+    year, month = _month(request)
+    if request.GET.get("format") == "xlsx":
+        return exports.response(exports.marketplace_tax_workbook(store, year, month),
+            f"pajak-marketplace-{year}-{month:02d}.xlsx")
+    start, end = month_bounds(year, month)
+    return render(request, "merchant/marketplace_tax.html", _merchant_context(request, store,
+        pack=marketplace_tax.build(store, start, end), report=monthly_tax(store, year, month),
+        profile=tax_profile(store), month=f"{year}-{month:02d}"))
+
+
+@login_required(login_url="/login/")
 def merchant_spt_ppn(request):
     """Lembar kerja SPT Masa PPN: keluaran, masukan, kompensasi, dan yang harus disetor."""
     from . import spt

@@ -15,7 +15,7 @@ from django.utils import timezone
 from apps.orders.models import Order, OrderItem, OrderStatusEvent
 
 from .models import Invoice, InvoiceItem
-from .services import InvoiceError, issue_invoice_for_order, vat_for
+from .services import InvoiceError, exclusive_price, issue_invoice_for_order, money, vat_for
 
 ZERO = Decimal(0)
 
@@ -41,11 +41,32 @@ def price_lines(lines, discount=0, shipping=0, *, store, is_pkp=None):
     return subtotal, tax, base + tax + shipping
 
 
+def from_inclusive(store, lines, discount=0):
+    """Lines typed with prices that already include PPN, as the books need them: ``(lines, discount,
+    rounding)``. Each unit price and discount is backed out to before PPN (``exclusive_price``); the cents
+    that do not come back exactly are ``rounding`` (to Pembulatan 4950), so the invoice total is exactly
+    what was typed. A seller who charges no PPN gets the lines back unchanged."""
+    discount = Decimal(discount or 0)
+    if not vat_for(store, Decimal(100))[1]:
+        return lines, discount, ZERO
+    converted = [{**line, "unit_price": exclusive_price(store, line["unit_price"]),
+        "discount": exclusive_price(store, line.get("discount") or 0)} for line in lines]
+    converted_discount = exclusive_price(store, discount)
+    typed = max(sum((line_net(line) for line in lines), ZERO) - discount, ZERO)
+    _subtotal, _tax, total = price_lines(converted, converted_discount, 0, store=store)
+    return converted, converted_discount, money(typed - total)
+
+
 def clean_lines(lines):
     """Drop empty rows and refuse a half-filled one."""
     kept = []
     for line in lines:
-        product = line.get("product")
+        product, variant = line.get("product"), line.get("variant")
+        if variant is not None:
+            if product is None:
+                product = variant.product
+            if variant.product_id != product.pk:
+                raise InvoiceError(f"Varian {variant.sku} bukan milik {product.name}.")
         text = (line.get("description") or "").strip()
         if not product and not text:
             continue
@@ -59,7 +80,10 @@ def clean_lines(lines):
         discount = Decimal(line.get("discount") or 0)
         if discount < 0 or discount > qty * price:
             raise InvoiceError(f"Diskon “{text or product.name}” melebihi harga barisnya.")
-        kept.append({"product": product, "description": text or product.name, "qty": qty,
+        from apps.catalog.units import factor as unit_factor
+        unit = (line.get("unit") or "").strip()[:20]
+        kept.append({"product": product, "variant": variant, "unit_factor": unit_factor(product, unit) if product else 1,
+            "description": text or (f"{product.name} / {variant.name}" if variant else product.name), "qty": qty,
             "unit_price": price, "discount": discount, "unit": (line.get("unit") or "").strip()[:20],
             "note": (line.get("note") or "").strip()[:300],
             "code": (line.get("code") or "").strip()[:60]})
@@ -68,8 +92,33 @@ def clean_lines(lines):
     return kept
 
 
+def _units(line):
+    """Base units a line moves: quantity × the factor of its unit (2 dus of 12 = 24)."""
+    return int(line["qty"]) * int(line.get("unit_factor") or 1)
+
+
 def _wants(lines):
-    return [(line["product"], int(line["qty"])) for line in lines if line.get("product")]
+    return [(line["product"], _units(line)) for line in lines if line.get("product") and not line.get("variant")]
+
+
+def _variant_shortages(lines, warehouse=None):
+    """``[(variant, wanted, available)]`` for the sizes or colours the shelf (or ``warehouse``) cannot cover."""
+    need = {}
+    for line in lines:
+        variant = line.get("variant")
+        if variant is not None:
+            held = need.setdefault(variant.pk, [variant, 0])
+            held[1] += _units(line)
+    short = []
+    for variant, wanted in need.values():
+        variant.refresh_from_db(fields=["stock", "reserved"])
+        available = variant.available_stock
+        if warehouse is not None:
+            from apps.orders.variant_stock import at
+            available = min(available, at(variant, warehouse))
+        if available < wanted:
+            short.append((variant, wanted, available))
+    return short
 
 
 def _check_stock(store, lines, actor=None, warehouse=None):
@@ -78,10 +127,15 @@ def _check_stock(store, lines, actor=None, warehouse=None):
     shelf is looked at."""
     from apps.orders.deficits import may_sell_short
     from apps.orders.inventory import stock_shortages
+    where = f" di {warehouse.name}" if warehouse is not None else ""
+    sizes = _variant_shortages(lines, warehouse)
+    if sizes:  # a variant is never sold short (stok minus is for products without variants)
+        raise StockShortage("Stok tidak cukup: " + "; ".join(f"{variant} ({variant.sku}) butuh {wanted}, "
+            f"tersedia {available}{where}" for variant, wanted, available in sizes)
+            + ". Tambah stok varian ini lebih dulu.")
     short = stock_shortages(store, _wants(lines), warehouse)
     if not short:
         return False
-    where = f" di {warehouse.name}" if warehouse is not None else ""
     detail = "; ".join(f"{product.name} ({product.sku}) butuh {wanted}, tersedia {available}{where}"
         for product, wanted, available in short)
     if not store.allow_negative_stock:
@@ -119,9 +173,12 @@ def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phon
     for line in lines:
         product = line.get("product")
         if product:
-            OrderItem.objects.create(order=order, product=product, name=product.name,
-                sku=product.sku, unit_price=line["unit_price"], quantity=int(line["qty"]),
-                line_total=line_net(line))
+            variant, unit_factor = line.get("variant"), int(line.get("unit_factor") or 1)
+            # the shelf counts base units; the price follows
+            from apps.catalog.units import per_base
+            OrderItem.objects.create(order=order, product=product, variant=variant, name=product.name,
+                sku=variant.sku if variant else product.sku, variant_name=variant.name if variant else "",
+                unit_price=per_base(line["unit_price"], unit_factor), quantity=_units(line), line_total=line_net(line))
     OrderStatusEvent.objects.create(order=order, status=status,
         note=f"Invoice dibuat manual{' (belum dibayar)' if status == 'pending' else ''} · "
              f"channel: {channel}")
@@ -148,11 +205,13 @@ def _buyer_label(buyer_name, company_name):
 def _write_items(invoice, lines):
     invoice.items.all().delete()
     for line in lines:
-        product = line.get("product")
-        InvoiceItem.objects.create(invoice=invoice, product=product,
-            description=line["description"], sku=product.sku if product else line.get("code", ""),
+        product, variant = line.get("product"), line.get("variant")
+        sku = variant.sku if variant else (product.sku if product else line.get("code", ""))
+        InvoiceItem.objects.create(invoice=invoice, product=product, variant=variant,
+            description=line["description"], sku=sku[:60],
             quantity=line["qty"], unit_price=line["unit_price"], discount=line["discount"],
-            unit=line.get("unit", ""), note=line.get("note", ""), line_total=line_net(line))
+            unit=line.get("unit", ""), unit_factor=int(line.get("unit_factor") or 1), note=line.get("note", ""),
+            line_total=line_net(line))
 
 
 @transaction.atomic
@@ -160,7 +219,8 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         customer=None, company_name="", buyer_npwp="", phone="-", address="-", notes="",
         external_order_id="", discount=0, shipping=0, on_credit=False, due_date=None, actor=None,
         courier="", tracking_number="", partner=None, delivered_costs=None, sales_order=None,
-        warehouse=None, number_series=None, rounding=0, cost_center=None):
+        warehouse=None, number_series=None, rounding=0, cost_center=None, credit_check=False,
+        prices_include_tax=False):
     """Create the order, take its stock, and issue the invoice. Returns the invoice. Stock leaves
     the shelf with the invoice and the cost of those goods is booked with it, so the two cannot
     disagree; a shortage refuses the invoice (``StockShortage``).
@@ -171,6 +231,9 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     ("POS") numbers the invoice from its own sequence instead of the INV series. ``rounding``
     (signed) is added to the total and booked to Pembulatan penjualan (4950): a register rounds what
     the buyer pays to whole rupiah. ``cost_center`` is the outlet the sale counts for.
+
+    ``credit_check`` refuses a credit sale that takes the customer past ``Customer.credit_limit``
+    (``tax/credit_limit.py``); only the invoice form asks for it, automatic flows never do.
 
     ``delivered_costs`` (``{product id: unit cost}``) means the goods already left on a surat jalan
     (tax/sales_orders.py): no stock is taken, the costs given are the HPP, and the invoice is marked
@@ -189,6 +252,9 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
     if abs(rounding) >= 1000:
         raise InvoiceError("Pembulatan terlalu besar.")
     total += rounding
+    if credit_check and on_credit:
+        from .credit_limit import check
+        check(customer, total)
     order = _build_order(store, lines=lines, buyer_name=buyer_name, issued_on=issued_on,
         channel=channel, customer=customer, phone=phone, address=address, notes=notes,
         external_order_id=external_order_id, discount=discount, shipping=shipping,
@@ -198,12 +264,14 @@ def create_sales_invoice(store, *, lines, buyer_name, issued_on=None, channel="m
         _deduct(order, allow_negative=short, actor=actor, warehouse=warehouse)
     else:
         for item in order.items.all():
-            item.unit_cost = delivered_costs.get(item.product_id)
+            item.unit_cost = delivered_costs.get((item.product_id, item.variant_id),
+                delivered_costs.get(item.product_id))
             item.save(update_fields=["unit_cost"])
     invoice, _ = issue_invoice_for_order(order, issued_on=issued_on, notes=notes, number_series=number_series,
         rounding=rounding, cost_center=cost_center)
     _write_items(invoice, lines)  # keeps services and per-line discounts; the order has only goods
-    patch = {"buyer_name": _buyer_label(buyer_name, company_name)}
+    patch = {"buyer_name": _buyer_label(buyer_name, company_name), "warehouse": warehouse,
+        "prices_include_tax": bool(prices_include_tax)}
     if delivered_costs is not None:
         patch.update(from_deliveries=True, sales_order=sales_order)
     if buyer_npwp:
@@ -237,7 +305,9 @@ def invoice_locks(invoice):
         reasons.append("dibayar lewat gateway atau marketplace")
     if getattr(order, "channel_order", None):
         reasons.append("diimpor dari marketplace")
-    if order.order_type != "direct":
+    if order.order_type == "opening":
+        reasons.append("saldo awal dari pembukuan lama")
+    elif order.order_type != "direct":
         reasons.append("pesanan mitra")
     if invoice.from_deliveries:
         reasons.append("dibuat dari surat jalan")
@@ -245,26 +315,31 @@ def invoice_locks(invoice):
 
 
 def _signature(lines):
-    return sorted((line["product"].pk if line.get("product") else 0, line["description"],
+    return sorted((line["product"].pk if line.get("product") else 0,
+        line["variant"].pk if line.get("variant") else 0, int(line.get("unit_factor") or 1), line["description"],
         Decimal(line["qty"]).normalize(), Decimal(line["unit_price"]).normalize(),
         Decimal(line.get("discount") or 0).normalize()) for line in lines)
 
 
 def invoice_lines(invoice):
     """An invoice's lines in the form the editor and the services use."""
-    return [{"product": item.product, "description": item.description, "qty": item.quantity,
-        "unit_price": item.unit_price, "discount": item.discount, "unit": item.unit,
+    return [{"product": item.product, "variant": item.variant, "description": item.description, "qty": item.quantity,
+        "unit_price": item.unit_price, "discount": item.discount, "unit": item.unit, "unit_factor": item.unit_factor,
         "note": item.note, "code": "" if item.product_id else item.sku}
-        for item in invoice.items.all()]
+        for item in invoice.items.select_related("product", "variant")]
 
 
 @transaction.atomic
 def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, company_name="",
         buyer_npwp="", buyer_address="", phone="-", customer=None, external_order_id="",
-        lines=None, discount=None, shipping=None, actor=None):
+        lines=None, discount=None, shipping=None, actor=None, credit_check=False, rounding=None,
+        prices_include_tax=None):
     """Change an invoice. Buyer, dates and notes can always change; lines and amounts only while
     nothing was paid or credited on it. Changed goods give the old stock back, take the new,
-    and rebook the sale and its cost."""
+    and rebook the sale and its cost.
+
+    ``rounding`` is the leftover of prices re-typed with PPN in them (``from_inclusive``); lines priced
+    before PPN come out exact and leave none. ``prices_include_tax`` records how the lines were typed."""
     from apps.accounting.ledger import reverse_source
     from apps.orders.inventory import return_order_inventory
 
@@ -294,16 +369,24 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
     if amounts_changed:
         memo = f"Edit invoice {invoice.number}"
         return_order_inventory(order, actor=actor, reason=memo)  # the old goods come back first
-        short = _check_stock(invoice.store, lines, actor)  # so the check sees what the edit can use
+        warehouse = invoice.warehouse  # sold from one location: the edit takes the new goods from there too
+        short = _check_stock(invoice.store, lines, actor, warehouse)  # sees what the edit can use
         subtotal, tax, total = price_lines(lines, discount, shipping, store=invoice.store,
             is_pkp=invoice.seller_is_pkp)
+        rounding = Decimal(rounding or 0)
+        if abs(rounding) >= 1000:
+            raise InvoiceError("Pembulatan terlalu besar.")
+        total += rounding
+        if credit_check and not settled:  # a credit invoice raised: the same limit as a new one
+            from .credit_limit import check
+            check(customer or order.customer, total, exclude=invoice)
         new_order = _build_order(invoice.store, lines=lines, buyer_name=buyer_name,
             issued_on=issued_on, channel=order.channel, customer=customer or order.customer,
             phone=phone, address=buyer_address, notes=notes,
             external_order_id=external_order_id or order.external_order_id, discount=discount,
             shipping=shipping, status=order.status if order.status in {"pending", "paid"} else "paid",
             subtotal=subtotal, tax=tax, total=total, partner=order.consignment_partner)
-        _deduct(new_order, allow_negative=short, actor=actor)
+        _deduct(new_order, allow_negative=short, actor=actor, warehouse=warehouse)
         Order.objects.filter(pk=order.pk).update(status="cancelled")  # no signals for a swap
         OrderStatusEvent.objects.create(order=order, status="cancelled",
             note=f"Diganti pesanan {new_order.invoice_number} karena invoice {invoice.number} diedit")
@@ -311,7 +394,9 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
         invoice.subtotal, invoice.discount, invoice.shipping = subtotal, discount, shipping
         invoice.tax_base = max(subtotal - discount, ZERO)
         invoice.tax_rate = vat_for(invoice.store, invoice.tax_base, is_pkp=invoice.seller_is_pkp)[0]
-        invoice.tax, invoice.total, invoice.other_charges = tax, total, ZERO
+        # Only the rounding of the new lines is kept: an earlier one would leave Pembulatan holding an
+        # amount the new total no longer has.
+        invoice.tax, invoice.total, invoice.other_charges, invoice.rounding = tax, total, ZERO, rounding
         _write_items(invoice, lines)
         order = new_order
     else:
@@ -320,6 +405,8 @@ def update_sales_invoice(invoice, *, buyer_name, issued_on, due_date, notes, com
             delivery_notes=notes[:300], external_order_id=external_order_id[:100],
             customer=customer or order.customer)
 
+    if amounts_changed and prices_include_tax is not None:
+        invoice.prices_include_tax = bool(prices_include_tax)
     invoice.issued_on, invoice.due_date, invoice.notes = issued_on, due_date, notes[:500]
     invoice.buyer_name = _buyer_label(buyer_name, company_name)
     invoice.buyer_address, invoice.buyer_npwp = buyer_address[:300], buyer_npwp[:16]

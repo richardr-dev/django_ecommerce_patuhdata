@@ -1,0 +1,94 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Ringkasan pembelian{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Ringkasan pembelian</h1>
+    <p>Alur pembelian dari usulan sampai pembayaran, dengan apa yang menunggu di tiap langkah. Klik langkahnya untuk membuka daftarnya.</p></div>
+  <div class="dp-actions">{% if can.purchase_order %}<a class="btn-primary" href="{% url 'merchant-purchase-order-new' %}">{% icon "plus" %} Pesanan pembelian baru</a>{% endif %}</div>
+</div>
+
+<div class="tiles">
+  <a class="tile accent" href="{% url 'merchant-purchase-orders' %}"><small>Masih dipesan</small><strong>{{ totals.on_order|rp }}</strong><span>sisa pesanan pembelian yang belum datang</span></a>
+  <a class="tile" href="{% url 'merchant-goods-receipts' %}"><small>Diterima, belum ditagih</small><strong>{{ totals.unbilled|rp }}</strong><span>barang sudah masuk, faktur supplier belum</span></a>
+  {% if can.books_view %}
+  <a class="tile" href="{% url 'merchant-payables' %}"><small>Utang usaha</small><strong>{{ totals.owed|rp }}</strong><span>semua tagihan supplier yang belum lunas</span></a>
+  <a class="tile" href="{% url 'merchant-payables' %}"><small>Lewat jatuh tempo</small><strong>{{ totals.overdue|rp }}</strong><span>{{ overdue|length }} tagihan perlu dibayar</span></a>
+  {% endif %}
+</div>
+
+<section class="panel">
+  <header><h2>Alur pembelian</h2></header>
+  <div class="flow-body"><ol class="flow-steps">
+    {% for s in steps %}<li><a href="{{ s.url }}">
+      <span class="bb-bubble step">{{ s.number }}</span>
+      <b>{{ s.title }}</b>
+      <small>{{ s.help }}</small>
+      <span class="flow-count"><strong>{{ s.count }}</strong> {{ s.waiting }}</span>
+      {% if s.late %}<span class="pill pill-warn">{{ s.late }} {{ s.late_text }}</span>{% endif %}
+    </a></li>{% endfor %}
+  </ol>
+  <p class="dp-help" style="margin:12px 0 0">Barang dibayar di tempat? Pakai <a href="{% url 'merchant-cash-purchase' %}">Beli tunai</a>: tagihan, penerimaan dan pembayaran tercatat sekaligus.</p></div>
+</section>
+
+<div class="flow-cols">
+  <section class="panel">
+    <header><h2>Buat dokumen</h2></header>
+    <div class="flow-body"><div class="flow-links">
+      {% if can.purchase_order %}<a href="{% url 'merchant-purchase-order-new' %}">{% icon "clipboard" %}<span><b>Pesanan pembelian</b><small>Pesan barang ke supplier (belum mencatat jurnal)</small></span></a>{% endif %}
+      {% if can.stock_receive %}<a href="{% url 'merchant-goods-receipt-new' %}">{% icon "box" %}<span><b>Penerimaan barang</b><small>Barang datang sebelum faktur supplier</small></span></a>{% endif %}
+      {% if can.books_edit %}<a href="{% url 'merchant-bill-new' %}">{% icon "truck" %}<span><b>Tagihan supplier</b><small>Faktur barang, jasa atau biaya</small></span></a>{% endif %}
+      {% if can.purchase_cash %}<a href="{% url 'merchant-cash-purchase' %}">{% icon "cash" %}<span><b>Beli tunai</b><small>Beli dan bayar langsung di tempat</small></span></a>{% endif %}
+      {% if can.books_edit %}<a href="{% url 'merchant-debit-note-new' %}">{% icon "undo" %}<span><b>Nota debit</b><small>Retur barang ke supplier</small></span></a>{% endif %}
+      <a href="{% url 'merchant-landed-costs' %}">{% icon "layers" %}<span><b>Biaya perolehan</b><small>Bagi ongkir atau bea masuk ke barang</small></span></a>
+    </div></div>
+  </section>
+  <section class="panel">
+    <header><h2>Data &amp; laporan</h2></header>
+    <div class="flow-body"><div class="flow-links">
+      <a href="{% url 'merchant-suppliers' %}">{% icon "building" %}<span><b>Supplier</b><small>Kontak, termin dan riwayat per supplier</small></span></a>
+      <a href="{% url 'merchant-reorder' %}?tab=aturan">{% icon "sliders" %}<span><b>Aturan stok minimum</b><small>Barang yang tidak boleh habis</small></span></a>
+      {% if can.books_view %}<a href="{% url 'merchant-payables' %}">{% icon "clock" %}<span><b>Umur utang</b><small>Utang per supplier menurut umur</small></span></a>
+      <a href="{% url 'merchant-debit-notes' %}">{% icon "file" %}<span><b>Daftar nota debit</b><small>Retur yang sudah dibuat</small></span></a>{% endif %}
+      <a href="{% url 'merchant-intercompany' %}">{% icon "swap" %}<span><b>Transfer antar brand</b><small>Beli dari brand lain dalam grup</small></span></a>
+    </div></div>
+  </section>
+</div>
+
+<div class="flow-cols">
+  <section class="panel">
+    <header><h2>Pesanan terlambat</h2><a class="btn" href="{% url 'merchant-purchase-orders' %}">Semua pesanan</a></header>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Supplier</th><th>Diharapkan</th></tr></thead><tbody>
+      {% for po in late_pos %}<tr><td><a href="{% url 'merchant-purchase-order' po.pk %}">{{ po.number }}</a></td><td>{{ po.supplier.name }}</td><td><span class="pill pill-warn">{{ po.expected_on|date:"d M Y" }}</span></td></tr>
+      {% empty %}<tr><td colspan="3" class="flow-empty">Tidak ada pesanan yang terlambat.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel">
+    <header><h2>Diterima, belum ditagih</h2><a class="btn" href="{% url 'merchant-goods-receipts' %}">Semua penerimaan</a></header>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Penerimaan</th><th>Supplier</th><th class="num">Nilai</th></tr></thead><tbody>
+      {% for r in unbilled %}<tr><td><a href="{% url 'merchant-goods-receipt' r.pk %}">{{ r.number|default:"Tanpa nomor" }}</a><small style="display:block;color:var(--ds-muted)">{{ r.received_on|date:"d M Y" }}</small></td><td>{{ r.supplier.name }}</td><td class="num">{{ r.value|rp }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="flow-empty">Semua barang yang diterima sudah ditagih.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+</div>
+
+{% if can.books_view %}
+<div class="flow-cols">
+  <section class="panel">
+    <header><h2>Tagihan lewat jatuh tempo</h2><a class="btn" href="{% url 'merchant-bills' %}">Semua tagihan</a></header>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Tagihan</th><th>Jatuh tempo</th><th class="num">Sisa</th><th></th></tr></thead><tbody>
+      {% for b in overdue %}<tr><td><a href="{% url 'merchant-bill-detail' b.pk %}">{{ b.number|default:"Tanpa nomor" }}</a><small style="display:block;color:var(--ds-muted)">{{ b.supplier.name }}</small></td><td><span class="pill pill-fail">{{ b.due_date|date:"d M Y" }}</span></td><td class="num">{{ b.amount_due|rp }}</td>
+        <td class="num" data-no-row>{% if can.books_edit %}<a class="btn" href="{% url 'merchant-supplier-pay' b.supplier_id %}">Bayar</a>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="4" class="flow-empty">Tidak ada tagihan yang lewat jatuh tempo.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel">
+    <header><h2>Jatuh tempo 7 hari ke depan</h2><a class="btn" href="{% url 'merchant-payables' %}">Umur utang</a></header>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Tagihan</th><th>Jatuh tempo</th><th class="num">Sisa</th><th></th></tr></thead><tbody>
+      {% for b in due_soon %}<tr><td><a href="{% url 'merchant-bill-detail' b.pk %}">{{ b.number|default:"Tanpa nomor" }}</a><small style="display:block;color:var(--ds-muted)">{{ b.supplier.name }}</small></td><td>{{ b.due_date|date:"d M Y" }}</td><td class="num">{{ b.amount_due|rp }}</td>
+        <td class="num" data-no-row>{% if can.books_edit %}<a class="btn" href="{% url 'merchant-supplier-pay' b.supplier_id %}">Bayar</a>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="4" class="flow-empty">Tidak ada tagihan yang jatuh tempo minggu ini.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

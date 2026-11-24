@@ -13,8 +13,8 @@
 <form method="post" data-unsaved><section class="panel">{% csrf_token %}
   <header><div><h2>Hasil hitung</h2><p>Stok sistem dibekukan saat hitung dimulai; penjualan setelahnya tidak ditimpa. Kosongkan baris yang belum dihitung.</p></div></header>
   <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Stok sistem</th><th class="num" style="width:140px">Hasil hitung</th><th class="num">Selisih</th></tr></thead><tbody>
-  {% for l in lines %}<tr><td><b>{{ l.product.name }}</b><small>{{ l.product.sku }}</small></td><td class="num">{{ l.system_qty }}</td>
-    <td class="num">{% if editable and can_count %}<input type="number" min="0" name="counted_{{ l.pk }}" value="{{ l.counted_qty|default_if_none:'' }}" class="num" aria-label="Hasil hitung {{ l.product.name }}">{% else %}{{ l.counted_qty|default_if_none:"—" }}{% endif %}</td>
+  {% for l in lines %}<tr><td><b>{{ l.label }}</b><small>{% if l.variant %}{{ l.variant.sku }}{% else %}{{ l.product.sku }}{% endif %}</small></td><td class="num">{{ l.system_qty }}</td>
+    <td class="num">{% if editable and can_count %}<input type="number" min="0" name="counted_{{ l.pk }}" value="{{ l.counted_qty|default_if_none:'' }}" class="num" aria-label="Hasil hitung {{ l.label }}">{% else %}{{ l.counted_qty|default_if_none:"—" }}{% endif %}</td>
     <td class="num">{% if l.difference %}<span class="pill {% if l.difference < 0 %}pill-overdue{% else %}pill-paid{% endif %}">{% if l.difference > 0 %}+{% endif %}{{ l.difference }}</span>{% elif l.counted_qty is not None %}0{% else %}—{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
   {% if editable %}<footer style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap">

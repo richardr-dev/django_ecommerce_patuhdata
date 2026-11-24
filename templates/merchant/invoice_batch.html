@@ -1,0 +1,161 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Buat banyak invoice{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-sales-invoices' %}">Invoice penjualan</a> › <span>Buat banyak invoice</span></nav>
+<div class="pg-head">
+  <div><span class="pg-kicker">Penjualan</span><h1>Buat banyak invoice sekaligus</h1>
+    <p>Dari Excel, atau tagihan yang sama ke banyak pelanggan. Dibukukan seperti form invoice; semua dibuat, atau tidak sama sekali.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-invoice-new' %}">{% icon "file" %} Satu invoice</a></div>
+</div>
+
+<div class="tabs" aria-label="Cara membuat">{% for key, label in modes %}<a href="?cara={{ key }}" class="{% if mode == key %}on{% endif %}">{{ label }}</a>{% endfor %}</div>
+
+<form method="post" data-unsaved class="ib-grid">{% csrf_token %}<input type="hidden" name="cara" value="{{ mode }}"><input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="ib-main">
+  {% if mode == "tempel" %}
+    <section class="panel">
+      <header><div><h2><span class="bb-bubble step">1</span> Tempel baris dari Excel</h2><p>Satu baris per barang atau jasa. Baris dengan <b>No. ref</b> yang sama menjadi satu invoice; No. ref disimpan sebagai Referensi invoice.</p></div></header>
+      <div class="ib-cols">{% for c in columns %}<span class="bb-pill">{{ forloop.counter }}. {{ c }}</span>{% endfor %}</div>
+      <label class="field"><span>Baris (pisahkan kolom dengan Tab dari Excel, atau titik koma)</span>
+        <textarea name="rows" rows="10" spellcheck="false" class="ib-paste" placeholder="PO-101&#9;CV Maju Jaya&#9;22/11/2026&#9;22/12/2026&#9;KBL&#9;10&#9;&#9;&#10;PO-101&#9;CV Maju Jaya&#9;&#9;&#9;Jasa pasang&#9;1&#9;250.000&#9;&#10;PO-102;Toko Sinar;22/11/2026;;LMP;5;45000;5000">{{ post.rows }}</textarea></label>
+      <ul class="ib-help">
+        <li><b>Barang</b>: tulis SKU produk; stok keluar dan HPP dibukukan. Selain SKU dianggap jasa (tanpa stok) dan harganya wajib diisi.</li>
+        <li><b>Harga kosong</b>: memakai daftar harga pelanggan, bila tidak ada harga jual produk. <b>Tanggal kosong</b>: hari ini. <b>Jatuh tempo kosong</b>: termin pembayaran pelanggan.</li>
+        <li><b>Pelanggan</b> dicocokkan dengan nama, nama perusahaan, atau nomor WhatsApp. Nama baru ditambahkan ke daftar pelanggan saat invoice dibuat.</li>
+      </ul>
+    </section>
+  {% else %}
+    <section class="panel">
+      <header><div><h2><span class="bb-bubble step">1</span> Barang atau jasa</h2><p>Baris yang sama untuk setiap pelanggan. Harga kosong pada produk memakai daftar harga masing-masing pelanggan.</p></div></header>
+      <div class="ib-lines" id="ib-lines">
+        <div class="ib-line ib-head" aria-hidden="true"><span>Barang (SKU) atau jasa</span><span>Jumlah</span><span>Harga</span><span>Diskon</span><span></span></div>
+        {% for line in lines %}<div class="ib-line">
+          <label class="field"><span class="ib-sm">Barang (SKU) atau jasa</span><input name="item[]" list="ib-products" value="{{ line.item }}" placeholder="SKU atau nama jasa" autocomplete="off"></label>
+          <label class="field"><span class="ib-sm">Jumlah</span><input name="qty[]" inputmode="decimal" value="{{ line.qty|default:'1' }}"></label>
+          <label class="field"><span class="ib-sm">Harga</span><input name="price[]" inputmode="numeric" data-rupiah value="{{ line.price }}" placeholder="daftar harga"></label>
+          <label class="field"><span class="ib-sm">Diskon</span><input name="line_discount[]" inputmode="numeric" data-rupiah value="{{ line.discount }}" placeholder="0"></label>
+          <button type="button" class="btn ib-del" aria-label="Hapus baris" data-no-loading><span aria-hidden="true">×</span></button>
+        </div>{% endfor %}
+      </div>
+      <div class="form-actions-bar" style="justify-content:flex-start"><button type="button" class="btn" id="ib-add">{% icon "plus" %} Tambah baris</button></div>
+      <datalist id="ib-products">{% for sku, name, price in products %}<option value="{{ sku }}">{{ name }} · {{ price|rp }}</option>{% endfor %}</datalist>
+    </section>
+
+    <section class="panel">
+      <header><div><h2><span class="bb-bubble step">2</span> Pelanggan</h2><p>Centang pelanggan yang ditagih. Satu invoice per pelanggan.</p></div>
+        <span class="bb-pill" id="ib-count">{{ chosen|length }} dipilih</span></header>
+      <div class="toolbar"><input type="search" id="ib-find" placeholder="Cari nama, perusahaan, atau nomor…" aria-label="Cari pelanggan" style="flex:1;min-width:200px">
+        <button type="button" class="btn" id="ib-all" data-no-loading>Pilih yang tampil</button><button type="button" class="btn" id="ib-none" data-no-loading>Kosongkan</button></div>
+      <div class="ib-people" id="ib-people">{% for c in customers %}
+        <label class="ib-person" data-find="{{ c.name|lower }} {{ c.company_name|lower }} {{ c.phone }}"><input type="checkbox" name="customer[]" value="{{ c.id }}"{% if c.id|stringformat:"s" in chosen %} checked{% endif %}>
+          <span><b>{{ c.name }}</b><small>{% if c.company_name %}{{ c.company_name }} · {% endif %}{% if c.payment_terms_days is not None %}termin {{ c.payment_terms_days }} hari{% else %}tanpa termin{% endif %}</small></span></label>
+      {% empty %}<div class="empty-box"><strong>Belum ada pelanggan</strong>Tambahkan pelanggan dulu, atau pakai Tempel dari Excel yang menambahkan nama baru.</div>{% endfor %}</div>
+    </section>
+
+    <section class="panel">
+      <header><div><h2><span class="bb-bubble step">3</span> Tanggal</h2><p>Jatuh tempo kosong: termin pembayaran masing-masing pelanggan.</p></div></header>
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <label class="field"><span>Tanggal invoice</span><input type="date" name="issued_on" value="{{ post.issued_on|default:today }}"></label>
+        <label class="field"><span>Jatuh tempo <em>(opsional)</em></span><input type="date" name="due_date" value="{{ post.due_date }}"></label>
+        <label class="field"><span>Referensi <em>(opsional)</em></span><input name="reference" maxlength="100" value="{{ post.reference }}" placeholder="Iuran November 2026"></label>
+      </div>
+    </section>
+  {% endif %}
+  </div>
+
+  <aside class="bb-summary ib-rail">
+    <h2>Pengaturan</h2>
+    {% if is_pkp %}<label class="ib-check"><input type="checkbox" name="prices_include_tax" value="1"{% if post.prices_include_tax == "1" %} checked{% endif %}><span>Harga sudah termasuk PPN</span></label>{% endif %}
+    {% if warehouses %}<label class="field"><span>Jual dari gudang</span><select name="warehouse"><option value="">Semua gudang (urut prioritas)</option>{% for w in warehouses %}<option value="{{ w.pk }}"{% if post.warehouse == w.pk|stringformat:"s" %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
+    {% if may_override_credit %}<label class="ib-check"><input type="checkbox" name="credit_override" value="1"{% if post.credit_override == "1" %} checked{% endif %}><span>Setujui melewati batas kredit</span></label>{% endif %}
+    <p class="dp-help">Semua invoice dicatat belum dibayar (piutang). Catat pembayarannya lewat Terima pembayaran. Paling banyak {{ max_invoices }} invoice sekali buat.</p>
+    {% if summary %}<div class="ib-sum">
+      <div><span>Invoice</span><b>{{ summary.count }}</b></div>
+      <div><span>Siap dibuat</span><b>{{ summary.ready }}</b></div>
+      {% if summary.bad %}<div class="bad"><span>Perlu diperbaiki</span><b>{{ summary.bad }}</b></div>{% endif %}
+      <div class="total"><span>Total tagihan</span><b>{{ summary.total|rp }}</b></div>
+    </div>{% endif %}
+    <button class="btn{% if not summary or summary.bad %}-primary{% endif %}" name="action" value="preview" id="ib-check">{% icon "search" %} Periksa</button>
+    {% if summary and not summary.bad %}<button class="btn-primary" name="action" value="create" data-confirm="Buat {{ summary.count }} invoice dengan total {{ summary.total|rp }}?{% if summary.new_customers %} {{ summary.new_customers|length }} pelanggan baru ditambahkan.{% endif %}" data-confirm-ok="Buat invoice" data-confirm-tone="neutral" id="ib-make">{% icon "check" %} Buat {{ summary.count }} invoice</button>
+    <p class="dp-help" id="ib-stale" hidden>Isian berubah: periksa lagi sebelum membuat invoice.</p>{% endif %}
+  </aside>
+</form>
+
+{% if plans %}
+<section class="panel">
+  <header><div><h2>Pratinjau</h2><p>{% if summary.bad %}Perbaiki baris yang ditandai, lalu periksa lagi. Tidak ada invoice yang dibuat sebelum semuanya benar.{% else %}Semua invoice siap. Tekan "Buat {{ summary.count }} invoice" untuk membuatnya.{% endif %}</p></div></header>
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Ref</th><th>Pelanggan</th><th>Tanggal</th><th>Jatuh tempo</th><th>Isi</th><th class="num">DPP</th><th class="num">PPN</th><th class="num">Total</th><th>Status</th></tr></thead>
+    <tbody>{% for p in plans %}<tr>
+      <td style="white-space:nowrap">{{ p.reference|default:"—" }}</td>
+      <td><b>{{ p.buyer_name|default:"—" }}</b>{% if p.new_customer %} <span class="pill pill-info">baru</span>{% endif %}</td>
+      <td>{{ p.issued_on|date:"d M Y" }}</td>
+      <td>{{ p.due_date|date:"d M Y"|default:"Saat diterima" }}</td>
+      <td>{% for line in p.lines %}<div class="ib-item">{{ line.qty|floatformat:"-2" }} × {% if line.product %}{{ line.product.name }}{% else %}{{ line.description }}{% endif %}</div>{% endfor %}</td>
+      <td class="num">{% if p.ok %}{{ p.subtotal|rp }}{% endif %}</td>
+      <td class="num">{% if p.ok %}{{ p.tax|rp }}{% endif %}</td>
+      <td class="num"><b>{% if p.ok %}{{ p.total|rp }}{% endif %}</b></td>
+      <td>{% if p.ok %}<span class="pill pill-paid">siap</span>{% else %}<span class="pill pill-overdue">perbaiki</span>{% for e in p.errors %}<div class="ib-err">{{ e }}</div>{% endfor %}{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="dp-help" style="padding:0 20px 16px">Stok dan batas kredit diperiksa lagi saat invoice dibuat.</p>
+</section>
+{% endif %}
+
+<script>
+(function () {
+  var main = document.querySelector("main");
+  var lines = main.querySelector("#ib-lines");
+  if (lines) {
+    var add = main.querySelector("#ib-add");
+    add.addEventListener("click", function () {
+      var rows = lines.querySelectorAll(".ib-line:not(.ib-head)");
+      var copy = rows[rows.length - 1].cloneNode(true);
+      copy.querySelectorAll("input").forEach(function (input) { input.value = input.name === "qty[]" ? "1" : ""; });
+      lines.appendChild(copy);
+      copy.querySelector("input").focus();
+    });
+    lines.addEventListener("click", function (event) {
+      var del = event.target.closest(".ib-del");
+      if (!del) return;
+      var rows = lines.querySelectorAll(".ib-line:not(.ib-head)");
+      var row = del.closest(".ib-line");
+      if (rows.length > 1) row.remove(); else row.querySelectorAll("input").forEach(function (i) { i.value = i.name === "qty[]" ? "1" : ""; });
+    });
+  }
+  var make = main.querySelector("#ib-make");
+  if (make) {   // a change after the preview: the count and total shown are no longer what would be made
+    var stale = function () {
+      make.hidden = true;
+      main.querySelector("#ib-stale").hidden = false;
+      main.querySelector("#ib-check").className = "btn-primary";
+    };
+    make.form.addEventListener("input", function (event) { if (event.target.id !== "ib-find") stale(); });
+    make.form.addEventListener("click", function (event) { if (event.target.closest("#ib-add, .ib-del, #ib-all, #ib-none")) stale(); });
+  }
+  var people = main.querySelector("#ib-people");
+  if (people) {
+    var count = main.querySelector("#ib-count");
+    var boxes = function () { return people.querySelectorAll("input[type=checkbox]"); };
+    var recount = function () {
+      var n = 0; boxes().forEach(function (b) { if (b.checked) n++; });
+      count.textContent = n + " dipilih";
+    };
+    people.addEventListener("change", recount);
+    main.querySelector("#ib-find").addEventListener("input", function (event) {
+      var words = event.target.value.toLowerCase().trim().split(/\s+/);
+      people.querySelectorAll(".ib-person").forEach(function (row) {
+        var text = row.dataset.find;
+        row.hidden = !words.every(function (w) { return text.indexOf(w) !== -1; });
+      });
+    });
+    main.querySelector("#ib-all").addEventListener("click", function () {
+      people.querySelectorAll(".ib-person:not([hidden]) input").forEach(function (b) { b.checked = true; }); recount();
+    });
+    main.querySelector("#ib-none").addEventListener("click", function () {
+      boxes().forEach(function (b) { b.checked = false; }); recount();
+    });
+  }
+})();
+</script>
+{% endblock %}

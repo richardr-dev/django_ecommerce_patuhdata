@@ -26,8 +26,10 @@ def next_number(store, order_date):
 
 
 @transaction.atomic
-def create_po(store, *, supplier, lines, order_date, expected_on=None, notes="", actor=None):
-    """``lines``: dicts with sku, qty (whole units), unit_cost."""
+def create_po(store, *, supplier, lines, order_date, expected_on=None, notes="", actor=None, warehouse=None):
+    """``lines``: dicts with sku, qty (whole units), unit_cost. ``warehouse`` is where the goods are going."""
+    if warehouse is not None and (warehouse.store_id != store.pk or not warehouse.is_active):
+        raise PurchaseError("Gudang tujuan bukan gudang aktif perusahaan ini.")
     if not lines:
         raise PurchaseError("Tambahkan minimal satu barang.")
     if expected_on and expected_on < order_date:
@@ -42,12 +44,18 @@ def create_po(store, *, supplier, lines, order_date, expected_on=None, notes="",
             raise PurchaseError(f"Jumlah {product.name} harus bilangan bulat lebih dari nol.")
         if cost < 0:
             raise PurchaseError("Harga tidak boleh negatif.")
-        resolved.append((product, variant, int(qty), cost))
+        # ordered per dus: counted and priced per pcs
+        from apps.catalog.units import factor, per_base
+        unit = (line.get("unit") or "").strip()[:20]
+        unit_factor = factor(product, unit) if variant is None else 1
+        resolved.append((product, variant, int(qty) * unit_factor, per_base(cost, unit_factor),
+            unit if unit_factor > 1 else "", unit_factor))
     po = PurchaseOrder.objects.create(store=store, supplier=supplier, number=next_number(store, order_date),
-        order_date=order_date, expected_on=expected_on, notes=notes, created_by=actor)
+        order_date=order_date, expected_on=expected_on, notes=notes, warehouse=warehouse, created_by=actor)
     PurchaseOrderLine.objects.bulk_create(PurchaseOrderLine(po=po, product=product, variant=variant,
         description=f"{product.name} · {variant.name}" if variant else product.name, quantity=qty,
-        unit_cost=cost) for product, variant, qty, cost in resolved)
+        unit_cost=cost, unit_name=unit, unit_factor=unit_factor)
+        for product, variant, qty, cost, unit, unit_factor in resolved)
     return po
 
 
@@ -86,9 +94,10 @@ def refresh_status(po):
 
 
 @transaction.atomic
-def receive_po(po, *, quantities, received_on, number="", warehouse=None, notes="", actor=None):
+def receive_po(po, *, quantities, received_on, number="", warehouse=None, notes="", actor=None, lots=None):
     """Receive part (or all) of a purchase order. ``quantities`` maps a PO line id to the units that
-    arrived; lines at zero are left out. Returns the goods receipt."""
+    arrived; lines at zero are left out. ``lots`` maps a line id to ``(lot code, expiry date)`` for
+    lot-tracked products. Returns the goods receipt."""
     from .receipts import ReceiptError, create_receipt
     po = PurchaseOrder.objects.select_related("supplier").get(pk=po.pk)
     lines = []
@@ -96,7 +105,9 @@ def receive_po(po, *, quantities, received_on, number="", warehouse=None, notes=
         qty = quantities.get(line.pk, 0)
         if qty:
             sku = line.variant.sku if line.variant and line.variant.sku else line.product.sku
-            lines.append({"sku": sku, "qty": Decimal(qty), "unit_cost": line.unit_cost, "po_line": line})
+            lot, expiry = (lots or {}).get(line.pk, ("", None))
+            lines.append({"sku": sku, "qty": Decimal(qty), "unit_cost": line.unit_cost, "po_line": line,
+                "lot": lot, "expiry": expiry})
     if not lines:
         raise PurchaseError("Isi jumlah yang diterima untuk minimal satu baris.")
     try:

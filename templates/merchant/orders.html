@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}{% load static %}{% block title %}Pesanan{% endblock %}{% block head_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}{% block content %}
+{% extends "merchant/base.html" %}{% load icons books %}{% load static %}{% block title %}Pesanan{% endblock %}{% block head_css %}<link rel="stylesheet" href="{% static 'css/orders.css' %}">{% endblock %}{% block content %}
 <section class="bb-hero ord-hero">
   <div class="ord-hero-text"><span class="bb-pill ord-eyebrow">Pesanan</span><h1>Pesanan &amp; pengiriman</h1><p>Cek pembayaran, kemas, lalu kirim. Satu tombol untuk setiap langkah.</p></div>
   <div class="ord-hero-actions">
@@ -11,7 +11,7 @@
   </div>
 </section>
 <div class="tiles ord-tiles">
-  <div class="tile accent"><span class="bb-bubble">{% icon "cash" %}</span><small>Penjualan hari ini</small><strong>Rp{{ kpi.revenue|floatformat:"0g" }}</strong><span class="sub">{{ kpi.orders }} pesanan masuk</span></div>
+  <div class="tile accent"><span class="bb-bubble">{% icon "cash" %}</span><small>Penjualan hari ini</small><strong>{{ kpi.revenue|rp }}</strong><span class="sub">{{ kpi.orders }} pesanan masuk</span></div>
   <div class="tile {% if kpi.to_check %}warn{% endif %}"><span class="bb-bubble {% if kpi.to_check %}warn{% endif %}">{% icon "clock" %}</span><small>Perlu dicek pembayarannya</small><strong>{{ kpi.to_check }}</strong><span class="sub">menunggu pembayaran / transfer</span></div>
   <div class="tile"><span class="bb-bubble">{% icon "truck" %}</span><small>Perlu dikemas &amp; dikirim</small><strong>{{ kpi.to_ship }}</strong><span class="sub">sudah dibayar, belum sampai</span></div>
 </div>

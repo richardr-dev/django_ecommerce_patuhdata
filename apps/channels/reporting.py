@@ -45,7 +45,7 @@ def _blank(channel):
 
 def sales_report(store, start, end, *, channel=None):
     orders = Order.objects.filter(store=store, created_at__date__range=(start, end)).exclude(
-        status__in=UNPAID)
+        status__in=UNPAID).exclude(order_type="opening")
     if channel:
         orders = orders.filter(channel=channel)
     rows = defaultdict(lambda: None)

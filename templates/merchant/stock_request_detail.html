@@ -5,9 +5,9 @@
 <div class="pg-head"><div><h1 class="dp-title">{{ doc.number }}</h1><p>{{ doc.from_warehouse.name }} → {{ doc.to_warehouse.name }} · diminta {{ doc.requested_by.username|default:"—" }} ·
   <span class="pill pill-{% if doc.status == 'received' %}paid{% elif doc.status == 'sent' %}info{% elif doc.status == 'requested' or doc.status == 'approved' %}pending{% else %}draft{% endif %}">{{ doc.get_status_display }}</span></p></div></div>
 <form method="post" data-unsaved>{% csrf_token %}<section class="panel"><header><h2>Barang</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Diminta</th><th class="num">Dikirim</th><th class="num">Diterima</th></tr></thead><tbody>
-  {% for l in lines %}<tr><td><b>{{ l.product.name }}</b><small>{{ l.product.sku }}</small></td><td class="num">{{ l.quantity }}</td>
-    <td class="num">{% if doc.status == 'approved' and can_send %}<input type="number" min="0" max="{{ l.quantity }}" name="send_{{ l.pk }}" value="{{ l.quantity }}" class="num" aria-label="Kirim {{ l.product.name }}">{% else %}{{ l.sent_quantity }}{% endif %}</td>
-    <td class="num">{% if doc.status == 'sent' and can_request %}<input type="number" min="0" max="{{ l.sent_quantity }}" name="recv_{{ l.pk }}" value="{{ l.sent_quantity }}" class="num" aria-label="Terima {{ l.product.name }}">{% else %}{{ l.received_quantity }}{% endif %}</td></tr>{% endfor %}
+  {% for l in lines %}<tr><td><b>{{ l.label }}</b><small>{% if l.variant %}{{ l.variant.sku }}{% else %}{{ l.product.sku }}{% endif %}</small></td><td class="num">{{ l.quantity }}</td>
+    <td class="num">{% if doc.status == 'approved' and can_send %}<input type="number" min="0" max="{{ l.quantity }}" name="send_{{ l.pk }}" value="{{ l.quantity }}" class="num" aria-label="Kirim {{ l.label }}">{% else %}{{ l.sent_quantity }}{% endif %}</td>
+    <td class="num">{% if doc.status == 'sent' and can_request %}<input type="number" min="0" max="{{ l.sent_quantity }}" name="recv_{{ l.pk }}" value="{{ l.sent_quantity }}" class="num" aria-label="Terima {{ l.label }}">{% else %}{{ l.received_quantity }}{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
   <footer style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap">
     {% if doc.status == 'requested' and can_approve %}<button class="btn-primary" name="action" value="approve">{% icon "check" %} Setujui</button><button class="btn btn-danger" name="action" value="reject" data-confirm="Tolak permintaan ini?" data-confirm-ok="Tolak">Tolak</button>{% endif %}

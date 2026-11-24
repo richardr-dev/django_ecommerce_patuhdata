@@ -210,5 +210,21 @@ def merchant_reminder_policy(request):
     return redirect("merchant-receivables")
 
 
+@login_required(login_url=LOGIN)
+@require_POST
+def merchant_credit_hold_policy(request):
+    """Tahan kredit (Piutang pelanggan): no new credit sale to a customer with an invoice N days late."""
+    store = _staff_store(request)
+    _require_roles(request, store, roles("sales.credit"))
+    policy = reminders.policy_for(store)
+    raw = request.POST.get("credit_hold_days", "").strip()
+    policy.credit_hold_days = int(raw) if request.POST.get("hold") and raw.isdigit() and int(raw) <= 365 else None
+    policy.save()
+    audit_log(store, request.user, "credit_hold.policy_updated", policy, days=policy.credit_hold_days)
+    messages.success(request, "Kredit ditahan untuk pelanggan dengan invoice terlambat lebih dari "
+        f"{policy.credit_hold_days} hari." if policy.credit_hold_days is not None else "Tahan kredit dimatikan.")
+    return redirect("merchant-receivables")
+
+
 def reminder_rows(invoice):
     return ReminderLog.objects.filter(invoice=invoice).order_by("-created_at")[:10]

@@ -1,0 +1,127 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penyesuaian stok baru{% endblock %}
+{% block content %}
+<nav class="text-xs text-blue-700"><a href="{% url 'merchant-stock-adjustments' %}">Penyesuaian stok</a> › Baru</nav>
+<div class="pg-head"><div><span class="pg-kicker">Persediaan</span><h1>Penyesuaian stok baru</h1>
+  <p>Pilih alasannya, lalu barang dan jumlahnya. Barang keluar dinilai pada harga pokok rata-rata; barang masuk pada harga pokok yang diisi.</p></div></div>
+
+<form method="post" data-unsaved class="dp-grid" id="sa-form">
+  {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Alasan</h2></div></header>
+      <div class="dp-card-body">
+        <div class="sa-reasons">{% for key, r in reasons.items %}<label class="sa-reason"><input type="radio" name="reason" value="{{ key }}" data-direction="{{ r.direction }}" {% if chosen_reason == key %}checked{% endif %} required>
+          <span><b>{{ r.label }}</b><small>{{ r.hint }}</small><em>{% if r.direction == "out" %}Stok berkurang{% elif r.direction == "in" %}Stok bertambah{% else %}Berkurang atau bertambah{% endif %} · akun {{ r.account }}</em></span></label>{% endfor %}</div>
+        <div class="field-row" style="margin-top:14px">
+          <label class="field"><span>Tanggal</span><input type="date" name="adjusted_on" value="{{ post.adjusted_on|default:today }}" max="{{ today }}" required></label>
+          {% if warehouses|length > 1 %}<label class="field"><span>Gudang</span><select name="warehouse">{% for w in warehouses %}<option value="{{ w.pk }}"{% if post.warehouse == w.pk|stringformat:"s" %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
+        </div>
+      </div></section>
+
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><div><h2>Barang</h2><p>Ketik nama atau SKU, atau pindai barcode. Produk bervarian dipilih per varian.</p></div></div></header>
+      <div><table class="editor sa-items"><thead><tr><th>Barang</th><th class="sa-sign">Arah</th><th class="num sa-qty">Jumlah</th><th class="num sa-cost">Harga pokok</th><th class="num sa-total">Nilai</th><th class="sa-x"></th></tr></thead>
+        <tbody id="sa-body">
+        {% for r in rows %}{% include "merchant/_stock_adjustment_row.html" with r=r %}{% empty %}{% include "merchant/_stock_adjustment_row.html" with r=blank %}{% endfor %}
+        </tbody></table></div>
+      <footer style="padding:12px 18px"><button type="button" class="btn" id="sa-add">{% icon "plus" %} Tambah barang</button></footer>
+    </section>
+
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">3</span><h2>Catatan</h2></div></header>
+      <div class="dp-card-body"><label class="field"><span>Keterangan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300" placeholder="mis. Kardus basah karena atap bocor">{{ post.notes }}</textarea></label></div></section>
+  </div>
+
+  <aside class="dp-rail">
+    <div class="bb-summary">
+      <small>Nilai penyesuaian</small><strong id="sa-total" style="display:block;font-size:32px;letter-spacing:-.02em">{{ 0|rp }}</strong>
+      <p class="dp-help" id="sa-effect" style="margin:10px 0 14px"></p>
+      <button class="btn-primary btn-block">{% icon "check" %} Bukukan penyesuaian</button>
+      <p class="dp-help" style="margin-top:10px">Stok dan jurnal Persediaan dicatat bersamaan. Penyesuaian tidak bisa diubah; bila salah, batalkan dan catat lagi.</p>
+    </div>
+  </aside>
+</form>
+
+<template id="sa-row">{% include "merchant/_stock_adjustment_row.html" with r=blank %}</template>
+<datalist id="sa-catalog">{% for item in catalog %}<option value="{{ item.sku }}">{{ item.name }}</option>{% endfor %}</datalist>
+{{ catalog|json_script:"sa-catalog-data" }}
+<script>
+(function () {
+  var form = document.getElementById("sa-form"), body = document.getElementById("sa-body");
+  var items = JSON.parse(document.getElementById("sa-catalog-data").textContent), bySku = {}, byName = {};
+  items.forEach(function (i) { bySku[i.sku.toLowerCase()] = i; byName[i.name.toLowerCase()] = i; });
+  function num(v) { return Number(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
+  function direction() { var r = form.querySelector("input[name=reason]:checked"); return r ? r.dataset.direction : "out"; }
+  function sign(row) { var d = direction(); return d === "out" ? -1 : d === "in" ? 1 : (row.querySelector(".sa-sign-input").value === "-" ? -1 : 1); }
+  function recalc() {
+    var total = 0, both = direction() === "both";
+    form.querySelectorAll(".sa-sign").forEach(function (c) { c.hidden = !both; });
+    body.querySelectorAll("tr").forEach(function (row) {
+      var s = sign(row), item = bySku[(row.querySelector(".sa-sku").value || "").trim().toLowerCase()];
+      var cost = row.querySelector(".cost-input");
+      // Units that leave are valued at the current average cost; only additions take a typed cost.
+      cost.readOnly = s < 0;
+      if (s < 0 && item) cost.value = item.cost ? Math.round(num(item.cost)).toLocaleString("id-ID") : "";
+      var value = s * num(row.querySelector(".qty-input").value) * num(cost.value);
+      row.querySelector(".line-total").textContent = pdMoney(value); total += value;
+    });
+    document.getElementById("sa-total").textContent = pdMoney(total);
+    document.getElementById("sa-effect").textContent = total < 0 ? "Persediaan berkurang, akun alasan bertambah." :
+      total > 0 ? "Persediaan bertambah." : "";
+  }
+  function pick(input) {
+    var key = input.value.trim(), row = input.closest("tr");
+    var item = bySku[key.toLowerCase()] || byName[key.toLowerCase()];
+    var label = row.querySelector(".sa-name");
+    label.textContent = item ? item.name + (item.cost ? "" : " · belum punya harga pokok") : (key ? "Tidak ada di katalog" : "");
+    label.classList.toggle("sa-missing", !item && !!key);
+    if (!item) return;
+    input.value = item.sku;
+    var cost = row.querySelector(".cost-input");
+    if (!num(cost.value) && item.cost) cost.value = Math.round(num(item.cost)).toLocaleString("id-ID");
+    recalc();
+  }
+  function addRow() {
+    body.appendChild(document.getElementById("sa-row").content.firstElementChild.cloneNode(true));
+    if (window.pdBindRupiah) window.pdBindRupiah(body);
+    recalc();
+    var last = body.lastElementChild.querySelector(".sa-sku"); if (last) last.focus();
+  }
+  form.addEventListener("change", function (e) {
+    if (e.target.classList.contains("sa-sku")) pick(e.target); else recalc();
+  });
+  body.addEventListener("input", recalc);
+  body.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target.classList.contains("sa-sku")) { e.preventDefault(); pick(e.target); addRow(); }
+  });
+  body.addEventListener("click", function (e) {
+    var b = e.target.closest(".remove-row");
+    if (b && body.querySelectorAll("tr").length > 1) { b.closest("tr").remove(); recalc(); }
+  });
+  document.getElementById("sa-add").addEventListener("click", addRow);
+  form.addEventListener("submit", function () {
+    body.querySelectorAll("tr").forEach(function (row) {
+      if (!row.querySelector(".sa-sku").value.trim() && body.querySelectorAll("tr").length > 1) row.remove();
+    });
+  });
+  body.querySelectorAll(".sa-sku").forEach(function (i) { if (i.value) pick(i); });
+  recalc();
+})();
+</script>
+<style>
+.sa-reasons{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.sa-reason{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:#F7FAFF;border:1px solid var(--ds-line);cursor:pointer}
+.sa-reason:has(input:checked){border-color:var(--ds-primary);box-shadow:0 0 0 2px rgba(11,111,184,.15);background:#fff}
+.sa-reason input{margin-top:3px}.sa-reason span{display:grid;gap:3px}.sa-reason small{color:var(--ds-muted);font-size:12px}
+.sa-reason em{font-style:normal;font-size:11px;color:var(--ds-primary);font-weight:600}
+.sa-name{display:block;margin-top:4px;font-size:12px;color:var(--ds-muted)}.sa-name.sa-missing{color:#C92A2A}
+.sa-items{table-layout:fixed;width:100%}.sa-items input,.sa-items select{width:100%;min-width:0}
+.sa-items .sa-sign{width:110px}.sa-items .sa-qty{width:84px}.sa-items .sa-cost{width:140px}.sa-items .sa-total{width:128px}.sa-items .sa-x{width:40px}
+.sa-items input[readonly]{background:var(--ds-frost,#eaf7fe);color:var(--ds-muted)}
+@media (max-width:640px){
+  .sa-items,.sa-items tbody{display:block}.sa-items thead{display:none}
+  .sa-items tbody tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px 10px;padding:12px 18px;border-bottom:1px solid #eef2f8}
+  .sa-items tbody td,.sa-items tbody td:first-child,.sa-items tbody td:last-child{padding:0;border:0;min-width:0}
+  .sa-items tbody td:first-child{grid-column:1 / -1}
+  .sa-items tbody td.sa-line{grid-column:1 / 3;text-align:right;font-size:13px}
+}
+</style>
+{% endblock %}

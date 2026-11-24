@@ -22,7 +22,7 @@ from apps.catalog.models import (
 from apps.shops.models import AuditLog, Store
 from apps.shops.tenancy import store_url
 
-from .models import ShippingMethod
+from .models import InventoryMovement, ShippingMethod
 
 
 def _setup_store(request):
@@ -80,7 +80,7 @@ def parse_import_rows(rows):
     return parsed
 
 
-def import_products(store, parsed):
+def import_products(store, parsed, *, actor=None):
     """Upsert products by SKU with a fixed number of queries per batch rather than per row.
     The store row lock serialises this with Product.save()'s SKU uniqueness check."""
     _lock_store(store.id)
@@ -136,19 +136,45 @@ def import_products(store, parsed):
     product_ids = dict(Product.objects.filter(store=store, sku__in=skus).values_list("sku", "id"))
     levels = {level.product_id: level for level in InventoryLevel.objects.select_for_update()
         .filter(warehouse=warehouse, product_id__in=product_ids.values())}
-    now, new_levels, changed_levels = timezone.now(), [], []
+    now, new_levels, changed_levels, before = timezone.now(), [], [], {}
     for row in parsed:
         product_id = product_ids[row["sku"]]
         level = levels.get(product_id)
         if level is None:
+            before[product_id] = 0
             new_levels.append(InventoryLevel(warehouse=warehouse, product_id=product_id,
                 on_hand=row["stock"]))
         else:
+            before[product_id] = level.on_hand
             level.on_hand, level.updated_at = max(row["stock"], level.reserved), now
             changed_levels.append(level)
     InventoryLevel.objects.bulk_create(new_levels, batch_size=BULK_BATCH_SIZE)
     InventoryLevel.objects.bulk_update(changed_levels, ["on_hand", "updated_at"],
         batch_size=BULK_BATCH_SIZE)
+    # Every stock change leaves a movement (the movement ledger must replay every level), like a
+    # manual edit on Kelola stok. Before the books start that is all (Saldo awal books the stock);
+    # afterwards the changes are Penyesuaian stok documents booked to Persediaan, so the import
+    # cannot put the shelf and the books apart.
+    from apps.accounting import stock_adjustments
+    changed = [level for level in InventoryLevel.objects.filter(warehouse=warehouse, product_id__in=before)
+        .select_related("product") if level.on_hand != before[level.product_id]]
+    sources = {}
+    if changed and stock_adjustments.books_started(store):
+        for reason, sign in (("opening", 1), ("correction", -1)):
+            picked = [level for level in changed if sign * (level.on_hand - before[level.product_id]) > 0]
+            if picked:
+                document = stock_adjustments.book_moved(store, warehouse=warehouse, reason=reason, actor=actor,
+                    notes="Impor produk (CSV)", lines=[{"product": level.product,
+                        "quantity": level.on_hand - before[level.product_id]} for level in picked])
+                sources.update({level.pk: str(document.pk) for level in picked})
+    movements = [InventoryMovement(store=store, inventory_level=level, kind="adjust",
+            quantity=abs(level.on_hand - before[level.product_id]), reason="Impor produk (CSV)",
+            actor=actor, previous_on_hand=before[level.product_id], new_on_hand=level.on_hand,
+            previous_reserved=level.reserved, new_reserved=level.reserved,
+            source_type="stock_adjustment" if level.pk in sources else "product_import",
+            source_id=sources.get(level.pk, ""))
+        for level in changed]
+    InventoryMovement.objects.bulk_create(movements, batch_size=BULK_BATCH_SIZE)
     return len(to_create), len(to_update)
 
 
@@ -211,7 +237,7 @@ def merchant_product_import(request):
                     raise ValueError(f"Maksimal {MAX_IMPORT_ROWS:,} produk per impor.".replace(",", "."))
                 parsed = parse_import_rows(rows)
                 with transaction.atomic():
-                    created, updated = import_products(store, parsed)
+                    created, updated = import_products(store, parsed, actor=request.user)
                     AuditLog.objects.create(store=store, actor=request.user, action="products.csv_imported",
                         object_type="Product", object_id="bulk", details={"created": created,
                             "updated": updated, "rows": len(rows)})

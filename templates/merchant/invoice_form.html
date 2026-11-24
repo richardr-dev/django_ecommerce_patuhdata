@@ -107,7 +107,7 @@
         </table>
       </div>
       <datalist id="catalog"></datalist>
-      <datalist id="units"><option value="pcs"><option value="unit"><option value="box"><option value="pak"><option value="lusin"><option value="kg"><option value="gram"><option value="liter"><option value="meter"><option value="set"><option value="paket"><option value="jam"><option value="hari"><option value="bulan"></datalist>
+      <datalist id="units"><option value="pcs"><option value="dus"><option value="unit"><option value="box"><option value="pak"><option value="lusin"><option value="kg"><option value="gram"><option value="liter"><option value="meter"><option value="set"><option value="paket"><option value="jam"><option value="hari"><option value="bulan"></datalist>
       <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
         {% if not locks %}<button type="button" id="add-line" class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100">+ Tambah baris</button>{% else %}<span></span>{% endif %}
         <p class="text-xs font-medium text-slate-500" id="stock-note"></p>
@@ -125,7 +125,7 @@
         <div class="flex justify-between text-blue-50"><span>Subtotal</span><span id="s-sub" class="font-semibold">Rp0</span></div>
         <div class="flex items-center justify-between gap-3 text-blue-50"><span>Diskon invoice</span>
           {% if locks %}<span class="font-semibold">{{ initial.discount|default:"0" }}</span>{% else %}<input name="discount" id="i-disc" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.discount }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
-        {% if vat_rate %}<div class="flex justify-between text-blue-50"><span>PPN {{ vat_rate|floatformat:"-2" }}%</span><span id="s-vat" class="font-semibold">Rp0</span></div>{% endif %}
+        {% if vat_rate %}<div class="flex justify-between text-blue-50"><span>PPN {{ vat_rate|floatformat:"-2" }}%<span id="s-vat-incl" hidden> (termasuk)</span></span><span id="s-vat" class="font-semibold">Rp0</span></div>{% endif %}
         <div class="flex items-center justify-between gap-3 text-blue-50"><span>Ongkos kirim</span>
           {% if locks %}<span class="font-semibold">{{ initial.shipping|default:"0" }}</span>{% else %}<input name="shipping" id="i-ship" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.shipping }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
       </div>
@@ -140,6 +140,17 @@
           {% else %}<select name="partner_id" id="f-partner" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Bukan penjualan ke mitra</option>{% for p in partners %}<option value="{{ p.id }}" data-name="{{ p.name }}" data-phone="{{ p.contact_phone }}" data-term="{{ p.payment_term_days }}"{% if initial.partner_id == p.id|stringformat:'s' or initial.partner_id == p.id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
           <small class="font-normal text-slate-400">Harga khusus mitra terisi otomatis (atur di Produk &rsaquo; Harga mitra).</small>{% endif %}</label>
         {% endif %}
+        {% if vat_rate and not locks %}
+        <label class="flex items-start gap-2.5 text-xs font-semibold text-slate-600"><input type="checkbox" name="prices_include_tax" value="1" id="f-incl" class="mt-0.5 h-4 w-4 rounded"{% if initial.prices_include_tax %} checked{% endif %}>
+          <span>Harga sudah termasuk PPN <span class="block font-normal text-slate-400">Harga dan diskon yang diketik sudah memuat PPN {{ vat_rate|floatformat:"-2" }}%. Sistem memisahkan DPP dan PPN; selisih sen masuk pembulatan.</span></span></label>
+        {% endif %}
+        {% if mode != 'edit' and warehouses %}
+        <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Jual dari gudang <span class="font-normal text-slate-400">(opsional)</span></span>
+          <select name="warehouse" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"><option value="">Otomatis (urutan prioritas gudang)</option>{% for w in warehouses %}<option value="{{ w.pk }}"{% if initial.warehouse == w.pk|stringformat:"s" %} selected{% endif %}>{{ w.name }}{% if w.is_outlet %} · outlet{% endif %}</option>{% endfor %}</select>
+          <small class="font-normal text-slate-400">Bila dipilih, stok hanya diambil dari gudang ini.</small></label>
+        {% elif mode == 'edit' and source.warehouse %}
+        <p class="text-xs text-slate-500">Dijual dari <b>{{ source.warehouse.name }}</b>: barang tambahan diambil dari gudang ini.</p>
+        {% endif %}
         {% if mode != 'edit' %}
         <div>
           <p class="mb-1.5 text-xs font-semibold text-slate-600">Pembayaran</p>
@@ -152,6 +163,8 @@
         <label id="due-wrap" class="grid gap-1.5 text-xs font-semibold text-slate-600" {% if mode != 'edit' and not initial.on_credit %}hidden{% endif %}{% if mode == 'edit' and not initial.on_credit and not initial.due_date %}hidden{% endif %}>Jatuh tempo
           <span class="flex gap-2"><select id="f-terms" aria-label="Termin" class="h-11 w-32 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for days, label in terms %}<option value="{{ days }}">{{ label }}</option>{% endfor %}</select>
           <input type="date" name="due_date" id="f-due" value="{{ initial.due_date|date:'Y-m-d' }}" class="h-11 min-w-0 flex-1 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500"></span></label>
+        <p id="credit-note" class="text-xs text-slate-500" hidden></p>
+        {% if may_override_credit %}<label id="credit-override" class="flex items-center gap-2 text-xs font-semibold text-slate-600"{% if not request.POST.credit_override %} hidden{% endif %}><input type="checkbox" name="credit_override" value="1"{% if request.POST.credit_override %} checked{% endif %} style="width:16px;height:16px;accent-color:var(--ds-primary)"> Setujui penjualan kredit ini (melewati batas / kredit ditahan)</label>{% endif %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Tanggal invoice<input type="date" name="issued_on" id="f-date" value="{{ initial.issued_on|date:'Y-m-d' }}" required class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
         {% if mode != 'edit' %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600">Channel penjualan<select name="channel" id="f-channel" class="h-11 rounded-xl border-0 bg-slate-50 px-3 text-sm font-normal ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500">{% for code, label in channels %}<option value="{{ code }}" {% if initial.channel == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
@@ -200,17 +213,19 @@
   var byLabel = {}, byId = {};
   var list = document.getElementById("catalog");
   catalog.forEach(function (p) {
-    var label = p.sku + " — " + p.name;
-    byLabel[label.toLowerCase()] = p; byId[p.id] = p;
+    var label = p.label || (p.sku + " — " + p.name);
+    byId[p.id] = p;
+    if (p.pick === false) return;   // sold through its sizes / colours, each listed on its own
+    byLabel[label.toLowerCase()] = p;
     var o = document.createElement("option"); o.value = label;
-    o.textContent = "Rp" + Math.round(p.price).toLocaleString("id-ID") + (p.stock === null ? "" : " · stok " + p.stock);
+    o.textContent = (window.pdMoney ? pdMoney(p.price) : "Rp" + Math.round(p.price).toLocaleString("id-ID")) + (p.stock === null ? "" : " · stok " + p.stock);
     list.appendChild(o);
   });
   function num(t) { t = String(t || "").replace(/\s/g, ""); if (!t) return 0;
     if (t.indexOf(",") > -1 && t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
     else if ((t.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(t)) t = t.replace(/\./g, ""); else t = t.replace(/,/g, "");
     return parseFloat(t) || 0; }
-  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}  // book currency
 
   /* ── optional columns, remembered per device ───────────────────────────── */
   var table = document.getElementById("lines"), KEY = "pd-invoice-columns";
@@ -276,8 +291,16 @@
   function hint(tr) {
     var id = tr.querySelector("[name='product[]']").value, h = tr.querySelector(".hint");
     var p = id && byId[id];
-    h.textContent = p ? (p.stock === null ? "Produk · stok tidak dilacak" : "Produk · stok tersedia " + p.stock) :
+    var kind = p && String(p.id).charAt(0) === "v" ? "Varian" : "Produk";
+    var sizes = p && p.units && p.units.length ? " · satuan " + [p.base || "pcs"].concat(p.units.map(function (u) {
+      return u.name + " (" + u.factor + ")"; })).join(", ") : "";
+    h.textContent = p ? (p.stock === null ? kind + " · stok tidak dilacak" : kind + " · stok tersedia " + p.stock + " " + (p.base || "pcs")) + sizes :
       (tr.querySelector(".item").value.trim() ? "Jasa / biaya lain (tanpa stok)" : "");
+  }
+  function unitFactor(p, tr) {   // base units in the unit typed on the row (a dus of 12: 12); catalog/units.py
+    var name = (tr.querySelector("[name='unit[]']").value || "").trim().toLowerCase();
+    var found = p && p.units ? p.units.filter(function (u) { return u.name.toLowerCase() === name; })[0] : null;
+    return found ? found.factor : 1;
   }
   var partnerEl = document.getElementById("f-partner");
   var activePartner = function () { return partnerEl ? partnerEl.value : ""; };
@@ -304,8 +327,8 @@
     });
     calc();
   }
-  function setAuto(price, p) {          // a price the system filled in: it follows the channel
-    price.value = Math.round(priceFor(p)).toLocaleString("id-ID"); price.dataset.auto = "1";
+  function setAuto(price, p) {          // a price the system filled in: it follows the channel and the unit
+    price.value = Math.round(priceFor(p) * unitFactor(p, price.closest("tr"))).toLocaleString("id-ID"); price.dataset.auto = "1";
   }
   function pick(tr) {
     var item = tr.querySelector(".item"), p = byLabel[item.value.trim().toLowerCase()];
@@ -316,6 +339,7 @@
       if (!price.value || num(price.value) === 0) setAuto(price, p);
       if (!qty.value) qty.value = 1;
       var code = tr.querySelector("[name='code[]']"); if (!code.value) code.value = p.sku;
+      if (p.units && p.units.length) applyCols(loadCols().concat(["unit"]));   // it can be sold per dus: show Satuan
     }
     hint(tr); calc();
   }
@@ -328,13 +352,18 @@
       tr.querySelector("[data-line]").textContent = q && p ? fmt(net) : "";
       sub += net;
       var prod = byId[tr.querySelector("[name='product[]']").value];
-      if (prod && prod.stock !== null && q > prod.stock) short.push(prod.name + " (butuh " + q + ", ada " + prod.stock + ")");
+      var units = prod ? q * unitFactor(prod, tr) : q;
+      if (prod && prod.stock !== null && units > prod.stock) short.push(prod.name + " (butuh " + units + ", ada " + prod.stock + ")");
     });
     var disc = num(document.getElementById("i-disc").value), ship = num(document.getElementById("i-ship").value);
-    var base = Math.max(sub - disc, 0), vat = Math.round(base * vatRate / 100);
+    var incl = document.getElementById("f-incl"), inclusive = !!(incl && incl.checked && vatRate);
+    var base = Math.max(sub - disc, 0), vat;
+    if (inclusive) { vat = Math.round(base - base * 100 / (100 + vatRate)); }   // PPN already inside the typed prices
+    else { vat = Math.round(base * vatRate / 100); }
     document.getElementById("s-sub").textContent = fmt(sub);
     var v = document.getElementById("s-vat"); if (v) v.textContent = fmt(vat);
-    document.getElementById("s-total").textContent = fmt(base + vat + ship);
+    var vi = document.getElementById("s-vat-incl"); if (vi) vi.hidden = !inclusive;
+    document.getElementById("s-total").textContent = fmt(inclusive ? base + ship : base + vat + ship);
     var note = document.getElementById("stock-note");
     note.textContent = short.length ? "⚠ Stok tidak cukup: " + short.join("; ") + ". Invoice akan ditolak." : "";
     note.style.color = short.length ? "#e11d48" : "";
@@ -348,6 +377,10 @@
         tr.querySelector("[data-disc]").value = Math.round(gross * num(e.target.value) / 100).toLocaleString("id-ID");
       } else if (e.target.matches("[data-disc]")) tr.querySelector("[data-pct]").value = "";
       if (e.target.matches("[data-price]")) delete e.target.dataset.auto;   // typed by hand: keep it
+      if (e.target.matches("[name='unit[]']")) {         // pcs → dus: a price the system chose follows the unit
+        var chosen = byId[tr.querySelector("[name='product[]']").value], cell = tr.querySelector("[data-price]");
+        if (chosen && cell.dataset.auto === "1") setAuto(cell, chosen);
+      }
       calc();
     });
     rows.addEventListener("change", function (e) { if (e.target.classList.contains("item")) pick(e.target.closest("tr")); });
@@ -356,6 +389,7 @@
     });
     document.getElementById("add-line").addEventListener("click", function () { addRow().querySelector(".item").focus(); });
     document.getElementById("inv-form").addEventListener("input", function (e) { if (e.target.id === "i-disc" || e.target.id === "i-ship") calc(); });
+    var inclBox = document.getElementById("f-incl"); if (inclBox) inclBox.addEventListener("change", calc);
     (initialLines.length ? initialLines : [{}, {}]).forEach(addRow);
     applyCols(loadCols());
     calc();
@@ -400,6 +434,29 @@
   terms.addEventListener("change", setDue);
   date.addEventListener("change", function () { if (!wrap.hidden && terms.value !== "0") setDue(); });
 
+  /* ── credit limit: shown when the chosen customer has one; the server decides ─ */
+  var creditNote = document.getElementById("credit-note"), creditOverride = document.getElementById("credit-override"), creditInfo = null;
+  function grandTotal() { var t = document.getElementById("s-total"); return t ? Number(String(t.textContent).replace(/[^0-9,-]/g, "").replace(",", ".")) || 0 : 0; }
+  function renderCredit() {
+    var credit = document.querySelector("input[name='payment_status'][value='credit']");
+    if (!creditInfo || !credit || !credit.checked) { creditNote.hidden = true; if (creditOverride) creditOverride.hidden = true; return; }
+    var limited = creditInfo.limit !== null, left = limited ? creditInfo.limit - creditInfo.owed : 0;
+    var over = !!creditInfo.hold || (limited && grandTotal() > left);
+    creditNote.hidden = false;
+    creditNote.className = "text-xs " + (over ? "font-semibold text-red-700" : "text-slate-500");
+    creditNote.textContent = creditInfo.hold ? "Kredit ditahan: " + creditInfo.hold + ". Jual tunai atau minta persetujuan." :
+      creditInfo.limit === 0 ? "Pelanggan ini hanya boleh membeli tunai." :
+      "Sisa batas kredit " + pdMoney(Math.max(left, 0)) + (over ? ": invoice ini melewatinya." : ".");
+    if (creditOverride) creditOverride.hidden = !over;
+  }
+  function showCredit(limit, owed, hold) {
+    creditInfo = (limit === null || limit === undefined) && !hold ? null :
+      {limit: limit === null || limit === undefined ? null : Number(limit), owed: Number(owed || 0), hold: hold || ""};
+    renderCredit();
+  }
+  payRadios.forEach(function (r) { r.addEventListener("change", renderCredit); });
+  document.getElementById("inv-form").addEventListener("input", renderCredit);
+
   /* ── customer picker and quick add ─────────────────────────────────────── */
   var q = document.getElementById("cust-q"), box = document.getElementById("cust-results"), timer;
   function applyTerms(days) {   // the customer's payment terms: credit, due in N days
@@ -416,6 +473,7 @@
     activeList = c.price_list_id || ""; repriceAuto();
     if (activeList && priceLists[activeList] && window.pdToast) window.pdToast("Daftar harga " + priceLists[activeList].name + " dipakai.", "success");
     applyTerms(c.payment_terms_days);
+    showCredit(c.credit_limit, c.credit_owed, c.credit_hold);
     document.getElementById("f-name").value = c.name || "";
     document.getElementById("f-company").value = c.company_name || "";
     document.getElementById("f-npwp").value = c.npwp || "";

@@ -13,7 +13,7 @@ from django.db.models import Sum
 from apps.accounting.ledger import INPUT_VAT, VAT
 from apps.accounting.models import Bill, Expense, JournalLine
 
-from .models import CreditNote, Invoice
+from .models import CreditNote, CustomerReceipt, Invoice, InvoicePayment
 
 ZERO = Decimal(0)
 LOOKBACK_MONTHS = 24
@@ -79,6 +79,12 @@ def worksheet(store, year, month):
         ).exclude(status__in=[Bill.STATUS_VOID, Bill.STATUS_DRAFT]).select_related("supplier")
     expenses = Expense.objects.filter(store=store, date__gte=first, date__lte=last, input_vat__gt=0,
         approval_pending=False)
+    # Uang muka kena PPN: its faktur counts in the month the money came in; the PPN is taken off again
+    # in the month the advance pays an invoice (that invoice's faktur lists the uang muka as already taxed).
+    advances = CustomerReceipt.objects.filter(store=store, date__gte=first, date__lte=last, deposit_vat__gt=0,
+        voided=False).order_by("date", "number")
+    advances_used = InvoicePayment.objects.filter(invoice__store=store, paid_on__gte=first, paid_on__lte=last,
+        vat_settled__gt=0).exclude(invoice__status=Invoice.STATUS_VOID).select_related("invoice").order_by("paid_on")
     dpp_out = sales.aggregate(t=Sum("tax_base"))["t"] or ZERO
     dpp_returns = credits.aggregate(t=Sum("subtotal"))["t"] or ZERO
     due_next = (last + datetime.timedelta(days=1)).replace(day=1)
@@ -95,5 +101,5 @@ def worksheet(store, year, month):
         "carry_in": carry, "to_pay": position if position > 0 else ZERO,
         "overpaid": -position if position < 0 else ZERO, "dpp_out": dpp_out, "dpp_returns": dpp_returns,
         "sales": itemised, "digunggung": digunggung, "credits": credits, "purchases": purchases,
-        "expenses": expenses, "deadline": deadline,
+        "expenses": expenses, "deadline": deadline, "advances": advances, "advances_used": advances_used,
         "missing_npwp": sum(1 for invoice in itemised if not invoice.buyer_npwp)}

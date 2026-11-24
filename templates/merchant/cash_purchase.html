@@ -1,0 +1,128 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Beli tunai{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-bills' %}">Pembelian</a></span><h1>Beli tunai</h1>
+  <p>Belanja barang dagang yang langsung dibayar, misalnya di pasar atau grosir. Sekali simpan: barang masuk stok, harga pokok ikut dihitung, dan kas berkurang.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-bill-new' %}">Beli dengan tempo (tagihan)</a></div></div>
+
+<form method="post" enctype="multipart/form-data" data-unsaved class="dp-grid" id="cp-form">
+  {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+  <div class="space-y-5">
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Beli dari siapa</h2></div></header>
+      <div class="dp-card-body">
+        <div class="field-row">
+          <label class="field"><span>Supplier</span>
+            <select name="supplier_id" id="cp-supplier"><option value="">— Pilih supplier —</option>{% for s in suppliers %}<option value="{{ s.id }}"{% if post.supplier_id == s.id|stringformat:"s" %} selected{% endif %}>{{ s.name }}</option>{% endfor %}<option value="new"{% if post.supplier_id == "new" or not suppliers %} selected{% endif %}>+ Supplier baru…</option></select></label>
+          <label class="field" id="cp-new-supplier"{% if suppliers and post.supplier_id != "new" %} hidden{% endif %}><span>Nama supplier</span><input type="text" name="supplier_name" maxlength="160" value="{{ post.supplier_name }}" placeholder="mis. Toko Grosir Sinar"></label>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>Tanggal beli</span><input type="date" name="purchase_date" value="{{ post.purchase_date|default:today }}" max="{{ today }}" required></label>
+          <label class="field"><span>Dibayar dari</span><select name="bank_account">{% for b in banks %}<option value="{{ b.pk }}"{% if post.bank_account == b.pk|stringformat:"s" %} selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
+          {% if warehouses %}<label class="field"><span>Masuk ke gudang</span><select name="warehouse">{% for w in warehouses %}<option value="{{ w.pk }}"{% if post.warehouse == w.pk|stringformat:"s" %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
+          <label class="field"><span>No. nota <em>(opsional)</em></span><input type="text" name="number" maxlength="40" value="{{ post.number }}" placeholder="Nomor di nota toko"></label>
+        </div>
+      </div></section>
+
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><div><h2>Barang yang dibeli</h2><p>Ketik nama, SKU, atau pindai barcode. Harga terisi dari harga pokok terakhir; ubah sesuai nota.</p></div></div></header>
+      <div><table class="editor cp-items"><thead><tr><th>Barang</th><th class="num cp-qty">Jumlah</th><th class="num cp-price">Harga satuan</th><th class="num cp-total">Total</th><th class="cp-x"></th></tr></thead>
+        <tbody id="cp-body">
+        {% for r in rows %}{% include "merchant/_cash_purchase_row.html" with r=r %}{% empty %}{% include "merchant/_cash_purchase_row.html" with r=blank %}{% endfor %}
+        </tbody></table></div>
+      <footer style="padding:12px 18px"><button type="button" class="btn" id="cp-add">{% icon "plus" %} Tambah barang</button></footer>
+    </section>
+
+    <section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">3</span><h2>Nota dan catatan</h2></div></header>
+      <div class="dp-card-body">
+        <label class="field"><span>Foto nota <em>(opsional, JPG/PNG/WebP/PDF, maks. 5 MB)</em></span><input type="file" name="nota" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment"></label>
+        <label class="field"><span>Catatan <em>(opsional)</em></span><textarea name="notes" rows="2" maxlength="300">{{ post.notes }}</textarea></label>
+      </div></section>
+  </div>
+
+  <aside class="dp-rail">
+    <div class="bb-summary">
+      <small>Total dibayar</small><strong id="cp-total" style="display:block;font-size:32px;letter-spacing:-.02em">{{ 0|rp }}</strong>
+      <dl style="margin:14px 0;display:grid;gap:8px;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><dt>Barang</dt><dd id="cp-subtotal" style="margin:0">{{ 0|rp }}</dd></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><dt><label for="cp-tax">PPN di nota</label></dt><dd style="margin:0"><input type="text" name="tax" id="cp-tax" data-rupiah inputmode="numeric" value="{{ post.tax|default:'0' }}" class="num" style="width:120px"></dd></div>
+      </dl>
+      <button class="btn-primary btn-block">{% icon "check" %} Simpan pembelian</button>
+      <p class="dp-help" style="margin-top:10px">Tercatat sebagai tagihan supplier yang langsung lunas, lengkap dengan jurnal Persediaan dan kas.</p>
+    </div>
+  </aside>
+</form>
+
+<template id="cp-row">{% include "merchant/_cash_purchase_row.html" with r=blank %}</template>
+<datalist id="cp-catalog">{% for item in catalog %}<option value="{{ item.sku }}">{{ item.name }}</option>{% endfor %}</datalist>
+{{ catalog|json_script:"cp-catalog-data" }}
+<script>
+(function () {
+  var form = document.getElementById("cp-form"), body = document.getElementById("cp-body");
+  var items = JSON.parse(document.getElementById("cp-catalog-data").textContent), bySku = {}, byCode = {}, byName = {};
+  items.forEach(function (i) { bySku[i.sku.toLowerCase()] = i; if (i.barcode) byCode[i.barcode] = i; byName[i.name.toLowerCase()] = i; });
+  function num(v) { return Number(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
+  function fmt(n) { return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function recalc() {
+    var sub = 0;
+    body.querySelectorAll("tr").forEach(function (row) {
+      var total = num(row.querySelector(".qty-input").value) * num(row.querySelector(".price-input").value);
+      row.querySelector(".line-total").textContent = fmt(total); sub += total;
+    });
+    document.getElementById("cp-subtotal").textContent = fmt(sub);
+    document.getElementById("cp-total").textContent = fmt(sub + num(document.getElementById("cp-tax").value));
+  }
+  function pick(input) {
+    var key = input.value.trim(), row = input.closest("tr");
+    var item = bySku[key.toLowerCase()] || byCode[key] || byName[key.toLowerCase()];
+    row.querySelector(".cp-name").textContent = item ? item.name : (key ? "Tidak ada di katalog" : "");
+    row.querySelector(".cp-name").classList.toggle("cp-missing", !item && !!key);
+    if (!item) return;
+    input.value = item.sku;
+    row.querySelector(".cp-desc").value = item.name;
+    var price = row.querySelector(".price-input");
+    if (!num(price.value) && num(item.cost)) { price.value = Math.round(num(item.cost)).toLocaleString("id-ID"); }
+    recalc();
+  }
+  function addRow() {
+    body.appendChild(document.getElementById("cp-row").content.firstElementChild.cloneNode(true));
+    if (window.pdBindRupiah) window.pdBindRupiah(body);
+    var last = body.lastElementChild.querySelector(".cp-sku"); if (last) last.focus();
+  }
+  body.addEventListener("input", recalc);
+  body.addEventListener("change", function (e) { if (e.target.classList.contains("cp-sku")) pick(e.target); });
+  body.addEventListener("keydown", function (e) {
+    // A barcode scanner ends with Enter: resolve the item and go to the next row instead of submitting.
+    if (e.key === "Enter" && e.target.classList.contains("cp-sku")) { e.preventDefault(); pick(e.target); addRow(); }
+  });
+  body.addEventListener("click", function (e) {
+    var b = e.target.closest(".remove-row");
+    if (b && body.querySelectorAll("tr").length > 1) { b.closest("tr").remove(); recalc(); }
+  });
+  document.getElementById("cp-add").addEventListener("click", addRow);
+  document.getElementById("cp-tax").addEventListener("input", recalc);
+  document.getElementById("cp-supplier").addEventListener("change", function () {
+    document.getElementById("cp-new-supplier").hidden = this.value !== "new";
+  });
+  form.addEventListener("submit", function () {
+    // Drop the empty last row a scanner leaves behind.
+    body.querySelectorAll("tr").forEach(function (row) {
+      if (!row.querySelector(".cp-sku").value.trim() && body.querySelectorAll("tr").length > 1) row.remove();
+    });
+  });
+  body.querySelectorAll(".cp-sku").forEach(function (i) { if (i.value) pick(i); });
+  recalc();
+})();
+</script>
+<style>
+.cp-name{display:block;margin-top:4px;font-size:12px;color:var(--ds-muted)}.cp-name.cp-missing{color:#C92A2A}
+#cp-form .dp-card-body .field-row + .field-row,#cp-form .dp-card-body .field + .field{margin-top:14px}
+.cp-items{table-layout:fixed;width:100%}.cp-items input{width:100%;min-width:0}
+.cp-items .cp-qty{width:84px}.cp-items .cp-price{width:140px}.cp-items .cp-total{width:128px}.cp-items .cp-x{width:40px}
+@media (max-width:640px){
+  .cp-items,.cp-items tbody{display:block}.cp-items thead{display:none}
+  .cp-items tbody tr{display:grid;grid-template-columns:72px minmax(0,1fr) 32px;gap:8px 10px;padding:12px 18px;border-bottom:1px solid #eef2f8}
+  .cp-items tbody td,.cp-items tbody td:first-child,.cp-items tbody td:last-child{padding:0;border:0;min-width:0}
+  .cp-items tbody td:first-child{grid-column:1 / -1}
+  .cp-items tbody td.cp-line{grid-column:1 / 3;text-align:right;font-size:13px}
+}
+</style>
+{% endblock %}

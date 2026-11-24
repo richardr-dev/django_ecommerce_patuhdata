@@ -11,7 +11,7 @@
   <div class="tile"><small>Masuk</small><strong>{{ card.total_in }}</strong><span>unit</span></div><div class="tile"><small>Keluar</small><strong>{{ card.total_out }}</strong><span>unit</span></div></div>
 <section class="panel"><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Gudang</th><th>Jenis</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Saldo</th></tr></thead><tbody>
   <tr><td colspan="6"><b>Saldo awal</b></td><td class="num"><b>{{ card.opening }}</b></td></tr>
-  {% for r in card.rows %}<tr><td>{{ r.date|date:"d M Y" }}</td><td>{{ r.warehouse }}</td><td><span class="pill pill-info">{{ r.move.get_kind_display }}</span></td><td>{{ r.move.reason|truncatechars:60 }}</td>
+  {% for r in card.rows %}<tr><td>{{ r.date|date:"d M Y" }}</td><td>{{ r.warehouse }}</td><td><span class="pill pill-info">{{ r.move.get_kind_display }}</span></td><td>{% if r.url %}<a href="{{ r.url }}">{{ r.move.reason|truncatechars:60 }}</a>{% else %}{{ r.move.reason|truncatechars:60 }}{% endif %}</td>
     <td class="num">{% if r.in %}+{{ r.in }}{% endif %}</td><td class="num">{% if r.out %}−{{ r.out }}{% endif %}</td><td class="num"><b>{{ r.balance }}</b></td></tr>
   {% empty %}<tr><td colspan="7" class="!py-8 text-center text-slate-400">Tidak ada pergerakan pada periode ini.</td></tr>{% endfor %}</tbody></table></div></section>
 {% elif candidates %}<section class="panel"><header><h2>Maksud Anda?</h2></header><div class="dp-card-body">{% for c in candidates %}<a class="btn" href="?sku={{ c.sku }}">{{ c.name }} · {{ c.sku }}</a> {% endfor %}</div></section>{% endif %}

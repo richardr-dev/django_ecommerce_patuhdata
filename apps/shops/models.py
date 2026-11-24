@@ -85,7 +85,9 @@ class Store(models.Model):
     campaign_text = models.CharField(max_length=280, blank=True)
     campaign_button_label = models.CharField(max_length=40, blank=True)
     campaign_link_url = models.CharField(max_length=300, blank=True)
-    currency = models.CharField(max_length=3, default="IDR")
+    # The book currency (apps/shops/currency.py): every amount follows it; fixed once the books have an entry.
+    currency = models.CharField(max_length=3, default="IDR", choices=[("IDR", "Rupiah (IDR)"),
+        ("USD", "Dolar AS (USD)"), ("EUR", "Euro (EUR)")])
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     support_phone = models.CharField(max_length=30, blank=True)
     support_email = models.EmailField(blank=True)
@@ -259,6 +261,8 @@ class Customer(models.Model):
         help_text="Termin pembayaran (hari) untuk invoice kredit. Kosong: ditanyakan setiap kali.")
     price_list = models.ForeignKey("catalog.PriceList", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="customers", help_text="Daftar harga yang dipakai untuk pelanggan ini.")
+    credit_limit = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True,
+        help_text="Batas piutang untuk invoice kredit. Kosong: tanpa batas; 0: hanya tunai.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

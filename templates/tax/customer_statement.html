@@ -1,0 +1,60 @@
+{% load branding books %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Laporan rekening {{ customer.name }}</title>{% include "platform/favicon.html" %}
+{% brand store as b %}<style>
+  body { margin:0; background:#f3fafe; color:#012441; font:14px/1.5 Inter,system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+  .bar { max-width:860px; margin:16px auto 0; padding:0 16px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:end; gap:10px; }
+  .bar form { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
+  .bar label { display:grid; gap:4px; font-size:12px; font-weight:600; color:#5b7186; }
+  .bar input { height:38px; padding:0 12px; border:1px solid #d6e6f0; border-radius:12px; background:#fff; color:#012441; font:inherit; }
+  button { height:38px; padding:0 18px; border:0; border-radius:99px; background:{{ b.accent }}; color:#fff; font:650 13px Inter,system-ui,sans-serif; cursor:pointer; }
+  button.soft { background:#fff; color:{{ b.accent }}; box-shadow:inset 0 0 0 1px #d6e6f0; }
+  .sheet { max-width:860px; margin:12px auto 32px; background:#fff; padding:36px; border-radius:20px; box-shadow:0 10px 30px -18px rgba(11,111,184,.35),0 0 0 1px rgba(1,36,65,.05); box-sizing:border-box; }
+  header { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; border-bottom:3px solid {{ b.accent }}; padding-bottom:14px; }
+  h1 { margin:0; font-size:22px; letter-spacing:.04em; color:{{ b.accent }}; } header p { margin:2px 0 0; color:#5b7186; white-space:pre-line; font-size:13px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:20px 0; } h2 { margin:0 0 4px; color:#5b7186; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .grid p { margin:0; white-space:pre-line; }
+  .sum { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:0 0 18px; }
+  .sum div { padding:10px 12px; border-radius:12px; background:#f6fbfe; border:1px solid #d6e6f0; } .sum small { display:block; color:#5b7186; font-size:11px; } .sum b { font-size:15px; }
+  .sum .end { background:{{ b.accent }}12; border-color:{{ b.accent }}55; } .sum .end b { color:{{ b.accent }}; }
+  .scroll { overflow-x:auto; } table { width:100%; border-collapse:collapse; min-width:560px; }
+  th { background:{{ b.accent }}1a; color:{{ b.accent }}; font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:9px 8px; text-align:left; }
+  td { padding:9px 8px; border-bottom:1px solid #d6e6f0; vertical-align:top; } .n { text-align:right; white-space:nowrap; } small { color:#5b7186; font-size:12px; }
+  tr.open td { background:#f6fbfe; font-weight:600; } tr.close td { border-top:2px solid #012441; border-bottom:0; font-weight:800; }
+  .banks { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:6px; } .bank { padding:10px 12px; border-radius:12px; background:#f6fbfe; border:1px solid #d6e6f0; }
+  .note { margin-top:18px; color:#5b7186; font-size:12px; }
+  @media (max-width:640px) { .sheet { padding:20px; border-radius:16px; } .grid, .sum { grid-template-columns:1fr 1fr; } }
+  @media print { body { background:#fff; } .bar { display:none; } .sheet { box-shadow:none; margin:0; max-width:none; padding:0; border-radius:0; } .scroll { overflow:visible; } }
+</style></head>
+<body>
+<div class="bar">
+  <form method="get"><label>Dari<input type="date" name="dari" value="{{ s.start|date:'Y-m-d' }}"></label><label>Sampai<input type="date" name="sampai" value="{{ s.end|date:'Y-m-d' }}"></label><button class="soft">Tampilkan</button></form>
+  <button type="button" onclick="window.print()">Cetak / simpan PDF</button>
+</div>
+<main class="sheet">
+  <header><div><h1>LAPORAN REKENING PELANGGAN</h1><p>Periode {{ s.start|date:"d M Y" }} – {{ s.end|date:"d M Y" }} · dicetak {{ today|date:"d F Y" }}</p></div>
+    <div style="text-align:right">{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" style="max-height:52px;max-width:150px;object-fit:contain;margin-bottom:4px">{% endif %}{% if b.show_name or not b.logo_url %}<p><b>{{ b.name }}</b></p>{% endif %}<p>{{ b.address }}</p></div></header>
+  <section class="grid">
+    <div><h2>Kepada</h2><p><b>{% if customer.company_name and customer.company_name != customer.name %}{{ customer.company_name }} ({{ customer.name }}){% else %}{{ customer.name }}{% endif %}</b>{% if customer.address %}
+{{ customer.address }}{% endif %}{% if customer.phone %}
+Telp. {{ customer.phone }}{% endif %}{% if customer.npwp %}
+NPWP {{ customer.npwp }}{% endif %}</p></div>
+    <div><h2>Ringkasan</h2><p>Saldo awal adalah sisa tagihan sebelum {{ s.start|date:"d M Y" }}. Saldo akhir adalah jumlah yang masih harus dibayar per {{ s.end|date:"d M Y" }}.</p></div>
+  </section>
+  <div class="sum">
+    <div><small>Saldo awal</small><b>{{ s.opening|rp }}</b></div>
+    <div><small>Tagihan baru</small><b>{{ s.invoiced|rp }}</b></div>
+    <div><small>Pembayaran &amp; kredit</small><b>{{ s.received|rp }}</b></div>
+    <div class="end"><small>Saldo akhir</small><b>{{ s.closing|rp }}</b></div>
+  </div>
+  <div class="scroll"><table><thead><tr><th>Tanggal</th><th>Dokumen</th><th>Keterangan</th><th class="n">Tagihan</th><th class="n">Pembayaran</th><th class="n">Saldo</th></tr></thead><tbody>
+    <tr class="open"><td>{{ s.start|date:"d/m/Y" }}</td><td colspan="4">Saldo awal</td><td class="n">{{ s.opening|rp }}</td></tr>
+    {% for l in s.lines %}<tr><td>{{ l.date|date:"d/m/Y" }}</td><td><b>{{ l.number }}</b></td><td>{{ l.text }}</td><td class="n">{% if l.debit %}{{ l.debit|rp }}{% endif %}</td><td class="n">{% if l.credit %}{{ l.credit|rp }}{% endif %}</td><td class="n">{{ l.balance|rp }}</td></tr>
+    {% empty %}<tr><td colspan="6"><small>Tidak ada transaksi pada periode ini.</small></td></tr>{% endfor %}
+    <tr class="close"><td colspan="5">Saldo akhir per {{ s.end|date:"d M Y" }}</td><td class="n">{{ s.closing|rp }}</td></tr>
+  </tbody></table></div>
+  {% if s.credit_available > 0 %}<p class="note"><b>Kredit pelanggan tersedia {{ s.credit_available|rp }}</b> (uang muka atau kelebihan bayar) dapat dipakai untuk membayar tagihan berikutnya.</p>{% endif %}
+  {% if s.closing > 0 and banks %}<section style="margin-top:18px"><h2>Pembayaran ke</h2><div class="banks">{% for bk in banks %}<div class="bank">{{ bk.bank_name|default:bk.name }}<br><b>{{ bk.account_number }}</b><br><small>a.n. {{ bk.name }}</small></div>{% endfor %}</div></section>{% endif %}
+  <p class="note">Mohon hubungi kami bila ada perbedaan dengan catatan Anda.</p>
+  {% if b.footer %}<p class="note">{{ b.footer }}</p>{% endif %}
+</main></body></html>

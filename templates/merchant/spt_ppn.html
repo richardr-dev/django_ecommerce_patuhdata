@@ -33,6 +33,8 @@
   {% for i in w.sales %}<tr><td>{{ i.number }}</td><td>{{ i.issued_on|date:"d M Y" }}</td><td>{{ i.buyer_name }}</td><td class="num">{{ i.tax_base|rp }}</td><td class="num">{{ i.tax|rp }}</td></tr>
   {% empty %}{% if not w.digunggung.count %}<tr><td colspan="5" class="!py-8 text-center text-slate-400">Tidak ada penjualan ber-PPN bulan ini.</td></tr>{% endif %}{% endfor %}
   {% for c in w.credits %}<tr><td>{{ c.number }} <small>(retur)</small></td><td>{{ c.issued_on|date:"d M Y" }}</td><td>{{ c.buyer_name }}</td><td class="num">− {{ c.subtotal|rp }}</td><td class="num">− {{ c.tax|rp }}</td></tr>{% endfor %}
+  {% for r in w.advances %}<tr><td>{{ r.number }} <small>(uang muka)</small></td><td>{{ r.date|date:"d M Y" }}</td><td>{{ r.buyer_name }}</td><td class="num">{{ r.deposit_base|rp }}</td><td class="num">{{ r.deposit_vat|rp }}</td></tr>{% endfor %}
+  {% for p in w.advances_used %}<tr><td>{{ p.invoice.number }} <small>(dikurangi uang muka)</small></td><td>{{ p.paid_on|date:"d M Y" }}</td><td>{{ p.invoice.buyer_name }}</td><td class="num">—</td><td class="num">− {{ p.vat_settled|rp }}</td></tr>{% endfor %}
 </tbody></table></div></section>
 
 <section class="panel"><header><div><h2>PPN masukan</h2><p>Tagihan supplier dan biaya ber-PPN bulan ini.</p></div></header>

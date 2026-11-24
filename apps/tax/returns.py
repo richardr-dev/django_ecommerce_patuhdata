@@ -86,13 +86,16 @@ def settle_refund(ret, *, quantities, issued_on, excess_action="credit", bank_ac
             raise ReturnError(f"{order_line.name}: hanya {order_line.quantity} yang dibeli.")
         item = None
         for candidate in invoice.items.filter(product_id=order_line.product_id):
-            if candidate.quantity - credited_quantity(candidate) >= quantity:
+            # A return counts base units (pcs); a line sold per dus counts dus.
+            if quantity % candidate.unit_factor == 0 and \
+                    candidate.quantity - credited_quantity(candidate) >= quantity // candidate.unit_factor:
                 item = candidate
                 break
         if item is None:
             raise ReturnError(f"{order_line.name}: tidak ada sisa jumlah di invoice untuk "
-                f"dikembalikan {quantity} unit.")
-        lines.append({"item": item, "quantity": quantity, "restock": good,
+                f"dikembalikan {quantity} unit (baris yang dijual per dus hanya bisa diretur per dus utuh; "
+                "selebihnya lewat nota kredit).")
+        lines.append({"item": item, "quantity": quantity // item.unit_factor, "restock": good,
             "unit_price": money(item.line_total / item.quantity)})
     if not lines:
         raise ReturnError("Isi jumlah barang yang dikembalikan.")

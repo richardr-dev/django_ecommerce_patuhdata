@@ -1,4 +1,5 @@
 import csv
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django import forms
@@ -45,6 +46,7 @@ from .payouts import (
     unsettled_payments,
 )
 
+logger = logging.getLogger(__name__)
 VIEW_ROLES = roles("books.view")
 EDIT_ROLES = roles("books.edit")
 
@@ -275,7 +277,7 @@ def merchant_suppliers(request):
         _require_roles(request, store, EDIT_ROLES)
         name = request.POST.get("name", "").strip()[:160]
         if name:
-            sup, created = Supplier.objects.get_or_create(store=store, name=name, defaults={
+            _supplier, created = Supplier.objects.get_or_create(store=store, name=name, defaults={
                 "contact": request.POST.get("contact", "")[:120],
                 "phone": request.POST.get("phone", "")[:30],
                 "email": request.POST.get("email", "")[:254],
@@ -445,6 +447,7 @@ def merchant_bill_new(request):
             messages.success(request, f"Bill {number or str(bill.id)[:8]} berhasil dibuat.")
             return redirect("merchant-bill-detail", bill_id=bill.id)
         except Exception as exc:
+            logger.exception("bill create failed for store %s", store.pk)
             idempotency.release(store, "bill", idem)
             messages.error(request, f"Gagal: {exc}")
 

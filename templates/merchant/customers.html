@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load static icons %}{% block title %}Pelanggan{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
+{% extends "merchant/base.html" %}{% load static icons books %}{% block title %}Pelanggan{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
 
 {# ── Pending approval queue ──────────────────────────────────────────── #}
 {% if pending %}
@@ -10,7 +10,7 @@
       <td>{% if customer.channel_buyer %}<span class="pill pill-info">{{ customer.channel_buyer.get_platform_display }}</span>{% else %}—{% endif %}</td>
       <td>{% if customer.channel_buyer.city %}{{ customer.channel_buyer.city }}{% if customer.channel_buyer.province %}, {{ customer.channel_buyer.province }}{% endif %}{% else %}—{% endif %}</td>
       <td class="num">{% if customer.channel_buyer %}{{ customer.channel_buyer.order_count }}{% else %}—{% endif %}</td>
-      <td class="num">{% if customer.channel_buyer and customer.channel_buyer.total_spent %}Rp{{ customer.channel_buyer.total_spent|floatformat:"0g" }}{% else %}—{% endif %}</td>
+      <td class="num">{% if customer.channel_buyer and customer.channel_buyer.total_spent %}{{ customer.channel_buyer.total_spent|rp }}{% else %}—{% endif %}</td>
       <td class="num" data-no-row><form method="post" class="inline" style="display:inline-flex;gap:8px">{% csrf_token %}<input type="hidden" name="customer_id" value="{{ customer.id }}">
         <button type="submit" name="action" value="approve" class="btn btn-primary">Setujui</button>
         <button type="submit" name="action" value="block" class="btn">Blokir</button></form></td></tr>{% endfor %}

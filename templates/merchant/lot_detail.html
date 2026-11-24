@@ -1,0 +1,21 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Lot {{ lot.code }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-lots' %}">Lot &amp; kedaluwarsa</a> › <span>{{ lot.code }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">Lot {{ lot.code }}</h1>
+  <p class="dp-sub">{% if lot.variant %}{{ lot.product.name }} / {{ lot.variant.name }}{% else %}{{ lot.product.name }}{% endif %} · diterima {{ lot.received_on|date:"d M Y" }} · {% if lot.expiry_date %}kedaluwarsa {{ lot.expiry_date|date:"d M Y" }}{% if lot.expiry_date < today %} <span class="pill pill-fail">sudah lewat</span>{% endif %}{% else %}tanpa tanggal kedaluwarsa{% endif %}</p></div></div>
+<div class="tiles">
+  <div class="tile accent"><small>Masih ada</small><strong>{{ lot.quantity }}</strong><span>{{ lot.product.base_unit|default:"pcs" }}</span></div>
+  <div class="tile"><small>Diterima</small><strong>{{ lot.received_quantity }}</strong><span>{{ lot.product.base_unit|default:"pcs" }}</span></div>
+</div>
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+<section class="panel !mb-0"><header><div><h2>Ke mana lot ini pergi</h2><p>Setiap masuk dan keluar lot ini, dengan dokumennya. Dipakai untuk penarikan produk (recall).</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Kejadian</th><th>Dokumen</th><th class="num">Unit</th></tr></thead><tbody>
+  {% for row in moves %}<tr><td>{{ row.move.created_at|date:"d M Y H:i" }}</td><td>{% if row.movement %}{{ row.movement.get_kind_display }}<small style="display:block;color:var(--ds-muted)">{{ row.movement.reason }}</small>{% else %}{{ row.move.note }}{% endif %}</td>
+    <td>{% if row.url %}<a href="{{ row.url }}">Buka</a>{% else %}—{% endif %}</td><td class="num"><b>{% if row.move.quantity > 0 %}+{% endif %}{{ row.move.quantity }}</b></td></tr>
+  {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada pergerakan.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% if can_edit %}<section class="panel !mb-0"><header><h2>Tanggal kedaluwarsa</h2></header><form method="post" class="dp-card-body grid gap-3">{% csrf_token %}
+  <label class="field"><span>Kedaluwarsa</span><input type="date" name="expiry_date" value="{{ lot.expiry_date|date:'Y-m-d' }}"></label>
+  <button class="btn-primary justify-center">Simpan tanggal</button></form></section>{% endif %}
+</div>
+{% endblock %}

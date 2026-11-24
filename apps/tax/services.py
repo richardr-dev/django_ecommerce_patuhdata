@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.accounting.ledger import INPUT_VAT, VAT, account_balances, money
@@ -81,6 +82,7 @@ def _create_invoice_items(invoice, order):
         InvoiceItem.objects.create(
             invoice=invoice,
             product=item.product,
+            variant_id=item.variant_id,
             description=item.name[:text_width],
             sku=(item.sku or "")[:sku_width],
             quantity=item.quantity,
@@ -134,7 +136,7 @@ def issue_invoice(order):
 
 
 def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None, rounding=0,
-        cost_center=None):
+        cost_center=None, number=None):
     """Issue an invoice for any order regardless of payment gateway status.
     Used for manual orders, marketplace imports, and mitra sell-through.
 
@@ -150,7 +152,9 @@ def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None,
     profile = tax_profile(store)
     if issued_on is None:
         issued_on = timezone.localdate()
-    if number_series:
+    if number:
+        pass  # an invoice carried over from the old books keeps the number the buyer knows
+    elif number_series:
         from .numbering import next_number
         number = next_number(store, number_series, issued_on)
     else:
@@ -191,7 +195,7 @@ def issue_invoice_for_order(order, issued_on=None, notes="", number_series=None,
 
 
 def record_payment(invoice, amount, paid_on, method, reference="", note="", user=None,
-        bank_account=None, receipt=None, withheld=0):
+        bank_account=None, receipt=None, withheld=0, vat_settled=0):
     """Record a payment against an invoice, book it, and update the invoice status.
 
     `amount` is the money received; `withheld` is PPh the buyer kept back (bukti potong). Together they
@@ -221,7 +225,7 @@ def record_payment(invoice, amount, paid_on, method, reference="", note="", user
         payment = InvoicePayment.objects.create(
             invoice=invoice, paid_on=paid_on, amount=settles, withheld=withheld,
             method=method, reference=reference, note=note, recorded_by=user,
-            bank_account=bank_account, receipt=receipt,
+            bank_account=bank_account, receipt=receipt, vat_settled=vat_settled,
         )
         try:
             if booked_by_invoice(invoice):
@@ -265,6 +269,12 @@ class MonthlyTax:
     invoice_count: int
     over_umkm_limit: bool
     input_vat: Decimal = Decimal(0)  # PPN masukan on recorded expenses
+    marketplace_pph22: Decimal = Decimal(0)  # PPh 22 marketplaces collected on payouts this month (PMK 37/2025)
+
+    @property
+    def pph_to_deposit(self):
+        """PPh Final still to deposit: under PP 55 what a marketplace collected already settles part of it."""
+        return max(Decimal(0), self.pph - self.marketplace_pph22)
 
     @property
     def vat_payable(self):
@@ -273,8 +283,20 @@ class MonthlyTax:
 
 
 def _turnover(store, start, end):
-    return sum((account.balance for account in account_balances(store, start=start, end=end)
-        if account.type == "revenue"), Decimal(0))
+    """Peredaran bruto for PPh Final UMKM: sales revenue (the 4xxx accounts, net of returns and
+    discounts), never other income (7xxx: bank interest is already taxed at source, an asset sale
+    or a cash-drawer overage is not business turnover). The year-end closing entry is left out, or
+    December would show minus the whole year."""
+    return sum((account.balance for account in account_balances(store, start=start, end=end,
+        exclude_closing=True) if account.type == "revenue" and account.code.startswith("4")),
+        Decimal(0))
+
+
+def marketplace_pph22(store, start, end):
+    """PPh 22 marketplaces collected on the payouts released between ``start`` and ``end``."""
+    from apps.channels.models import ChannelOrderIncome
+    return ChannelOrderIncome.objects.filter(channel_order__channel__store=store, released_on__range=(start, end)
+        ).exclude(payout_reference="").aggregate(total=Sum("pph22"))["total"] or Decimal(0)
 
 
 def monthly_tax(store, year, month, profile=None):
@@ -296,4 +318,5 @@ def monthly_tax(store, year, month, profile=None):
         pph_base=pph_base, pph=money(max(Decimal(0), pph_base) * UMKM_RATE),
         pph_due=next_month_end.replace(day=15), vat=vat, vat_due=next_month_end,
         invoice_count=Invoice.objects.filter(store=store, issued_on__range=(start, end)).count(),
-        over_umkm_limit=before + turnover > UMKM_TURNOVER_LIMIT, input_vat=input_vat)
+        over_umkm_limit=before + turnover > UMKM_TURNOVER_LIMIT, input_vat=input_vat,
+        marketplace_pph22=marketplace_pph22(store, start, end))

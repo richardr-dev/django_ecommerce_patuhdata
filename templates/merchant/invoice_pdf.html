@@ -1,4 +1,4 @@
-{% load branding %}<!DOCTYPE html>
+{% load branding books %}<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -157,11 +157,11 @@
           {% if item.dimension %}<div class="item-dim">{{ item.dimension }}</div>{% endif %}{% if item.note %}<div class="item-dim">{{ item.note }}</div>{% endif %}
         </td>
         <td class="r">{{ item.quantity|floatformat:"-2" }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
-        <td class="r">Rp{{ item.unit_price|floatformat:"0g" }}</td>
+        <td class="r">{{ item.unit_price|rp }}</td>
         {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
-        <td class="r">{% if item.discount %}−Rp{{ item.discount|floatformat:"0g" }}{% else %}—{% endif %}</td>
+        <td class="r">{% if item.discount %}−{{ item.discount|rp }}{% else %}—{% endif %}</td>
         {% endif %}
-        <td class="r">Rp{{ item.line_total|floatformat:"0g" }}</td>
+        <td class="r">{{ item.line_total|rp }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -169,27 +169,27 @@
 
   <div class="totals-wrap">
     <table class="totals-table">
-      <tr><td>Subtotal</td><td class="r">Rp{{ invoice.subtotal|floatformat:"0g" }}</td></tr>
+      <tr><td>Subtotal</td><td class="r">{{ invoice.subtotal|rp }}</td></tr>
       {% if invoice.discount %}
-      <tr><td>Diskon</td><td class="r">−Rp{{ invoice.discount|floatformat:"0g" }}</td></tr>
+      <tr><td>Diskon</td><td class="r">−{{ invoice.discount|rp }}</td></tr>
       {% endif %}
       {% if invoice.shipping %}
-      <tr><td>Ongkos Kirim</td><td class="r">Rp{{ invoice.shipping|floatformat:"0g" }}</td></tr>
+      <tr><td>Ongkos Kirim</td><td class="r">{{ invoice.shipping|rp }}</td></tr>
       {% endif %}
       {% if invoice.tax %}
-      <tr><td>PPN {{ invoice.tax_rate|floatformat:"1" }}%</td><td class="r">Rp{{ invoice.tax|floatformat:"0g" }}</td></tr>
+      <tr><td>PPN {{ invoice.tax_rate|floatformat:"1" }}%</td><td class="r">{{ invoice.tax|rp }}</td></tr>
       {% endif %}
       {% if invoice.other_charges %}
-      <tr><td>Biaya Lain</td><td class="r">Rp{{ invoice.other_charges|floatformat:"0g" }}</td></tr>
+      <tr><td>Biaya Lain</td><td class="r">{{ invoice.other_charges|rp }}</td></tr>
       {% endif %}
-      <tr class="grand"><td>TOTAL</td><td class="r">Rp{{ invoice.total|floatformat:"0g" }}</td></tr>
+      <tr class="grand"><td>TOTAL</td><td class="r">{{ invoice.total|rp }}</td></tr>
       {% with paid=invoice.amount_paid credited=invoice.credited %}
       {% if credited %}
-      <tr><td style="font-size:8pt;color:#6b7280">Nota Kredit</td><td class="r" style="font-size:8pt;color:#6b7280">−Rp{{ credited|floatformat:"0g" }}</td></tr>
+      <tr><td style="font-size:8pt;color:#6b7280">Nota Kredit</td><td class="r" style="font-size:8pt;color:#6b7280">−{{ credited|rp }}</td></tr>
       {% endif %}
       {% if paid and invoice.status != 'paid' or credited and invoice.status != 'paid' %}
-      {% if paid %}<tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">−Rp{{ paid|floatformat:"0g" }}</td></tr>{% endif %}
-      <tr><td style="font-weight:700">Sisa Tagihan</td><td class="r" style="font-weight:700">Rp{{ invoice.amount_due|floatformat:"0g" }}</td></tr>
+      {% if paid %}<tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">−{{ paid|rp }}</td></tr>{% endif %}
+      <tr><td style="font-weight:700">Sisa Tagihan</td><td class="r" style="font-weight:700">{{ invoice.amount_due|rp }}</td></tr>
       {% endif %}
       {% endwith %}
     </table>

@@ -52,6 +52,8 @@ def create_debit_note(bill, *, quantities, reason, note_date, actor=None):
     bill = Bill.objects.select_for_update().get(pk=bill.pk)
     if bill.status in (Bill.STATUS_DRAFT, Bill.STATUS_VOID):
         raise NoteError("Tagihan ini tidak bisa diberi nota debit.")
+    if bill.is_opening:
+        raise NoteError("Tagihan saldo awal tidak memakai nota debit: bila sisanya salah, batalkan lalu catat lagi.")
     if not (reason or "").strip():
         raise NoteError("Tulis alasan retur.")
     picks = []

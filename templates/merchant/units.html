@@ -1,0 +1,28 @@
+{% extends "merchant/base.html" %}{% load icons %}
+{% block title %}Satuan barang{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Persediaan</span><h1>Satuan barang</h1>
+    <p>Stok selalu dihitung dalam satuan dasar (pcs, botol, kg). Tambahkan satuan besar seperti dus atau pak beserta isinya, lalu pakai di pesanan pembelian dan invoice: 2 dus berisi 12 pcs mengeluarkan atau memasukkan 24 pcs, dengan harga per dus.</p></div>
+  <div class="dp-actions">{% if can_edit %}<button type="button" class="btn-primary" data-open="unit-dialog">{% icon "plus" %} Satuan baru</button>{% endif %}</div>
+</div>
+<div class="toolbar"><form method="get" class="flex flex-wrap items-center gap-2"><label class="sr-only" for="u-q">Cari produk</label><input id="u-q" name="q" value="{{ query }}" placeholder="Cari nama atau SKU…" class="bb-input">
+  <button class="btn">Cari</button>{% if show != 'all' and not query %}<a class="btn" href="?show=all">Tampilkan semua produk</a>{% else %}<a class="btn" href="?">Hanya yang punya satuan besar</a>{% endif %}</form></div>
+<section class="panel"><div class="scroll-x"><table class="tbl" data-no-row-link><thead><tr><th>Produk</th><th>Satuan dasar</th><th>Satuan besar</th><th></th></tr></thead><tbody>
+  {% for p in rows %}<tr>
+    <td><b>{{ p.name }}</b><small style="display:block;color:var(--ds-muted)">{{ p.sku }}</small></td>
+    <td data-no-row>{% if can_edit %}<form method="post" class="flex items-center gap-2">{% csrf_token %}<input type="hidden" name="action" value="base"><input type="hidden" name="product" value="{{ p.pk }}"><input type="hidden" name="q" value="{{ query }}"><input name="base_unit" value="{{ p.base_unit|default:'pcs' }}" maxlength="20" aria-label="Satuan dasar {{ p.name }}" style="width:90px"><button class="btn">Simpan</button></form>{% else %}{{ p.base_unit|default:"pcs" }}{% endif %}</td>
+    <td>{% for u in p.units.all %}{% if u.is_active %}<span class="pill pill-info" style="margin:2px">1 {{ u.name }} = {{ u.factor }} {{ p.base_unit|default:"pcs" }}{% if u.barcode %} · {{ u.barcode }}{% endif %}</span>{% endif %}{% empty %}<span style="color:var(--ds-muted)">—</span>{% endfor %}</td>
+    <td class="num" data-no-row>{% if can_edit %}{% for u in p.units.all %}{% if u.is_active %}<form method="post" style="display:inline" data-confirm="Berhenti memakai satuan {{ u.name }} untuk {{ p.name }}? Dokumen lama tetap benar." data-confirm-ok="Hapus">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="product" value="{{ p.pk }}"><input type="hidden" name="unit" value="{{ u.pk }}"><button class="btn">Hapus {{ u.name }}</button></form>{% endif %}{% endfor %}{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="4" class="!py-10 text-center text-slate-400">{% if query %}Tidak ada produk yang cocok.{% else %}Belum ada produk dengan satuan besar. Tekan "Satuan baru" untuk menambah, mis. 1 dus = 12 pcs.{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% if can_edit %}<dialog id="unit-dialog" class="pd-dialog" style="max-width:520px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">
+  <header><h2>Satuan baru</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><label class="field"><span>Produk</span><select name="product" required><option value="">— pilih produk —</option>{% for p in all_products %}<option value="{{ p.pk }}">{{ p.sku }} · {{ p.name }} ({{ p.base_unit|default:"pcs" }})</option>{% endfor %}</select></label>
+    <div class="field-row"><label class="field"><span>Nama satuan</span><input name="name" maxlength="20" placeholder="dus, pak, lusin" required></label>
+      <label class="field"><span>Isi (satuan dasar)</span><input name="factor" inputmode="numeric" placeholder="12" required></label></div>
+    <label class="field"><span>Barcode satuan ini <em>(opsional)</em></span><input name="barcode" maxlength="80"></label>
+    <p class="dp-help" style="margin:0">Produk bervarian belum bisa memakai satuan besar.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan satuan</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

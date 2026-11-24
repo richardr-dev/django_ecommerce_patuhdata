@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}{{ customer.name }} · Pelanggan{% endblock %}
 {% block content %}
 
@@ -19,6 +19,7 @@
     </p>
   </div>
   <div class="dp-actions">
+    <a class="btn" href="{% url 'merchant-customer-statement' customer.id %}" target="_blank" rel="noopener">{% icon "file" %} Laporan rekening</a>
     {% if customer.status == 'pending' %}
     <form method="post" action="{% url 'merchant-customers' %}">{% csrf_token %}
       <input type="hidden" name="customer_id" value="{{ customer.id }}">
@@ -32,20 +33,20 @@
 
 {# KPI tiles #}
 <div class="tiles">
-  <div class="tile accent"><small>Total belanja</small><strong>Rp{{ lifetime_spend|floatformat:"0g" }}</strong><span>{{ order_count }} pesanan dibayar</span></div>
-  <div class="tile"><small>Rata-rata per pesanan</small><strong>Rp{{ average_order|floatformat:"0g" }}</strong></div>
+  <div class="tile accent"><small>Total belanja</small><strong>{{ lifetime_spend|rp }}</strong><span>{{ order_count }} pesanan dibayar</span></div>
+  <div class="tile"><small>Rata-rata per pesanan</small><strong>{{ average_order|rp }}</strong></div>
   <div class="tile"><small>Terakhir belanja</small><strong>{% if days_since is not None %}{% if days_since == 0 %}Hari ini{% elif days_since == 1 %}Kemarin{% else %}{{ days_since }} hari lalu{% endif %}{% else %}—{% endif %}</strong></div>
-  <div class="tile"><small>Piutang</small><strong{% if overdue_receivable %} style="color:var(--ds-bad,#c92a2a)"{% endif %}>Rp{{ receivable|floatformat:"0g" }}</strong>
-    {% if open_invoice_count %}<span><a href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{{ open_invoice_count }} invoice terbuka{% if overdue_receivable %} · Rp{{ overdue_receivable|floatformat:"0g" }} terlambat{% endif %} →</a></span>{% else %}<span>Tidak ada tagihan terbuka</span>{% endif %}</div>
+  <div class="tile"><small>Piutang</small><strong{% if overdue_receivable %} style="color:var(--ds-bad,#c92a2a)"{% endif %}>{{ receivable|rp }}</strong>
+    {% if open_invoice_count %}<span><a href="{% url 'merchant-receivables' %}?customer={{ customer.id }}">{{ open_invoice_count }} invoice terbuka{% if overdue_receivable %} · {{ overdue_receivable|rp }} terlambat{% endif %} →</a></span>{% else %}<span>Tidak ada tagihan terbuka</span>{% endif %}</div>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
   <section class="panel"><header><h2>Channel pembelian</h2></header>
-    {% if channel_breakdown %}<table class="tbl"><tbody>{% for row in channel_breakdown %}<tr><td><span class="pill pill-info">{{ row.label }}</span></td><td class="num"><b>Rp{{ row.revenue|floatformat:"0g" }}</b><br><small class="muted">{{ row.orders }} pesanan</small></td></tr>{% endfor %}</tbody></table>
+    {% if channel_breakdown %}<table class="tbl"><tbody>{% for row in channel_breakdown %}<tr><td><span class="pill pill-info">{{ row.label }}</span></td><td class="num"><b>{{ row.revenue|rp }}</b><br><small class="muted">{{ row.orders }} pesanan</small></td></tr>{% endfor %}</tbody></table>
     {% else %}<p class="dp-empty">Belum ada data.</p>{% endif %}</section>
 
   <section class="panel"><header><h2>Produk favorit</h2></header>
-    {% if top_products %}<table class="tbl"><tbody>{% for p in top_products %}<tr><td><b>{{ p.name }}</b>{% if p.sku %}<br><small class="muted">{{ p.sku }}</small>{% endif %}</td><td class="num"><b>{{ p.units }}×</b><br><small class="muted">Rp{{ p.revenue|floatformat:"0g" }}</small></td></tr>{% endfor %}</tbody></table>
+    {% if top_products %}<table class="tbl"><tbody>{% for p in top_products %}<tr><td><b>{{ p.name }}</b>{% if p.sku %}<br><small class="muted">{{ p.sku }}</small>{% endif %}</td><td class="num"><b>{{ p.units }}×</b><br><small class="muted">{{ p.revenue|rp }}</small></td></tr>{% endfor %}</tbody></table>
     {% else %}<p class="dp-empty">Belum ada data.</p>{% endif %}</section>
 
   <section class="panel"><header><h2>Info pelanggan</h2></header>
@@ -56,11 +57,15 @@
       {% if customer.channel_buyer %}<div><dt>Marketplace</dt><dd>{{ customer.channel_buyer.get_platform_display }}<br><small class="muted">{{ customer.channel_buyer.external_id }}</small></dd></div>
         {% if customer.channel_buyer.city %}<div><dt>Kota / provinsi</dt><dd>{{ customer.channel_buyer.city }}, {{ customer.channel_buyer.province }}</dd></div>{% endif %}{% endif %}
       <div><dt>Bergabung</dt><dd>{{ customer.created_at|date:"d M Y" }}</dd></div>
+      <div><dt>Batas kredit</dt><dd>{% if credit.limit == None %}Tanpa batas{% if credit.owed %} · piutang berjalan {{ credit.owed|rp }}{% endif %}{% elif credit.limit == 0 %}Hanya tunai{% else %}{{ credit.limit|rp }} · terpakai {{ credit.owed|rp }}, sisa <b>{{ credit.available|rp }}</b>
+        <span class="bb-bar" style="display:block;margin-top:8px" data-tip="{{ credit.used_pct }}% terpakai"><i style="width:{{ credit.used_pct|stringformat:'s' }}%"></i></span>{% endif %}
+        {% if credit_hold %}<span style="display:block;margin-top:8px"><span class="pill pill-overdue">Kredit ditahan</span> <a href="{% url 'merchant-invoice-detail' credit_hold.0.pk %}" style="color:var(--ds-primary);font-weight:600">{{ credit_hold.0.number }}</a> terlambat {{ credit_hold.1 }} hari</span>{% endif %}</dd></div>
       <div><dt>Ketentuan penjualan</dt><dd>{% if customer.payment_terms_days != None %}Termin {{ customer.payment_terms_days }} hari{% else %}Termin ditanyakan tiap invoice{% endif %} · {% if customer.price_list %}Daftar harga <b>{{ customer.price_list.name }}</b>{% else %}Harga jual (retail){% endif %}</dd></div>
     </dl>
     {% if merchant_role != 'viewer' and merchant_role != 'ops' %}
     <form method="post" action="{% url 'merchant-customer-terms' customer.id %}" style="display:grid;gap:10px;margin-top:12px">{% csrf_token %}
       <label class="field"><span>Termin pembayaran (hari)</span><input name="payment_terms_days" type="number" min="0" max="365" value="{{ customer.payment_terms_days|default_if_none:'' }}" placeholder="kosong: ditanyakan"></label>
+      {% if may_set_credit %}<label class="field"><span>Batas kredit</span><input name="credit_limit" data-rupiah inputmode="numeric" value="{{ customer.credit_limit|default_if_none:''|floatformat:'0' }}" placeholder="kosong: tanpa batas · 0: hanya tunai"></label>{% endif %}
       <label class="field"><span>Daftar harga</span><select name="price_list"><option value="">Harga jual (retail)</option>{% for pl in price_lists %}<option value="{{ pl.id }}"{% if customer.price_list_id == pl.id %} selected{% endif %}>{{ pl.name }}{% if pl.discount_percent %} (−{{ pl.discount_percent|floatformat:"-2" }}%){% endif %}</option>{% endfor %}</select></label>
       <button class="btn">Simpan ketentuan</button>
     </form>

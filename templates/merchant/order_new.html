@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load static %}{% block title %}Buat pesanan{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
+{% extends "merchant/base.html" %}{% load static books %}{% block title %}Buat pesanan{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'css/billing.css' %}">
 <nav class="dp-crumb"><a href="{% url 'merchant-orders' %}">Pesanan</a> › <span>Buat pesanan</span></nav>
 <div class="pg-head"><div><span class="pg-kicker">Pesanan</span><h1>Buat pesanan</h1><p>Untuk pesanan dari chat WhatsApp, Instagram, atau telepon. Stok langsung disisihkan, lalu kirim link pembayaran ke pelanggan.</p></div><div class="dp-actions"><a class="btn" href="{% url 'merchant-orders' %}">← Kembali</a></div></div>
 <form method="post" class="manual-order" novalidate data-unsaved>{% csrf_token %}{{ form.idempotency_key }}
@@ -7,7 +7,7 @@
 <div class="order-lines" data-lines><div class="order-line order-line-head" aria-hidden="true"><span>SKU produk / varian</span><span>Jumlah</span><span>Harga satuan (opsional)</span><span></span></div>
 {% for sku, quantity, price in posted_rows %}<div class="order-line" data-line><input class="control" name="sku" value="{{ sku }}" list="sku-options" placeholder="Ketik nama atau SKU" aria-label="SKU" data-sku><input class="control" name="quantity" type="number" min="1" value="{{ quantity|default:1 }}" aria-label="Jumlah"><input class="control" name="price" inputmode="numeric" value="{{ price }}" placeholder="Harga normal" aria-label="Harga satuan" data-price><button type="button" class="btn" data-remove-line>Hapus</button></div>{% endfor %}
 </div><button type="button" class="btn" data-add-line>+ Tambah produk</button>
-<datalist id="sku-options">{% for option in sku_options %}<option value="{{ option.sku }}" data-price="{{ option.price|floatformat:0 }}">{{ option.label }} · Rp{{ option.price|floatformat:"0g" }}</option>{% endfor %}</datalist>
+<datalist id="sku-options">{% for option in sku_options %}<option value="{{ option.sku }}" data-price="{{ option.price|floatformat:0 }}">{{ option.label }} · {{ option.price|rp }}</option>{% endfor %}</datalist>
 <p class="muted"><small>Kosongkan harga untuk memakai harga normal produk. Produk pre-order tidak menyisihkan stok.</small></p></section>
 <section class="panel"><header><h2>Channel Penjualan</h2></header><div class="field-grid">{% include "merchant/form_field.html" with field=form.channel %}{% include "merchant/form_field.html" with field=form.order_type %}<div data-abshop-source style="display:none">{% include "merchant/form_field.html" with field=form.ab_shop_source %}</div></div></section>
 <section class="panel"><header><h2>Pelanggan</h2></header><div class="field-grid">{% include "merchant/form_field.html" with field=form.customer_name %}{% include "merchant/form_field.html" with field=form.phone %}{% include "merchant/form_field.html" with field=form.email %}</div></section>

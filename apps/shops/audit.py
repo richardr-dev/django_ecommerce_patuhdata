@@ -3,6 +3,13 @@ shows exactly what was recorded and nothing is added by hand."""
 from .models import AuditLog
 
 LABELS = {
+    "stock_adjustment.posted": "Penyesuaian stok dibukukan", "stock_adjustment.voided": "Penyesuaian stok dibatalkan",
+    "payroll.created": "Penggajian disusun", "payroll.updated": "Penggajian dihitung ulang",
+    "payroll.posted": "Penggajian diposting", "payroll.paid": "Gaji dibayar", "payroll.bpjs_paid": "BPJS disetor",
+    "payroll.voided": "Penggajian dibatalkan", "employee.created": "Karyawan ditambahkan",
+    "employee.updated": "Data karyawan diubah", "bill.opening_created": "Tagihan saldo awal dicatat",
+    "credit_hold.policy_updated": "Aturan tahan kredit diubah",
+    "invoice.credit_hold_override": "Disetujui melewati tahan kredit",
     "invoice.created": "Invoice dibuat", "invoice.updated": "Invoice diubah",
     "invoice.paid": "Pembayaran dicatat", "invoice.voided": "Invoice dibatalkan",
     "invoice.sent": "Invoice dikirim", "bill.created": "Tagihan dibuat", "bill.paid": "Pembayaran tagihan",

@@ -26,14 +26,15 @@
       <td class="num"><input name="pph_{{ inv.id }}" inputmode="decimal" data-rupiah placeholder="0" data-pph aria-label="PPh dipotong pembeli untuk {{ inv.number }}"></td></tr>
     {% empty %}<tr><td colspan="5"><div class="empty-box">Tidak ada invoice terbuka untuk pelanggan ini. Jumlah yang diterima akan disimpan sebagai kredit.</div></td></tr>{% endfor %}</tbody></table></div>
   <div class="editor-foot"><div>{% if invoices %}<button type="button" class="add-line" id="auto">Alokasikan otomatis (terlama dulu)</button>{% endif %}
-      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="keep_rest" value="1" checked style="width:auto;height:auto"> Simpan sisa yang tidak dialokasikan sebagai kredit pelanggan</label></div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="keep_rest" value="1" checked style="width:auto;height:auto"> Simpan sisa yang tidak dialokasikan sebagai kredit pelanggan</label>
+      {% if is_pkp %}<label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:13px;color:var(--pd-text)"><input type="checkbox" name="advance_vat" value="1"{% if post.advance_vat %} checked{% endif %} style="width:auto;height:auto;margin-top:3px"> <span>Sisa ini <b>uang muka</b> atas barang/jasa yang belum diserahkan: pungut PPN {{ tax_rate|floatformat:"-2" }}% di dalamnya sekarang (faktur uang muka). PPN-nya dikurangkan lagi saat uang muka dipakai membayar invoice.</span></label>{% endif %}</div>
     <div class="sum"><div><span>Diterima</span><span id="recv">Rp0</span></div><div><span>Dialokasikan ke invoice</span><span id="alloc">Rp0</span></div><div class="grand"><span>Menjadi kredit</span><span id="rest">Rp0</span></div></div></div>
   <div class="form-actions-bar"><a class="btn" href="{% url 'merchant-receivables' %}">Batal</a><button class="btn-primary">{% icon "check" %} Simpan penerimaan</button></div>
 </form>
 <script>
 (function(){
   function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
-  function fmt(n){return (n<0?"−":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");}
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}  // book currency
   var amount=document.getElementById("amount"),fields=document.querySelectorAll("[data-alloc]");
   function pph(f){var p=f.closest("tr").querySelector("[data-pph]");return p?num(p.value):0;}
   function calc(){var a=num(amount.value),s=0;fields.forEach(function(f){s+=num(f.value);});

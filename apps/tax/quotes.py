@@ -45,9 +45,10 @@ def save_quote(store, *, lines, buyer_name, issued_on=None, valid_days=14, valid
         quote.save()
         quote.items.all().delete()
     for line in lines:
-        product = line["product"]
-        QuoteItem.objects.create(quote=quote, product=product, description=product.name,
-            sku=product.sku, quantity=line["qty"], unit_price=line["unit_price"],
+        product, variant = line["product"], line.get("variant")
+        QuoteItem.objects.create(quote=quote, product=product, variant=variant,
+            description=f"{product.name} / {variant.name}" if variant else product.name,
+            sku=variant.sku if variant else product.sku, quantity=line["qty"], unit_price=line["unit_price"],
             line_total=Decimal(line["unit_price"]) * Decimal(line["qty"]))
     return quote
 
@@ -77,8 +78,8 @@ def convert_to_invoice(quote, *, issued_on=None, on_credit=True, due_days=14, ac
     if quote.status == Quote.STATUS_DECLINED:
         raise QuoteError("Penawaran yang ditolak tidak bisa dijadikan invoice.")
     issued_on = issued_on or timezone.localdate()
-    lines = [{"product": item.product, "qty": item.quantity, "unit_price": item.unit_price}
-        for item in quote.items.select_related("product")]
+    lines = [{"product": item.product, "variant": item.variant, "qty": item.quantity, "unit_price": item.unit_price}
+        for item in quote.items.select_related("product", "variant")]
     try:
         invoice = create_sales_invoice(quote.store, lines=lines, buyer_name=quote.buyer_name,
             issued_on=issued_on, customer=quote.customer, company_name=quote.company_name,

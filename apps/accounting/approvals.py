@@ -121,7 +121,27 @@ def _pos_shift_variance(store, p, actor):
     audit_log(store, actor, "pos.shift_variance_approved", shift, selisih=shift.variance, register=shift.register.code)
 
 
-EXECUTORS = {"bill_payment": _bill_payment, "bill_void": _bill_void, "invoice_void": _invoice_void,
+def _payroll(store, p, actor):
+    from .models import PayrollRun
+    from .payroll import post_run
+    run = PayrollRun.objects.get(pk=p["run_id"], store=store)
+    post_run(run, actor=actor)
+
+
+def _stock_adjustment(store, p, actor):
+    from apps.catalog.models import Product, ProductVariant, Warehouse
+
+    from .stock_adjustments import post_adjustment
+    lines = [{"product": Product.objects.get(pk=product_id, store=store),
+        "variant": ProductVariant.objects.get(pk=variant_id, product_id=product_id) if variant_id else None,
+        "quantity": quantity, "unit_cost": Decimal(cost), "anywhere": bool(rest and rest[0])}
+        for product_id, variant_id, quantity, cost, *rest in p["lines"]]
+    post_adjustment(store, warehouse=Warehouse.objects.get(pk=p["warehouse_id"], store=store),
+        adjusted_on=datetime.date.fromisoformat(p["adjusted_on"]), reason=p["reason"], lines=lines,
+        notes=p.get("notes", ""), actor=actor, approved=True)
+
+
+EXECUTORS = {"payroll": _payroll, "stock_adjustment": _stock_adjustment, "bill_payment": _bill_payment, "bill_void": _bill_void, "invoice_void": _invoice_void,
     "invoice_writeoff": _invoice_writeoff,
     "journal": _journal, "expense": _expense, "pos_shift_variance": _pos_shift_variance}
 

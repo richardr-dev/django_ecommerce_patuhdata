@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
+from apps.catalog import unit_views
 from apps.integrations import whatsapp_views
 from apps.shops import segment_views
 from apps.shops.auth import CustomerLoginView, MerchantLoginView, customer_logout, merchant_logout
@@ -11,6 +13,7 @@ from . import (
     delivery_views,
     gift_card_views,
     label_views,
+    lot_views,
     manual_views,
     search,
     setup_views,
@@ -41,6 +44,7 @@ urlpatterns = [
         template_name="registration/password_reset_form.html",
         email_template_name="registration/password_reset_email.txt",
         subject_template_name="registration/password_reset_subject.txt",
+        extra_email_context={"platform_name": settings.PLATFORM_NAME},
         success_url=reverse_lazy("password-reset-done"))), name="password-reset"),
     path("account/password-reset/done/", auth_views.PasswordResetDoneView.as_view(
         template_name="registration/password_reset_done.html"), name="password-reset-done"),
@@ -88,6 +92,9 @@ urlpatterns = [
     path("books/stock/permintaan/baru/", stock_request_views.merchant_stock_request_new, name="merchant-stock-request-new"),
     path("books/stock/permintaan/<int:request_id>/", stock_request_views.merchant_stock_request, name="merchant-stock-request"),
     path("books/stock/minus/", deficit_views.merchant_stock_minus, name="merchant-stock-minus"),
+    path("books/stock/satuan/", unit_views.merchant_units, name="merchant-units"),
+    path("books/stock/lot/", lot_views.merchant_lots, name="merchant-lots"),
+    path("books/stock/lot/<int:lot_id>/", lot_views.merchant_lot, name="merchant-lot"),
     path("books/orders.csv", views.merchant_orders_csv, name="merchant-orders-csv"),
     path("books/subscribers.csv", views.merchant_subscribers_csv, name="merchant-subscribers-csv"),
     path("books/orders/<uuid:order_id>/", views.merchant_order_detail, name="merchant-order-detail"),

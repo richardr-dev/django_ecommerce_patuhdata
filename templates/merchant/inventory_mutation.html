@@ -1,0 +1,38 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Mutasi persediaan{% endblock %}
+{% block content %}
+<nav class="text-xs text-blue-700"><a href="{% url 'merchant-inventory-value' %}">Laporan persediaan</a> › Mutasi persediaan</nav>
+<div class="pg-head"><div><span class="pg-kicker">Laporan persediaan</span><h1>Mutasi persediaan</h1>
+  <p>Saldo awal, barang masuk dan keluar menurut jenisnya, dan saldo akhir untuk satu periode: unit per barang dari pergerakan stok, nilai rupiah dari akun Persediaan di buku besar.</p></div>
+  <div class="dp-actions"><a class="btn-primary" href="?{{ query }}{% if query %}&{% endif %}format=xlsx" data-no-soft>{% icon "download" %} Unduh Excel</a></div></div>
+
+<form method="get" class="bb-filter"><div class="bb-filter-top">
+  <div class="bb-range"><label class="field"><span>Dari</span><input type="date" name="start" value="{{ start|date:'Y-m-d' }}"></label>
+    <label class="field"><span>Sampai</span><input type="date" name="end" value="{{ end|date:'Y-m-d' }}"></label></div>
+  {% if warehouses %}<label class="field"><span>Gudang</span><select name="gudang"><option value="">Semua gudang</option>{% for w in warehouses %}<option value="{{ w.pk }}"{% if warehouse and warehouse.pk == w.pk %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label>{% endif %}
+  <button class="btn">Tampilkan</button></div></form>
+
+<div class="tiles">
+  <div class="tile accent"><small>Persediaan akhir (buku)</small><strong>{{ report.value.closing|rp }}</strong><span>per {{ end|date:"d M Y" }}</span></div>
+  <div class="tile"><small>Persediaan awal (buku)</small><strong>{{ report.value.opening|rp }}</strong><span>sebelum {{ start|date:"d M Y" }}</span></div>
+  <div class="tile"><small>Masuk</small><strong>{{ report.value.debit|rp }}</strong><span>debit Persediaan</span></div>
+  <div class="tile"><small>Keluar</small><strong>{{ report.value.credit|rp }}</strong><span>kredit Persediaan</span></div>
+</div>
+
+<section class="panel"><header><div><h2>Nilai menurut dokumen</h2><p>Mutasi akun Persediaan barang (1400) pada periode ini, dikelompokkan menurut dokumen yang membukukannya. Pembatalan masuk ke kelompok dokumen aslinya.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Dokumen</th><th class="num">Masuk</th><th class="num">Keluar</th></tr></thead><tbody>
+  <tr><td><b>Saldo sebelum {{ start|date:"d M Y" }}</b></td><td class="num"><b>{{ report.value.opening|rp }}</b></td><td></td></tr>
+  {% for g in report.value.rows %}<tr><td>{{ g.label }}</td><td class="num">{% if g.debit %}{{ g.debit|rp }}{% endif %}</td><td class="num">{% if g.credit %}{{ g.credit|rp }}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="3" class="!py-6 text-center text-slate-400">Tidak ada mutasi Persediaan pada periode ini.</td></tr>{% endfor %}
+  <tr><td><b>Jumlah mutasi</b></td><td class="num"><b>{{ report.value.debit|rp }}</b></td><td class="num"><b>{{ report.value.credit|rp }}</b></td></tr>
+  <tr><td><b>Saldo per {{ end|date:"d M Y" }}</b></td><td class="num"><b>{{ report.value.closing|rp }}</b></td><td></td></tr>
+  </tbody></table></div></section>
+
+<section class="panel"><header><div><h2>Unit per barang</h2><p>{% if warehouse %}Hanya {{ warehouse.name }}. {% endif %}Plus = masuk, minus = keluar. {% if report.rows|length > 500 %}500 barang pertama dari {{ report.rows|length }}; Excel memuat semuanya.{% else %}{{ report.rows|length }} barang.{% endif %}</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th class="num">Saldo awal</th>{% for key, label in report.columns %}<th class="num">{{ label }}</th>{% endfor %}<th class="num">Saldo akhir</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><a href="{% url 'merchant-stock-card' %}?sku={{ r.product.sku|urlencode }}&start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}"><b>{{ r.name }}</b></a><small>{{ r.sku }}</small></td>
+    <td class="num">{{ r.opening }}</td>{% for v in r.cells %}<td class="num">{% if v > 0 %}+{{ v }}{% elif v < 0 %}{{ v }}{% else %}<span class="text-slate-400">0</span>{% endif %}</td>{% endfor %}<td class="num"><b>{{ r.closing }}</b></td></tr>
+  {% empty %}<tr><td colspan="9" class="!py-10 text-center text-slate-400">Belum ada pergerakan stok.</td></tr>{% endfor %}
+  {% if rows %}<tr><td><b>Jumlah</b></td><td class="num"><b>{{ report.units.opening }}</b></td>{% for v in report.units.cells %}<td class="num"><b>{{ v }}</b></td>{% endfor %}<td class="num"><b>{{ report.units.closing }}</b></td></tr>{% endif %}
+  </tbody></table></div></section>
+{% endblock %}

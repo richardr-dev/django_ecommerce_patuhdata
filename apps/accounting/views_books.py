@@ -635,7 +635,7 @@ def merchant_opening_balances(request):
                 _audit(request, store, "opening.undone", store)
                 messages.success(request, "Saldo awal dibatalkan. Anda bisa mencatatnya lagi.")
                 return redirect("merchant-opening-balances")
-            valuation = inventory.stock_valuation(store)
+            valuation = inventory.opening_stock(store)
             entry = opening.post_opening(store,
                 date=_date(request.POST.get("date"), timezone.localdate()),
                 banks={bank: _amount(request.POST.get(f"bank_{bank.pk}")) for bank in banks},
@@ -651,10 +651,16 @@ def merchant_opening_balances(request):
             messages.success(request, "Saldo awal dicatat. Neraca dimulai dari tanggal itu.")
             return redirect("merchant-opening-balances")
         return redirect("merchant-opening-balances")
-    valuation = inventory.stock_valuation(store)
+    valuation = inventory.opening_stock(store)
+    from apps.tax.opening_invoices import totals
+    opened = totals(store)
+    from .opening_bills import totals as bill_totals
+    owed_bills = bill_totals(store)
     return render(request, "merchant/opening_balances.html", _merchant_context(request, store,
         banks=banks, standing=standing, lines=opening.breakdown(standing) if standing else [],
         valuation=valuation, today=timezone.localdate().isoformat(),
+        opening_count=opened[0], opening_owed=opened[2],
+        opening_bill_count=owed_bills[0], opening_bill_owed=owed_bills[2],
         can_edit=_can_edit(request, store), locked_through=locked_through(store)))
 
 

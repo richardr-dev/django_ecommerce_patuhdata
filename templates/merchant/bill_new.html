@@ -54,7 +54,7 @@
 (function () {
   var body = document.getElementById("items-body");
   function num(v) { return Number(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
-  function fmt(n) { return "Rp" + Math.round(n).toLocaleString("id-ID"); }
+  function fmt(n) { return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID"); }
   function recalc() {
     var sub = 0;
     body.querySelectorAll("tr").forEach(function (row) {

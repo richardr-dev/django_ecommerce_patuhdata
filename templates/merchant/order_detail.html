@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}{% load order_text %}{% block title %}Pesanan {{ order|order_ref }}{% endblock %}
+{% extends "merchant/base.html" %}{% load icons books %}{% load order_text %}{% block title %}Pesanan {{ order|order_ref }}{% endblock %}
 {% block content %}
 
 <nav class="dp-crumb" aria-label="Breadcrumb">
@@ -7,7 +7,7 @@
 <div class="dp-head">
   <div>
     <h1 class="dp-title"><span title="Nomor pesanan">{{ order|order_ref }}</span> <button type="button" class="btn" data-copy-order="{{ order|order_copy }}" style="height:30px;padding:0 12px;font-size:12px;vertical-align:middle">Salin</button> <span class="pill pill-{{ order.status }}">{{ order.get_status_display }}</span>{% if order|is_archived %} <span class="pill pill-void" title="Salinan lama dari impor sebelumnya; bukan penjualan">arsip</span>{% endif %}</h1>
-    <p class="dp-sub">{% if order.invoice_number %}Invoice <b>{{ order.invoice_number }}</b> · {% endif %}<b>{{ order.customer_name }}</b> · {{ order.created_at|date:"d M Y, H:i" }} · {{ order.get_channel_display }} · Total <b>Rp{{ order.total|floatformat:"0g" }}</b></p>
+    <p class="dp-sub">{% if order.invoice_number %}Invoice <b>{{ order.invoice_number }}</b> · {% endif %}<b>{{ order.customer_name }}</b> · {{ order.created_at|date:"d M Y, H:i" }} · {{ order.get_channel_display }} · Total <b>{{ order.total|rp }}</b></p>
   </div>
   <div class="dp-actions">
     {% if invoice %}
@@ -67,15 +67,15 @@
       <div class="scroll-x"><table class="dp-items"><thead><tr><th>#</th><th>Produk</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Jumlah</th></tr></thead><tbody>
       {% for item in order.items.all %}<tr><td>{{ forloop.counter }}</td>
         <td><strong>{{ item.name }}</strong>{% if item.variant_name %}<small>{{ item.variant_name }}</small>{% endif %}{% if item.sku %}<small>SKU: {{ item.sku }}</small>{% endif %}</td>
-        <td class="num">{{ item.quantity }}</td><td class="num">Rp{{ item.unit_price|floatformat:"0g" }}</td><td class="num"><strong>Rp{{ item.line_total|floatformat:"0g" }}</strong></td></tr>
+        <td class="num">{{ item.quantity }}</td><td class="num">{{ item.unit_price|rp }}</td><td class="num"><strong>{{ item.line_total|rp }}</strong></td></tr>
       {% empty %}<tr><td colspan="5" class="dp-empty">Tidak ada produk.</td></tr>{% endfor %}
       </tbody></table></div>
       <div class="dp-card-body"><div class="dp-totals" style="max-width:320px;margin-left:auto">
-        <div><span>Subtotal</span><span>Rp{{ order.subtotal|floatformat:"0g" }}</span></div>
-        {% if order.discount %}<div><span>Diskon</span><span>−Rp{{ order.discount|floatformat:"0g" }}</span></div>{% endif %}
-        {% if order.tax %}<div><span>PPN</span><span>Rp{{ order.tax|floatformat:"0g" }}</span></div>{% endif %}
-        {% if order.shipping_cost %}<div><span>Ongkir</span><span>Rp{{ order.shipping_cost|floatformat:"0g" }}</span></div>{% endif %}
-        <div class="grand"><span>Total</span><span>Rp{{ order.total|floatformat:"0g" }}</span></div>
+        <div><span>Subtotal</span><span>{{ order.subtotal|rp }}</span></div>
+        {% if order.discount %}<div><span>Diskon</span><span>−{{ order.discount|rp }}</span></div>{% endif %}
+        {% if order.tax %}<div><span>PPN</span><span>{{ order.tax|rp }}</span></div>{% endif %}
+        {% if order.shipping_cost %}<div><span>Ongkir</span><span>{{ order.shipping_cost|rp }}</span></div>{% endif %}
+        <div class="grand"><span>Total</span><span>{{ order.total|rp }}</span></div>
       </div></div>
     </section>
 

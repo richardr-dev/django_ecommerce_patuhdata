@@ -1,0 +1,60 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Utang saldo awal{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-opening-balances' %}">Saldo awal</a> › <span>Utang per tagihan</span></nav>
+<div class="pg-head">
+  <div><span class="pg-kicker">Akuntansi</span><h1>Utang saldo awal per tagihan</h1>
+    <p>Tagihan supplier lama yang belum dibayar: bisa dibayar dan masuk umur utang, tanpa dihitung lagi sebagai pembelian atau PPN masukan.</p></div>
+</div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Masih harus dibayar</small><strong>{{ owed|rp }}</strong><span>{{ count }} tagihan saldo awal</span></div>
+  <div class="tile"><small>Nilai saat dicatat</small><strong>{{ original|rp }}</strong><span>Modal pemilik / Utang usaha{% if start %} per {{ start|date:"d M Y" }}{% endif %}</span></div>
+  <div class="tile {% if lump and count %}warn{% endif %}"><small>Utang total di Saldo awal</small><strong>{{ lump|rp }}</strong><span>{% if lump %}diisi sebagai satu angka, tidak dirinci{% else %}tidak ada: semua utang dirinci di sini{% endif %}</span></div>
+</div>
+
+{% if lump and count %}<div class="notice">{% icon "alert" %}<span><b>Jangan dihitung dua kali.</b> Saldo awal sudah memuat utang supplier {{ lump|rp }} sebagai satu angka. Bila tagihan di bawah termasuk di dalamnya, batalkan Saldo awal lalu catat lagi dengan utang hanya untuk sisa yang tidak dirinci di sini.</span></div>{% endif %}
+
+{% if can_edit %}
+<div class="grid gap-5 lg:grid-cols-2">
+  <form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+    <header><div><h2>Tambah satu tagihan</h2><p>Isi sisa yang belum dibayar, bukan nilai awal tagihan bila sudah dicicil.</p></div></header>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <label class="field" style="grid-column:1/-1"><span>Supplier</span><input name="supplier" list="op-suppliers" value="{{ post.supplier }}" required autocomplete="off" placeholder="Ketik nama; nama baru langsung ditambahkan"></label>
+      <label class="field"><span>No. tagihan supplier</span><input name="number" value="{{ post.number }}" required maxlength="40" placeholder="FK-2210"></label>
+      <label class="field"><span>Sisa tagihan</span><input name="amount" inputmode="numeric" data-rupiah value="{{ post.amount }}" required placeholder="0"></label>
+      <label class="field"><span>Tanggal tagihan</span><input type="date" name="bill_date" value="{{ post.bill_date }}" required{% if start %} max="{{ start|date:'Y-m-d' }}"{% endif %}></label>
+      <label class="field"><span>Jatuh tempo</span><input type="date" name="due_date" value="{{ post.due_date }}"></label>
+    </div>
+    <div class="form-actions-bar"><button class="btn-primary">{% icon "plus" %} Tambah tagihan</button></div>
+  </form>
+
+  <form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}"><input type="hidden" name="action" value="paste">
+    <header><div><h2>Tempel dari Excel</h2><p>Salin lima kolom dari daftar utang lama: <b>supplier, no. tagihan, tanggal, jatuh tempo, sisa tagihan</b>. Semua baris dicatat sekaligus, atau tidak sama sekali bila ada yang salah.</p></div></header>
+    <div class="form-grid" style="grid-template-columns:1fr"><label class="field"><span>Baris</span><textarea name="rows" rows="7" spellcheck="false" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px" placeholder="PT Sumber Makmur&#9;FK-2210&#9;15/10/2026&#9;14/11/2026&#9;4.800.000&#10;UD Plastik Jaya;SJ-118;20/10/2026;;650000">{{ post.rows }}</textarea></label></div>
+    <div class="form-actions-bar"><button class="btn-primary">{% icon "upload" %} Catat semua baris</button></div>
+  </form>
+</div>
+<datalist id="op-suppliers">{% for name in suppliers %}<option value="{{ name }}">{% endfor %}</datalist>
+{% endif %}
+
+<section class="panel">
+  <header><div><h2>Tagihan saldo awal</h2><p>Pembayaran dicatat seperti tagihan biasa: buka tagihannya, atau bayar beberapa sekaligus dari halaman supplier.</p></div></header>
+  {% if bills %}
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>No. tagihan</th><th>Supplier</th><th>Tanggal</th><th>Jatuh tempo</th><th class="num">Dicatat</th><th class="num">Sisa</th><th>Status</th></tr></thead>
+    <tbody>{% for bill in bills %}<tr>
+      <td><a href="{% url 'merchant-bill-detail' bill.id %}" style="color:var(--pd-primary);font-weight:600">{{ bill.number }}</a></td>
+      <td>{{ bill.supplier.name }}</td>
+      <td>{{ bill.bill_date|date:"d M Y" }}</td>
+      <td>{{ bill.due_date|date:"d M Y"|default:"—" }}</td>
+      <td class="num">{{ bill.total|rp }}</td>
+      <td class="num"><b>{% if bill.status == void %}—{% else %}{{ bill.amount_due|rp }}{% endif %}</b></td>
+      <td><span class="pill pill-{{ bill.status }}">{{ bill.get_status_display }}</span></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="empty-box"><strong>Belum ada tagihan saldo awal</strong>Tambahkan satu per satu atau tempel daftar utang dari Excel.</div>
+  {% endif %}
+</section>
+{% endblock %}

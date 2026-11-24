@@ -21,7 +21,10 @@ NET_WORDS = ("total penghasilan", "jumlah dana dilepas", "dana dilepas", "total 
 DATE_WORDS = ("tanggal dana dilepaskan", "dana dilepaskan", "release date", "settlement time",
     "settled time", "tanggal pencairan", "tanggal settlement", "payout date")
 # Header keywords -> fee category. Checked in order, first match wins.
+# PPh 22 collected by the marketplace (PMK 37/2025): tax, kept apart from the fees.
+TAX_WORDS = ("pph 22", "pph pasal 22", "pph22", "pajak penghasilan", "withholding tax", "income tax")
 FEE_WORDS = [
+    ("pph22", TAX_WORDS),
     ("affiliate", ("afiliasi", "affiliate", "ams")),
     ("voucher", ("voucher", "diskon ditanggung penjual", "seller discount", "seller coupon")),
     ("commission", ("komisi", "commission")),
@@ -112,13 +115,15 @@ def parse_income(upload, name="income.xlsx"):
     rows = _rows(upload, name)
     for start, row in enumerate(rows[:10]):
         headers = [_norm(cell) for cell in row]
+        # "Pajak penghasilan" holds the word "penghasilan" but is the PPh 22 column, never the amount released.
+        untaxed = ["" if any(word in header for word in TAX_WORDS) else header for header in headers]
         order_col = _find(headers, ORDER_WORDS)
-        if order_col is not None and _find(headers, NET_WORDS) is not None:
+        if order_col is not None and _find(untaxed, NET_WORDS) is not None:
             break
     else:
         raise ChannelImportError("Kolom nomor pesanan dan jumlah dana yang dicairkan tidak "
             "ditemukan. Pastikan ini laporan penghasilan / settlement dari marketplace.")
-    net_col = _find(headers, NET_WORDS)
+    net_col = _find(untaxed, NET_WORDS)
     date_col = _find(headers, DATE_WORDS)
     fee_cols = _classify(headers, {order_col, net_col, date_col})
     result = []

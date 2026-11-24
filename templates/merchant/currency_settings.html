@@ -1,0 +1,19 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Mata uang{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pengaturan</span><h1>Mata uang pembukuan</h1>
+  <p>Semua angka di layar, PDF, dan Excel memakai mata uang ini. Saat ini pembukuan memakai Rupiah; Dolar AS dan Euro menyusul.</p></div></div>
+
+<div class="tiles"><div class="tile accent"><small>Mata uang aktif</small><strong>{{ active.code }}</strong><span>{{ active.label }} · contoh {{ active_example }}</span></div></div>
+
+{% if not can_change %}<div class="notice">{% icon "lock" %}<span>{{ locked_reason }}</span></div>{% endif %}
+
+<form method="post" class="panel">{% csrf_token %}
+  <header><div><h2>Pilih mata uang</h2><p>Hanya bisa diganti sebelum pembukuan berisi jurnal pertama.</p></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th></th><th>Mata uang</th><th>Simbol</th><th>Contoh</th><th>Status</th></tr></thead><tbody>
+  {% for o in options %}<tr>
+    <td data-no-row><input type="radio" name="currency" value="{{ o.code }}" aria-label="{{ o.label }}"{% if o.current %} checked{% endif %}{% if not o.enabled or not can_change or not can_edit %} disabled{% endif %}></td>
+    <td><b>{{ o.label }}</b></td><td>{{ o.symbol }}</td><td>{{ o.example }}</td>
+    <td>{% if o.current %}<span class="pill pill-paid">Aktif</span>{% elif o.enabled %}<span class="pill pill-info">Tersedia</span>{% else %}<span class="pill pill-void">Segera</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if can_change and can_edit %}<footer><button class="btn-primary">{% icon "check" %} Simpan</button></footer>{% endif %}
+</form>
+{% endblock %}

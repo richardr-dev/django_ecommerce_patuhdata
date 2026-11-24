@@ -213,8 +213,7 @@ def settlement_detail(request, pk):
             except (SettlementError, InvalidOperation) as exc:
                 messages.error(request, f"Gagal mencatat pembayaran: {exc}")
 
-        elif action == "add_orders":
-            if not settlement.is_locked:
+        elif action == "add_orders" and not settlement.is_locked:
                 raw_ids = request.POST.getlist("order_ids")
                 try:
                     added = add_sell_through_orders(settlement, raw_ids)
@@ -329,8 +328,8 @@ def product_partner_prices(request, product_id):
                         defaults={"price": price,
                                   "notes": request.POST.get(f"notes_{partner.pk}", "")[:200]})
                     saved += 1
-                except (InvalidOperation, Exception):
-                    pass
+                except InvalidOperation:
+                    pass  # an unreadable price is skipped; the others on the form are still saved
             else:
                 # Empty = remove custom price (fall back to product default)
                 PartnerProductPrice.objects.filter(partner=partner, product=product).delete()

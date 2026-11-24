@@ -21,7 +21,7 @@
 <script>
 (function () {
   function num(v) { return Number(String(v || "").replace(/\./g, "")) || 0; }
-  function recalc() { var t = 0; document.querySelectorAll(".pay-amount").forEach(function (i) { t += num(i.value); }); document.getElementById("pay-total").textContent = "Rp" + t.toLocaleString("id-ID"); }
+  function recalc() { var t = 0; document.querySelectorAll(".pay-amount").forEach(function (i) { t += num(i.value); }); document.getElementById("pay-total").textContent = (window.pdMoney ? pdMoney(t) : "Rp" + Math.round(t).toLocaleString("id-ID")); }
   document.addEventListener("input", function (e) { if (e.target.classList && e.target.classList.contains("pay-amount")) recalc(); });
   setTimeout(recalc, 50);
 })();

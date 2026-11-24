@@ -125,6 +125,9 @@ class Order(models.Model):
         ("direct", "Penjualan Langsung"),      # B2C: store → customer
         ("reseller_sell_in", "Jual ke Reseller"),  # B2B: store → AB Shop (creates invoice & stock handover)
         ("reseller_sell_through", "Penjualan Reseller"),  # Downstream: AB Shop → end customer (informational)
+        # Carries an invoice the business issued before its books started here (saldo awal piutang per
+        # invoice, ``tax/opening_invoices.py``): not a sale, never counted in sales reports.
+        ("opening", "Saldo awal piutang"),
     ]
     ABSHOP_BILLING_STATUSES = [
         ("unbilled", "Belum Ditagih"),
@@ -416,7 +419,7 @@ class MovementQuerySet(models.QuerySet):
 class InventoryMovement(models.Model):
     objects = MovementQuerySet.as_manager()
     KIND = [("reserve", "Reserve"), ("release", "Release"), ("commit", "Commit"),
-        ("adjust", "Adjust"), ("return", "Return"), ("receipt", "Barang masuk"),
+        ("adjust", "Penyesuaian stok"), ("return", "Return"), ("receipt", "Barang masuk"),
         ("transfer_in", "Transfer masuk"), ("transfer_out", "Transfer keluar"),
         ("consign_out", "Kirim ke mitra"), ("consign_in", "Kembali dari mitra"),
         ("opname", "Stok opname"), ("deficit", "Jual melebihi stok"), ("purchase_return", "Retur ke supplier"),
@@ -428,6 +431,10 @@ class InventoryMovement(models.Model):
         related_name="movements", null=True, blank=True)
     variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT,
         related_name="inventory_movements", null=True, blank=True)
+    # The location of a variant's units (a product's is its inventory level's warehouse). Empty on variant
+    # movements recorded before variants were stocked per warehouse, and on reservations.
+    warehouse = models.ForeignKey("catalog.Warehouse", on_delete=models.PROTECT, related_name="+", null=True,
+        blank=True)
     kind = models.CharField(max_length=20, choices=KIND)
     quantity = models.PositiveIntegerField()
     reason = models.CharField(max_length=200)
@@ -526,10 +533,15 @@ class StockRequest(models.Model):
 class StockRequestLine(models.Model):
     request = models.ForeignKey(StockRequest, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="+")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     quantity = models.PositiveIntegerField()
     sent_quantity = models.PositiveIntegerField(default=0)
     received_quantity = models.PositiveIntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # frozen when sent
+
+    @property
+    def label(self):
+        return f"{self.product.name} / {self.variant.name}" if self.variant_id else self.product.name
 
     class Meta:
         ordering = ["id"]
@@ -850,3 +862,39 @@ class GiftCardEntry(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class StockLot(models.Model):
+    """A lot (batch) of a product or variant: its code, expiry date and the units of it still held (shelf and
+    mitra, store-wide). Opened by a goods receipt; drawn soonest-expiry first (FEFO). See ``orders/lots.py``."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="stock_lots")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="lots")
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True, related_name="lots")
+    code = models.CharField(max_length=60)
+    expiry_date = models.DateField(null=True, blank=True)
+    received_on = models.DateField()
+    received_quantity = models.PositiveIntegerField(default=0)
+    quantity = models.PositiveIntegerField(default=0)   # still held
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["expiry_date", "received_on", "id"]
+        indexes = [models.Index(fields=["store", "expiry_date"], name="stock_lot_expiry_idx")]
+
+    def __str__(self):
+        return self.code
+
+
+class StockLotMove(models.Model):
+    """Units of a lot moved by one stock movement (negative: drawn), so a lot traces to its documents."""
+    lot = models.ForeignKey(StockLot, on_delete=models.CASCADE, related_name="moves")
+    # Empty for units that left without a shelf movement (lost on a stock request between warehouses).
+    movement = models.ForeignKey(InventoryMovement, on_delete=models.PROTECT, related_name="lot_moves", null=True,
+        blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    quantity = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]

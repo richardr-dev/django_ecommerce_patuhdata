@@ -7,6 +7,12 @@
 </div>
 {% if locked_through %}<div class="notice">{% icon "lock" %}<span>Pembukuan sampai {{ locked_through|date:"d M Y" }} sudah ditutup: pilih tanggal setelahnya.</span></div>{% endif %}
 
+<section class="panel"><header><div><h2>Piutang per invoice</h2><p>{% if opening_count %}{{ opening_count }} invoice lama dicatat satu per satu, sisa {{ opening_owed|rp }}.{% else %}Masukkan invoice lama yang belum lunas satu per satu (atau tempel dari Excel) agar bisa ditagih, diingatkan, dan masuk umur piutang.{% endif %} Yang dirinci di sana tidak perlu diisi lagi di kolom Piutang pelanggan di bawah.</p></div>
+  <a class="btn" href="{% url 'merchant-opening-invoices' %}">{% icon "list" %} Rinci piutang per invoice</a></header></section>
+
+<section class="panel"><header><div><h2>Utang per tagihan</h2><p>{% if opening_bill_count %}{{ opening_bill_count }} tagihan supplier lama dicatat satu per satu, sisa {{ opening_bill_owed|rp }}.{% else %}Masukkan tagihan supplier lama yang belum dibayar satu per satu (atau tempel dari Excel) agar bisa dibayar per tagihan dan masuk umur utang.{% endif %} Yang dirinci di sana tidak perlu diisi lagi di kolom Utang supplier di bawah.</p></div>
+  <a class="btn" href="{% url 'merchant-opening-bills' %}">{% icon "list" %} Rinci utang per tagihan</a></header></section>
+
 {% if standing %}
 <section class="panel">
   <header><div><h2>Saldo awal sudah dicatat</h2><p>Per {{ standing.date|date:"d M Y" }} · <a href="{% url 'merchant-journal-detail' standing.id %}" style="color:var(--pd-primary)">lihat jurnal JU-{{ standing.id }}</a></p></div>
@@ -27,13 +33,13 @@
     <tbody>
       {% for bank in banks %}<tr><td><strong>{{ bank.name }}</strong><br><small style="color:var(--pd-faint)">{% if bank.bank_name %}{{ bank.bank_name }} · {% endif %}akun {{ bank.account.code }}</small></td>
         <td class="num"><input name="bank_{{ bank.pk }}" inputmode="decimal" data-rupiah placeholder="0" data-asset></td></tr>{% endfor %}
-      <tr><td><strong>Piutang pelanggan</strong><br><small style="color:var(--pd-faint)">Total yang belum dibayar pelanggan, di semua invoice lama</small></td><td class="num"><input name="receivable" inputmode="decimal" data-rupiah placeholder="0" data-asset></td></tr>
-      <tr><td><strong>Persediaan barang</strong><br><small style="color:var(--pd-faint)">Stok saat ini dinilai dengan harga pokok: {{ valuation.shelf_value|rp }} di gudang{% if valuation.mitra_value %}, {{ valuation.mitra_value|rp }} di mitra{% endif %}{% if valuation.missing_cost %} · {{ valuation.missing_cost }} barang belum punya harga pokok{% endif %}</small></td>
+      <tr><td><strong>Piutang pelanggan</strong><br><small style="color:var(--pd-faint)">Hanya piutang yang tidak dirinci di Piutang per invoice</small></td><td class="num"><input name="receivable" inputmode="decimal" data-rupiah placeholder="0" data-asset></td></tr>
+      <tr><td><strong>Persediaan barang</strong><br><small style="color:var(--pd-faint)">Stok yang belum ada di buku, dinilai dengan harga pokok: {{ valuation.shelf_value|rp }} di gudang{% if valuation.mitra_value %}, {{ valuation.mitra_value|rp }} di mitra{% endif %}{% if valuation.booked %} · {{ valuation.booked|rp }} sudah ada di buku (tagihan, penyesuaian stok) dan tidak dicatat dua kali{% endif %}{% if valuation.missing_cost %} · {{ valuation.missing_cost }} barang belum punya harga pokok{% endif %}</small></td>
         <td class="num" style="padding-right:14px"><label style="display:inline-flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" name="include_stock" value="1" checked style="width:auto;height:auto" data-stock="{{ valuation.shelf_value|add:valuation.mitra_value|floatformat:'0' }}"> Catat nilai stok</label></td></tr>
     </tbody>
     <thead><tr><th>Yang Anda tanggung</th><th class="num">Saldo</th></tr></thead>
     <tbody>
-      <tr><td><strong>Utang supplier</strong><br><small style="color:var(--pd-faint)">Total tagihan supplier yang belum dibayar</small></td><td class="num"><input name="payable" inputmode="decimal" data-rupiah placeholder="0" data-debt></td></tr>
+      <tr><td><strong>Utang supplier</strong><br><small style="color:var(--pd-faint)">Hanya utang yang tidak dirinci di Utang per tagihan</small></td><td class="num"><input name="payable" inputmode="decimal" data-rupiah placeholder="0" data-debt></td></tr>
       <tr><td><strong>Pinjaman bank & utang lain</strong></td><td class="num"><input name="loans" inputmode="decimal" data-rupiah placeholder="0" data-debt></td></tr>
     </tbody>
   </table></div>
@@ -44,7 +50,7 @@
 <script>
 (function(){
   function num(t){return parseFloat(String(t||"").replace(/\./g,"").replace(",","."))||0;}
-  function fmt(n){return (n<0?"−":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");}
+  function fmt(n){return (n<0?"−":"")+(window.pdMoney ? pdMoney(Math.abs(n)) : "Rp" + Math.round(Math.abs(n)).toLocaleString("id-ID"));}
   var form=document.getElementById("opening-form");
   function calc(){var a=0,d=0;form.querySelectorAll("[data-asset]").forEach(function(i){a+=num(i.value);});
     var st=form.querySelector("[data-stock]");if(st&&st.checked)a+=num(st.dataset.stock);

@@ -30,7 +30,7 @@
     <div class="nested" style="padding:16px"><h3 style="margin:0 0 10px;font-weight:600">Pengumuman promosi</h3>{% include "merchant/_ds_field.html" with field=form.announcement_text %}<div class="field-row">{% include "merchant/_ds_field.html" with field=form.announcement_link_label %}{% include "merchant/_ds_field.html" with field=form.announcement_link_url %}</div></div></div></section>
 
   <section class="panel" id="operasional"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">4</span><div><h2>Penjualan & bantuan</h2><p>Informasi dasar untuk checkout dan kepercayaan pelanggan.</p></div></div></header><div class="dp-card-body">
-    <div class="field-row">{% include "merchant/_ds_field.html" with field=form.currency %}{% include "merchant/_ds_field.html" with field=form.tax_rate %}</div>
+    <div class="field-row">{% include "merchant/_ds_field.html" with field=form.tax_rate %}</div>
     <div class="field-row">{% include "merchant/_ds_field.html" with field=form.support_phone %}{% include "merchant/_ds_field.html" with field=form.support_email %}{% include "merchant/_ds_field.html" with field=form.instagram %}</div>
     <div class="field-row">{% include "merchant/_ds_field.html" with field=form.terms_url %}{% include "merchant/_ds_field.html" with field=form.privacy_url %}</div>
     {% include "merchant/_ds_field.html" with field=form.return_policy %}{% include "merchant/_ds_check.html" with field=form.listed_in_directory %}</div></section>

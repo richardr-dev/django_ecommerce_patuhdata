@@ -29,8 +29,8 @@
 </div>
 
 <div class="tiles">
-  <div class="tile accent"><small>Saldo pembukuan</small><strong>Rp{{ summary.book_balance|floatformat:"0g" }}</strong><span>Semua jurnal di akun {{ bank.account.code }}</span></div>
-  <div class="tile"><small>Saldo menurut bank</small><strong>{% if summary.statement_balance is not None %}Rp{{ summary.statement_balance|floatformat:"0g" }}{% else %}—{% endif %}</strong><span>{% if summary.statement_date %}Per {{ summary.statement_date|date:"d M Y" }}, dari mutasi terakhir{% else %}Impor mutasi untuk melihatnya{% endif %}</span></div>
+  <div class="tile accent"><small>Saldo pembukuan</small><strong>{{ summary.book_balance|rp }}</strong><span>Semua jurnal di akun {{ bank.account.code }}</span></div>
+  <div class="tile"><small>Saldo menurut bank</small><strong>{% if summary.statement_balance is not None %}{{ summary.statement_balance|rp }}{% else %}—{% endif %}</strong><span>{% if summary.statement_date %}Per {{ summary.statement_date|date:"d M Y" }}, dari mutasi terakhir{% else %}Impor mutasi untuk melihatnya{% endif %}</span></div>
   <div class="tile {% if summary.unmatched_count %}warn{% endif %}"><small>Mutasi belum cocok</small><strong>{{ summary.unmatched_count }}</strong><span>{% if summary.unmatched_count %}Total {{ summary.unmatched_total|signed_rp }}{% else %}{{ summary.matched_count }} mutasi sudah cocok{% endif %}</span></div>
   <div class="tile"><small>Jurnal belum ada di mutasi</small><strong>{{ summary.open_ledger_count }}</strong><span>Dicatat di buku, belum muncul di bank</span></div>
 </div>
@@ -108,9 +108,9 @@
       <tr>
         <td>{{ line.date|date:"d M Y" }}</td>
         <td>{{ line.description|truncatechars:70 }}{% if line.matched_line %}<small>↳ <a href="{% url 'merchant-journal-detail' line.matched_line.entry_id %}">JU-{{ line.matched_line.entry_id }}</a> · {{ line.matched_line.entry.memo|truncatechars:50 }}</small>{% endif %}</td>
-        <td class="num pos">{% if line.amount > 0 %}Rp{{ line.amount|floatformat:"0g" }}{% endif %}</td>
+        <td class="num pos">{% if line.amount > 0 %}{{ line.amount|rp }}{% endif %}</td>
         <td class="num">{% if line.amount < 0 %}{{ line.amount|abs|rp }}{% endif %}</td>
-        <td class="num muted">{% if line.balance is not None %}Rp{{ line.balance|floatformat:"0g" }}{% endif %}</td>
+        <td class="num muted">{% if line.balance is not None %}{{ line.balance|rp }}{% endif %}</td>
         <td><span class="pill {% if line.status == 'matched' %}pill-paid{% elif line.status == 'ignored' %}pill-void{% else %}pill-partial{% endif %}">{{ line.get_status_display }}</span></td>
         <td class="num">{% if can_edit and line.status != 'unmatched' %}<form method="post">{% csrf_token %}<input type="hidden" name="tab" value="all"><input type="hidden" name="action" value="{% if line.status == 'matched' %}unmatch{% else %}restore{% endif %}"><input type="hidden" name="line" value="{{ line.id }}"><button class="link-btn">{% if line.status == 'matched' %}Batalkan cocok{% else %}Kembalikan{% endif %}</button></form>{% endif %}</td>
       </tr>
@@ -136,8 +136,8 @@
         <td>{{ line.entry.date|date:"d M Y" }}</td>
         <td><a class="rowlink" href="{% url 'merchant-journal-detail' line.entry_id %}">JU-{{ line.entry_id }}</a></td>
         <td>{{ line.entry.memo|truncatechars:80 }}</td>
-        <td class="num pos">{% if line.debit %}Rp{{ line.debit|floatformat:"0g" }}{% endif %}</td>
-        <td class="num">{% if line.credit %}Rp{{ line.credit|floatformat:"0g" }}{% endif %}</td>
+        <td class="num pos">{% if line.debit %}{{ line.debit|rp }}{% endif %}</td>
+        <td class="num">{% if line.credit %}{{ line.credit|rp }}{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

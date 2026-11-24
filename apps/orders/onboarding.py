@@ -48,23 +48,53 @@ def _warehouse_url(store):
         else reverse("merchant-entity-new", args=["warehouses"]))
 
 
+MAIN_ACCOUNT_NAME = "Kas & bank utama"  # the name `accounting.bank.bank_accounts` gives the automatic one
+
+
 def books_setup_steps(store):
-    """The accountant's setup list for Beranda: what the books need before the numbers can be trusted.
-    Each step is ticked from real data, like the shop list above."""
+    """Starting the books, in the order a shop does it: who it is to the tax office, where its money
+    is, what it sells and at what cost, the balances on the first day, then the first sale. Each step
+    is ticked from real data, like the shop list above, and its hint says what is still missing."""
     from apps.accounting import opening
     from apps.accounting.models import BankAccount
+    from apps.catalog.models import Product
     from apps.tax.models import Invoice, TaxProfile
 
     profile = TaxProfile.objects.filter(store=store).first()
+    if profile:
+        regime = "PPh Final 0,5% dari omzet" if profile.pph_regime == "umkm_final" else "PPh tarif umum"
+        tax_hint = (f"Saat ini: {profile.get_taxpayer_type_display().lower()}, {regime}, "
+            f"{'PKP (memungut PPN)' if profile.is_pkp else 'bukan PKP'}."
+            + ("" if profile.npwp else " Periksa, lalu isi NPWP atau NIK."))
+    else:
+        tax_hint = "Orang pribadi atau badan, PPh Final 0,5% atau tarif umum, PKP atau bukan, dan NPWP."
+
+    accounts = list(BankAccount.objects.filter(store=store, is_active=True).values_list("name", flat=True))
+    # The main cash account is created automatically, so it alone does not mean the step was done.
+    banks_done = len(accounts) > 1 or (accounts and accounts[0] != MAIN_ACCOUNT_NAME)
+
+    products = Product.objects.filter(store=store, is_active=True, is_digital=False)
+    no_cost = products.filter(cost_price__isnull=True).count()
+    if not products.exists():
+        product_hint = "Impor dari Excel (CSV): nama, SKU, harga jual, stok, dan harga pokok sekaligus."
+    elif no_cost:
+        product_hint = (f"{no_cost} produk belum punya harga pokok, jadi HPP dan laba belum akurat. "
+            "Isi kolom cost_price lalu impor ulang.")
+    else:
+        product_hint = "Semua produk punya harga pokok."
+
     return [
-        SetupStep("Lengkapi profil pajak", "NPWP, alamat, dan status PKP tercetak di setiap invoice.",
-            bool(profile and profile.npwp), reverse("merchant-tax"), "Isi profil pajak"),
-        SetupStep("Catat rekening kas & bank", "Satu rekening per bank, kas tunai, atau e-wallet.",
-            BankAccount.objects.filter(store=store, is_active=True).exists(),
+        SetupStep("Periksa profil pajak", tax_hint, bool(profile and profile.npwp),
+            reverse("merchant-tax"), "Isi profil pajak"),
+        SetupStep("Catat kas & rekening bank", "Laci kas, setiap rekening bank, dan e-wallet (QRIS, "
+            "GoPay, OVO) yang menerima uang usaha.", bool(banks_done),
             reverse("merchant-bank-accounts"), "Tambah rekening"),
-        SetupStep("Isi saldo awal", "Saldo kas, piutang, dan utang saat Anda mulai memakai pembukuan.",
-            opening.existing(store) is not None, reverse("merchant-opening-balances"), "Isi saldo awal"),
-        SetupStep("Terbitkan invoice pertama", "Penjualan langsung tercatat di buku besar.",
-            Invoice.objects.filter(order__store=store).exists(), reverse("merchant-invoice-new"),
-            "Buat invoice"),
+        SetupStep("Masukkan produk dan harga pokok", product_hint,
+            products.exists() and not no_cost, reverse("merchant-product-import"), "Impor produk"),
+        SetupStep("Isi saldo awal", "Uang di kas dan bank, nilai stok, piutang, dan utang pada hari Anda "
+            "mulai memakai pembukuan.", opening.existing(store) is not None,
+            reverse("merchant-opening-balances"), "Isi saldo awal"),
+        SetupStep("Catat penjualan pertama", "Dari kasir, invoice, atau impor pesanan marketplace; "
+            "penjualan, HPP, dan stok tercatat otomatis.", Invoice.objects.filter(store=store).exists(),
+            reverse("merchant-invoice-new"), "Buat invoice"),
     ]

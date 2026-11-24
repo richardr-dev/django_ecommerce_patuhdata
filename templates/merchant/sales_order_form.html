@@ -45,7 +45,7 @@
 <script>
 (function(){
   function num(t){t=(t||"").replace(/\s/g,"");if(!t)return 0;if(t.indexOf(",")>-1&&t.lastIndexOf(",")>t.lastIndexOf("."))t=t.replace(/\./g,"").replace(",",".");else if((t.match(/\./g)||[]).length>1||/\.\d{3}$/.test(t))t=t.replace(/\./g,"");else t=t.replace(/,/g,"");return parseFloat(t)||0;}
-  function fmt(n){return "Rp"+Math.round(n).toLocaleString("id-ID");}
+  function fmt(n){return window.pdMoney ? pdMoney(n) : "Rp" + Math.round(n).toLocaleString("id-ID");}
   var rows=document.getElementById("rows");
   function calc(){var s=0;rows.querySelectorAll("tr").forEach(function(tr){var q=num(tr.querySelector("[data-qty]").value),p=num(tr.querySelector("[data-price]").value);tr.querySelector("[data-line]").textContent=q&&p?fmt(q*p):"";s+=q*p;});
     document.getElementById("sub").textContent=fmt(s);document.getElementById("grand").textContent=fmt(Math.max(s-num(document.querySelector("[data-disc]").value),0)+num(document.querySelector("[data-ship]").value));}

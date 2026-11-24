@@ -1,0 +1,24 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}{{ cost.number }}{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-landed-costs' %}">Biaya perolehan</a> › <span>{{ cost.number }}</span></nav>
+<div class="dp-head"><div><h1 class="dp-title">{{ cost.number }} <span class="pill {% if cost.status == 'posted' %}pill-paid{% else %}pill-cancelled{% endif %}">{{ cost.get_status_display }}</span></h1>
+  <p class="dp-sub">{{ cost.date|date:"d M Y" }} · tagihan <a href="{% url 'merchant-bill-detail' cost.bill.pk %}">{{ cost.bill.supplier.name }} {{ cost.bill.number }}</a> · {{ cost.get_method_display|lower }} · <b>{{ cost.amount|rp }}</b></p></div>
+  <div class="dp-actions">{% if can_allocate and cost.status == 'posted' %}<form method="post" data-confirm="Batalkan {{ cost.number }}? Jurnalnya dibalik dan harga pokok barang dikembalikan." data-confirm-ok="Batalkan">{% csrf_token %}<input type="hidden" name="action" value="void"><button class="btn btn-danger">Batalkan</button></form>{% endif %}</div></div>
+<div class="tiles">
+  <div class="tile accent"><small>Masuk persediaan</small><strong>{{ cost.to_stock|rp }}</strong><span>barang yang masih ada</span></div>
+  <div class="tile"><small>Masuk HPP</small><strong>{{ cost.to_cogs|rp }}</strong><span>barang yang sudah terjual</span></div>
+</div>
+<div class="grid gap-5">
+<div class="grid gap-5 content-start">
+<section class="panel !mb-0"><header><h2>Pembagian per barang</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Barang</th><th>Penerimaan</th><th class="num">Diterima</th><th class="num">Masih ada</th><th class="num">Bagian</th><th class="num">Ke persediaan</th><th class="num">Ke HPP</th></tr></thead><tbody>
+  {% for l in lines %}<tr><td><b>{% if l.variant %}{{ l.product.name }} / {{ l.variant.name }}{% else %}{{ l.product.name }}{% endif %}</b></td><td><a href="{% url 'merchant-goods-receipt' l.receipt_line.receipt.pk %}">{{ l.receipt_line.receipt.number|default:"Penerimaan" }}</a></td>
+    <td class="num">{{ l.quantity }}</td><td class="num">{{ l.held }}</td><td class="num">{{ l.share|rp }}</td><td class="num">{{ l.to_stock|rp }}</td><td class="num">{{ l.to_cogs|rp }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% include "merchant/_journal_card.html" %}
+</div>
+<div class="grid gap-5 content-start">
+{% if cost.notes %}<section class="panel !mb-0"><header><h2>Catatan</h2></header><div class="dp-card-body">{{ cost.notes }}</div></section>{% endif %}
+{% include "merchant/_audit_card.html" %}
+</div></div>
+{% endblock %}

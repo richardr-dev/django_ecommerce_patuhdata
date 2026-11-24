@@ -1,0 +1,77 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Usulan pembelian{% endblock %}
+{% block content %}
+<div class="pg-head">
+  <div><span class="pg-kicker">Pembelian</span><h1>Usulan pembelian</h1>
+    <p>Barang yang perkiraan stoknya di bawah stok minimum. Perkiraan = stok di rak − dipesan pelanggan (reservasi) + masih dipesan ke supplier − sisa pesanan penjualan. Centang, periksa jumlah dan supplier, lalu buat pesanan pembeliannya sekaligus.</p></div>
+  <div class="dp-actions">{% if can_order %}<button type="button" class="btn-primary" data-open="rule-dialog">{% icon "plus" %} Aturan stok minimum</button>{% endif %}</div>
+</div>
+<div class="tiles">
+  <div class="tile accent"><small>Perlu dipesan</small><strong>{{ suggestions|length }}</strong><span>barang di bawah stok minimum</span></div>
+  <div class="tile"><small>Perkiraan nilai</small><strong>{{ total|rp }}</strong><span>pada harga pesanan terakhir</span></div>
+  <div class="tile"><small>Aturan aktif</small><strong>{{ rules|length }}</strong><span>produk atau varian yang dipantau</span></div>
+</div>
+<div class="tabs"><a href="?tab=usulan" class="{% if tab == 'usulan' %}on{% endif %}">Usulan ({{ suggestions|length }})</a><a href="?tab=aturan" class="{% if tab == 'aturan' %}on{% endif %}">Aturan stok minimum ({{ rules|length }})</a></div>
+
+{% if tab == 'usulan' %}
+<form method="post" id="reorder-form">{% csrf_token %}<input type="hidden" name="action" value="order"><input type="hidden" name="idem" value="{{ idem_key }}">
+<section class="panel"><div class="scroll-x"><table class="tbl" data-no-row-link><thead><tr><th style="width:36px"><input type="checkbox" id="pick-all" aria-label="Pilih semua" checked></th><th>Barang</th><th>Gudang</th><th class="num">Di rak</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Perkiraan</th><th class="num">Min / maks</th><th class="num" style="width:110px">Pesan</th><th style="width:170px">Supplier</th><th class="num" style="width:120px">Harga satuan</th></tr></thead><tbody>
+  {% for s in suggestions %}<tr>
+    <td data-no-row><input type="checkbox" name="pick" value="{{ s.rule.pk }}" checked aria-label="Pesan {{ s.rule.label }}"></td>
+    <td><b>{{ s.rule.label }}</b><small style="display:block;color:var(--ds-muted)">{{ s.rule.sku }}</small></td>
+    <td>{{ s.rule.warehouse.name|default:"Semua gudang" }}</td>
+    <td class="num">{{ s.position.on_hand }}{% if s.position.reserved %}<small style="display:block;color:var(--ds-muted)">−{{ s.position.reserved }} reservasi</small>{% endif %}</td>
+    <td class="num">{{ s.position.incoming|default:"—" }}</td><td class="num">{{ s.position.outgoing|default:"—" }}</td>
+    <td class="num"><span class="pill {% if s.position.forecast <= 0 %}pill-fail{% else %}pill-warn{% endif %}">{{ s.position.forecast }}</span></td>
+    <td class="num">{{ s.rule.minimum }} / {{ s.rule.maximum }}{% if s.rule.multiple > 1 %}<small style="display:block;color:var(--ds-muted)">kelipatan {{ s.rule.multiple }}</small>{% endif %}</td>
+    <td class="num" data-no-row><input name="qty_{{ s.rule.pk }}" inputmode="numeric" value="{{ s.quantity }}" aria-label="Jumlah pesan {{ s.rule.label }}" style="width:72px;text-align:right"></td>
+    <td data-no-row><select name="supplier_{{ s.rule.pk }}" aria-label="Supplier {{ s.rule.label }}"><option value="">— pilih supplier —</option>{% for sup in suppliers %}<option value="{{ sup.pk }}"{% if s.supplier and s.supplier.pk == sup.pk %} selected{% endif %}>{{ sup.name }}</option>{% endfor %}</select></td>
+    <td class="num" data-no-row><input name="cost_{{ s.rule.pk }}" inputmode="decimal" data-rupiah value="{{ s.unit_cost|floatformat:'0' }}" aria-label="Harga {{ s.rule.label }}" style="width:105px;text-align:right"></td>
+  </tr>{% empty %}<tr><td colspan="11" class="!py-10 text-center text-slate-400">{% if rules %}Semua barang yang dipantau masih di atas stok minimum.{% else %}Belum ada aturan stok minimum. Tambahkan satu untuk barang yang tidak boleh habis.{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if suggestions and can_order %}<footer style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><span class="dp-help" style="margin:0">Satu pesanan pembelian per supplier (dan gudang tujuan). Pesanan belum mencatat apa pun di buku besar.</span><button class="btn-primary" data-confirm="Buat pesanan pembelian untuk barang yang dicentang?" data-confirm-ok="Buat pesanan" data-confirm-tone="neutral">{% icon "clipboard" %} Buat pesanan pembelian</button></footer>{% endif %}
+</section></form>
+{% else %}
+<section class="panel"><div class="scroll-x"><table class="tbl" data-no-row-link><thead><tr><th>Barang</th><th>Gudang</th><th class="num">Perkiraan</th><th class="num">Minimum</th><th class="num">Maksimum</th><th class="num">Kelipatan</th><th>Supplier</th><th class="num">Waktu tunggu</th><th></th></tr></thead><tbody>
+  {% for r in rules %}<tr>
+    <td><b>{{ r.label }}</b><small style="display:block;color:var(--ds-muted)">{{ r.sku }}</small></td><td>{{ r.warehouse.name|default:"Semua gudang" }}</td>
+    <td class="num"><span class="pill {% if r.where.forecast < r.minimum %}pill-warn{% else %}pill-ok{% endif %}">{{ r.where.forecast }}</span></td>
+    <td class="num">{{ r.minimum }}</td><td class="num">{{ r.maximum }}</td><td class="num">{{ r.multiple }}</td>
+    <td>{{ r.supplier.name|default:"Supplier terakhir" }}</td><td class="num">{% if r.lead_days %}{{ r.lead_days }} hari{% else %}—{% endif %}</td>
+    <td class="num" data-no-row>{% if can_order %}<button type="button" class="btn" data-open="rule-dialog" data-rule="{{ r.pk }}" data-item="{% if r.variant_id %}v{{ r.variant_id }}{% else %}{{ r.product_id }}{% endif %}" data-warehouse="{{ r.warehouse_id|default_if_none:'' }}" data-minimum="{{ r.minimum }}" data-maximum="{{ r.maximum }}" data-multiple="{{ r.multiple }}" data-supplier="{{ r.supplier_id|default_if_none:'' }}" data-lead="{{ r.lead_days }}">Ubah</button>
+      <form method="post" style="display:inline" data-confirm="Hapus aturan stok minimum {{ r.label }}?" data-confirm-ok="Hapus">{% csrf_token %}<input type="hidden" name="action" value="delete_rule"><input type="hidden" name="rule" value="{{ r.pk }}"><button class="btn">Hapus</button></form>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="9" class="!py-10 text-center text-slate-400">Belum ada aturan. Tekan "Aturan stok minimum" untuk menambah.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+
+{% if can_order %}<dialog id="rule-dialog" class="pd-dialog" style="max-width:600px"><form method="post" id="rule-form">{% csrf_token %}<input type="hidden" name="action" value="save_rule"><input type="hidden" name="rule" id="r-rule">
+  <header><h2 id="r-title">Aturan stok minimum</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+  <div><p class="dp-help" style="margin:0">Bila perkiraan stok turun di bawah minimum, sistem mengusulkan pesanan sampai stok maksimum, dibulatkan ke atas sesuai kelipatan (mis. 12 per dus).</p>
+    <label class="field"><span>Produk atau varian</span><select name="item" id="r-item" required><option value="">— pilih barang —</option>{% for i in items %}<option value="{{ i.id }}">{{ i.sku }} · {{ i.name }}</option>{% endfor %}</select></label>
+    <div class="field-row">
+      <label class="field"><span>Gudang</span><select name="warehouse" id="r-warehouse"><option value="">Semua gudang</option>{% for w in warehouses %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Supplier <em>(opsional)</em></span><select name="supplier" id="r-supplier"><option value="">Supplier terakhir</option>{% for sup in suppliers %}<option value="{{ sup.pk }}">{{ sup.name }}</option>{% endfor %}</select></label></div>
+    <div class="field-row">
+      <label class="field"><span>Stok minimum</span><input name="minimum" id="r-minimum" inputmode="numeric" required></label>
+      <label class="field"><span>Stok maksimum</span><input name="maximum" id="r-maximum" inputmode="numeric" required></label>
+      <label class="field"><span>Kelipatan</span><input name="multiple" id="r-multiple" inputmode="numeric" value="1"></label>
+      <label class="field"><span>Waktu tunggu (hari)</span><input name="lead_days" id="r-lead" inputmode="numeric" value="0"></label></div></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan aturan</button></footer></form></dialog>{% endif %}
+{% include "merchant/_dialog_js.html" %}
+<script>
+(function () {
+  var all = document.getElementById("pick-all");
+  if (all) all.addEventListener("change", function () {
+    document.querySelectorAll("#reorder-form input[name='pick']").forEach(function (box) { box.checked = all.checked; });
+  });
+  document.querySelectorAll("[data-open='rule-dialog']").forEach(function (button) {
+    button.addEventListener("click", function () {   // "Ubah" fills the dialog; the header button opens it empty
+      var d = button.dataset, set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ""; };
+      set("r-rule", d.rule); set("r-item", d.item); set("r-warehouse", d.warehouse); set("r-supplier", d.supplier);
+      set("r-minimum", d.minimum); set("r-maximum", d.maximum); set("r-multiple", d.multiple || "1"); set("r-lead", d.lead || "0");
+      document.getElementById("r-title").textContent = d.rule ? "Ubah aturan stok minimum" : "Aturan stok minimum baru";
+    });
+  });
+})();
+</script>
+{% endblock %}

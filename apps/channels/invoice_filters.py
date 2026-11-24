@@ -32,7 +32,7 @@ MONTHS = ("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", 
 TABS = [
     ("", "Semua", None),
     ("draft", "Draft", Q(invoice__status=Invoice.STATUS_DRAFT)),
-    ("awaiting", "Menunggu pembayaran", Q(invoice__status__in=[Invoice.STATUS_ISSUED,
+    ("awaiting", "Belum dibayar",Q(invoice__status__in=[Invoice.STATUS_ISSUED,
         Invoice.STATUS_PARTIAL, Invoice.STATUS_OVERDUE])),
     ("overdue", "Jatuh tempo", Q(invoice__status=Invoice.STATUS_OVERDUE)),
     ("paid", "Lunas", Q(invoice__status=Invoice.STATUS_PAID)),

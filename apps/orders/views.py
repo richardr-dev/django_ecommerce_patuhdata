@@ -63,7 +63,6 @@ from apps.integrations.platform_balance import platform_orders
 from apps.integrations.reconciliation import confirm_payment
 from apps.integrations.shipping import BiteshipProvider, RajaOngkirProvider, shipping_origin
 from apps.shops.availability import preview_url, store_state
-from apps.shops.permissions import roles
 from apps.shops.models import (
     AuditLog,
     Customer,
@@ -73,6 +72,7 @@ from apps.shops.models import (
     StorefrontSlide,
     StorePage,
 )
+from apps.shops.permissions import roles
 from apps.shops.shortlinks import attributed_campaign_id
 from apps.shops.storefront_templates import STOREFRONT_TEMPLATES, apply_storefront_template
 from apps.shops.tenancy import store_url
@@ -111,7 +111,7 @@ from .forms import (
 from .gift_cards import find as find_gift_card
 from .gift_cards import redeem as redeem_gift_card
 from .gift_cards import usable_amount as gift_card_usable
-from .inventory import record_movement, reserve_from_levels, reserve_variant
+from .inventory import reserve_from_levels, reserve_variant
 from .loyalty import loyalty_account, redeem_for_order, redemption_quote
 from .models import (
     CommerceSession,
@@ -1002,12 +1002,14 @@ def request_return(request, order_id):
 def _staff_store(request):
     stores = Store.objects.filter(owner=request.user) | Store.objects.filter(staff_members__user=request.user)
     stores = stores.distinct().order_by("name")
-    requested = request.GET.get("store") or request.POST.get("store")
-    if requested and stores.filter(id=requested).exists():
+    requested = str(request.GET.get("store") or request.POST.get("store") or "").strip()
+    if requested.isdigit() and stores.filter(id=requested).exists():   # junk (a slug, text) is ignored
         request.session["merchant_store_id"] = int(requested)
     store = stores.filter(id=request.session.get("merchant_store_id")).first() or stores.first()
     if store:
         request.session["merchant_store_id"] = store.id
+        from apps.shops import currency
+        currency.activate(store.currency)  # every amount on this page in the company's book currency
         return store
     raise Http404
 
@@ -1030,7 +1032,9 @@ def _merchant_context(request, store, **context):
     role_label = _permissions.ROLE_LABELS[role] if role in _permissions.SCREEN_ROLE else ""
     role = _permissions.screen_role(role)
     pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
+    from apps.shops import currency as _currency
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "book_currency": _currency.for_store(store),
         "merchant_role_label": role_label, "merchant_is_accountant": is_auditor, "merchant_real_role": real_role,
         "approvals_pending": _approvals_pending(store, request.user),
         "merchant_is_owner": store.owner_id == request.user.id,
@@ -1143,9 +1147,11 @@ def merchant_dashboard(request):
     loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     from apps.accounting.todo import todo_items
+    books_setup = books_setup_steps(store)
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
         books=_books_summary(request, store, today),
-        books_setup=(lambda steps: steps if not all(x.done for x in steps) else [])(books_setup_steps(store)),
+        books_setup=books_setup if not all(step.done for step in books_setup) else [],
+        books_setup_done=sum(step.done for step in books_setup),
         finance_todo=todo_items(store, today, request.user), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
@@ -1209,7 +1215,7 @@ def merchant_orders(request):
     web_only = request.GET.get("sumber") == "web" and not (chosen & MARKETPLACE_CHANNELS)
     with_marketplace = not web_only
     hidden_marketplace = marketplace_orders(store).count() if web_only else 0
-    all_orders = website_orders(store) if web_only else Order.objects.filter(store=store)
+    all_orders = website_orders(store) if web_only else Order.objects.filter(store=store).exclude(order_type="opening")
     # Old clean-ups renamed superseded copies of an order to "<id>~dibersihkan": cancelled leftovers that were
     # never sales. They stay in the data but are hidden here unless asked for (?arsip=1).
     show_archive = request.GET.get("arsip") == "1"
@@ -1231,7 +1237,15 @@ def merchant_orders(request):
     # Search, channels (several), period, amount: the same filter as the invoice list. The order
     # page also finds a parcel by its tracking number, payment reference or short #id.
     from apps.accounting.views import render_partial
-    from apps.channels.invoice_filters import KEYS, PRESETS, SORTS, apply_filters, apply_sort, date_range, values
+    from apps.channels.invoice_filters import (
+        KEYS,
+        PRESETS,
+        SORTS,
+        apply_filters,
+        apply_sort,
+        date_range,
+        values,
+    )
     query = request.GET.get("q", "").strip()
     shared = request.GET.copy()
     shared.pop("q", None)
@@ -1798,6 +1812,8 @@ def merchant_stock(request):
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "ops", "warehouse"})
     back = request.get_full_path()
+    if request.method == "POST" and request.POST.get("action") == "move":
+        return _move_stock(request, store, back)
     if request.method == "POST":
         target_type = request.POST.get("target_type")
         try:
@@ -1808,59 +1824,62 @@ def merchant_stock(request):
         except ValueError:
             messages.error(request, "Stok harus berupa angka nol atau lebih.")
             return redirect(back)
-        reason = request.POST.get("reason", "Penyesuaian stok dashboard").strip()[:200]
-        with transaction.atomic():
-            if target_type == "product":
-                # A product that has no stock entry yet starts one in the main warehouse.
-                product = get_object_or_404(Product, id=request.POST.get("target_id"),
-                    store=store, is_active=True)
-                warehouse = Warehouse.objects.filter(store=store, is_active=True).order_by(
-                    "priority", "id").first()
-                if warehouse is None:
-                    messages.error(request, "Tambahkan gudang terlebih dahulu.")
-                    return redirect(back)
-                level, _ = InventoryLevel.objects.select_for_update().get_or_create(
-                    warehouse=warehouse, product=product)
-                target_type = "level"
-            else:
-                level = None
-            if target_type == "level":
-                level = level or get_object_or_404(InventoryLevel.objects.select_for_update(),
-                    id=request.POST.get("target_id"), warehouse__store=store)
-                if new_stock < level.reserved:
-                    messages.error(request,
-                        f"Stok tidak boleh kurang dari {level.reserved} unit yang sedang direservasi.")
-                    return redirect(back)
-                previous = level.on_hand
-                level.on_hand, level.safety_stock = new_stock, safety_stock
-                level.save(update_fields=["on_hand", "safety_stock", "updated_at"])
-                if previous != new_stock:
-                    record_movement(store=store, inventory_level=level, kind="adjust",
-                        quantity=abs(new_stock - previous), reason=reason, actor=request.user,
-                        previous_on_hand=previous, new_on_hand=new_stock,
-                        previous_reserved=level.reserved, new_reserved=level.reserved)
-                label = f"{level.product.name} · {level.warehouse.name}"
-            elif target_type == "variant":
-                variant = get_object_or_404(ProductVariant.objects.select_for_update(),
-                    id=request.POST.get("target_id"), product__store=store)
-                if new_stock < variant.reserved:
-                    messages.error(request,
-                        f"Stok tidak boleh kurang dari {variant.reserved} unit yang sedang direservasi.")
-                    return redirect(back)
-                previous = variant.stock
-                variant.stock = new_stock
-                variant.save(update_fields=["stock"])
-                if previous != new_stock:
-                    record_movement(store=store, variant=variant, kind="adjust",
-                        quantity=abs(new_stock - previous), reason=reason, actor=request.user,
-                        previous_on_hand=previous, new_on_hand=new_stock,
-                        previous_reserved=variant.reserved, new_reserved=variant.reserved)
-                label = str(variant)
-            else:
-                raise Http404
-            AuditLog.objects.create(store=store, actor=request.user, action="inventory.adjusted",
-                object_type=target_type, object_id=request.POST.get("target_id", ""),
-                details={"label": label, "new_stock": new_stock, "reason": reason})
+        from apps.accounting import stock_adjustments
+        from apps.accounting.models import ApprovalRequest
+        notes = request.POST.get("reason", "").strip()[:200]
+        reason_code = request.POST.get("reason_code") or "correction"
+        if reason_code not in stock_adjustments.REASONS:
+            reason_code = "correction"
+        level = None
+        try:
+            with transaction.atomic():
+                if target_type == "product":
+                    # A product that has no stock entry yet starts one in the main warehouse.
+                    product = get_object_or_404(Product, id=request.POST.get("target_id"),
+                        store=store, is_active=True)
+                    warehouse = Warehouse.objects.filter(store=store, is_active=True).order_by(
+                        "priority", "id").first()
+                    if warehouse is None:
+                        messages.error(request, "Tambahkan gudang terlebih dahulu.")
+                        return redirect(back)
+                    level, _ = InventoryLevel.objects.select_for_update().get_or_create(
+                        warehouse=warehouse, product=product)
+                    target_type = "level"
+                    if reason_code == "correction":
+                        reason_code = "opening"  # first stock of a product: goods held but never recorded
+                if target_type == "level":
+                    level = get_object_or_404(InventoryLevel.objects.select_for_update().select_related(
+                        "product", "warehouse"), id=level.id if level else request.POST.get("target_id"),
+                        warehouse__store=store)
+                    if level.safety_stock != safety_stock:
+                        level.safety_stock = safety_stock
+                        level.save(update_fields=["safety_stock", "updated_at"])
+                    result = stock_adjustments.set_quantity(store, level=level, new_quantity=new_stock,
+                        reason=reason_code, notes=notes, actor=request.user)
+                    label = f"{level.product.name} · {level.warehouse.name}"
+                elif target_type == "variant":
+                    variant = get_object_or_404(ProductVariant.objects.select_for_update().select_related("product"),
+                        id=request.POST.get("target_id"), product__store=store)
+                    location = Warehouse.objects.filter(store=store, pk=request.POST.get("warehouse") or 0).first()
+                    result = stock_adjustments.set_quantity(store, variant=variant, new_quantity=new_stock,
+                        warehouse=location, reason=reason_code, notes=notes, actor=request.user)
+                    label = f"{variant} · {location.name}" if location else str(variant)
+                else:
+                    raise Http404
+                AuditLog.objects.create(store=store, actor=request.user, action="inventory.adjusted",
+                    object_type=target_type, object_id=request.POST.get("target_id", ""),
+                    details={"label": label, "new_stock": new_stock, "reason": notes or reason_code})
+        except stock_adjustments.AdjustmentError as error:
+            messages.error(request, str(error))
+            return redirect(back)
+        if isinstance(result, ApprovalRequest):
+            messages.info(request, f"Perubahan stok {label} di atas batas persetujuan: diajukan dan dibukukan "
+                "setelah disetujui orang lain.")
+            return redirect(back)
+        if result is not None:
+            messages.success(request, f"Stok {label} diperbarui lewat penyesuaian {result.number} "
+                f"({result.reason_label}), dibukukan ke Persediaan.")
+            return redirect(back)
         messages.success(request, f"Stok {label} berhasil diperbarui.")
         return redirect(back)
     levels = InventoryLevel.objects.filter(warehouse__store=store).select_related(
@@ -1882,10 +1901,64 @@ def merchant_stock(request):
     levels, level_range, level_query = paginate(request, levels, MERCHANT_PAGE_SIZE)
     variants, variant_range, variant_query = paginate(request, variants, MERCHANT_PAGE_SIZE,
         param="vpage")
+    from .variant_stock import locations
+    warehouses = list(Warehouse.objects.filter(store=store, is_active=True).order_by("priority", "id"))
+    names = {w.pk: w for w in warehouses}
+    for variant in variants:
+        # One row per location that holds units (the first warehouse when none does yet).
+        held = [(names[w], units) for w, units in locations(variant) if w in names and units]
+        variant.location_rows = held or ([(warehouses[0], 0)] if warehouses else [])
     return render(request, "merchant/stock.html", _merchant_context(request, store,
         levels=levels, level_range=level_range, level_query=level_query, variants=variants,
         unstocked=unstocked,
-        variant_range=variant_range, variant_query=variant_query, query=query))
+        variant_range=variant_range, variant_query=variant_query, query=query,
+        books_started=_books_started(store), stock_reasons=_stock_reasons(),
+        warehouses=warehouses if len(warehouses) > 1 else []))
+
+
+def _move_stock(request, store, back):
+    """Pindah gudang from Kelola stok: units of a product or variant from one warehouse to another. No journal:
+    the goods stay the company's Persediaan at the same cost (``stock.transfer_stock``)."""
+    from apps.shops import permissions
+
+    from .stock import StockError, transfer_stock
+    if not permissions.can(request.user, store, "stock.send"):
+        raise Http404
+    active = Warehouse.objects.filter(store=store, is_active=True)
+    source = active.filter(pk=request.POST.get("source") or 0).first()
+    target = active.filter(pk=request.POST.get("target") or 0).first()
+    try:
+        quantity = int(request.POST.get("quantity", "0"))
+        if not source or not target or quantity <= 0:
+            raise StockError("Pilih gudang asal, gudang tujuan, dan jumlah lebih dari nol.")
+        if request.POST.get("target_type") == "variant":
+            variant = get_object_or_404(ProductVariant.objects.select_related("product"),
+                id=request.POST.get("target_id"), product__store=store)
+            product, label = variant.product, str(variant)
+        else:
+            product = get_object_or_404(Product, id=request.POST.get("target_id"), store=store)
+            variant, label = None, product.name
+        reason = (request.POST.get("reason", "").strip() or f"Pindah {source.name} → {target.name}")[:200]
+        transfer_stock(store=store, product=product, variant=variant, quantity=quantity, source=source,
+            target=target, reason=reason, actor=request.user)
+    except (StockError, ValueError) as error:
+        messages.error(request, str(error) or "Jumlah tidak valid.")
+        return redirect(back)
+    AuditLog.objects.create(store=store, actor=request.user, action="inventory.moved", object_type="stock",
+        object_id=str(product.pk), details={"label": label, "from": source.name, "to": target.name,
+        "quantity": quantity})
+    messages.success(request, f"{quantity} unit {label} dipindah dari {source.name} ke {target.name}.")
+    return redirect(back)
+
+
+def _books_started(store):
+    from apps.accounting.stock_adjustments import books_started
+    return books_started(store)
+
+
+def _stock_reasons():
+    from apps.accounting.stock_adjustments import REASONS
+    return REASONS
 
 @login_required(login_url="/login/")
 def merchant_order_detail(request, order_id):
@@ -1896,15 +1969,8 @@ def merchant_order_detail(request, order_id):
                                        "status_events").select_related("pickup_outlet"),
         id=order_id, store=store,
     )
-    from apps.channels.models import ChannelOrder
-    try:
-        channel_order = order.channel_order
-    except Exception:
-        channel_order = None
-    try:
-        invoice = order.invoice
-    except Exception:
-        invoice = None
+    channel_order = getattr(order, "channel_order", None)  # missing reverse one-to-ones raise AttributeError
+    invoice = getattr(order, "invoice", None)
     order.available_statuses = allowed_order_transitions(order)
     crm_customer = getattr(order, "customer", None)
     from .resi_labels import COURIERS
@@ -2285,16 +2351,21 @@ def _save_entity(request, store, section, entity, form, instance, variants):
         reserved = stored.reserved if stored else 0
         if saved.on_hand < reserved:
             raise ValidationError(f"Stok tidak boleh kurang dari {reserved} unit yang sedang direservasi.")
+        from apps.accounting import stock_adjustments
+        wanted = saved.on_hand
+        saved.on_hand = previous  # the quantity itself changes below, as a movement (and a journal once books run)
         if stored:
             saved.reserved = reserved  # the locked row's figure, not the one read before the lock
-            saved.save(update_fields=["on_hand", "safety_stock", "updated_at"])
+            saved.save(update_fields=["safety_stock", "updated_at"])
         else:
             saved.save()
-        if saved.on_hand != previous:
-            record_movement(store=store, inventory_level=saved, kind="adjust",
-                quantity=abs(saved.on_hand - previous), reason="Ubah stok di Persediaan", actor=request.user,
-                previous_on_hand=previous, new_on_hand=saved.on_hand,
-                previous_reserved=reserved, new_reserved=saved.reserved)
+        if wanted != previous:
+            try:
+                stock_adjustments.set_quantity(store, level=saved, new_quantity=wanted,
+                    reason="correction" if stored else "opening", notes="Ubah stok di Persediaan", actor=request.user)
+            except stock_adjustments.AdjustmentError as error:
+                raise ValidationError(str(error)) from error
+            saved.refresh_from_db()
         form.save_m2m()
         AuditLog.objects.create(store=store, actor=request.user,
             action=f"{section}.{'updated' if instance else 'created'}", object_type=entity.__name__,
@@ -2445,6 +2516,9 @@ def merchant_customer_detail(request, customer_id):
     spend = sold.aggregate(total=Sum("total"))["total"] or 0
     return render_partial(request, "merchant/customer_detail.html", "merchant/_customer_history.html",
         _merchant_context(request, store, price_lists=__import__("apps.catalog.models", fromlist=["PriceList"]).PriceList.objects.filter(store=store, is_active=True),
+            credit=__import__("apps.tax.credit_limit", fromlist=["position"]).position(customer),
+            credit_hold=__import__("apps.tax.credit_limit", fromlist=["overdue_hold"]).overdue_hold(customer),
+            may_set_credit=__import__("apps.shops.permissions", fromlist=["can"]).can(request.user, store, "sales.credit"),
         history=history, history_count=history.count(), history_spend=spend,
         history_units=sum(row["units"] or 0 for row in rows), purchased=rows,
         active_filters=active_filters, presets=PRESETS, range_preset=request.GET.get("range", ""),

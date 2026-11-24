@@ -1,4 +1,4 @@
-{% extends "merchant/base.html" %}{% load icons %}
+{% extends "merchant/base.html" %}{% load icons books %}
 {% block title %}Laporan Penjualan Semua Channel{% endblock %}
 {% block content %}
 
@@ -25,10 +25,10 @@
 </form>
 
 <div class="tiles">
-  <div class="tile accent"><small>Penjualan bersih</small><strong>Rp{{ report.totals.net_sales|floatformat:"0g" }}</strong><span>{{ report.totals.orders }} pesanan</span></div>
-  <div class="tile"><small>Harga pokok (HPP)</small><strong>Rp{{ report.totals.cogs|floatformat:"0g" }}</strong></div>
-  <div class="tile"><small>Biaya marketplace</small><strong>Rp{{ report.totals.fees|floatformat:"0g" }}</strong></div>
-  <div class="tile {% if report.totals.margin < 0 %}warn{% endif %}"><small>Margin</small><strong class="{% if report.totals.margin < 0 %}!text-rose-600{% else %}!text-emerald-600{% endif %}">Rp{{ report.totals.margin|floatformat:"0g" }}</strong><span>{{ report.totals.margin_pct }}% dari penjualan bersih</span></div>
+  <div class="tile accent"><small>Penjualan bersih</small><strong>{{ report.totals.net_sales|rp }}</strong><span>{{ report.totals.orders }} pesanan</span></div>
+  <div class="tile"><small>Harga pokok (HPP)</small><strong>{{ report.totals.cogs|rp }}</strong></div>
+  <div class="tile"><small>Biaya marketplace</small><strong>{{ report.totals.fees|rp }}</strong></div>
+  <div class="tile {% if report.totals.margin < 0 %}warn{% endif %}"><small>Margin</small><strong class="{% if report.totals.margin < 0 %}!text-rose-600{% else %}!text-emerald-600{% endif %}">{{ report.totals.margin|rp }}</strong><span>{{ report.totals.margin_pct }}% dari penjualan bersih</span></div>
 </div>
 
 <section class="panel">
@@ -44,14 +44,14 @@
       <tr>
         <td><span class="inline-flex items-center gap-2.5"><span class="bb-avatar !h-8 !w-8 !text-xs">{{ row.label|slice:":1"|upper }}</span><b class="text-slate-900">{{ row.label }}</b></span></td>
         <td class="num">{{ row.orders }}</td>
-        <td class="num">Rp{{ row.gross|floatformat:"0g" }}</td>
-        <td class="num muted">Rp{{ row.discount|floatformat:"0g" }}</td>
-        <td class="num"><b class="text-slate-900">Rp{{ row.net_sales|floatformat:"0g" }}</b></td>
-        <td class="num muted">{{ row.return_count }} · Rp{{ row.returns|floatformat:"0g" }}</td>
+        <td class="num">{{ row.gross|rp }}</td>
+        <td class="num muted">{{ row.discount|rp }}</td>
+        <td class="num"><b class="text-slate-900">{{ row.net_sales|rp }}</b></td>
+        <td class="num muted">{{ row.return_count }} · {{ row.returns|rp }}</td>
         <td class="num muted">{{ row.cancelled_count }}{% if row.cancel_pct %} <small class="!inline">({{ row.cancel_pct }}%)</small>{% endif %}</td>
-        <td class="num">Rp{{ row.cogs|floatformat:"0g" }}</td>
-        <td class="num">Rp{{ row.fees|floatformat:"0g" }}{% if row.orders and not row.fees_known and row.channel != 'web' and row.channel != 'manual' %}<small class="!text-amber-600" title="Impor laporan penghasilan marketplace untuk biaya yang akurat">{{ row.fee_orders }}/{{ row.orders }} pesanan</small>{% endif %}</td>
-        <td class="num"><b class="{% if row.margin < 0 %}neg{% else %}text-slate-900{% endif %}">Rp{{ row.margin|floatformat:"0g" }}</b> <small class="!inline">{{ row.margin_pct }}%</small></td>
+        <td class="num">{{ row.cogs|rp }}</td>
+        <td class="num">{{ row.fees|rp }}{% if row.orders and not row.fees_known and row.channel != 'web' and row.channel != 'manual' %}<small class="!text-amber-600" title="Impor laporan penghasilan marketplace untuk biaya yang akurat">{{ row.fee_orders }}/{{ row.orders }} pesanan</small>{% endif %}</td>
+        <td class="num"><b class="{% if row.margin < 0 %}neg{% else %}text-slate-900{% endif %}">{{ row.margin|rp }}</b> <small class="!inline">{{ row.margin_pct }}%</small></td>
       </tr>
     {% empty %}
       <tr><td colspan="10" class="!py-10 text-center text-slate-400">Belum ada penjualan pada periode ini.</td></tr>
@@ -68,8 +68,8 @@
       {% for p in report.products %}
       <tr><td><b class="text-slate-900">{{ p.name }}</b><small>{{ p.sku }}</small></td>
         <td class="num">{{ p.quantity }} unit</td>
-        <td class="num"><b class="text-slate-900">Rp{{ p.revenue|floatformat:"0g" }}</b></td>
-        <td class="num muted">margin Rp{{ p.margin|floatformat:"0g" }}</td></tr>
+        <td class="num"><b class="text-slate-900">{{ p.revenue|rp }}</b></td>
+        <td class="num muted">margin {{ p.margin|rp }}</td></tr>
       {% empty %}<tr><td class="!py-8 text-center text-slate-400">Belum ada data.</td></tr>{% endfor %}
     </tbody></table>
   </section>
@@ -79,7 +79,7 @@
       {% for c in report.customers %}
       <tr><td><span class="inline-flex items-center gap-2.5"><span class="bb-avatar !h-8 !w-8 !text-xs">{{ c.name|slice:":1"|upper }}</span><a class="rowlink" href="{% url 'merchant-customer-detail' c.id %}">{{ c.name }}</a></span></td>
         <td class="num">{{ c.orders }} pesanan</td>
-        <td class="num"><b class="text-slate-900">Rp{{ c.total|floatformat:"0g" }}</b></td></tr>
+        <td class="num"><b class="text-slate-900">{{ c.total|rp }}</b></td></tr>
       {% empty %}<tr><td class="!py-8 text-center text-slate-400">Belum ada data.</td></tr>{% endfor %}
     </tbody></table>
   </section>

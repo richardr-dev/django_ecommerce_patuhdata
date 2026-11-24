@@ -80,7 +80,7 @@ def merchant_stock_count(request, count_id):
         except (stock_counts.CountError, ValueError) as error:
             messages.error(request, f"Gagal: {error}")
         return redirect("merchant-stock-count", count_id=count.pk)
-    lines = list(count.lines.select_related("product"))
+    lines = list(count.lines.select_related("product", "variant"))
     return render(request, "merchant/stock_count_detail.html", _merchant_context(request, store, count=count, lines=lines,
         summary=stock_counts.summary(count), journal=entries_for(store, [("stock_count", count.pk)]),
         audit=audit_trail(store, count), editable=count.status == StockCount.DRAFT,

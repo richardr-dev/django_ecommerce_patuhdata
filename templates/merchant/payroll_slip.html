@@ -1,0 +1,53 @@
+{% load books branding %}{% brand store as b %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slip gaji {{ line.employee.name }} · {{ run.period|date:"F Y" }}</title>
+<style>
+  :root{--accent:{{ b.accent|default:"#0b6fb8" }};--ink:#012441;--muted:#5b7186;--line:#d6e6f0}
+  *{box-sizing:border-box}body{margin:0;background:#eaf7fe;color:var(--ink);font:14px/1.5 'Plus Jakarta Sans','Inter',-apple-system,sans-serif;font-variant-numeric:tabular-nums}
+  .paper{max-width:720px;margin:24px auto;background:#fff;border-radius:24px;padding:32px;box-shadow:0 8px 24px -4px rgba(1,36,65,.06)}
+  header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:2px solid var(--accent);padding-bottom:16px}
+  header img{max-height:48px;max-width:160px}h1{margin:0;font-size:20px}small,.muted{color:var(--muted)}
+  .who{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin:18px 0}.who div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding:4px 0}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:20px 0 6px}
+  table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px solid var(--line)}td.num{text-align:right}
+  tr.total td{font-weight:700;border-bottom:none}.net{margin-top:20px;background:#eaf7fe;border-radius:16px;padding:14px 18px;display:flex;justify-content:space-between;font-size:18px;font-weight:700}
+  .net span:last-child{color:var(--accent)}footer{margin-top:20px;font-size:12px;color:var(--muted)}
+  .print{display:block;margin:0 auto 24px;border:0;border-radius:999px;background:var(--accent);color:#fff;padding:10px 22px;font:inherit;font-weight:600;cursor:pointer}
+  @media print{body{background:#fff}.paper{box-shadow:none;margin:0;max-width:none}.print{display:none}}
+  @media (max-width:640px){.paper{margin:0;border-radius:0;padding:20px 16px}.who{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div class="paper">
+  <header><div>{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="{{ b.name }}">{% endif %}<h1>Slip gaji</h1><small>{{ run.period|date:"F Y" }} · {{ run.number }}</small></div>
+    <div style="text-align:right"><b>{{ b.name }}</b>{% if b.address %}<br><small>{{ b.address }}</small>{% endif %}</div></header>
+  <div class="who">
+    <div><span class="muted">Nama</span><b>{{ line.employee.name }}</b></div>
+    <div><span class="muted">Jabatan</span><span>{{ line.employee.position|default:"—" }}</span></div>
+    <div><span class="muted">NIK</span><span>{{ line.employee.nik|default:"—" }}</span></div>
+    <div><span class="muted">NPWP</span><span>{{ line.employee.npwp|default:"—" }}</span></div>
+    <div><span class="muted">Status PTKP</span><span>{{ line.employee.ptkp_status }}</span></div>
+    <div><span class="muted">Dibayar</span><span>{% if run.paid_on %}{{ run.paid_on|date:"d M Y" }}{% else %}belum{% endif %}</span></div>
+  </div>
+  <h2>Penghasilan</h2>
+  <table>{% for label, amount in slip.earnings %}<tr><td>{{ label }}</td><td class="num">{{ amount|rp }}</td></tr>{% endfor %}
+    <tr class="total"><td>Jumlah penghasilan</td><td class="num">{{ slip.gross_paid|rp }}</td></tr></table>
+  <h2>Potongan</h2>
+  <table>{% for label, amount in slip.deductions %}<tr><td>{{ label }}</td><td class="num">− {{ amount|rp }}</td></tr>{% empty %}<tr><td class="muted">Tidak ada potongan</td><td></td></tr>{% endfor %}
+    <tr class="total"><td>Total potongan</td><td class="num">− {{ slip.deducted|rp }}</td></tr></table>
+  <div class="net"><span>Diterima (take home pay)</span><span>{{ slip.net|rp }}</span></div>
+  {% if slip.annual %}<h2>PPh 21 setahun (masa pajak terakhir)</h2>
+  <table><tr><td>Penghasilan bruto setahun</td><td class="num">{{ slip.annual.gross|rp }}</td></tr>
+    <tr><td>Biaya jabatan</td><td class="num">− {{ slip.annual.job_cost|rp }}</td></tr>
+    <tr><td>Iuran JHT dan JP karyawan</td><td class="num">− {{ slip.annual.pension|rp }}</td></tr>
+    <tr><td>Penghasilan neto setahun</td><td class="num">{{ slip.annual.net|rp }}</td></tr>
+    <tr><td>PTKP {{ line.employee.ptkp_status }}</td><td class="num">− {{ slip.annual.ptkp|rp }}</td></tr>
+    <tr><td>Penghasilan kena pajak</td><td class="num">{{ slip.annual.pkp|rp }}</td></tr>
+    <tr><td>PPh 21 terutang setahun (Pasal 17)</td><td class="num">{{ slip.annual.tax|rp }}</td></tr>
+    <tr><td>Sudah dipotong masa sebelumnya</td><td class="num">− {{ slip.annual.withheld|rp }}</td></tr>
+    <tr class="total"><td>{% if slip.annual.december < 0 %}Lebih potong, dikembalikan{% else %}PPh 21 masa ini{% endif %}</td><td class="num">{{ slip.annual.december|abs|rp }}</td></tr></table>{% endif %}
+  {% if slip.company %}<h2>Dibayar perusahaan (tidak memotong gaji)</h2>
+  <table>{% for label, amount in slip.company %}<tr><td>{{ label }}</td><td class="num">{{ amount|rp }}</td></tr>{% endfor %}</table>{% endif %}
+  <footer>Dokumen ini dicetak dari pembukuan {{ b.name }}. Bukti potong PPh 21 diberikan terpisah.</footer>
+</div>
+<button class="print" onclick="window.print()">Cetak</button>
+</body></html>

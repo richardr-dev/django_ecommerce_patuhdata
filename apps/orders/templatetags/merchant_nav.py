@@ -64,12 +64,15 @@ NAV = [
     ]),
     ("Pembelian", [
         Group("Pembelian", "truck", [
-            Link("Supplier", "merchant-suppliers"),
+            Link("Ringkasan pembelian", "merchant-purchasing"),
+            Link("Usulan pembelian", "merchant-reorder"),
             Link("Pesanan pembelian", "merchant-purchase-orders", match=("/books/accounting/pesanan-pembelian/",)),
             Link("Penerimaan barang", "merchant-goods-receipts", match=("/books/accounting/penerimaan/",)),
-            Link("Tagihan supplier", "merchant-bills"),
-            Link("Buat tagihan", "merchant-bill-new"),
+            Link("Tagihan supplier", "merchant-bills", match=("/books/accounting/bills/",)),
+            Link("Beli tunai", "merchant-cash-purchase"),
             Link("Nota debit", "merchant-debit-notes", match=("/books/accounting/nota-debit/",)),
+            Link("Biaya perolehan", "merchant-landed-costs", match=("/books/accounting/biaya-perolehan/",)),
+            Link("Supplier", "merchant-suppliers", match=("/books/accounting/suppliers/",)),
             Link("Umur utang", "merchant-payables"),
             Link("Transfer antar brand", "merchant-intercompany", match=("/books/accounting/antar-brand/",)),
         ]),
@@ -80,6 +83,7 @@ NAV = [
             Link("Biaya operasional", "merchant-expenses"),
             Link("Pencairan dana", "merchant-payouts"),
             Link("Pinjaman", "merchant-loans", match=("/books/accounting/pinjaman/",)),
+            Link("Penggajian", "merchant-payroll", match=("/books/penggajian/",)),
             Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
         ]),
     ]),
@@ -88,8 +92,11 @@ NAV = [
             Link("Semua produk", "merchant-entity-list", ("products",), match=("/books/products/",)),
             Link("Kategori", "merchant-entity-list", ("categories",)),
             Link("Paket (bundle)", "merchant-bundles"),
+            Link("Satuan barang", "merchant-units"),
+            Link("Lot & kedaluwarsa", "merchant-lots", match=("/books/stock/lot/",)),
             Link("Stok gudang", "merchant-stock"),
             Link("Stok opname", "merchant-stock-counts", match=("/books/accounting/stok-opname/",)),
+            Link("Penyesuaian stok", "merchant-stock-adjustments", match=("/books/accounting/penyesuaian-stok/",)),
             Link("Permintaan stok", "merchant-stock-requests", match=("/books/stock/permintaan/",)),
             Link("Stok minus", "merchant-stock-minus"),
             Link("Gudang & outlet", "merchant-entity-list", ("warehouses",)),
@@ -100,6 +107,7 @@ NAV = [
         Group("Laporan persediaan", "layers", [
             Link("Nilai persediaan", "merchant-inventory-value"),
             Link("Kartu stok", "merchant-stock-card"),
+            Link("Mutasi persediaan", "merchant-inventory-mutation"),
             Link("Stok lambat bergerak", "merchant-slow-moving"),
             Link("Penutupan persediaan", "merchant-inventory-close"),
         ]),
@@ -137,6 +145,7 @@ NAV = [
             Link("PPN & PPh", "merchant-tax"),
             Link("Kalender pajak", "merchant-tax-calendar"),
             Link("SPT Masa PPN", "merchant-spt-ppn"),
+            Link("Pajak marketplace", "merchant-marketplace-tax"),
             Link("SPT Tahunan badan", "merchant-spt-tahunan"),
             Link("PPh dipotong", "merchant-withholdings", match=("/books/tax/pph/",)),
             Link("Tampilan invoice", "merchant-invoice-style", roles=frozenset({"admin", "manager", "finance"})),
@@ -187,6 +196,7 @@ NAV = [
     ("", [
         Group("Pengaturan", "sliders", [
             Link("Pembayaran", "merchant-payment-settings"),
+            Link("Mata uang", "merchant-currency-settings", roles=ADMIN),
             # Shipping methods serve manual orders and courier booking too, not only the online shop.
             Link("Pengiriman", "merchant-entity-list", ("shipping",), match=("/books/shipping-areas/",)),
             Link("WhatsApp", "merchant-whatsapp", roles=ADMIN),
@@ -205,6 +215,7 @@ NAV = [
 CREATE = [
     ("Penjualan", [
         ("Invoice", "merchant-invoice-new", "file", (), "", "sales.edit"),
+        ("Banyak invoice sekaligus", "merchant-invoice-batch", "layers", (), "", "sales.edit"),
         ("Penawaran", "merchant-quote-new", "note", (), "", "sales.edit"),
         ("Pesanan penjualan", "merchant-sales-order-new", "clipboard", (), "", "sales.edit"),
         ("Invoice berulang", "merchant-recurring-new", "calendar", (), "", "sales.edit"),
@@ -216,6 +227,7 @@ CREATE = [
     ("Pembelian", [
         ("Pesanan pembelian", "merchant-purchase-order-new", "clipboard", (), "", "purchase.order"),
         ("Penerimaan barang", "merchant-goods-receipt-new", "box", (), "", "stock.receive"),
+        ("Beli tunai", "merchant-cash-purchase", "cash", (), "", "purchase.cash"),
         ("Tagihan supplier", "merchant-bill-new", "truck", (), "", "books.edit"),
         ("Nota debit", "merchant-debit-notes", "undo", (), "", "books.edit"),  # picks the bill first
         ("Supplier", "merchant-suppliers", "handshake", (), "buka=add-supplier", "books.edit"),
@@ -230,6 +242,7 @@ CREATE = [
     ("Persediaan", [
         ("Produk", "merchant-entity-new", "tag", ("products",), "", "catalog.edit"),
         ("Stok opname", "merchant-stock-counts", "layers", (), "", "stock.count"),
+        ("Penyesuaian stok", "merchant-stock-adjustment-new", "layers", (), "", "stock.adjust"),
         ("Permintaan stok", "merchant-stock-request-new", "truck", (), "", "stock.request"),
         ("Transfer antar brand", "merchant-intercompany-new", "swap", (), "", "intercompany.create"),
         ("Impor produk", "merchant-product-import", "upload", (), "", "catalog.edit"),

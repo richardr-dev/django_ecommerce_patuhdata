@@ -1,6 +1,15 @@
 from django.urls import path
 
-from . import activity, campaign_views, install_views, shortlinks, staff_views, tracking, views
+from . import (
+    activity,
+    campaign_views,
+    currency_views,
+    install_views,
+    shortlinks,
+    staff_views,
+    tracking,
+    views,
+)
 
 urlpatterns = [
     path("registration/", install_views.partner_install, name="partner-install"),
@@ -9,6 +18,7 @@ urlpatterns = [
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),
     path("s/<slug:code>/", shortlinks.campaign_redirect, name="campaign-short-slash"),
     path("books/staff/", staff_views.merchant_staff, name="merchant-staff"),
+    path("books/settings/mata-uang/", currency_views.merchant_currency_settings, name="merchant-currency-settings"),
     path("books/staff/akses/", staff_views.merchant_access, name="merchant-access"),
     path("books/activity/", activity.merchant_activity, name="merchant-activity"),
     path("books/tracking/", tracking.merchant_tracking, name="merchant-tracking"),

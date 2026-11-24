@@ -1,0 +1,44 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penggajian{% endblock %}
+{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Kas &amp; bank</span><h1>Penggajian</h1>
+  <p>Gaji bulanan, BPJS, dan PPh 21 karyawan. Setiap penggajian diposting ke buku besar, lalu dibayar dari rekening; PPh 21 masuk register bukti potong.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-payroll-employees' %}">{% icon "users" %} Karyawan ({{ employees }})</a>
+    {% if can_edit %}<button type="button" class="btn" data-open="bpjs-dialog">{% icon "settings" %} Tarif BPJS</button>
+    <button type="button" class="btn-primary" data-open="run-dialog">{% icon "plus" %} Susun penggajian</button>{% endif %}</div></div>
+
+<div class="tiles">
+  <div class="tile accent"><small>Gaji belum dibayar</small><strong>{{ wages|rp }}</strong><span>Utang gaji dari penggajian yang sudah diposting</span></div>
+  <div class="tile"><small>BPJS belum disetor</small><strong>{{ bpjs|rp }}</strong><span>bagian karyawan dan perusahaan</span></div>
+  <div class="tile"><small>PPh 21 belum disetor</small><strong>{{ pph|rp }}</strong><span><a href="{% url 'merchant-withholdings' %}" style="color:var(--ds-primary)">Setor lewat PPh dipotong</a></span></div>
+  <div class="tile"><small>Penggajian terakhir</small><strong>{% if latest %}{{ latest.period|date:"M Y" }}{% else %}—{% endif %}</strong><span>{% if latest %}{{ latest.get_status_display }} · bruto {{ latest.gross|rp }}{% else %}belum ada{% endif %}</span></div>
+</div>
+
+<section class="panel"><header><div><h2>Penggajian per bulan</h2><p>Buka untuk memeriksa per karyawan, memposting, membayar, dan mencetak slip gaji.</p></div></header>
+<div class="scroll-x"><table class="tbl"><thead><tr><th>Bulan</th><th>Nomor</th><th class="num">Karyawan</th><th class="num">Gaji bruto</th><th class="num">BPJS</th><th class="num">PPh 21</th><th class="num">Dibayar ke karyawan</th><th>Status</th></tr></thead><tbody>
+  {% for r in runs %}<tr><td><a class="rowlink" href="{% url 'merchant-payroll-run' r.pk %}"><b>{{ r.period|date:"F Y" }}</b></a></td><td>{{ r.number }}</td>
+    <td class="num">{{ r.lines.all|length }}</td><td class="num">{{ r.gross|rp }}</td><td class="num">{{ r.bpjs_total|rp }}</td><td class="num">{{ r.pph21|rp }}</td><td class="num"><b>{{ r.net|rp }}</b></td>
+    <td><span class="pill {% if r.status == 'paid' %}pill-paid{% elif r.status == 'void' %}pill-void{% elif r.status == 'posted' %}pill-info{% else %}pill-draft{% endif %}">{% if r.approval_pending %}Menunggu persetujuan{% else %}{{ r.get_status_display }}{% endif %}</span></td></tr>
+  {% empty %}<tr><td colspan="8"><div class="empty-box"><strong>Belum ada penggajian</strong>{% if employees %}Susun penggajian bulan ini dari data karyawan.{% else %}Tambahkan karyawan dulu, lalu susun penggajian.{% endif %}</div></td></tr>{% endfor %}
+</tbody></table></div></section>
+
+{% if can_edit %}
+<dialog id="run-dialog" class="pd-dialog" aria-labelledby="run-title" style="max-width:480px"><form method="post">{% csrf_token %}
+  <header><h2 id="run-title">Susun penggajian</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <label class="field"><span>Bulan</span><input type="month" name="period" value="{{ next_period }}" required></label>
+    <p class="dp-help">Semua karyawan aktif dimasukkan dengan gaji pokok, tunjangan, dan tarif PPh 21 dari datanya. Lembur dan bonus diisi sesudahnya. Belum ada yang dibukukan sampai Anda memposting.</p></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Susun</button></footer></form></dialog>
+
+<dialog id="bpjs-dialog" class="pd-dialog" aria-labelledby="bpjs-title" style="max-width:600px"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="settings">
+  <header><h2 id="bpjs-title">Tarif BPJS</h2><button type="button" data-close aria-label="Tutup">&times;</button></header><div>
+    <p class="dp-help" style="margin:0">Persen dari gaji pokok + tunjangan tetap. Batas upah BPJS Kesehatan dan JP berubah tiap tahun: periksa pengumuman BPJS. JKK sesuai tingkat risiko usaha (0,24% sampai 1,74%).</p>
+    <div class="field-row"><label class="field"><span>Kesehatan · perusahaan %</span><input name="kes_company" inputmode="decimal" value="{{ settings.kes_company|floatformat:'-2' }}"></label><label class="field"><span>Kesehatan · karyawan %</span><input name="kes_employee" inputmode="decimal" value="{{ settings.kes_employee|floatformat:'-2' }}"></label></div>
+    <label class="field"><span>Batas upah Kesehatan</span><input name="kes_cap" data-rupiah value="{{ settings.kes_cap|floatformat:'0' }}"></label>
+    <div class="field-row"><label class="field"><span>JHT · perusahaan %</span><input name="jht_company" inputmode="decimal" value="{{ settings.jht_company|floatformat:'-2' }}"></label><label class="field"><span>JHT · karyawan %</span><input name="jht_employee" inputmode="decimal" value="{{ settings.jht_employee|floatformat:'-2' }}"></label></div>
+    <div class="field-row"><label class="field"><span>JKK %</span><input name="jkk" inputmode="decimal" value="{{ settings.jkk|floatformat:'-2' }}"></label><label class="field"><span>JKM %</span><input name="jkm" inputmode="decimal" value="{{ settings.jkm|floatformat:'-2' }}"></label></div>
+    <div class="field-row"><label class="field"><span>JP · perusahaan %</span><input name="jp_company" inputmode="decimal" value="{{ settings.jp_company|floatformat:'-2' }}"></label><label class="field"><span>JP · karyawan %</span><input name="jp_employee" inputmode="decimal" value="{{ settings.jp_employee|floatformat:'-2' }}"></label></div>
+    <label class="field"><span>Batas upah JP</span><input name="jp_cap" data-rupiah value="{{ settings.jp_cap|floatformat:'0' }}"></label></div>
+  <footer><button type="button" class="btn" data-close>Batal</button><button class="btn-primary">Simpan tarif</button></footer></form></dialog>
+{% endif %}
+{% include "merchant/_dialog_js.html" %}
+{% endblock %}

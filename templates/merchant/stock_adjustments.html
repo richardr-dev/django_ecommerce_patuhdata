@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Penyesuaian stok{% endblock %}
+{% block content %}
+<nav class="text-xs text-blue-700"><a href="{% url 'merchant-stock' %}">Persediaan</a> › Penyesuaian stok</nav>
+<div class="pg-head"><div><span class="pg-kicker">Persediaan</span><h1>Penyesuaian stok</h1>
+  <p>Stok yang berubah bukan karena pembelian, penjualan, transfer, atau stok opname: rusak, hilang, sampel, diambil pemilik, ditemukan, atau salah catat. Setiap penyesuaian bernomor, punya alasan, dan dibukukan ke Persediaan pada harga pokok.</p></div>
+  {% if can_make %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-stock-adjustment-new' %}">{% icon "plus" %} Penyesuaian baru</a></div>{% endif %}</div>
+
+{% if not books_started %}<div class="notice">{% icon "info" %}<span>Pembukuan belum dimulai, jadi stok yang diisi di Kelola stok atau halaman produk belum dijurnal. Saldo awal akan membukukan nilainya sekaligus. Setelah jurnal pertama, setiap perubahan stok dicatat di sini.</span></div>{% endif %}
+
+<div class="tiles">
+  <div class="tile accent"><small>Nilai bulan ini</small><strong>{{ month_total|signed_rp }}</strong><span>minus = stok dihapus dari buku</span></div>
+  {% for key, label, count, value in by_reason|slice:":3" %}<div class="tile"><small>{{ label }}</small><strong>{{ value|signed_rp }}</strong><span>{{ count }} dokumen bulan ini</span></div>{% endfor %}
+</div>
+
+<section class="panel">
+  <form method="get" class="bb-filter">
+    <div class="bb-filter-rows"><div class="bb-filter-row"><span class="bb-filter-label">Alasan</span><div class="bb-chips">
+      <label><input class="peer sr-only" type="radio" name="alasan" value="" {% if not reason %}checked{% endif %} onchange="this.form.requestSubmit()"><span class="bb-chip">Semua</span></label>
+      {% for key, r in reasons.items %}<label><input class="peer sr-only" type="radio" name="alasan" value="{{ key }}" {% if reason == key %}checked{% endif %} onchange="this.form.requestSubmit()"><span class="bb-chip">{{ r.label }}</span></label>{% endfor %}
+    </div></div></div></form>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Alasan</th><th>Gudang</th><th>Dibuat oleh</th><th class="num">Nilai</th><th>Status</th></tr></thead><tbody>
+  {% for a in rows %}<tr><td><a href="{% url 'merchant-stock-adjustment' a.pk %}"><b>{{ a.number }}</b></a>{% if a.notes %}<small>{{ a.notes|truncatechars:60 }}</small>{% endif %}</td>
+    <td>{{ a.adjusted_on|date:"d M Y" }}</td><td>{{ a.reason_label }}</td><td>{{ a.warehouse.name }}</td><td>{{ a.created_by.username|default:"—" }}</td>
+    <td class="num">{{ a.value|signed_rp }}</td>
+    <td>{% if a.status == "void" %}<span class="pill pill-draft">Dibatalkan</span>{% else %}<span class="pill pill-paid">Dibukukan</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7" class="!py-10 text-center text-slate-400">Belum ada penyesuaian stok.{% if can_make %} <a href="{% url 'merchant-stock-adjustment-new' %}">Catat penyesuaian pertama</a>.{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+{% endblock %}

@@ -41,7 +41,7 @@ def period(params):
 def summary(store, params, *, detail=True):
     start, end = period(params)
     channel = params.get("channel", "")
-    base = Order.objects.filter(store=store, status__in=REVENUE_STATUSES)
+    base = Order.objects.filter(store=store, status__in=REVENUE_STATUSES).exclude(order_type="opening")
     if channel:
         base = base.filter(channel=channel)
     orders = base.filter(created_at__date__gte=start, created_at__date__lte=end)
@@ -82,5 +82,5 @@ def summary(store, params, *, detail=True):
         top_products=list(OrderItem.objects.filter(order__in=orders).values("name", "sku")
             .annotate(units=Sum("quantity"), revenue=Sum("line_total")).order_by("-revenue")[:10]),
         recent_orders=list(Order.objects.filter(store=store, created_at__date__gte=start,
-            created_at__date__lte=end).order_by("-created_at")[:15]))
+            created_at__date__lte=end).exclude(order_type="opening").order_by("-created_at")[:15]))
     return result

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.tax import invoice_form_views
+from apps.tax import batch_views, invoice_form_views
 
 from . import income_views, mapping_views, report_views, views
 
@@ -23,6 +23,7 @@ urlpatterns = [
         name="merchant-channel-stock"),
     path("books/sales/invoices/new/", invoice_form_views.merchant_invoice_form,
         name="merchant-invoice-new"),
+    path("books/sales/invoices/banyak/", batch_views.merchant_invoice_batch, name="merchant-invoice-batch"),
     path("books/sales/invoices/<uuid:invoice_id>/", views.merchant_invoice_detail,
         name="merchant-invoice-detail"),
     path("books/sales/invoices/<uuid:invoice_id>/edit/", invoice_form_views.merchant_invoice_form,

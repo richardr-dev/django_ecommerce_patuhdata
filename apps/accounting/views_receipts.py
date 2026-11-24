@@ -64,10 +64,14 @@ def merchant_goods_receipt_new(request):
             if not supplier:
                 raise receipts.ReceiptError("Pilih atau isi nama supplier.")
             lines = []
-            for sku, qty, cost in zip(request.POST.getlist("sku[]"), request.POST.getlist("qty[]"),
-                    request.POST.getlist("unit_cost[]"), strict=False):
-                if sku.strip():
-                    lines.append({"sku": sku, "qty": _number(qty), "unit_cost": _number(cost)})
+            count = len(request.POST.getlist("sku[]"))
+            codes = request.POST.getlist("lot[]") + [""] * count
+            dates = request.POST.getlist("expiry[]") + [""] * count
+            for index, (sku, qty, cost) in enumerate(zip(request.POST.getlist("sku[]"), request.POST.getlist("qty[]"),
+                    request.POST.getlist("unit_cost[]"), strict=False)):
+                if sku.strip():   # lot and expiry count only for a product that tracks lots (orders/lots.py)
+                    lines.append({"sku": sku, "qty": _number(qty), "unit_cost": _number(cost), "lot": codes[index],
+                        "expiry": datetime.date.fromisoformat(dates[index]) if dates[index] else None})
             warehouse = Warehouse.objects.filter(store=store, pk=request.POST.get("warehouse") or 0).first()
             receipt = receipts.create_receipt(store, supplier=supplier, lines=lines,
                 received_on=datetime.date.fromisoformat(request.POST.get("received_on") or timezone.localdate().isoformat()),

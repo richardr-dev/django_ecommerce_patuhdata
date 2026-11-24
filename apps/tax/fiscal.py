@@ -8,10 +8,11 @@
 The corrections and credits are entered by the accountant (``FiscalAdjustment``): the worksheet never
 guesses what is deductible. It is a preparation aid, not a replacement for the tax advisor; individuals
 (progressive rates, PTKP) and PPh Final UMKM stores do not use it."""
+from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from .models import FiscalAdjustment
-from .services import tax_profile
+from .services import marketplace_pph22, tax_profile
 
 FULL_RATE = Decimal("0.22")
 DISCOUNT_RATE = Decimal("0.11")          # 50% of 22%
@@ -56,7 +57,6 @@ def buyer_withholdings(store, year):
 
 
 def worksheet(store, year):
-    from datetime import date
 
     from apps.accounting import reports
     profile = tax_profile(store)
@@ -68,13 +68,16 @@ def worksheet(store, year):
     credits = sum((r.amount for r in rows if r.kind == FiscalAdjustment.CREDIT), ZERO)
     withheld = buyer_withholdings(store, year)
     buyer_withheld = sum((p.withheld for p in withheld), ZERO)
-    credits_total = credits + buyer_withheld
+    # Under PPh Final UMKM it is part of the final tax, never a credit.
+    marketplace_withheld = ZERO if profile.pph_regime == "umkm_final" else marketplace_pph22(
+        store, date(year, 1, 1), date(year, 12, 31))
+    credits_total = credits + buyer_withheld + marketplace_withheld
     fiscal = commercial + positive - negative
     pkp = max((fiscal / 1000).quantize(Decimal(1), ROUND_DOWN) * 1000, ZERO)
     tax, detail = tax_due(pkp, turnover)
     return {"year": year, "profile": profile, "not_applicable": applicable(profile), "commercial": commercial,
         "turnover": turnover, "rows": rows, "positive": positive, "negative": negative, "credits": credits,
-        "buyer_withheld": buyer_withheld, "buyer_withholdings": withheld, "credits_total": credits_total,
+        "buyer_withheld": buyer_withheld, "buyer_withholdings": withheld, "marketplace_withheld": marketplace_withheld, "credits_total": credits_total,
         "fiscal": fiscal, "pkp": pkp, "tax": tax, "detail": detail, "pph29": tax - credits_total,
         "pph25_monthly": _round(tax / 12), "loss": -fiscal if fiscal < 0 else ZERO,
         "effective": round(tax / commercial * 100, 1) if commercial > 0 and tax else None,
