@@ -58,6 +58,10 @@ def partner_install(request):
             messages.success(request, f"Uji coba {company.name} diakhiri.")
         return redirect("partner-install")
     values = {name: request.POST.get(name, "") for name in FIELDS}
+    if request.method != "POST":
+        from .models import PlatformSettings
+        default_days = PlatformSettings.get().default_trial_days
+        values["trial_days"] = str(default_days) if default_days else ""
     values["is_pkp"] = request.POST.get("is_pkp") == "1"
     if request.method == "POST":
         organization = Organization.objects.filter(pk=values["organization"] or 0).first()
@@ -188,3 +192,69 @@ def platform_user_detail(request, user_id):
         "stores": Store.objects.order_by("name")[:300],
         "roles": StoreStaff._meta.get_field("role").choices,
         "locked": person.is_superuser or person.pk == request.user.pk})
+
+
+@login_required(login_url="/login/")
+def platform_company(request, store_id):
+    """/platform/companies/<id>/: edit a company's details, tax identity and trial end."""
+    from django.shortcuts import get_object_or_404
+
+    from apps.tax.models import TaxProfile
+
+    from . import platform_companies as service
+    from .models import StoreStaff
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman perusahaan hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    store = get_object_or_404(Store.objects.select_related("owner", "organization"), pk=store_id)
+    error = ""
+    if request.method == "POST":
+        post = request.POST
+        try:
+            service.update_company(store, name=post.get("name", ""), support_email=post.get("support_email", ""),
+                support_phone=post.get("support_phone", ""), legal_name=post.get("legal_name", ""),
+                npwp=post.get("npwp", ""), address=post.get("address", ""),
+                taxpayer_type=post.get("taxpayer_type", "company"), is_pkp=post.get("is_pkp") == "1",
+                trial_end=post.get("trial_end", ""), actor=request.user)
+        except service.CompanyError as problem:
+            error = str(problem)
+        else:
+            messages.success(request, "Data perusahaan disimpan.")
+            return redirect("platform-company", store_id=store.pk)
+    from . import trial
+    return render(request, "platform/company.html", {"store": store, "error": error,
+        "profile": TaxProfile.objects.filter(store=store).first(), "trial": trial.trial_state(store),
+        "staff": StoreStaff.objects.filter(store=store).select_related("user").order_by("user__username"),
+        "post": request.POST if error else None})
+
+
+@login_required(login_url="/login/")
+def platform_settings(request):
+    """/platform/settings/: the sales contact shown when a trial ends, and the default trial length."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    from .models import PlatformSettings
+
+    if not request.user.is_superuser:
+        messages.error(request, "Pengaturan platform hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    conf, error = PlatformSettings.get(), ""
+    if request.method == "POST":
+        email, days = request.POST.get("sales_email", "").strip(), request.POST.get("default_trial_days", "").strip()
+        try:
+            if email:
+                validate_email(email)
+            if days and not days.isdigit():
+                raise ValidationError("x")
+        except ValidationError:
+            error = "Periksa email sales dan lama uji coba (angka hari)."
+        else:
+            conf.sales_whatsapp = request.POST.get("sales_whatsapp", "").strip()[:30]
+            conf.sales_email = email
+            conf.default_trial_days = int(days) if days else None
+            conf.save()
+            messages.success(request, "Pengaturan platform disimpan.")
+            return redirect("platform-settings")
+    return render(request, "platform/settings.html", {"conf": conf, "error": error})

@@ -45,6 +45,14 @@ def extend_trial(store, days, actor=None):
     return store
 
 
+def set_trial_end(store, end, actor=None):
+    """Set the exact end of the trial (a datetime), or None for full access."""
+    store.trial_ends_at = end
+    store.save(update_fields=["trial_ends_at"])
+    _log(store, actor, "trial.set", ends=end or "full access")
+    return store
+
+
 def activate_full_access(store, actor=None):
     store.trial_ends_at = None
     store.save(update_fields=["trial_ends_at"])
@@ -66,11 +74,14 @@ def _log(store, actor, action, **details):
 
 def sales_contact():
     """What the notice offers: a WhatsApp link and an email, whichever the platform has set."""
-    phone = "".join(ch for ch in settings.SALES_WHATSAPP if ch.isdigit())
+    from .models import PlatformSettings
+    stored = PlatformSettings.objects.filter(pk=1).first()
+    shown = (stored.sales_whatsapp if stored else "") or settings.SALES_WHATSAPP
+    email = (stored.sales_email if stored else "") or settings.SALES_EMAIL
+    phone = "".join(ch for ch in shown if ch.isdigit())
     if phone.startswith("0"):
         phone = "62" + phone[1:]
-    return {"whatsapp": settings.SALES_WHATSAPP, "whatsapp_url": f"https://wa.me/{phone}" if phone else "",
-        "email": settings.SALES_EMAIL}
+    return {"whatsapp": shown, "whatsapp_url": f"https://wa.me/{phone}" if phone else "", "email": email}
 
 
 def _store_of(request):

@@ -1,0 +1,35 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ store.name }} · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln ln-wide"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Partner platform</span></div></div>
+    <h1>{{ store.name }}</h1>
+    <p class="ln-sub">Kode {{ store.slug }} · pemilik {{ store.owner.username }} · organisasi {{ store.organization.name }}</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">{% csrf_token %}
+      <div class="ln-grid">
+        <label class="ln-field"><span>Nama perusahaan / brand</span><span class="ln-input"><input name="name" value="{{ post.name|default:store.name }}" maxlength="160" required></span></label>
+        <label class="ln-field"><span>Nama badan (sesuai NPWP)</span><span class="ln-input"><input name="legal_name" value="{{ post.legal_name|default:profile.legal_name }}" maxlength="160"></span></label>
+        <label class="ln-field"><span>Email kontak</span><span class="ln-input"><input type="email" name="support_email" value="{{ post.support_email|default:store.support_email }}"></span></label>
+        <label class="ln-field"><span>WhatsApp kontak</span><span class="ln-input"><input name="support_phone" value="{{ post.support_phone|default:store.support_phone }}"></span></label>
+        <label class="ln-field"><span>NPWP</span><span class="ln-input"><input name="npwp" value="{{ post.npwp|default:profile.npwp }}" inputmode="numeric" placeholder="16 digit"></span></label>
+        <label class="ln-field"><span>Jenis wajib pajak</span><span class="ln-input"><select name="taxpayer_type"><option value="company"{% if profile.taxpayer_type != "individual" %} selected{% endif %}>Badan usaha</option><option value="individual"{% if profile.taxpayer_type == "individual" %} selected{% endif %}>Orang pribadi</option></select></span></label>
+        <label class="ln-field ln-span"><span>Alamat (sesuai NPWP)</span><span class="ln-input"><input name="address" value="{{ post.address|default:profile.address }}"></span></label>
+        <label class="ln-field"><span>Uji coba berakhir pada</span><span class="ln-input"><input type="date" name="trial_end" value="{% if post %}{{ post.trial_end }}{% elif store.trial_ends_at %}{{ store.trial_ends_at|date:'Y-m-d' }}{% endif %}"></span></label>
+        <label class="ln-check"><input type="checkbox" name="is_pkp" value="1"{% if post %}{% if post.is_pkp %} checked{% endif %}{% elif profile.is_pkp %} checked{% endif %}> Pengusaha Kena Pajak (memungut PPN)</label>
+      </div>
+      <p class="ln-sub">Tanggal uji coba kosong berarti akses penuh. {% if trial %}{% if trial.expired %}Uji coba sudah berakhir: perusahaan ini terkunci.{% else %}Sisa {{ trial.days_left }} hari.{% endif %}{% endif %} Kode perusahaan tidak bisa diubah karena dipakai di alamat dan dokumen.</p>
+      <button class="ln-btn">Simpan</button>
+    </form>
+  </div>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Pengguna di perusahaan ini</h2>
+    <table class="ln-table"><thead><tr><th>Pengguna</th><th>Peran</th></tr></thead><tbody>
+    <tr><td><a href="{% url 'platform-user' store.owner_id %}"><b>{{ store.owner.get_full_name|default:store.owner.username }}</b></a><small>{{ store.owner.username }}</small></td><td>Pemilik</td></tr>
+    {% for m in staff %}<tr><td><a href="{% url 'platform-user' m.user_id %}"><b>{{ m.user.get_full_name|default:m.user.username }}</b></a><small>{{ m.user.username }}</small></td><td>{{ m.get_role_display }}</td></tr>{% endfor %}</tbody></table></div>
+  <p class="ln-foot"><a href="{% url 'partner-install' %}">Kembali ke daftar perusahaan</a></p>
+</main></body></html>

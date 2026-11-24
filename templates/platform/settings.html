@@ -1,0 +1,24 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pengaturan platform · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln ln-wide"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Partner platform</span></div></div>
+    <h1>Pengaturan platform</h1>
+    <p class="ln-sub">Kontak sales yang muncul di popup saat uji coba berakhir, dan lama uji coba bawaan untuk perusahaan baru.</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">{% csrf_token %}
+      <div class="ln-grid">
+        <label class="ln-field"><span>WhatsApp sales</span><span class="ln-input"><input name="sales_whatsapp" value="{{ conf.sales_whatsapp }}" placeholder="0812…"></span></label>
+        <label class="ln-field"><span>Email sales</span><span class="ln-input"><input type="email" name="sales_email" value="{{ conf.sales_email }}" placeholder="sales@patuhdata.id"></span></label>
+        <label class="ln-field"><span>Uji coba bawaan (hari)</span><span class="ln-input"><input name="default_trial_days" value="{{ conf.default_trial_days|default_if_none:'' }}" inputmode="numeric" placeholder="kosong = tanpa uji coba"></span></label>
+      </div>
+      <button class="ln-btn">Simpan</button>
+    </form>
+  </div>
+  <p class="ln-foot"><a href="{% url 'partner-install' %}">Pasang perusahaan</a> · <a href="{% url 'platform-users' %}">Kelola pengguna</a></p>
+</main></body></html>

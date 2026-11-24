@@ -423,3 +423,16 @@ class Outlet(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.store.name})"
+
+
+class PlatformSettings(models.Model):
+    """Platform-wide settings the partner edits on /platform/settings/ (one row, id 1). An empty field falls
+    back to the server setting of the same name."""
+    sales_whatsapp = models.CharField(max_length=30, blank=True)
+    sales_email = models.EmailField(blank=True)
+    default_trial_days = models.PositiveSmallIntegerField(null=True, blank=True,
+        help_text="Lama uji coba yang diisi otomatis di halaman instalasi. Kosong: tanpa uji coba.")
+
+    @classmethod
+    def get(cls):
+        return cls.objects.get_or_create(pk=1)[0]

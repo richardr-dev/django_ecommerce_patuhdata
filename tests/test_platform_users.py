@@ -182,3 +182,49 @@ class TrialTests(TestCase):
             page = self.client.get("/books/")
         self.assertContains(page, "wa.me/6281234567890", status_code=402)
         self.assertContains(page, "sales@patuhdata.id", status_code=402)
+
+
+class PlatformCompanyTests(TestCase):
+    def setUp(self):
+        self.partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.store = install(**CLIENT, trial_days=14)["store"]
+        self.client.force_login(self.partner)
+        self.url = f"/platform/companies/{self.store.pk}/"
+
+    def _post(self, **over):
+        data = {"name": "Toko Maju Baru", "legal_name": "PT Maju Baru", "npwp": "0123456789012345",
+            "address": "Jl. Baru 2", "taxpayer_type": "company", "is_pkp": "1", "support_email": "a@b.id",
+            "support_phone": "0812", "trial_end": "2030-01-31", **over}
+        return self.client.post(self.url, data)
+
+    def test_edit_company_tax_identity_and_trial_end(self):
+        from apps.tax.models import TaxProfile
+        self.assertContains(self.client.get(self.url), "Toko Maju")
+        self._post()
+        self.store.refresh_from_db()
+        profile = TaxProfile.objects.get(store=self.store)
+        self.assertEqual((self.store.name, profile.legal_name, profile.address), ("Toko Maju Baru", "PT Maju Baru", "Jl. Baru 2"))
+        self.assertEqual(self.store.trial_ends_at.date().isoformat(), "2030-01-31")
+
+    def test_empty_trial_date_is_full_access_and_bad_input_keeps_everything(self):
+        self._post(trial_end="")
+        self.store.refresh_from_db()
+        self.assertIsNone(self.store.trial_ends_at)
+        page = self._post(name="Berubah", npwp="123")
+        self.assertContains(page, "NPWP harus 16 digit")
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.name, "Toko Maju Baru")   # the refused save changed nothing
+
+    def test_a_store_account_cannot_open_it(self):
+        self.client.force_login(self.store.owner)
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+
+    def test_sales_contact_and_default_trial_are_editable(self):
+        from apps.shops.models import PlatformSettings
+        from apps.shops.trial import sales_contact
+        self.client.post("/platform/settings/", {"sales_whatsapp": "0811-222-333", "sales_email": "s@p.id",
+            "default_trial_days": "21"})
+        conf = PlatformSettings.get()
+        self.assertEqual((conf.sales_email, conf.default_trial_days), ("s@p.id", 21))
+        self.assertEqual(sales_contact()["whatsapp_url"], "https://wa.me/62811222333")
+        self.assertContains(self.client.get("/registration/"), 'value="21"')

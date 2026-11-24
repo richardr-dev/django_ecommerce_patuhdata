@@ -15,6 +15,8 @@ urlpatterns = [
     path("registration/", install_views.partner_install, name="partner-install"),
     path("platform/users/", install_views.platform_users, name="platform-users"),
     path("platform/users/<int:user_id>/", install_views.platform_user_detail, name="platform-user"),
+    path("platform/companies/<int:store_id>/", install_views.platform_company, name="platform-company"),
+    path("platform/settings/", install_views.platform_settings, name="platform-settings"),
     path("favicon.ico", views.favicon, name="favicon"),
     # /s/ is a seller's own campaign short link.
     path("s/<slug:code>", shortlinks.campaign_redirect, name="campaign-short"),
