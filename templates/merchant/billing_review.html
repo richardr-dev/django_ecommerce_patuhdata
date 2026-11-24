@@ -1,0 +1,57 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Tinjau langganan{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-billing' %}" style="color:inherit">Langganan</a> › Tinjau</span><h1>Tinjau langganan Anda</h1><p>Periksa paket, manfaat, dan total pembayaran. Belum ada yang ditagih sampai Anda menekan tombol bayar.</p></div></div>
+
+<div class="bp-review">
+  <div class="bp-stack">
+
+    <section class="bp-card bp-plan" style="gap:16px">
+      <div class="bp-plan-head"><div><span class="bp-kicker">Paket yang dipilih</span><h3 style="font-size:26px;margin-top:4px">{{ plan.name }}</h3></div>{% if renewing %}<span class="pill pill-info">Perpanjangan</span>{% elif changing %}<span class="pill pill-pending">Ganti paket</span>{% else %}<span class="pill pill-info">Langganan baru</span>{% endif %}</div>
+      {% if plan.tagline %}<p class="bp-muted" style="margin:-8px 0 0">{{ plan.tagline }}</p>{% endif %}
+      <div class="bp-switch" role="tablist" aria-label="Periode">
+        <a class="{% if months == 1 %}on{% endif %}" href="?plan={{ plan.code }}&months=1">Bulanan</a>
+        {% if plan.price_yearly %}<a class="{% if months == 12 %}on{% endif %}" href="?plan={{ plan.code }}&months=12">Tahunan{% if plan.discount_pct_yearly %} · hemat {{ plan.discount_pct_yearly }}%{% endif %}</a>{% endif %}
+      </div>
+    </section>
+
+    <section class="bp-card"><h3 style="margin-bottom:14px">Yang Anda dapatkan</h3>
+      <ul class="bp-list">
+        <li><span>{% if plan.max_products is None %}Produk aktif tanpa batas{% else %}Hingga <b>{{ plan.max_products }}</b> produk aktif{% endif %}</span></li>
+        <li><span>{% if plan.max_channels is None %}Toko marketplace tanpa batas{% else %}<b>{{ plan.max_channels }}</b> toko marketplace terhubung{% endif %}</span></li>
+        <li><span>{% if plan.included_outlets is None %}Outlet tanpa batas{% elif plan.extra_outlet_price %}<b>{{ plan.included_outlets }}</b> outlet, tambahan {{ plan.extra_outlet_price|rp }} per outlet per bulan{% else %}1 outlet{% endif %}</span></li>
+        <li><span>{% if plan.allow_custom_domain %}Domain sendiri + HTTPS otomatis{% else %}Alamat subdomain gratis{% endif %}</span></li>
+        {% if plan.allow_payout_reconciliation %}<li><span>Pencocokan pencairan marketplace dan gateway</span></li>{% endif %}
+        {% for feature in plan.feature_list %}<li><span>{{ feature }}</span></li>{% endfor %}
+      </ul>
+    </section>
+
+    <section class="bp-card"><h3 style="margin-bottom:14px">Apa yang terjadi setelah ini</h3>
+      <ol class="bp-steps">
+        <li><span>Anda diarahkan ke halaman pembayaran <b>DOKU</b>: pilih QRIS, virtual account, e-wallet, atau kartu.</span></li>
+        <li><span>Begitu pembayaran diterima, paket langsung aktif tanpa Anda melakukan apa pun.</span></li>
+        <li><span>Paket diperpanjang otomatis di akhir periode. Anda bisa membatalkan kapan saja di halaman Langganan; paket tetap aktif sampai periode yang sudah dibayar habis.</span></li>
+      </ol>
+    </section>
+  </div>
+
+  <aside class="bp-card bp-summary" aria-label="Ringkasan pembayaran">
+    <h3>Ringkasan</h3>
+    <div class="bp-line"><span>Paket</span><b>{{ plan.name }}</b></div>
+    <div class="bp-line"><span>Periode</span><b>{% if months == 12 %}12 bulan{% else %}1 bulan{% endif %}</b></div>
+    <div class="bp-line"><span>Mulai</span><b>{{ start|date:"d F Y" }}</b></div>
+    <div class="bp-line"><span>Aktif sampai</span><b>{{ end|date:"d F Y" }}</b></div>
+    {% if slashed %}<div class="bp-line"><span>Harga normal</span><b style="text-decoration:line-through;color:var(--ds-faint)">{{ slashed|rp }}</b></div>
+    <div class="bp-line save"><span>Diskon {{ pct }}%</span><b>-{{ saving|rp }}</b></div>{% endif %}
+    <div class="bp-line"><span>Harga paket</span><b>{{ plan_price|rp }}</b></div>
+    {% if extra %}<div class="bp-line"><span>{{ extra }} outlet tambahan</span><b>termasuk di total</b></div>{% endif %}
+    <div class="bp-total"><span>Total bayar</span><b>{{ amount|rp }}</b></div>
+    {% if renewing %}<div class="bp-note">Perpanjangan dihitung dari akhir periode saat ini ({{ start|date:"d F Y" }}), jadi tidak ada hari yang hilang.</div>{% endif %}
+    {% if changing %}<div class="bp-note warn">Anda sedang berlangganan {{ current.plan.name }} sampai {{ current.current_period_end|date:"d F Y" }}. Paket {{ plan.name }} mulai berlaku hari ini dan sisa masa {{ current.plan.name }} tidak dikembalikan.</div>{% endif %}
+    <form method="post" action="{% url 'merchant-billing-checkout' %}" style="display:grid;gap:8px">{% csrf_token %}
+      <input type="hidden" name="plan" value="{{ plan.code }}"><input type="hidden" name="months" value="{{ months }}">
+      <button class="btn-primary" style="justify-content:center;height:48px;font-size:15px">Bayar {{ amount|rp }}</button>
+      <a class="btn" href="{% url 'merchant-billing' %}" style="justify-content:center">Kembali ke daftar paket</a>
+    </form>
+    <p class="bp-muted" style="margin:0;font-size:12px;text-align:center">Pembayaran diproses aman oleh DOKU. {{ platform_name }} tidak menyimpan data kartu Anda.</p>
+  </aside>
+</div>
+{% endblock %}

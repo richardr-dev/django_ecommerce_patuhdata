@@ -37,6 +37,12 @@ def start_checkout(store, plan, months, user):
     # Renewing the same plan pays for the extra outlets too; another plan starts without them.
     extra = current.extra_outlets if current and current.plan_id == plan.id else 0
     amount = plan_amount(plan, months, extra)
+    # A second press (or a second tab) must not make a second bill: reuse the open one for the same choice.
+    open_bill = SubscriptionInvoice.objects.filter(store=store, plan=plan, months=months, kind="checkout",
+        status="pending", amount=amount, created_at__gte=timezone.now() - timedelta(
+            minutes=settings.DOKU_PAYMENT_DUE_MINUTES)).exclude(checkout_url="").order_by("-created_at").first()
+    if open_bill:
+        return open_bill
     provider = settings.PAYMENT_PROVIDER
     if provider not in SUBSCRIPTION_PROVIDERS:
         raise BillingError("Pembayaran langganan saat ini hanya tersedia melalui DOKU.")
@@ -215,3 +221,47 @@ def reduce_outlets(store, extra_outlets, active_outlets):
     subscription.save(update_fields=["extra_outlets", "updated_at"])
     _refresh_open_renewal(subscription)
     return subscription
+
+
+def cancel_subscription(store, user):
+    """Stop renewing. The plan stays until the end of the period already paid for; nothing is refunded."""
+    subscription = getattr(store, "subscription", None)
+    if subscription is None or not subscription.plan.is_paid:
+        raise BillingError("Tidak ada langganan berbayar yang bisa dibatalkan.")
+    if not subscription.auto_renew:
+        raise BillingError("Langganan ini sudah dibatalkan; paket aktif sampai akhir periode.")
+    subscription.auto_renew = False
+    subscription.save(update_fields=["auto_renew", "updated_at"])
+    for bill in store.subscription_invoices.filter(kind="renewal", status="pending"):
+        if not bill.checkouts.exists():   # a bill with a payment page open may still be paid
+            bill.status = "cancelled"
+            bill.save(update_fields=["status"])
+    AuditLog.objects.create(store=store, actor=user, action="billing.subscription_cancelled",
+        object_type="Subscription", object_id=str(subscription.id),
+        details={"plan": subscription.plan.code,
+            "active_until": subscription.current_period_end.isoformat() if subscription.current_period_end else ""})
+    return subscription
+
+
+def resume_subscription(store, user):
+    subscription = getattr(store, "subscription", None)
+    if subscription is None or not subscription.plan.is_paid:
+        raise BillingError("Tidak ada langganan berbayar.")
+    subscription.auto_renew = True
+    subscription.save(update_fields=["auto_renew", "updated_at"])
+    AuditLog.objects.create(store=store, actor=user, action="billing.subscription_resumed",
+        object_type="Subscription", object_id=str(subscription.id), details={"plan": subscription.plan.code})
+    return subscription
+
+
+def cancel_pending_invoice(invoice, user):
+    """Drop a bill that was not paid. DOKU is asked first, so a payment made a moment ago is never cancelled."""
+    if invoice.status != "pending":
+        raise BillingError("Tagihan ini sudah tidak menunggu pembayaran.")
+    if check_pending_invoice(invoice) == "paid":
+        raise BillingError("Pembayaran untuk tagihan ini sudah kami terima, jadi tidak bisa dibatalkan.")
+    SubscriptionInvoice.objects.filter(id=invoice.id, status="pending").update(status="cancelled")
+    AuditLog.objects.create(store=invoice.store, actor=user, action="billing.invoice_cancelled",
+        object_type="SubscriptionInvoice", object_id=str(invoice.id),
+        details={"plan": invoice.plan.code, "amount": str(invoice.amount)})
+    return invoice

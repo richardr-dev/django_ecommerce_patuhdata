@@ -2,7 +2,7 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from apps.shops.models import Store, StoreStaff
+from apps.shops.models import AuditLog, Store, StoreStaff
 from apps.shops.platform_users import PlatformUserError, create_user, delete_user, set_active
 from apps.shops.provisioning import install
 
@@ -352,7 +352,7 @@ class TrialCompanyCanBuyTests(TestCase):
         self.client.force_login(store.owner)
         page = self.client.get("/books/billing/")
         self.assertContains(page, "Pilih Pro")
-        self.assertContains(page, "UJI COBA BERAKHIR")
+        self.assertContains(page, "Uji coba berakhir")
         self.assertNotContains(page, "Dikelola platform")
         from django.test import override_settings
         with override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True):
@@ -578,7 +578,7 @@ class SlashedPriceTests(TestCase):
         self.client.force_login(store.owner)
         page = self.client.get("/books/billing/")
         self.assertContains(page, "Hemat 23%")
-        self.assertContains(page, "line-through")
+        self.assertContains(page, "bp-was")
         from django.test import override_settings
         with override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True):
             self.client.post("/books/billing/checkout/", {"plan": "pro", "months": "1"})
@@ -616,3 +616,95 @@ class CsrfFailurePageTests(TestCase):
         self.assertContains(res, "Halaman perlu dimuat ulang", status_code=403)
         self.assertContains(res, 'href="http://testserver/books/billing/"', status_code=403)
         self.assertNotContains(res, "Verifikasi CSRF", status_code=403)
+
+
+class ReviewCancelTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.billing.models import Plan, Subscription
+        self.plan, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 99000,
+            "list_price_monthly": 129000, "price_yearly": 990000, "list_price_yearly": 1548000, "is_public": True,
+            "contact_sales": False, "features": "Dukungan WhatsApp"})
+        self.store = install(**CLIENT, trial_days=14)["store"]
+        self.owner = self.store.owner
+        self.Subscription, self.timedelta, self.timezone = Subscription, timedelta, timezone
+        self.client.force_login(self.owner)
+
+    def _subscribe(self, auto_renew=True):
+        from apps.billing.models import SubscriptionInvoice
+        SubscriptionInvoice.objects.create(store=self.store, plan=self.plan, months=1, amount=99000,
+            provider="demo", status="paid")   # a paid bill is what separates a paying company from a trial
+        return self.Subscription.objects.create(store=self.store, plan=self.plan, auto_renew=auto_renew,
+            current_period_end=self.timezone.now() + self.timedelta(days=20))
+
+    def test_review_shows_plan_benefits_price_dates_and_total_before_paying(self):
+        page = self.client.get("/books/billing/review/?plan=pro&months=1")
+        self.assertContains(page, "Tinjau langganan")
+        self.assertContains(page, "Dukungan WhatsApp")
+        self.assertContains(page, "Diskon 23%")
+        self.assertContains(page, "Total bayar")
+        self.assertContains(page, 'action="/books/billing/checkout/"')
+        yearly = self.client.get("/books/billing/review/?plan=pro&months=12")
+        self.assertContains(yearly, "12 bulan")
+        self.assertContains(yearly, "Diskon 36%")
+
+    def test_review_refuses_a_plan_that_cannot_be_bought_and_pays_nothing_by_itself(self):
+        from apps.billing.models import SubscriptionInvoice
+        self.assertEqual(self.client.get("/books/billing/review/?plan=custom").status_code, 302)
+        self.client.get("/books/billing/review/?plan=pro&months=1")
+        self.assertFalse(SubscriptionInvoice.objects.exists())
+
+    def test_plan_cards_lead_to_the_review_page(self):
+        page = self.client.get("/books/billing/")
+        self.assertContains(page, "/books/billing/review/?plan=pro&months=1")
+
+    def test_cancel_keeps_the_plan_until_the_end_and_stops_renewing(self):
+        sub = self._subscribe()
+        res = self.client.post("/books/billing/cancel/")
+        self.assertEqual(res.status_code, 302)
+        sub.refresh_from_db()
+        self.assertFalse(sub.auto_renew)
+        self.assertGreater(sub.current_period_end, self.timezone.now())   # still active
+        self.assertContains(self.client.get("/books/billing/"), "Dibatalkan")
+        self.assertTrue(AuditLog.objects.filter(store=self.store, action="billing.subscription_cancelled").exists())
+        self.client.post("/books/billing/cancel/", {"action": "resume"})
+        sub.refresh_from_db()
+        self.assertTrue(sub.auto_renew)
+
+    def test_cancel_an_unpaid_bill_but_never_a_paid_one(self):
+        from unittest import mock
+
+        from apps.billing.models import SubscriptionInvoice
+        from apps.integrations.payments import PaymentStatus
+        bill = SubscriptionInvoice.objects.create(store=self.store, plan=self.plan, months=1, amount=99000,
+            provider="doku", payment_reference="SBcancel001")
+        with mock.patch("apps.billing.services.DokuPaymentProvider") as doku:
+            doku.return_value.fetch_status.return_value = PaymentStatus("pending")
+            self.client.post(f"/books/billing/{bill.id}/cancel/")
+        bill.refresh_from_db()
+        self.assertEqual(bill.status, "cancelled")
+        paid_at_doku = SubscriptionInvoice.objects.create(store=self.store, plan=self.plan, months=1, amount=99000,
+            provider="doku", payment_reference="SBcancel002")
+        with mock.patch("apps.billing.services.DokuPaymentProvider") as doku:
+            doku.return_value.fetch_status.return_value = PaymentStatus("paid", amount=99000)
+            self.client.post(f"/books/billing/{paid_at_doku.id}/cancel/")
+        paid_at_doku.refresh_from_db()
+        self.assertEqual(paid_at_doku.status, "paid")   # DOKU said it was paid: activated, not cancelled
+
+    def test_a_second_press_of_pay_reuses_the_open_bill(self):
+        from django.test import override_settings
+
+        from apps.billing.models import SubscriptionInvoice
+        with override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True):
+            self.client.post("/books/billing/checkout/", {"plan": "pro", "months": "1"})
+            self.client.post("/books/billing/checkout/", {"plan": "pro", "months": "1"})
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store).count(), 1)
+
+    def test_billing_pages_stay_open_when_the_trial_has_ended(self):
+        from apps.shops.models import Store
+        Store.objects.filter(pk=self.store.pk).update(trial_ends_at=self.timezone.now() - self.timedelta(hours=1))
+        self.assertEqual(self.client.get("/books/billing/review/?plan=pro").status_code, 200)
+        self.assertEqual(self.client.get("/books/").status_code, 402)

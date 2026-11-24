@@ -14,15 +14,28 @@ from .plans import allowed_outlets, effective_plan, plan_amount, subscription_st
 from .renewals import RenewalError, open_payment_page
 from .services import (
     BillingError,
+    cancel_pending_invoice,
+    cancel_subscription,
     check_pending_invoice,
     mark_invoice_paid,
     outlet_purchase_quote,
     reduce_outlets,
+    resume_subscription,
     start_checkout,
     start_outlet_purchase,
 )
 
 BILLING_ROLES = roles("billing.manage")
+
+
+def _usage(plan, products, channels, outlets, outlet_limit):
+    """The meters on the plan card: used, limit (None = unlimited) and the bar's width in whole percent."""
+    def meter(label, used, limit):
+        pct = 0 if not limit else min(100, round(used * 100 / limit))
+        return {"label": label, "used": used, "limit": limit, "pct": pct, "full": bool(limit) and used >= limit}
+    return [meter("Produk aktif", products, getattr(plan, "max_products", None)),
+        meter("Toko marketplace", channels, getattr(plan, "max_channels", None)),
+        meter("Outlet", outlets, outlet_limit)]
 
 
 def _settle_recent_payments(store):
@@ -47,8 +60,12 @@ def merchant_billing(request):
     _require_roles(request, store, BILLING_ROLES)
     _settle_recent_payments(store)
     subscription = getattr(store, "subscription", None)
+    active_outlets = _active_outlets(store)
     return render(request, "merchant/billing.html", _merchant_context(request, store,
         title="Langganan", section="billing", subscription=subscription,
+        usage=_usage(effective_plan(store), Product.objects.filter(store=store, is_active=True).count(),
+            store.sales_channels.count(), active_outlets, allowed_outlets(store)),
+        pending_invoices=store.subscription_invoices.filter(status="pending").select_related("plan"),
         plan=effective_plan(store), plans=Plan.objects.filter(is_public=True),
         active_products=Product.objects.filter(store=store, is_active=True).count(),
         channel_count=store.sales_channels.count(), status=subscription_status(store),
@@ -186,3 +203,82 @@ def merchant_billing_outlets(request):
     except (BillingError, RenewalError) as error:
         messages.error(request, str(error))
         return redirect("merchant-billing")
+
+
+@login_required(login_url="/login/")
+def merchant_billing_review(request):
+    """The page before payment: what is chosen, what it includes, what it costs, from when to when."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .plans import PERIOD_DAYS
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    plan = get_object_or_404(Plan, code=request.GET.get("plan", ""), is_public=True)
+    months = 12 if request.GET.get("months") == "12" else 1
+    if not plan.is_paid or plan.contact_sales or plan.price_for(months) <= 0:
+        messages.error(request, "Paket atau periode tidak tersedia.")
+        return redirect("merchant-billing")
+    current = getattr(store, "subscription", None)
+    extra = current.extra_outlets if current and current.plan_id == plan.id else 0
+    amount = plan_amount(plan, months, extra)
+    now = timezone.now()
+    renewing = bool(current and current.plan_id == plan.id and current.current_period_end
+        and current.current_period_end > now)
+    start = current.current_period_end if renewing else now
+    end = start + timedelta(days=PERIOD_DAYS[months])
+    slashed = plan.list_price_monthly if months == 1 else plan.list_price_yearly
+    pct = plan.discount_pct_monthly if months == 1 else plan.discount_pct_yearly
+    saving = (slashed - plan.price_for(months)) if pct else 0
+    other = 1 if months == 12 else 12
+    other_option = {"months": other, "price": plan.price_for(other),
+        "pct": plan.discount_pct_monthly if other == 1 else plan.discount_pct_yearly} if plan.price_for(other) > 0 else None
+    return render(request, "merchant/billing_review.html", _merchant_context(request, store,
+        title="Tinjau langganan", section="billing", plan=plan, months=months, amount=amount, extra=extra,
+        plan_price=plan.price_for(months), slashed=slashed if pct else 0, pct=pct, saving=saving,
+        renewing=renewing, start=start, end=end, other_option=other_option, current=current,
+        changing=bool(current and current.plan_id != plan.id and current.plan.is_paid
+            and current.current_period_end and current.current_period_end > now),
+        sales_contact_url=_sales_url()))
+
+
+def _sales_url():
+    from apps.shops.trial import sales_contact
+    return sales_contact()["whatsapp_url"]
+
+
+@login_required(login_url="/login/")
+def merchant_billing_cancel(request):
+    """Batalkan langganan (stop renewing; active until the paid period ends) or turn renewing back on."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    try:
+        if request.POST.get("action") == "resume":
+            resume_subscription(store, request.user)
+            messages.success(request, "Perpanjangan otomatis aktif kembali.")
+        else:
+            subscription = cancel_subscription(store, request.user)
+            messages.success(request, "Langganan dibatalkan. Paket tetap aktif sampai "
+                f"{subscription.current_period_end:%d %b %Y} dan tidak akan ditagih lagi.")
+    except BillingError as error:
+        messages.error(request, str(error))
+    return redirect("merchant-billing")
+
+
+@login_required(login_url="/login/")
+def merchant_billing_cancel_invoice(request, invoice_id):
+    """Batalkan tagihan: drop a bill that has not been paid."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    invoice = get_object_or_404(SubscriptionInvoice, id=invoice_id, store=store)
+    try:
+        cancel_pending_invoice(invoice, request.user)
+        messages.success(request, "Tagihan dibatalkan.")
+    except BillingError as error:
+        messages.error(request, str(error))
+    return redirect("merchant-billing")

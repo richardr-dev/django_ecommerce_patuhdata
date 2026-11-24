@@ -136,7 +136,7 @@ class RenewalPageTests(TestCase):
 
     def test_billing_page_shows_the_bill_and_pay_opens_checkout(self):
         page = self.client.get("/books/billing/")
-        self.assertContains(page, "TAGIHAN BERIKUTNYA")
+        self.assertContains(page, "Tagihan perpanjangan")
         invoice = SubscriptionInvoice.objects.get(kind="renewal")
 
         response = self.client.post(f"/books/billing/{invoice.id}/pay/")

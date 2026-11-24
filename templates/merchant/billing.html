@@ -1,49 +1,139 @@
 {% extends "merchant/base.html" %}{% load icons books %}{% block title %}Langganan{% endblock %}{% block content %}
-<div class="pg-head"><div><span class="pg-kicker">Akun perusahaan</span><h1>Langganan</h1><p>Paket menentukan batas produk dan fitur seperti domain sendiri.</p></div></div>
+<div class="pg-head"><div><span class="pg-kicker">Akun perusahaan</span><h1>Langganan</h1><p>Pilih paket, tinjau rinciannya, lalu bayar dengan aman lewat DOKU. Anda bisa membatalkan kapan saja; paket tetap aktif sampai periode yang sudah dibayar berakhir.</p></div></div>
+
+<div class="bp-stack">
+
+{# ---- 1. The plan the company is on now ---- #}
+{% if plan %}
+<section class="bp-card bp-current">
+  <div class="bp-current-main">
+    <span class="bp-kicker">Paket Anda</span>
+    <h2>{{ plan.name }}</h2>
+    <div>
+      {% if status.trial and not status.lapsed %}<span class="pill pill-info">Masa coba gratis</span>
+      {% elif status.lapsed %}<span class="pill pill-draft">Masa aktif berakhir</span>
+      {% elif subscription.plan.is_paid and not subscription.auto_renew %}<span class="pill pill-pending">Dibatalkan</span>
+      {% elif subscription.plan.is_paid %}<span class="pill pill-paid">Aktif</span>
+      {% else %}<span class="pill pill-info">Gratis</span>{% endif %}
+    </div>
+    {% if status.trial and not status.lapsed %}<p class="bp-muted">Gratis sampai <b>{{ subscription.current_period_end|date:"d F Y" }}</b> ({{ status.days_left }} hari lagi). Bayar sekarang dan sisa masa coba tetap terhitung.</p>
+    {% elif status.lapsed %}<p class="bp-muted">{% if status.trial %}Masa coba gratis{% else %}Paket {{ subscription.plan.name }}{% endif %} berakhir {{ subscription.current_period_end|date:"d F Y" }}. Pilih paket di bawah agar semua fitur aktif kembali.</p>
+    {% elif subscription.plan.is_paid and plan.code == subscription.plan.code and not subscription.auto_renew %}<p class="bp-muted">Langganan dibatalkan. Paket tetap aktif sampai <b>{{ subscription.current_period_end|date:"d F Y" }}</b> dan tidak akan ditagih lagi.</p>
+    {% elif subscription.plan.is_paid and plan.code == subscription.plan.code %}<p class="bp-muted">Aktif sampai <b>{{ subscription.current_period_end|date:"d F Y" }}</b>.{% if subscription.auto_renew %} Diperpanjang otomatis, kami ingatkan lewat email sebelum ditagih.{% endif %}</p>
+    {% elif subscription.plan.is_paid %}<p class="bp-muted">Paket {{ subscription.plan.name }} berakhir {{ subscription.current_period_end|date:"d F Y" }}. Perusahaan kembali ke paket {{ plan.name }} sampai Anda memperpanjang.</p>
+    {% else %}<p class="bp-muted">{{ plan.tagline }}</p>{% endif %}
+    <div class="bp-actions">
+      {% if subscription.plan.is_paid and plan.code == subscription.plan.code and not status.lapsed %}<a class="btn-primary" href="{% url 'merchant-billing-review' %}?plan={{ subscription.plan.code }}&months={{ subscription.renew_months }}">Perpanjang</a>{% endif %}
+      {% if subscription.plan.is_paid and plan.code == subscription.plan.code and not status.lapsed %}
+        {% if subscription.auto_renew %}<form method="post" action="{% url 'merchant-billing-cancel' %}">{% csrf_token %}<button class="btn" data-confirm="Batalkan langganan? Paket tetap aktif sampai {{ subscription.current_period_end|date:'d F Y' }}, lalu tidak diperpanjang dan tidak ditagih lagi." data-confirm-ok="Ya, batalkan" data-confirm-tone="danger">Batalkan langganan</button></form>
+        {% else %}<form method="post" action="{% url 'merchant-billing-cancel' %}">{% csrf_token %}<input type="hidden" name="action" value="resume"><button class="btn">Aktifkan perpanjangan otomatis</button></form>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="bp-meters">
+    {% for m in usage %}<div class="bp-meter"><div class="bp-meter-top"><span>{{ m.label }}</span><b>{{ m.used }}{% if m.limit is not None %} / {{ m.limit }}{% else %} · tanpa batas{% endif %}</b></div>{% if m.limit is not None %}<div class="bp-bar{% if m.full %} full{% endif %}"><i style="width:{{ m.pct|stringformat:'d' }}%"></i></div>{% endif %}</div>{% endfor %}
+    <div class="bp-meter"><div class="bp-meter-top"><span>Domain sendiri</span><b>{% if plan.allow_custom_domain %}Tersedia{% else %}Tidak termasuk{% endif %}</b></div></div>
+  </div>
+</section>
+{% elif trial %}
+<section class="bp-card bp-current">
+  <div class="bp-current-main">
+    <span class="bp-kicker">{% if trial.expired %}{% if trial.paid %}Langganan berakhir{% else %}Uji coba berakhir{% endif %}{% else %}Uji coba gratis{% endif %}</span>
+    <h2>{% if trial.expired %}Pilih paket untuk membuka kembali semua fitur{% else %}{{ trial.days_left }} hari lagi{% endif %}</h2>
+    <p class="bp-muted">{% if trial.expired %}Berakhir {{ trial.ends_at|date:"d F Y" }}. Data Anda aman. Setelah pembayaran diterima, semua fitur aktif kembali.{% else %}Sampai {{ trial.ends_at|date:"d F Y" }}. Setelah itu fitur terkunci sampai Anda berlangganan.{% endif %}</p>
+  </div>
+  <div class="bp-meters"><div class="bp-meter"><div class="bp-meter-top"><span>Status</span><b>{% if trial.expired %}Terkunci{% else %}Semua fitur aktif{% endif %}</b></div></div></div>
+</section>
+{% else %}
+<section class="bp-card"><span class="bp-kicker">Paket aktif</span><h2>Dikelola platform</h2><p class="bp-muted" style="margin:6px 0 0">Perusahaan ini dikelola langsung oleh pengelola platform tanpa batas paket.</p></section>
+{% endif %}
+
+{# ---- 2. Bills waiting for payment ---- #}
+{% for invoice in pending_invoices %}
+<section class="bp-card bp-bill">
+  <span class="bp-kicker" style="color:var(--ds-warn)">{% if invoice.kind == "renewal" %}Tagihan perpanjangan{% elif invoice.kind == "outlets" %}Tagihan outlet{% else %}Menunggu pembayaran{% endif %}</span>
+  <div class="bp-bill-main"><b>{{ invoice.amount|rp }}</b><span class="bp-muted">{{ invoice.plan.name }} · {{ invoice.get_months_display }}{% if invoice.due_at %} · jatuh tempo {{ invoice.due_at|date:"d M Y" }}{% endif %}</span>
+    {% if status.grace and invoice.kind == "renewal" %}<span class="bp-muted">Periode sudah berakhir; fitur tetap aktif selama masa tenggang. Bayar sekarang agar tidak terputus.</span>{% endif %}</div>
+  <div class="bp-actions">
+    <form method="post" action="{% url 'merchant-billing-pay' invoice.id %}">{% csrf_token %}<button class="btn-primary">Bayar sekarang</button></form>
+    {% if invoice.provider == "doku" %}<form method="post" action="{% url 'merchant-billing-check' invoice.id %}">{% csrf_token %}<button class="btn">Cek pembayaran</button></form>{% endif %}
+    <form method="post" action="{% url 'merchant-billing-cancel-invoice' invoice.id %}">{% csrf_token %}<button class="btn" data-confirm="Batalkan tagihan {{ invoice.amount|rp }} ini? Tagihan yang belum dibayar akan dihapus dari daftar." data-confirm-ok="Ya, batalkan tagihan" data-confirm-tone="danger">Batalkan tagihan</button></form>
+  </div>
+</section>
+{% endfor %}
+
+{# ---- 3. Plans ---- #}
+{% if plan or trial %}
+<div><h2 style="margin:0 0 4px;font-size:20px;font-weight:700;color:var(--ds-ink)">Pilih paket</h2><p class="bp-muted" style="margin:0">Tinjau rincian dan manfaat paket di langkah berikutnya sebelum membayar.</p></div>
+<div class="bp-plans">
+{% for option in plans %}
+  <article class="bp-card bp-plan{% if option.code == plan.code %} is-current{% endif %}">
+    <div class="bp-plan-head"><h3>{{ option.name }}</h3>{% if option.code == plan.code %}<span class="pill pill-info">Paket Anda</span>{% endif %}</div>
+    {% if option.tagline %}<p class="bp-muted" style="margin:-6px 0 0">{{ option.tagline }}</p>{% endif %}
+    <div class="bp-price">
+      {% if option.contact_sales %}<span class="bp-now">Custom</span>
+      {% elif option.is_paid %}{% if option.discount_pct_monthly %}<span class="bp-was">{{ option.list_price_monthly|rp }}</span>{% endif %}
+        <span class="bp-now">{{ option.price_monthly|rp }}<small>/bulan</small></span>
+        {% if option.discount_pct_monthly %}<span><span class="bp-save">Hemat {{ option.discount_pct_monthly }}%</span></span>{% endif %}
+      {% else %}<span class="bp-now">Gratis</span>{% endif %}
+    </div>
+    <ul class="bp-list">
+      <li>{% if option.max_products is None %}Produk tanpa batas{% else %}Hingga {{ option.max_products }} produk aktif{% endif %}</li>
+      <li>{% if option.max_channels is None %}Toko marketplace tanpa batas{% else %}{{ option.max_channels }} toko marketplace{% endif %}</li>
+      <li>{% if option.allow_custom_domain %}Domain sendiri + HTTPS otomatis{% else %}Alamat subdomain gratis{% endif %}</li>
+      <li>{% if option.included_outlets is None %}Outlet tanpa batas{% elif option.extra_outlet_price %}{{ option.included_outlets }} outlet + {{ option.extra_outlet_price|rp }}/outlet tambahan{% else %}1 outlet{% endif %}</li>
+      {% for feature in option.feature_list %}<li>{{ feature }}</li>{% endfor %}
+    </ul>
+    <div class="bp-cta">
+      {% if option.code == plan.code and not option.is_paid %}<span class="pill pill-paid" style="justify-self:start">Paket Anda</span>
+      {% elif option.contact_sales %}{% if platform_sales_url %}<a class="btn-primary" href="{{ platform_sales_url }}" target="_blank" rel="noopener">Hubungi sales</a>{% elif sales_contact.whatsapp_url %}<a class="btn-primary" href="{{ sales_contact.whatsapp_url }}" target="_blank" rel="noopener">Hubungi sales</a>{% else %}<span class="bp-muted">Hubungi pengelola platform</span>{% endif %}
+      {% elif option.is_paid %}
+        <a class="btn-primary" href="{% url 'merchant-billing-review' %}?plan={{ option.code }}&months=1">{% if option.code == plan.code %}Perpanjang 1 bulan{% else %}Pilih {{ option.name }}{% endif %}</a>
+        {% if option.price_yearly %}<a class="btn" href="{% url 'merchant-billing-review' %}?plan={{ option.code }}&months=12">12 bulan · {{ option.price_yearly|rp }}{% if option.discount_pct_yearly %} · hemat {{ option.discount_pct_yearly }}%{% endif %}</a>{% endif %}
+      {% endif %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+{% endif %}
+
+{# ---- 4. Renewal and outlets ---- #}
+{% if subscription and subscription.plan.is_paid %}{% with renewal=status.renewal %}
+<section class="bp-card bp-sub">
+  <div><h3>Perpanjangan otomatis</h3><p class="bp-muted" style="margin:4px 0 0">{% if subscription.auto_renew %}Tagihan dibuat {{ renewal_notice_days }} hari sebelum periode berakhir, lalu kami ingatkan lewat email.{% else %}Mati. Paket berakhir {{ subscription.current_period_end|date:"d F Y" }} tanpa tagihan baru.{% endif %}</p></div>
+  <form method="post" action="{% url 'merchant-billing-autorenew' %}" class="bp-row">{% csrf_token %}
+    <label class="ds-check" style="align-items:center"><input type="checkbox" name="auto_renew" {% if subscription.auto_renew %}checked{% endif %}><span><b>Perpanjang otomatis</b></span></label>
+    <label class="field" style="margin:0"><span>Periode</span><select name="renew_months"><option value="1" {% if subscription.renew_months == 1 %}selected{% endif %}>Bulanan · {{ subscription.plan.price_monthly|rp }}</option>{% if subscription.plan.price_yearly %}<option value="12" {% if subscription.renew_months == 12 %}selected{% endif %}>Tahunan · {{ subscription.plan.price_yearly|rp }} (hemat 2 bulan)</option>{% endif %}</select></label>
+    <button class="btn">Simpan</button>
+  </form>
+</section>{% endwith %}{% endif %}
 
 {% if plan %}
-<section class="panel"><div class="dp-card-body bl-plan">
-  <div><small style="letter-spacing:.06em;font-weight:700;color:var(--ds-primary)">PAKET AKTIF</small><h2 style="margin:4px 0 6px;font-size:26px;font-weight:700">{{ plan.name }}</h2>
-    {% if status.trial and not status.lapsed %}<p>{% icon "gift" %} Masa coba gratis sampai {{ subscription.current_period_end|date:"d M Y" }} ({{ status.days_left }} hari lagi). Bayar sekarang dan sisa masa coba tetap terhitung.</p>
-    {% elif subscription.plan.is_paid and subscription.current_period_end and plan.code == subscription.plan.code %}<p>Aktif sampai {{ subscription.current_period_end|date:"d M Y" }}.</p>
-    {% elif status.lapsed %}<p>{% if status.trial %}Masa coba gratis{% else %}Paket {{ subscription.plan.name }}{% endif %} berakhir {{ subscription.current_period_end|date:"d M Y" }}. Toko online tetap tampil, tetapi produk baru belum bisa ditambahkan sampai Anda memilih paket.</p>
-    {% elif subscription.plan.is_paid %}<p>Paket {{ subscription.plan.name }} berakhir {{ subscription.current_period_end|date:"d M Y" }}. Perusahaan kembali ke paket {{ plan.name }} sampai Anda memperpanjang.</p>{% else %}<p>{{ plan.tagline }}</p>{% endif %}</div>
-  <dl class="bl-stats">
-    <div><dt>Produk aktif</dt><dd>{{ active_products }}{% if plan.max_products is not None %} / {{ plan.max_products }}{% endif %}</dd></div>
-    <div><dt>Toko marketplace</dt><dd>{{ channel_count }}{% if plan.max_channels is not None %} / {{ plan.max_channels }}{% endif %}</dd></div>
-    <div><dt>Domain sendiri</dt><dd>{% if plan.allow_custom_domain %}Tersedia{% else %}—{% endif %}</dd></div>
-    <div><dt>Alamat toko</dt><dd><a href="{{ merchant_store_url }}" target="_blank" rel="noopener">{{ merchant_store_url }}</a></dd></div></dl></div></section>
-{% elif trial %}<section class="panel"><div class="dp-card-body"><small style="color:var(--ds-primary);font-weight:700;letter-spacing:.06em">{% if trial.expired %}{% if trial.paid %}LANGGANAN BERAKHIR{% else %}UJI COBA BERAKHIR{% endif %}{% else %}UJI COBA GRATIS{% endif %}</small><h2 style="margin:4px 0">{% if trial.expired %}Pilih paket untuk membuka kembali semua fitur{% else %}{{ trial.days_left }} hari lagi{% endif %}</h2><p style="margin:0;color:var(--ds-muted)">{% if trial.expired %}Berakhir {{ trial.ends_at|date:"d F Y" }}. Data Anda aman. Setelah pembayaran diterima, semua fitur aktif kembali.{% else %}Sampai {{ trial.ends_at|date:"d F Y" }}. Setelah itu fitur terkunci sampai Anda berlangganan.{% endif %}</p></div></section>
-{% else %}<section class="panel"><div class="dp-card-body"><small style="color:var(--ds-primary);font-weight:700;letter-spacing:.06em">PAKET AKTIF</small><h2 style="margin:4px 0">Dikelola platform</h2><p style="margin:0;color:var(--ds-muted)">Perusahaan ini dikelola langsung oleh pengelola platform tanpa batas paket.</p></div></section>{% endif %}
+<section class="bp-card bp-sub">
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+    <div><h3>{{ active_outlets }} outlet aktif{% if allowed_outlets is not None %} dari {{ allowed_outlets }}{% else %} · tanpa batas{% endif %}</h3>
+      <p class="bp-muted" style="margin:4px 0 0">{% if plan.extra_outlet_price %}Paket {{ plan.name }} memuat {{ plan.included_outlets }} outlet; setiap outlet tambahan {{ plan.extra_outlet_price|rp }}/bulan.{% if subscription.extra_outlets %} Anda membayar {{ subscription.extra_outlets }} outlet tambahan.{% endif %}{% elif allowed_outlets is None %}Outlet tanpa batas sesuai kontrak.{% else %}Paket {{ plan.name }} untuk 1 outlet. Multi-outlet tersedia di paket Pro (per outlet) atau Custom.{% endif %}</p></div>
+    <a class="btn" href="{% url 'merchant-entity-list' 'warehouses' %}">Kelola outlet</a></div>
+  {% if plan.extra_outlet_price and outlet_quote %}
+  <form method="post" action="{% url 'merchant-billing-outlets' %}" class="bp-row">{% csrf_token %}<input type="hidden" name="action" value="add"><label class="field" style="margin:0"><span>Tambah outlet</span><input type="number" name="count" min="1" max="50" value="1" style="width:110px"></label><button class="btn-primary">Bayar &amp; tambah</button>
+    <span class="bp-muted" style="flex:1 0 100%">{{ outlet_quote.0|rp }} per outlet untuk sisa {{ outlet_quote.1 }} hari periode ini, lalu {{ plan.extra_outlet_price|rp }}/bulan di tagihan berikutnya.</span></form>
+  {% if subscription.extra_outlets %}<form method="post" action="{% url 'merchant-billing-outlets' %}" class="bp-row">{% csrf_token %}<input type="hidden" name="action" value="reduce"><label class="field" style="margin:0"><span>Kurangi menjadi (outlet tambahan)</span><input type="number" name="count" min="0" max="{{ subscription.extra_outlets|add:'-1' }}" value="{{ subscription.extra_outlets|add:'-1' }}" style="width:110px"></label><button class="btn">Simpan</button></form>{% endif %}
+  {% elif plan.extra_outlet_price %}<p class="bp-muted" style="margin:0">Perpanjang paket terlebih dahulu untuk menambah outlet.</p>{% endif %}
+</section>
+{% endif %}
 
-{% if subscription and subscription.plan.is_paid %}{% with renewal=status.renewal %}
-<section class="panel"><header><h2>Perpanjangan</h2></header><div class="dp-card-body">
-  {% if renewal %}<div class="notice {% if status.grace %}warn{% endif %}" style="align-items:center">{% icon "wallet" %}<span style="flex:1"><small style="font-weight:700;letter-spacing:.06em;color:var(--ds-muted)">TAGIHAN BERIKUTNYA</small><br><b>{{ renewal.amount|rp }} · {{ renewal.plan.name }} {{ renewal.get_months_display }}</b><br>{% if status.grace %}Periode sudah berakhir; fitur tetap aktif sampai masa tenggang selesai. Bayar sekarang agar tidak terputus.{% else %}Jatuh tempo {{ renewal.due_at|date:"d M Y" }}. Masa aktif baru dihitung dari tanggal itu, jadi tidak ada hari yang hilang.{% endif %}</span>
-    <form method="post" action="{% url 'merchant-billing-pay' renewal.id %}">{% csrf_token %}<button class="btn-primary">Bayar sekarang</button><small style="display:block;color:var(--ds-muted);margin-top:4px">QRIS, virtual account, e-wallet, atau kartu</small></form></div>{% endif %}
-  <form method="post" action="{% url 'merchant-billing-autorenew' %}" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">{% csrf_token %}
-    <label class="ds-check" style="flex:1;min-width:260px;align-items:flex-start"><input type="checkbox" name="auto_renew" {% if subscription.auto_renew %}checked{% endif %}><span><b>Perpanjangan otomatis</b><small style="display:block;color:var(--ds-muted);font-weight:400">{% if subscription.auto_renew %}Tagihan dibuat {{ renewal_notice_days }} hari sebelum periode berakhir, lalu kami ingatkan lewat email.{% else %}Mati. Paket berakhir {{ subscription.current_period_end|date:"d M Y" }} tanpa tagihan baru.{% endif %}</small></span></label>
-    <label class="field" style="margin:0"><span>Periode</span><select name="renew_months"><option value="1" {% if subscription.renew_months == 1 %}selected{% endif %}>Bulanan · {{ subscription.plan.price_monthly|rp }}</option>{% if subscription.plan.price_yearly %}<option value="12" {% if subscription.renew_months == 12 %}selected{% endif %}>Tahunan · {{ subscription.plan.price_yearly|rp }} (hemat 2 bulan)</option>{% endif %}</select></label>
-    <button class="btn">Simpan</button></form></div></section>{% endwith %}{% endif %}
+{# ---- 5. History ---- #}
+<section class="bp-card"><h3 style="margin-bottom:14px">Riwayat tagihan</h3>
+  <div class="bp-hist">
+  {% for invoice in invoices %}
+    <div class="bp-hist-item">
+      <div><b>{{ invoice.plan.name }}</b> · {{ invoice.get_months_display }}<small>{{ invoice.created_at|date:"d M Y H:i" }}{% if invoice.period_end %} · berlaku s.d. {{ invoice.period_end|date:"d M Y" }}{% endif %}</small></div>
+      <div><span class="pill {% if invoice.status == 'paid' %}pill-paid{% elif invoice.status == 'pending' %}pill-pending{% else %}pill-draft{% endif %}">{{ invoice.get_status_display }}</span></div>
+      <div class="bp-hist-amount">{{ invoice.amount|rp }}{% if invoice.discount %}<small>hemat {{ invoice.discount|rp }}</small>{% endif %}</div>
+    </div>
+  {% empty %}<p class="bp-muted" style="text-align:center;padding:24px 0;margin:0">Belum ada tagihan.</p>{% endfor %}
+  </div>
+</section>
 
-{% if plan %}<section class="panel"><header><div><h2>{{ active_outlets }} outlet aktif{% if allowed_outlets is not None %} dari {{ allowed_outlets }}{% else %} · tanpa batas{% endif %}</h2>
-  <p>{% if plan.extra_outlet_price %}Paket {{ plan.name }} memuat {{ plan.included_outlets }} outlet; setiap outlet tambahan {{ plan.extra_outlet_price|rp }}/bulan.{% if subscription.extra_outlets %} Anda membayar {{ subscription.extra_outlets }} outlet tambahan.{% endif %}{% elif allowed_outlets is None %}Outlet tanpa batas sesuai kontrak.{% else %}Paket {{ plan.name }} untuk 1 outlet. Multi-outlet tersedia di paket Pro (per outlet) atau Custom.{% endif %}</p></div><a class="btn" href="{% url 'merchant-entity-list' 'warehouses' %}">Kelola outlet</a></header>
-  {% if plan.extra_outlet_price and outlet_quote %}<div class="dp-card-body" style="display:grid;gap:14px">
-    <form method="post" action="{% url 'merchant-billing-outlets' %}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">{% csrf_token %}<input type="hidden" name="action" value="add"><label class="field" style="margin:0"><span>Tambah outlet</span><input type="number" name="count" min="1" max="50" value="1" style="width:110px"></label><button class="btn-primary">Bayar & tambah</button>
-      <small style="flex:1 0 100%;color:var(--ds-muted)">{{ outlet_quote.0|rp }} per outlet untuk sisa {{ outlet_quote.1 }} hari periode ini, lalu {{ plan.extra_outlet_price|rp }}/bulan di tagihan berikutnya.</small></form>
-    {% if subscription.extra_outlets %}<form method="post" action="{% url 'merchant-billing-outlets' %}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">{% csrf_token %}<input type="hidden" name="action" value="reduce"><label class="field" style="margin:0"><span>Kurangi menjadi (outlet tambahan)</span><input type="number" name="count" min="0" max="{{ subscription.extra_outlets|add:'-1' }}" value="{{ subscription.extra_outlets|add:'-1' }}" style="width:110px"></label><button class="btn">Simpan</button></form>{% endif %}</div>
-  {% elif plan.extra_outlet_price %}<div class="dp-card-body"><p class="dp-help" style="margin:0">Perpanjang paket terlebih dahulu untuk menambah outlet.</p></div>{% endif %}</section>{% endif %}
-
-{% if plan or trial %}<div style="display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">{% for option in plans %}<article class="panel" style="{% if option.code == plan.code %}box-shadow:0 0 0 2px var(--ds-primary),var(--ds-shadow-lift){% endif %}"><div class="dp-card-body" style="display:flex;flex-direction:column;gap:10px;height:100%">
-  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;font-size:18px;font-weight:700">{{ option.name }}</h3>{% if option.code == plan.code %}<span class="pill pill-info">Paket Anda</span>{% endif %}</div><p style="margin:0;color:var(--ds-muted)">{{ option.tagline }}</p>
-  <strong style="font-size:26px;letter-spacing:-.02em">{% if option.contact_sales %}Custom{% elif option.is_paid %}{% if option.discount_pct_monthly %}<small style="display:block;font-size:14px;color:var(--ds-muted);font-weight:500;text-decoration:line-through">{{ option.list_price_monthly|rp }}</small>{% endif %}{{ option.price_monthly|rp }}<small style="font-size:13px;color:var(--ds-muted);font-weight:500">/bulan</small>{% if option.discount_pct_monthly %} <span class="pill pill-paid" style="vertical-align:middle">Hemat {{ option.discount_pct_monthly }}%</span>{% endif %}{% else %}Gratis{% endif %}</strong>
-  <ul style="margin:0;padding-left:18px;color:var(--ds-muted);display:grid;gap:4px;flex:1"><li>{% if option.max_products is None %}Produk tanpa batas{% else %}Hingga {{ option.max_products }} produk aktif{% endif %}</li><li>{% if option.max_channels is None %}Toko marketplace tanpa batas{% else %}{{ option.max_channels }} toko marketplace{% endif %}</li><li>{% if option.allow_custom_domain %}Domain sendiri + HTTPS otomatis{% else %}Alamat subdomain gratis{% endif %}</li><li>{% if option.included_outlets is None %}Outlet tanpa batas{% elif option.extra_outlet_price %}{{ option.included_outlets }} outlet + {{ option.extra_outlet_price|rp }}/outlet tambahan{% else %}1 outlet{% endif %}</li>{% for feature in option.feature_list %}<li>{{ feature }}</li>{% endfor %}</ul>
-  {% if option.code == plan.code and not option.is_paid %}<span class="pill pill-paid" style="align-self:flex-start">Paket Anda</span>
-  {% elif option.contact_sales %}{% if platform_sales_url %}<a class="btn-primary" href="{{ platform_sales_url }}" target="_blank" rel="noopener" style="justify-content:center">Hubungi sales</a>{% elif sales_contact.whatsapp_url %}<a class="btn-primary" href="{{ sales_contact.whatsapp_url }}" target="_blank" rel="noopener" style="justify-content:center">Hubungi sales</a>{% else %}<span class="dp-help">Hubungi pengelola platform</span>{% endif %}
-  {% elif option.is_paid %}<form method="post" action="{% url 'merchant-billing-checkout' %}" style="display:grid;gap:8px">{% csrf_token %}<input type="hidden" name="plan" value="{{ option.code }}"><button class="btn-primary" name="months" value="1" style="justify-content:center">{% if option.code == plan.code %}Perpanjang 1 bulan{% else %}Pilih {{ option.name }}{% endif %}</button>{% if option.price_yearly %}<button class="btn" name="months" value="12" style="justify-content:center">atau 12 bulan · {% if option.discount_pct_yearly %}<s style="opacity:.6;font-weight:400">{{ option.list_price_yearly|rp }}</s> {% endif %}{{ option.price_yearly|rp }}{% if option.discount_pct_yearly %} · hemat {{ option.discount_pct_yearly }}%{% endif %}</button>{% endif %}</form>{% endif %}</div></article>{% endfor %}</div>{% endif %}
-
-<section class="panel"><header><h2>Riwayat tagihan</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Paket</th><th>Periode</th><th class="num">Jumlah</th><th>Status</th><th></th></tr></thead><tbody>
-  {% for invoice in invoices %}<tr><td>{{ invoice.created_at|date:"d M Y H:i" }}</td><td>{{ invoice.plan.name }}</td><td>{{ invoice.get_months_display }}</td><td class="num"><b>{{ invoice.amount|rp }}</b>{% if invoice.discount %}<small>hemat {{ invoice.discount|rp }}</small>{% endif %}</td>
-    <td><span class="pill {% if invoice.status == 'paid' %}pill-paid{% elif invoice.status == 'pending' %}pill-pending{% else %}pill-draft{% endif %}">{{ invoice.get_status_display }}</span>{% if invoice.period_end %}<small>s.d. {{ invoice.period_end|date:"d M Y" }}</small>{% endif %}</td>
-    <td class="num" data-no-row>{% if invoice.status == 'pending' %}<form method="post" action="{% url 'merchant-billing-pay' invoice.id %}" style="display:inline">{% csrf_token %}<button class="btn-primary">Bayar</button></form> {% if invoice.provider == 'doku' %}<form method="post" action="{% url 'merchant-billing-check' invoice.id %}" style="display:inline">{% csrf_token %}<button class="btn">Cek pembayaran</button></form>{% endif %}{% endif %}</td></tr>
-  {% empty %}<tr><td colspan="6" class="!py-10 text-center text-slate-400">Belum ada tagihan.</td></tr>{% endfor %}</tbody></table></div></section>
+</div>
 {% endblock %}

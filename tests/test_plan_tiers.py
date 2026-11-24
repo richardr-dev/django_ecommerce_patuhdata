@@ -82,7 +82,7 @@ class TierLimitTests(TestCase):
         response = client.get("/books/billing/")
         self.assertContains(response, "Hubungi sales")
         self.assertContains(response, "2 toko marketplace")
-        self.assertContains(response, "<dd>0 / 2</dd>")
+        self.assertContains(response, "<b>0 / 2</b>")
         self.assertContains(response, "Masa coba gratis")
 
 
