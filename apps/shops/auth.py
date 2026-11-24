@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.views import LoginView
 from django.core import signing
+from django.views.decorators.csrf import csrf_exempt
 
 from apps.orders.services import normalize_indonesian_phone
 from apps.shops.models import Store, StoreStaff
@@ -107,8 +108,13 @@ def sign_out(request, redirect_to, *, clear_site_cookies):
     return response
 
 
+@csrf_exempt
 def merchant_logout(request):
-    """Keluar from the back office, back to the merchant login (never the Django admin)."""
+    """Keluar from the back office, back to the merchant login (never the Django admin).
+
+    Exempt from the CSRF check on purpose: a page left open after signing out has lost its cookie, and a
+    second press of Keluar must simply land on the sign-in page, not on a 403. Signing out is harmless to
+    forge: the session cookie is SameSite=Lax, so a cross-site POST carries no session to end."""
     from django.http import HttpResponseNotAllowed
     from django.shortcuts import redirect
     from django.urls import reverse

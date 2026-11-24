@@ -15,6 +15,7 @@ from django.contrib.auth.views import LoginView
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounting import bank
@@ -343,6 +344,7 @@ def kasir_home(request):
         "accounts": [a for a in bank.bank_accounts(store) if a.id not in drawers]})
 
 
+@csrf_exempt   # same reason as merchant_logout: a second press from a stale page must not 403
 @require_POST
 def pos_logout(request):
     return sign_out(request, reverse("pos-login"), clear_site_cookies=True)

@@ -591,3 +591,18 @@ class SlashedPriceTests(TestCase):
         changes = PlatformLog.objects.filter(action="plan.updated").first().changes
         self.assertEqual(changes["list_price_monthly"], [0, 129000])
         self.assertEqual(changes["price_monthly"], [100000, 99000])
+
+
+class StaleLogoutTests(TestCase):
+    def test_pressing_keluar_again_from_a_page_left_open_does_not_403(self):
+        from django.test import Client
+        partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        stale = Client(enforce_csrf_checks=True)   # a browser whose cookies were cleared by the first sign-out
+        for path in ("/books/logout/", "/kasir/keluar/"):
+            res = stale.post(path)
+            self.assertEqual(res.status_code, 302, path)
+            self.assertIn("login", res["Location"])
+        signed_in = Client(enforce_csrf_checks=True)
+        signed_in.force_login(partner)
+        self.assertEqual(signed_in.post("/books/logout/")["Location"], "/login/?keluar=1")
+        self.assertEqual(signed_in.get("/platform/users/").status_code, 302)   # really signed out
