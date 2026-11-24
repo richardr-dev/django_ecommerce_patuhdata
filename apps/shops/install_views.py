@@ -298,3 +298,56 @@ def platform_companies(request):
     for company in companies:
         company.trial = trial.trial_state(company)
     return render(request, "platform/companies.html", {"companies": companies, "q": query})
+
+
+@login_required(login_url="/login/")
+def platform_plans(request):
+    """/platform/plans/: every plan with its price; add, edit or delete one."""
+    from django.db.models import Count
+
+    from apps.billing.models import Plan, Subscription
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman paket hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    if request.method == "POST" and request.POST.get("action") == "delete":
+        from apps.billing import platform_plans as service
+        plan = Plan.objects.filter(pk=request.POST.get("plan") or 0).first()
+        try:
+            if plan is None:
+                raise service.PlanError("Paket tidak ditemukan.")
+            messages.success(request, f"Paket {service.delete_plan(plan)} dihapus.")
+        except service.PlanError as problem:
+            messages.error(request, str(problem))
+        return redirect("platform-plans")
+    plans = list(Plan.objects.order_by("sort_order", "price_monthly"))
+    counts = {row["plan_id"]: row["n"] for row in Subscription.objects.values("plan_id").annotate(
+        n=Count("id"))}
+    for plan in plans:
+        plan.users = counts.get(plan.id, 0)
+    return render(request, "platform/plans.html", {"plans": plans})
+
+
+@login_required(login_url="/login/")
+def platform_plan(request, plan_id=None):
+    """/platform/plans/new/ and /platform/plans/<id>/: one plan's price, limits and features."""
+    from django.shortcuts import get_object_or_404
+
+    from apps.billing import platform_plans as service
+    from apps.billing.models import Plan
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman paket hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    plan = get_object_or_404(Plan, pk=plan_id) if plan_id else None
+    error, post = "", None
+    if request.method == "POST":
+        post = request.POST
+        try:
+            saved = service.save_plan(plan, post, request.user)
+        except service.PlanError as problem:
+            error = str(problem)
+        else:
+            messages.success(request, f"Paket {saved.name} disimpan. Harga baru berlaku untuk tagihan berikutnya.")
+            return redirect("platform-plans")
+    return render(request, "platform/plan_form.html", {"plan": plan, "error": error, "post": post})

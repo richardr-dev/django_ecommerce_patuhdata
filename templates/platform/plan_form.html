@@ -1,0 +1,36 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ubah paket · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pp-b{height:30px;padding:0 14px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}.pp-b.bad{background:#ffebeb;color:#c92a2a}.pp-pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:#eaf7fe;color:#0b6fb8;margin-right:4px}.pp-pill.off{background:#f1f4f7;color:#5b7186}.pp-wrap{overflow-x:auto}.pp-add{display:inline-flex;margin-bottom:14px}.ln-ta{width:100%;min-height:96px;border:0;background:transparent;font:inherit;padding:10px 0;resize:vertical;outline:0}</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="plans" %}
+  <div class="ln-card">
+    <h1>{% if plan %}Ubah paket {{ plan.name }}{% else %}Tambah paket{% endif %}</h1>
+    <p class="ln-sub">Kosongkan batas jumlah untuk tanpa batas. Harga dalam rupiah, tanpa titik.</p>
+    {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">{% csrf_token %}
+      <div class="ln-grid">
+        {% if not plan %}<label class="ln-field"><span>Kode paket (tidak bisa diubah)</span><span class="ln-input"><input name="code" value="{{ post.code }}" maxlength="40" required placeholder="pro-plus" autocapitalize="none"></span></label>{% endif %}
+        <label class="ln-field"><span>Nama paket</span><span class="ln-input"><input name="name" value="{% if post %}{{ post.name }}{% else %}{{ plan.name }}{% endif %}" maxlength="60" required></span></label>
+        <label class="ln-field ln-span"><span>Keterangan singkat</span><span class="ln-input"><input name="tagline" value="{% if post %}{{ post.tagline }}{% else %}{{ plan.tagline }}{% endif %}" maxlength="160"></span></label>
+        <label class="ln-field"><span>Harga per bulan (Rp)</span><span class="ln-input"><input name="price_monthly" inputmode="numeric" value="{% if post %}{{ post.price_monthly }}{% elif plan %}{{ plan.price_monthly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <label class="ln-field"><span>Harga per tahun (Rp)</span><span class="ln-input"><input name="price_yearly" inputmode="numeric" value="{% if post %}{{ post.price_yearly }}{% elif plan %}{{ plan.price_yearly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <label class="ln-field"><span>Produk aktif maksimal</span><span class="ln-input"><input name="max_products" inputmode="numeric" value="{% if post %}{{ post.max_products }}{% elif plan.max_products is not None %}{{ plan.max_products }}{% endif %}" placeholder="kosong = tanpa batas"></span></label>
+        <label class="ln-field"><span>Toko marketplace maksimal</span><span class="ln-input"><input name="max_channels" inputmode="numeric" value="{% if post %}{{ post.max_channels }}{% elif plan.max_channels is not None %}{{ plan.max_channels }}{% endif %}" placeholder="kosong = tanpa batas"></span></label>
+        <label class="ln-field"><span>Outlet yang termasuk</span><span class="ln-input"><input name="included_outlets" inputmode="numeric" value="{% if post %}{{ post.included_outlets }}{% elif plan %}{% if plan.included_outlets is not None %}{{ plan.included_outlets }}{% endif %}{% else %}1{% endif %}" placeholder="kosong = tanpa batas"></span></label>
+        <label class="ln-field"><span>Harga per outlet tambahan / bulan (Rp)</span><span class="ln-input"><input name="extra_outlet_price" inputmode="numeric" value="{% if post %}{{ post.extra_outlet_price }}{% elif plan.extra_outlet_price is not None %}{{ plan.extra_outlet_price|floatformat:0 }}{% endif %}" placeholder="kosong = tidak bisa tambah outlet"></span></label>
+        <label class="ln-field"><span>Urutan tampil</span><span class="ln-input"><input name="sort_order" inputmode="numeric" value="{% if post %}{{ post.sort_order }}{% else %}{{ plan.sort_order|default:0 }}{% endif %}"></span></label>
+        <label class="ln-field ln-span"><span>Keunggulan (satu per baris, tampil di halaman harga)</span><span class="ln-input"><textarea class="ln-ta" name="features">{% if post %}{{ post.features }}{% else %}{{ plan.features }}{% endif %}</textarea></span></label>
+        <label class="ln-check"><input type="checkbox" name="is_public" value="1"{% if post %}{% if post.is_public %} checked{% endif %}{% elif not plan or plan.is_public %} checked{% endif %}> Tampil di halaman harga</label>
+        <label class="ln-check"><input type="checkbox" name="is_default" value="1"{% if post %}{% if post.is_default %} checked{% endif %}{% elif plan.is_default %} checked{% endif %}> Paket bawaan perusahaan baru</label>
+        <label class="ln-check"><input type="checkbox" name="contact_sales" value="1"{% if post %}{% if post.contact_sales %} checked{% endif %}{% elif plan.contact_sales %} checked{% endif %}> Paket khusus: pembeli menghubungi sales</label>
+        <label class="ln-check"><input type="checkbox" name="allow_custom_domain" value="1"{% if post %}{% if post.allow_custom_domain %} checked{% endif %}{% elif plan.allow_custom_domain %} checked{% endif %}> Boleh domain sendiri</label>
+        <label class="ln-check"><input type="checkbox" name="allow_payout_reconciliation" value="1"{% if post %}{% if post.allow_payout_reconciliation %} checked{% endif %}{% elif plan.allow_payout_reconciliation %} checked{% endif %}> Pencocokan pencairan marketplace dan gateway</label>
+      </div>
+      <button class="ln-btn">Simpan paket</button>
+    </form>
+  </div>
+  <p class="ln-foot"><a href="{% url 'platform-plans' %}">Kembali ke daftar paket</a></p>
+</main></body></html>

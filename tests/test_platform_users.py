@@ -413,3 +413,49 @@ class ReturnFromDokuTests(TestCase):
             self.client.get("/books/billing/")
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, "pending")
+
+
+class PlanEditorTests(TestCase):
+    def setUp(self):
+        self.partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.client.force_login(self.partner)
+
+    def test_list_shows_plans_and_a_store_account_is_refused(self):
+        self.assertContains(self.client.get("/platform/plans/"), "Paket &amp; harga")
+        store = install(**CLIENT)["store"]
+        self.client.force_login(store.owner)
+        self.assertEqual(self.client.get("/platform/plans/").status_code, 302)
+        self.assertEqual(self.client.post("/platform/plans/new/", {"code": "x-plan", "name": "X"}).status_code, 302)
+
+    def test_change_a_price_and_limits(self):
+        from apps.billing.models import Plan
+        plan = Plan.objects.filter(is_default=False, contact_sales=False).first()
+        res = self.client.post(f"/platform/plans/{plan.pk}/", {"name": plan.name, "price_monthly": "125000",
+            "price_yearly": "1250000", "max_products": "", "max_channels": "5", "included_outlets": "2",
+            "is_public": "1"})
+        self.assertEqual(res.status_code, 302)
+        plan.refresh_from_db()
+        self.assertEqual((int(plan.price_monthly), int(plan.price_yearly), plan.max_products, plan.max_channels),
+            (125000, 1250000, None, 5))
+
+    def test_add_a_plan_and_a_new_default_replaces_the_old_one(self):
+        from apps.billing.models import Plan
+        self.client.post("/platform/plans/new/", {"code": "gold-plus", "name": "Gold Plus", "price_monthly": "250000",
+            "price_yearly": "2500000", "is_public": "1", "is_default": "1"})
+        self.assertEqual(Plan.objects.filter(is_default=True).count(), 1)
+        self.assertTrue(Plan.objects.get(code="gold-plus").is_default)
+
+    def test_bad_input_is_refused_and_keeps_the_typed_values(self):
+        page = self.client.post("/platform/plans/new/", {"code": "Bad Code!", "name": "Z", "price_monthly": "10"})
+        self.assertContains(page, "Kode paket")
+        self.assertContains(page, 'value="Z"')
+
+    def test_a_used_plan_cannot_be_deleted_but_an_unused_one_can(self):
+        from apps.billing.models import Plan, Subscription
+        used = Plan.objects.create(code="used-plan", name="Used", price_monthly=1000, price_yearly=10000)
+        Subscription.objects.create(store=install(**CLIENT)["store"], plan=used)
+        self.client.post("/platform/plans/", {"action": "delete", "plan": used.pk})
+        self.assertTrue(Plan.objects.filter(pk=used.pk).exists())
+        spare = Plan.objects.create(code="spare-plan", name="Spare", price_monthly=1000, price_yearly=10000)
+        self.client.post("/platform/plans/", {"action": "delete", "plan": spare.pk})
+        self.assertFalse(Plan.objects.filter(pk=spare.pk).exists())

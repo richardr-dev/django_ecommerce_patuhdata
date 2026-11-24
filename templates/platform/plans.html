@@ -1,0 +1,26 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paket & harga · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pp-b{height:30px;padding:0 14px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}.pp-b.bad{background:#ffebeb;color:#c92a2a}.pp-pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:#eaf7fe;color:#0b6fb8;margin-right:4px}.pp-pill.off{background:#f1f4f7;color:#5b7186}.pp-wrap{overflow-x:auto}.pp-add{display:inline-flex;margin-bottom:14px}.ln-ta{width:100%;min-height:96px;border:0;background:transparent;font:inherit;padding:10px 0;resize:vertical;outline:0}</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="plans" %}
+  <div class="ln-card">
+    <h1>Paket &amp; harga</h1>
+    <p class="ln-sub">Paket langganan yang bisa dibeli perusahaan. Harga baru berlaku untuk tagihan berikutnya; tagihan yang sudah dibuat tidak berubah.</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    <a class="pp-b pp-add" href="{% url 'platform-plan-new' %}">+ Tambah paket</a>
+    <div class="pp-wrap"><table class="ln-table"><thead><tr><th>Paket</th><th>Per bulan</th><th>Per tahun</th><th>Batas</th><th>Status</th><th>Dipakai</th><th></th></tr></thead><tbody>
+    {% for p in plans %}<tr>
+      <td><b>{{ p.name }}</b><small>{{ p.code }}{% if p.tagline %} · {{ p.tagline }}{% endif %}</small></td>
+      <td>{% if p.contact_sales %}Hubungi sales{% elif p.price_monthly %}Rp{{ p.price_monthly|floatformat:0 }}{% else %}Gratis{% endif %}</td>
+      <td>{% if p.price_yearly %}Rp{{ p.price_yearly|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td><small>{% if p.max_products is None %}Produk tanpa batas{% else %}{{ p.max_products }} produk{% endif %} · {% if p.max_channels is None %}marketplace tanpa batas{% else %}{{ p.max_channels }} marketplace{% endif %} · {% if p.included_outlets is None %}outlet tanpa batas{% else %}{{ p.included_outlets }} outlet{% endif %}</small></td>
+      <td>{% if p.is_default %}<span class="pp-pill">Bawaan</span>{% endif %}{% if p.is_public %}<span class="pp-pill">Tampil</span>{% else %}<span class="pp-pill off">Disembunyikan</span>{% endif %}{% if p.contact_sales %}<span class="pp-pill">Sales</span>{% endif %}</td>
+      <td>{{ p.users }}</td>
+      <td style="white-space:nowrap"><a class="pp-b" href="{% url 'platform-plan' p.pk %}">Ubah</a>
+        {% if not p.is_default and not p.users %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="plan" value="{{ p.pk }}"><button class="pp-b bad">Hapus</button></form>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="7">Belum ada paket.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</main></body></html>

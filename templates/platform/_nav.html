@@ -1,6 +1,7 @@
 <nav class="pn" aria-label="Menu partner">
 <style>.pn{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}.pn a{padding:8px 16px;border-radius:99px;background:#fff;color:#0b6fb8;font-size:13px;font-weight:600;text-decoration:none;border:1px solid #d6e6f0}.pn a.on{background:#0b6fb8;color:#fff;border-color:#0b6fb8}.pn a.back{margin-left:auto;background:transparent;border-color:transparent;color:#5b7186}.pn form{margin:0}.pn button{padding:8px 16px;border-radius:99px;background:#ffebeb;color:#c92a2a;font:inherit;font-size:13px;font-weight:600;border:1px solid #ffd6d6;cursor:pointer}.pn button:hover{background:#ffdede}</style>
 <a href="{% url 'platform-companies' %}"{% if active == 'companies' %} class="on"{% endif %}>Perusahaan</a>
+<a href="{% url 'platform-plans' %}"{% if active == 'plans' %} class="on"{% endif %}>Paket &amp; harga</a>
 <a href="{% url 'platform-users' %}"{% if active == 'users' %} class="on"{% endif %}>Pengguna</a>
 <a href="{% url 'partner-install' %}"{% if active == 'install' %} class="on"{% endif %}>Pasang perusahaan</a>
 <a href="{% url 'platform-settings' %}"{% if active == 'settings' %} class="on"{% endif %}>Pengaturan</a>
