@@ -67,3 +67,14 @@ def legacy_merchant(request, rest=""):
     response = HttpResponse(status=308)
     response["Location"] = target
     return response
+
+
+def csrf_failure(request, reason=""):
+    """The security check of a form failed, usually because the page was left open while the session changed
+    (signed out in another tab, cookies cleared). Say so in plain words and offer the way back."""
+    from django.shortcuts import render
+    back = request.META.get("HTTP_REFERER", "")
+    host = request.get_host()
+    if not back.startswith((f"https://{host}/", f"http://{host}/")):
+        back = "/books/"
+    return render(request, "csrf_failure.html", {"back": back}, status=403)

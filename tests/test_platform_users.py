@@ -606,3 +606,13 @@ class StaleLogoutTests(TestCase):
         signed_in.force_login(partner)
         self.assertEqual(signed_in.post("/books/logout/")["Location"], "/login/?keluar=1")
         self.assertEqual(signed_in.get("/platform/users/").status_code, 302)   # really signed out
+
+
+class CsrfFailurePageTests(TestCase):
+    def test_a_failed_security_check_shows_a_plain_page_with_a_way_back(self):
+        from django.test import Client
+        res = Client(enforce_csrf_checks=True).post("/books/billing/checkout/", {"plan": "pro"},
+            HTTP_REFERER="http://testserver/books/billing/")
+        self.assertContains(res, "Halaman perlu dimuat ulang", status_code=403)
+        self.assertContains(res, 'href="http://testserver/books/billing/"', status_code=403)
+        self.assertNotContains(res, "Verifikasi CSRF", status_code=403)

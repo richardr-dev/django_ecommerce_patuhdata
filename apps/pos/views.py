@@ -347,7 +347,7 @@ def kasir_home(request):
 @csrf_exempt   # same reason as merchant_logout: a second press from a stale page must not 403
 @require_POST
 def pos_logout(request):
-    return sign_out(request, reverse("pos-login"), clear_site_cookies=True)
+    return sign_out(request, reverse("pos-login"), clear_site_cookies=False)   # see merchant_logout
 
 
 def public_receipt(request, token):

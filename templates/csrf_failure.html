@@ -1,0 +1,12 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halaman perlu dimuat ulang</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<body class="ln"><main class="ln-wrap"><div class="ln-card" style="text-align:center">
+  <h1>Halaman perlu dimuat ulang</h1>
+  <p class="ln-sub">Untuk keamanan, formulir ini tidak diproses karena halamannya sudah kedaluwarsa. Biasanya ini terjadi bila Anda keluar atau masuk di tab lain. Data Anda tidak berubah.</p>
+  <a class="ln-btn" href="{{ back }}" style="text-decoration:none">Muat ulang halaman</a>
+  <p class="ln-sub" style="margin-top:14px">Masih gagal? Tutup tab ini, buka <a href="/login/">halaman masuk</a>, lalu masuk lagi.</p>
+</div></main></body></html>

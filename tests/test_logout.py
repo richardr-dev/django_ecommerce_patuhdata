@@ -27,7 +27,7 @@ class LogoutTests(TestCase):
         self.assertNotContains(dashboard, "/platform-admin/logout/")
         reply = self.seller.post("/books/logout/")
         self.assertEqual(reply["Location"], "/login/?keluar=1")
-        self.assertEqual(reply["Clear-Site-Data"], '"cache", "storage", "cookies"')
+        self.assertEqual(reply["Clear-Site-Data"], '"cache", "storage"')   # cookies are deleted by name instead
         for name in ("sessionid", "csrftoken", SELLER_COOKIE):
             self.assertEqual(reply.cookies[name].value, "", name)
         self.assertFalse(Session.objects.exists())

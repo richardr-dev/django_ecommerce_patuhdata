@@ -123,7 +123,10 @@ def merchant_logout(request):
         return redirect("merchant-dashboard" if request.user.is_authenticated else "merchant-login")
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    return sign_out(request, reverse("merchant-login") + "?keluar=1", clear_site_cookies=True)
+    # No "cookies" in Clear-Site-Data: the session, CSRF and seller cookies are deleted by name above, and the
+    # header makes Chrome wipe every cookie of the site, which raced with the next sign-in (CSRF cookie lost
+    # between login and the first form post, seen on /books/billing/checkout/).
+    return sign_out(request, reverse("merchant-login") + "?keluar=1", clear_site_cookies=False)
 
 
 def customer_logout(request):

@@ -123,6 +123,7 @@ if USE_S3:
     AWS_S3_FILE_OVERWRITE = False
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=604800"}
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_FAILURE_VIEW = "config.views.csrf_failure"
 SESSION_COOKIE_SECURE = not DEBUG
 # A sign-in lasts SESSION_DAYS (default 14) of inactivity: every request renews it, so someone who
 # works in the system is never signed out mid-task, and closing the browser does not end it. The
