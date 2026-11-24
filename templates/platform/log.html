@@ -1,0 +1,19 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Riwayat · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pp-b{height:30px;padding:0 14px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}.pp-b.bad{background:#ffebeb;color:#c92a2a}.pp-pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:#eaf7fe;color:#0b6fb8;margin-right:4px}.pp-pill.off{background:#f1f4f7;color:#5b7186}.pp-wrap{overflow-x:auto}.pp-add{display:inline-flex;margin-bottom:14px}.ln-ta{width:100%;min-height:96px;border:0;background:transparent;font:inherit;padding:10px 0;resize:vertical;outline:0}</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">{% include "platform/_nav.html" with active="log" %}
+  <div class="ln-card">
+    <h1>Riwayat perubahan</h1>
+    <p class="ln-sub">Setiap perubahan paket, harga, langganan, perusahaan, uji coba, pengguna dan pengaturan, lengkap dengan nilai lama dan barunya.</p>
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><select name="jenis" aria-label="Jenis" style="height:40px;border:1px solid #d6e6f0;border-radius:99px;padding:0 14px;font:inherit"><option value="">Semua jenis</option>{% for code, label in kinds %}<option value="{{ code }}"{% if kind == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><input name="q" value="{{ q }}" placeholder="Cari nama paket, perusahaan, atau pelaku" aria-label="Cari" style="flex:1;min-width:200px;height:40px;border:1px solid #d6e6f0;border-radius:99px;padding:0 16px;font:inherit"><button class="pp-b">Cari</button></form>
+    <div class="pp-wrap"><table class="ln-table"><thead><tr><th>Waktu</th><th>Pelaku</th><th>Tindakan</th><th>Objek</th><th>Perubahan</th></tr></thead><tbody>
+    {% for e in entries %}<tr><td style="white-space:nowrap">{{ e.created_at|date:"d M Y H:i" }}</td><td>{{ e.actor_name|default:"sistem" }}</td><td>{{ e.action }}</td>
+      <td><b>{{ e.target_label }}</b><small>{{ e.target_type }}{% if e.store %} · {{ e.store.name }}{% endif %}</small></td>
+      <td>{% for field, change in e.changes.items %}<div><small><b>{{ field }}</b>: {{ change.0|default:"—" }} → <b>{{ change.1|default:"—" }}</b></small></div>{% empty %}—{% endfor %}</td></tr>
+    {% empty %}<tr><td colspan="5">Belum ada perubahan tercatat.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</main></body></html>

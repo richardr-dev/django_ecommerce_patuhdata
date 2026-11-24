@@ -27,6 +27,24 @@
       <button class="ln-btn">Simpan</button>
     </form>
   </div>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Langganan</h2>
+    <p class="ln-sub">{% if subscription %}Paket {{ subscription.plan.name }}{% if subscription.current_period_end %}, berlaku sampai {{ subscription.current_period_end|date:"d M Y" }}{% endif %}.{% else %}Belum ada paket: perusahaan ini dikelola platform tanpa batas paket.{% endif %} Mengubah di sini tidak membuat tagihan; untuk perusahaan yang sedang uji coba atau berlangganan, tanggal berlaku sampai juga menjadi tanggal kunci.</p>
+    {% if sub_error %}<p class="ln-msg bad" role="alert">{{ sub_error }}</p>{% endif %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="section" value="subscription">
+      <div class="ln-grid">
+        <label class="ln-field"><span>Paket</span><span class="ln-input"><select name="plan"><option value="">Tanpa paket (dikelola platform)</option>{% for p in plans %}<option value="{{ p.code }}"{% if subscription.plan.code == p.code %} selected{% endif %}>{{ p.name }}{% if p.price_monthly %} · Rp{{ p.price_monthly|floatformat:0 }}/bln{% endif %}</option>{% endfor %}</select></span></label>
+        <label class="ln-field"><span>Berlaku sampai</span><span class="ln-input"><input type="date" name="period_end" value="{{ subscription.current_period_end|date:'Y-m-d' }}"></span></label>
+        <label class="ln-field"><span>Periode tagihan berikutnya</span><span class="ln-input"><select name="renew_months"><option value="1"{% if subscription.renew_months != 12 %} selected{% endif %}>Bulanan</option><option value="12"{% if subscription.renew_months == 12 %} selected{% endif %}>Tahunan</option></select></span></label>
+        <label class="ln-field"><span>Outlet tambahan</span><span class="ln-input"><input name="extra_outlets" inputmode="numeric" value="{{ subscription.extra_outlets|default:0 }}"></span></label>
+        <label class="ln-check"><input type="checkbox" name="auto_renew" value="1"{% if not subscription or subscription.auto_renew %} checked{% endif %}> Perpanjangan otomatis</label>
+      </div>
+      <button class="ln-btn">Simpan langganan</button>
+    </form>
+  </div>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Riwayat perubahan perusahaan ini</h2>
+    {% for e in logs %}<p style="margin:0 0 8px;font-size:13px"><b>{{ e.created_at|date:"d M Y H:i" }}</b> · {{ e.actor_name|default:"sistem" }} · {{ e.action }}{% for field, change in e.changes.items %}<br><small>{{ field }}: {{ change.0|default:"—" }} → {{ change.1|default:"—" }}</small>{% endfor %}</p>{% empty %}<p class="ln-sub">Belum ada perubahan tercatat.</p>{% endfor %}
+    <p><a href="{% url 'platform-log' %}?q={{ store.name|urlencode }}">Lihat semua riwayat</a></p>
+  </div>
   <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Pengguna di perusahaan ini</h2>
     <table class="ln-table"><thead><tr><th>Pengguna</th><th>Peran</th></tr></thead><tbody>
     <tr><td><a href="{% url 'platform-user' store.owner_id %}"><b>{{ store.owner.get_full_name|default:store.owner.username }}</b></a><small>{{ store.owner.username }}</small></td><td>Pemilik</td></tr>

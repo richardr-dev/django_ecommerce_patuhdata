@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.tax.models import TaxProfile
 from apps.tax.services import normalize_npwp
 
+from . import platform_log
 from .models import AuditLog
 from .trial import set_trial_end
 
@@ -22,6 +23,11 @@ def update_company(store, *, name, support_email="", support_phone="", legal_nam
     name = (name or "").strip()
     if not name:
         raise CompanyError("Tulis nama perusahaan.")
+    old_profile = TaxProfile.objects.filter(store=store).first()
+    before = {"nama": store.name, "email_kontak": store.support_email, "whatsapp_kontak": store.support_phone,
+        "nama_badan": old_profile.legal_name if old_profile else "", "npwp": old_profile.npwp if old_profile else "",
+        "alamat": old_profile.address if old_profile else "", "jenis_wp": old_profile.taxpayer_type if old_profile else "",
+        "pkp": bool(old_profile and old_profile.is_pkp)}
     try:
         npwp = normalize_npwp(npwp)
     except ValueError as problem:
@@ -48,6 +54,12 @@ def update_company(store, *, name, support_email="", support_phone="", legal_nam
     if end != store.trial_ends_at and (end is None or store.trial_ends_at is None
             or end.date() != store.trial_ends_at.astimezone(timezone.get_current_timezone()).date()):
         set_trial_end(store, end, actor)
+    after = {"nama": store.name, "email_kontak": store.support_email, "whatsapp_kontak": store.support_phone,
+        "nama_badan": profile.legal_name, "npwp": profile.npwp, "alamat": profile.address,
+        "jenis_wp": profile.taxpayer_type, "pkp": profile.is_pkp}
+    changes = platform_log.diff(before, after)
+    if changes:
+        platform_log.log(actor, "company.updated", "Store", store.name, changes, store=store)
     AuditLog.objects.create(store=store, actor=actor, action="store.edited_by_partner", object_type="Store",
         object_id=str(store.pk), details={"name": store.name})
     return store

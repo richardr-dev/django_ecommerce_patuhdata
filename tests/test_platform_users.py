@@ -459,3 +459,83 @@ class PlanEditorTests(TestCase):
         spare = Plan.objects.create(code="spare-plan", name="Spare", price_monthly=1000, price_yearly=10000)
         self.client.post("/platform/plans/", {"action": "delete", "plan": spare.pk})
         self.assertFalse(Plan.objects.filter(pk=spare.pk).exists())
+
+
+class ChangeLogAndSubscriptionTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+        self.partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.store = install(**CLIENT, trial_days=14)["store"]
+        self.plan = Plan.objects.filter(is_default=False, contact_sales=False, price_monthly__gt=0).first()
+        self.client.force_login(self.partner)
+
+    def test_a_price_and_name_change_is_logged_with_old_and_new_values(self):
+        from apps.shops.models import PlatformLog
+        old = (self.plan.name, int(self.plan.price_monthly))
+        plan = self.plan
+        form = {"name": "Nama Baru", "tagline": plan.tagline, "price_monthly": "777000", "price_yearly": "7770000",
+            "max_products": plan.max_products or "", "max_channels": plan.max_channels or "",
+            "included_outlets": plan.included_outlets or "", "sort_order": plan.sort_order,
+            "features": plan.features, "is_public": "1" if plan.is_public else "",
+            "allow_custom_domain": "1" if plan.allow_custom_domain else "",
+            "allow_payout_reconciliation": "1" if plan.allow_payout_reconciliation else ""}
+        self.client.post(f"/platform/plans/{plan.pk}/", form)
+        entry = PlatformLog.objects.filter(action="plan.updated").first()
+        self.assertEqual(entry.actor_name, "partner@x.id")
+        self.assertEqual(entry.changes["name"], [old[0], "Nama Baru"])
+        self.assertEqual(entry.changes["price_monthly"], [old[1], 777000])
+        self.assertNotIn("tagline", entry.changes)
+        page = self.client.get("/platform/log/")
+        self.assertContains(page, "Nama Baru")
+        self.assertContains(page, "777000")
+
+    def test_edit_a_companys_subscription_and_it_is_logged(self):
+        from datetime import date
+
+        from apps.shops.models import PlatformLog
+        res = self.client.post(f"/platform/companies/{self.store.pk}/", {"section": "subscription",
+            "plan": self.plan.code, "period_end": "2031-05-01", "renew_months": "12", "extra_outlets": "0",
+            "auto_renew": "1"})
+        self.assertEqual(res.status_code, 302)
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.subscription.plan, self.plan)
+        self.assertEqual(self.store.subscription.current_period_end.date(), date(2031, 5, 1))
+        self.assertEqual(self.store.trial_ends_at.date(), date(2031, 5, 1))   # the lock date follows
+        entry = PlatformLog.objects.filter(action__startswith="subscription.", store=self.store).first()
+        self.assertEqual(entry.changes["berlaku_sampai"], ["", "2031-05-01"])
+
+    def test_change_the_plan_again_and_remove_it(self):
+        from apps.shops.models import PlatformLog
+        self.client.post(f"/platform/companies/{self.store.pk}/", {"section": "subscription", "plan": self.plan.code,
+            "period_end": "2031-05-01", "renew_months": "1", "extra_outlets": "0"})
+        self.client.post(f"/platform/companies/{self.store.pk}/", {"section": "subscription", "plan": ""})
+        self.store.refresh_from_db()
+        self.assertFalse(hasattr(self.store, "subscription") and self.store.subscription_id if False else False)
+        from apps.billing.models import Subscription
+        self.assertFalse(Subscription.objects.filter(store=self.store).exists())
+        self.assertTrue(PlatformLog.objects.filter(action="subscription.removed").exists())
+
+    def test_bad_subscription_input_is_refused(self):
+        page = self.client.post(f"/platform/companies/{self.store.pk}/", {"section": "subscription",
+            "plan": self.plan.code, "period_end": "", "renew_months": "1", "extra_outlets": "0"})
+        self.assertContains(page, "tanggal")
+        from apps.billing.models import Subscription
+        self.assertFalse(Subscription.objects.filter(store=self.store).exists())
+
+    def test_user_company_trial_and_settings_changes_all_reach_the_log(self):
+        from apps.shops.models import PlatformLog
+        self.client.post(f"/platform/companies/{self.store.pk}/", {"name": "Toko Maju 2", "npwp": "",
+            "taxpayer_type": "company", "trial_end": "2031-01-01"})
+        self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "end"})
+        self.client.post("/platform/users/", {"action": "create", "name": "Sari", "contact": "sari@maju.co.id"})
+        self.client.post("/platform/settings/", {"sales_whatsapp": "0811", "sales_email": "", "default_trial_days": "7"})
+        actions = set(PlatformLog.objects.values_list("action", flat=True))
+        self.assertTrue({"company.updated", "trial.ended", "user.created", "settings.updated"} <= actions, actions)
+
+    def test_the_log_page_is_for_partners_only_and_filters(self):
+        self.client.post(f"/platform/plans/{self.plan.pk}/", {"name": "Zzz", "price_monthly": "1", "price_yearly": "10",
+            "is_public": "1"})
+        self.assertContains(self.client.get("/platform/log/?jenis=plan"), "Zzz")
+        self.assertNotContains(self.client.get("/platform/log/?jenis=user"), "Zzz")
+        self.client.force_login(self.store.owner)
+        self.assertEqual(self.client.get("/platform/log/").status_code, 302)

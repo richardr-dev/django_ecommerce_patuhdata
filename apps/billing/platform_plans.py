@@ -6,7 +6,18 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import ProtectedError
 
+from apps.shops import platform_log
+
 from .models import Plan
+
+FIELDS = ("name", "tagline", "price_monthly", "price_yearly", "max_products", "max_channels", "included_outlets",
+    "extra_outlet_price", "allow_custom_domain", "allow_payout_reconciliation", "contact_sales", "is_public",
+    "is_default", "sort_order", "features")
+
+
+def snapshot(plan):
+    return {field: ("" if getattr(plan, field) is None else (int(getattr(plan, field)) if field.startswith(
+        "price") or field == "extra_outlet_price" else getattr(plan, field))) for field in FIELDS}
 
 CODE = re.compile(r"[a-z0-9][a-z0-9-]{1,38}[a-z0-9]")
 
@@ -38,6 +49,7 @@ def _limit(raw, label):
 def save_plan(plan, data, actor=None):
     """Create (``plan`` None) or update a plan from a form's values."""
     creating = plan is None
+    before = {} if creating else snapshot(plan)
     name = (data.get("name") or "").strip()
     if not name:
         raise PlanError("Tulis nama paket.")
@@ -72,10 +84,13 @@ def save_plan(plan, data, actor=None):
     if plan.is_default:
         Plan.objects.exclude(pk=plan.pk).filter(is_default=True).update(is_default=False)
     plan.save()
+    after = snapshot(plan)
+    platform_log.log(actor, "plan.created" if creating else "plan.updated", "Plan", f"{plan.name} ({plan.code})",
+        after if creating else platform_log.diff(before, after))
     return plan
 
 
-def delete_plan(plan):
+def delete_plan(plan, actor=None):
     """Only a plan nobody has ever used can go; otherwise hide it from the pricing page."""
     if plan.is_default:
         raise PlanError("Paket bawaan tidak bisa dihapus. Jadikan paket lain sebagai bawaan dulu.")
@@ -86,4 +101,5 @@ def delete_plan(plan):
     except ProtectedError:
         raise PlanError(f"Paket {name} sudah dipakai perusahaan atau tagihan. Sembunyikan saja "
             "(hilangkan centang “Tampil di halaman harga”).") from None
+    platform_log.log(actor, "plan.deleted", "Plan", name)
     return name

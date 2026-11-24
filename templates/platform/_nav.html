@@ -4,6 +4,7 @@
 <a href="{% url 'platform-plans' %}"{% if active == 'plans' %} class="on"{% endif %}>Paket &amp; harga</a>
 <a href="{% url 'platform-users' %}"{% if active == 'users' %} class="on"{% endif %}>Pengguna</a>
 <a href="{% url 'partner-install' %}"{% if active == 'install' %} class="on"{% endif %}>Pasang perusahaan</a>
+<a href="{% url 'platform-log' %}"{% if active == 'log' %} class="on"{% endif %}>Riwayat</a>
 <a href="{% url 'platform-settings' %}"{% if active == 'settings' %} class="on"{% endif %}>Pengaturan</a>
 <a class="back" href="{% url 'merchant-dashboard' %}">Ke back office</a>
 <form method="post" action="{% url 'merchant-logout' %}">{% csrf_token %}<button type="submit">Keluar{% if request.user.is_authenticated %} · {{ request.user.username }}{% endif %}</button></form></nav>

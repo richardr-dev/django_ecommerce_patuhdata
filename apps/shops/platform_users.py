@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import ProtectedError, Q
 
+from . import platform_log
 from .auth import login_phone
 from .models import AuditLog, Store, StoreStaff
 
@@ -77,6 +78,9 @@ def create_user(*, name, contact, store=None, role="", actor=None):
         AuditLog.objects.create(store=store, actor=actor, action="staff.invited", object_type="User",
             object_id=str(user.id), details={"role": role, "new": str(created), "by": "platform"})
     link = invite_link(user) if not user.has_usable_password() else None
+    platform_log.log(actor, "user.created" if created else "user.added_to_company", "User", user.username,
+        {"nama": ["", name], "perusahaan": ["", store.name if store else ""], "peran": ["", role if store else ""]},
+        store=store)
     return user, created, link
 
 
@@ -91,6 +95,8 @@ def set_active(user, active, actor):
     _check_target(user, actor)
     user.is_active = bool(active)
     user.save(update_fields=["is_active"])
+    platform_log.log(actor, "user.activated" if active else "user.deactivated", "User", user.username,
+        {"aktif": ["tidak" if active else "ya", "ya" if active else "tidak"]})
     return user
 
 
@@ -108,6 +114,7 @@ def delete_user(user, actor):
     except ProtectedError:
         raise PlatformUserError(f"{label} sudah tercatat di data perusahaan (organisasi atau shift kasir). "
             "Matikan akunnya agar tidak bisa masuk, data tetap utuh.") from None
+    platform_log.log(actor, "user.deleted", "User", user.username or label)
     return label
 
 
@@ -123,10 +130,13 @@ def update_user(user, *, name, contact, actor):
     taken = User.objects.exclude(pk=user.pk).filter(Q(username__iexact=contact) | Q(email__iexact=contact))
     if taken.exists():
         raise PlatformUserError("Email atau nomor itu sudah dipakai akun lain.")
+    before = {"nama": user.get_full_name() or user.first_name, "login": user.username}
     user.first_name, user.last_name = name[:150], ""
     user.username = contact
     user.email = contact if "@" in contact else ""
     user.save(update_fields=["first_name", "last_name", "username", "email"])
+    platform_log.log(actor, "user.updated", "User", user.username,
+        platform_log.diff(before, {"nama": name[:150], "login": contact}))
     return user
 
 
@@ -137,7 +147,9 @@ def set_membership(user, store, role, actor):
         raise PlatformUserError("Pilih peran.")
     if user.id == store.owner_id:
         raise PlatformUserError("Itu akun pemilik perusahaan.")
+    old = StoreStaff.objects.filter(store=store, user=user).values_list("role", flat=True).first() or ""
     row, _ = StoreStaff.objects.update_or_create(store=store, user=user, defaults={"role": role})
+    platform_log.log(actor, "user.role_changed", "User", user.username, {"peran": [old, role]}, store=store)
     AuditLog.objects.create(store=store, actor=actor, action="staff.role_changed", object_type="User",
         object_id=str(user.id), details={"role": role, "by": "platform"})
     return row
@@ -147,6 +159,8 @@ def remove_membership(user, store, actor):
     _check_target(user, actor)
     removed, _ = StoreStaff.objects.filter(store=store, user=user).delete()
     if removed:
+        platform_log.log(actor, "user.removed_from_company", "User", user.username, {"perusahaan": [store.name, ""]},
+            store=store)
         AuditLog.objects.create(store=store, actor=actor, action="staff.removed", object_type="User",
             object_id=str(user.id), details={"by": "platform"})
     return bool(removed)
@@ -157,4 +171,5 @@ def password_link(user, actor):
     from .staff_views import invite_link
 
     _check_target(user, actor)
+    platform_log.log(actor, "user.password_link", "User", user.username)
     return invite_link(user)

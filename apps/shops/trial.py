@@ -87,6 +87,10 @@ def end_trial_now(store, actor=None):
 def _log(store, actor, action, **details):
     AuditLog.objects.create(store=store, actor=actor, action=action, object_type="Store",
         object_id=str(store.pk), details={k: str(v) for k, v in details.items()})
+    from . import platform_log
+    platform_log.log(actor, action, "Store", store.name, {k: ["", str(v)] for k, v in details.items()}
+        | {"masa_uji_coba_berakhir": ["", store.trial_ends_at.date().isoformat() if store.trial_ends_at else "akses penuh"]},
+        store=store)
 
 
 def sales_contact():

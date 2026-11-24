@@ -20,6 +20,7 @@ urlpatterns = [
     path("platform/plans/", install_views.platform_plans, name="platform-plans"),
     path("platform/plans/new/", install_views.platform_plan, name="platform-plan-new"),
     path("platform/plans/<int:plan_id>/", install_views.platform_plan, name="platform-plan"),
+    path("platform/log/", install_views.platform_log_page, name="platform-log"),
     path("platform/settings/", install_views.platform_settings, name="platform-settings"),
     path("favicon.ico", views.favicon, name="favicon"),
     # /s/ is a seller's own campaign short link.

@@ -94,6 +94,10 @@ def partner_install(request):
         except InstallError as problem:
             error = str(problem)
         else:
+            from . import platform_log
+            platform_log.log(request.user, "store.installed", "Store", result["store"].name,
+                {"pemilik": ["", result["owner"].username], "uji_coba_hari": ["", values["trial_days"]]},
+                store=result["store"])
             result["emailed"] = _email_owner(result)
             values = dict.fromkeys(FIELDS, "") | {"is_pkp": False}
     stores = list(Store.objects.select_related("owner", "organization").order_by("-id")[:100])
@@ -227,8 +231,21 @@ def platform_company(request, store_id):
         messages.error(request, "Halaman perusahaan hanya untuk akun partner platform.")
         return redirect("merchant-dashboard")
     store = get_object_or_404(Store.objects.select_related("owner", "organization"), pk=store_id)
-    error = ""
-    if request.method == "POST":
+    error, sub_error = "", ""
+    if request.method == "POST" and request.POST.get("section") == "subscription":
+        from apps.billing import platform_subscriptions as subscriptions
+        post = request.POST
+        try:
+            subscriptions.update_subscription(store, plan_code=post.get("plan", ""),
+                period_end=post.get("period_end", ""), auto_renew=post.get("auto_renew") == "1",
+                renew_months=12 if post.get("renew_months") == "12" else 1,
+                extra_outlets=post.get("extra_outlets", "0"), actor=request.user)
+        except subscriptions.SubscriptionError as problem:
+            sub_error = str(problem)
+        else:
+            messages.success(request, "Langganan disimpan.")
+            return redirect("platform-company", store_id=store.pk)
+    elif request.method == "POST":
         post = request.POST
         try:
             service.update_company(store, name=post.get("name", ""), support_email=post.get("support_email", ""),
@@ -241,11 +258,15 @@ def platform_company(request, store_id):
         else:
             messages.success(request, "Data perusahaan disimpan.")
             return redirect("platform-company", store_id=store.pk)
+    from apps.billing.models import Plan
+
     from . import trial
-    return render(request, "platform/company.html", {"store": store, "error": error,
+    return render(request, "platform/company.html", {"store": store, "error": error, "sub_error": sub_error,
+        "subscription": getattr(store, "subscription", None), "plans": Plan.objects.order_by("sort_order"),
+        "logs": store.platform_logs.all()[:15],
         "profile": TaxProfile.objects.filter(store=store).first(), "trial": trial.trial_state(store),
         "staff": StoreStaff.objects.filter(store=store).select_related("user").order_by("user__username"),
-        "post": request.POST if error else None})
+        "post": request.POST if (error or sub_error) else None})
 
 
 @login_required(login_url="/login/")
@@ -270,10 +291,17 @@ def platform_settings(request):
         except ValidationError:
             error = "Periksa email sales dan lama uji coba (angka hari)."
         else:
+            from . import platform_log
+            old = {"whatsapp_sales": conf.sales_whatsapp, "email_sales": conf.sales_email,
+                "uji_coba_bawaan": conf.default_trial_days or ""}
             conf.sales_whatsapp = request.POST.get("sales_whatsapp", "").strip()[:30]
             conf.sales_email = email
             conf.default_trial_days = int(days) if days else None
             conf.save()
+            changes = platform_log.diff(old, {"whatsapp_sales": conf.sales_whatsapp, "email_sales": conf.sales_email,
+                "uji_coba_bawaan": conf.default_trial_days or ""})
+            if changes:
+                platform_log.log(request.user, "settings.updated", "PlatformSettings", "Pengaturan platform", changes)
             messages.success(request, "Pengaturan platform disimpan.")
             return redirect("platform-settings")
     return render(request, "platform/settings.html", {"conf": conf, "error": error})
@@ -294,10 +322,13 @@ def platform_companies(request):
     companies = Store.objects.select_related("owner", "organization").order_by("-id")
     if query:
         companies = companies.filter(name__icontains=query) | companies.filter(slug__icontains=query)
+    plan = request.GET.get("plan", "").strip()
+    if plan:
+        companies = companies.filter(subscription__plan__code=plan)
     companies = list(companies[:200])
     for company in companies:
         company.trial = trial.trial_state(company)
-    return render(request, "platform/companies.html", {"companies": companies, "q": query})
+    return render(request, "platform/companies.html", {"companies": companies, "q": query, "plan": plan})
 
 
 @login_required(login_url="/login/")
@@ -316,7 +347,7 @@ def platform_plans(request):
         try:
             if plan is None:
                 raise service.PlanError("Paket tidak ditemukan.")
-            messages.success(request, f"Paket {service.delete_plan(plan)} dihapus.")
+            messages.success(request, f"Paket {service.delete_plan(plan, request.user)} dihapus.")
         except service.PlanError as problem:
             messages.error(request, str(problem))
         return redirect("platform-plans")
@@ -351,3 +382,24 @@ def platform_plan(request, plan_id=None):
             messages.success(request, f"Paket {saved.name} disimpan. Harga baru berlaku untuk tagihan berikutnya.")
             return redirect("platform-plans")
     return render(request, "platform/plan_form.html", {"plan": plan, "error": error, "post": post})
+
+
+@login_required(login_url="/login/")
+def platform_log_page(request):
+    """/platform/log/: what the partner changed, from what to what."""
+    from .models import PlatformLog
+
+    if not request.user.is_superuser:
+        messages.error(request, "Riwayat hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    query, kind = request.GET.get("q", "").strip(), request.GET.get("jenis", "").strip()
+    entries = PlatformLog.objects.select_related("store")
+    if kind:
+        entries = entries.filter(action__startswith=kind + ".")
+    if query:
+        from django.db.models import Q
+        entries = entries.filter(Q(target_label__icontains=query) | Q(actor_name__icontains=query)
+            | Q(action__icontains=query))
+    return render(request, "platform/log.html", {"entries": entries[:300], "q": query, "kind": kind,
+        "kinds": [("plan", "Paket & harga"), ("subscription", "Langganan"), ("store", "Perusahaan"),
+            ("company", "Data perusahaan"), ("trial", "Uji coba"), ("user", "Pengguna"), ("settings", "Pengaturan")]})

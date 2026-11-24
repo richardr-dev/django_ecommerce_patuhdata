@@ -436,3 +436,19 @@ class PlatformSettings(models.Model):
     @classmethod
     def get(cls):
         return cls.objects.get_or_create(pk=1)[0]
+
+
+class PlatformLog(models.Model):
+    """What the partner changed on the platform, and from what to what: plans and prices, companies, trials,
+    subscriptions, users, platform settings. Rows are only ever added."""
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actor_name = models.CharField(max_length=150, blank=True)
+    action = models.CharField(max_length=60, db_index=True)
+    target_type = models.CharField(max_length=40)
+    target_label = models.CharField(max_length=200)
+    store = models.ForeignKey(Store, on_delete=models.SET_NULL, null=True, blank=True, related_name="platform_logs")
+    changes = models.JSONField(default=dict, blank=True)   # {"field": [old, new]}
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
