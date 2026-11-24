@@ -335,3 +335,38 @@ class PartnerLogoutTests(TestCase):
         self.client.post("/books/logout/")
         self.assertEqual(self.client.get("/platform/users/").status_code, 302)
         self.assertIn("/login", self.client.get("/platform/users/")["Location"])
+
+
+class TrialCompanyCanBuyTests(TestCase):
+    def test_a_trial_company_without_a_subscription_sees_plans_and_can_start_checkout(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.billing.models import Plan, SubscriptionInvoice
+        store = install(**CLIENT, trial_days=14)["store"]
+        Store.objects.filter(pk=store.pk).update(trial_ends_at=timezone.now() - timedelta(hours=1))
+        self.assertFalse(hasattr(store, "subscription") and store.subscription)
+        pro, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 399000,
+            "price_yearly": 3990000, "is_public": True})
+        self.client.force_login(store.owner)
+        page = self.client.get("/books/billing/")
+        self.assertContains(page, "Pilih Pro")
+        self.assertContains(page, "UJI COBA BERAKHIR")
+        self.assertNotContains(page, "Dikelola platform")
+        from django.test import override_settings
+        with override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True):
+            res = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": "1"})
+        self.assertEqual(res.status_code, 302)
+        self.assertTrue(SubscriptionInvoice.objects.filter(store=store, plan=pro, status="pending").exists())
+
+    def test_the_pay_button_text_is_white(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        store = install(**CLIENT, trial_days=14)["store"]
+        Store.objects.filter(pk=store.pk).update(trial_ends_at=timezone.now() - timedelta(hours=1))
+        self.client.force_login(store.owner)
+        page = self.client.get("/books/")
+        self.assertContains(page, ".tr-act a.tr-btn", status_code=402)
+        self.assertContains(page, "color:#fff", status_code=402)
