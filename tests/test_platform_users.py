@@ -322,3 +322,16 @@ class CompanyListTests(TestCase):
         self.assertEqual(self.client.post("/platform/companies/", {"store": self.store.pk, "trial_action": "end"}).status_code, 302)
         self.store.refresh_from_db()
         self.assertIsNotNone(self.store.trial_ends_at)
+
+
+class PartnerLogoutTests(TestCase):
+    def test_every_partner_page_has_a_working_sign_out(self):
+        partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.client.force_login(partner)
+        for path in ("/platform/companies/", "/platform/users/", "/platform/settings/", "/registration/"):
+            page = self.client.get(path)
+            self.assertContains(page, 'action="/books/logout/"', msg_prefix=path)
+            self.assertContains(page, "Keluar")
+        self.client.post("/books/logout/")
+        self.assertEqual(self.client.get("/platform/users/").status_code, 302)
+        self.assertIn("/login", self.client.get("/platform/users/")["Location"])
