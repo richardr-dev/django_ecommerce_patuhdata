@@ -81,6 +81,7 @@
   </header>
 
   <main class="pd-main">
+    {% if trial and not trial.expired %}<div class="notice" role="status" style="margin-bottom:14px"><b>Uji coba gratis: {{ trial.days_left }} hari lagi</b> (sampai {{ trial.ends_at|date:"d F Y" }}). Setelah itu fitur terkunci sampai paket diaktifkan.{% if sales_contact.whatsapp_url %} <a href="{{ sales_contact.whatsapp_url }}" target="_blank" rel="noopener" data-no-soft>Hubungi sales</a>{% endif %}</div>{% endif %}
     {% if messages %}
     <div class="pd-messages">
       {% for message in messages %}

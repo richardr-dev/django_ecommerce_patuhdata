@@ -26,6 +26,7 @@ class Command(BaseCommand):
         parser.add_argument("--pkp", action="store_true", help="The client is a PKP (charges PPN)")
         parser.add_argument("--individual", action="store_true", help="Orang pribadi instead of badan usaha")
         parser.add_argument("--organization", default="", help="Code of an existing organization, to add a brand")
+        parser.add_argument("--trial-days", type=int, default=None, help="Free trial length in days; omit for full access")
         parser.add_argument("--plan", default="", help="Subscription plan code; none means no plan limits")
 
     def handle(self, *args, **options):
@@ -44,7 +45,7 @@ class Command(BaseCommand):
                 owner_email=options["email"], owner_phone=options["phone"], legal_name=options["legal_name"],
                 npwp=options["npwp"], address=options["address"], is_pkp=options["pkp"],
                 taxpayer_type="individual" if options["individual"] else "company",
-                organization=organization, plan=plan)
+                organization=organization, plan=plan, trial_days=options["trial_days"])
         except InstallError as error:
             raise CommandError(str(error)) from None
         store, owner = result["store"], result["owner"]

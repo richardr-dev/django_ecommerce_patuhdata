@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.shops.middleware.StoreResolverMiddleware",
     "apps.shops.middleware.StorefrontGateMiddleware",
+    "apps.shops.trial.TrialLockMiddleware",
     "apps.shops.middleware.SellerShortcutMiddleware",
     "apps.shops.middleware.PrivatePagesMiddleware",
     "apps.shops.middleware.CampaignAttributionMiddleware",
@@ -231,6 +232,9 @@ PLATFORM_SUPPORT_EMAIL = os.getenv("PLATFORM_SUPPORT_EMAIL", "")
 PLATFORM_SALES_URL = os.getenv("PLATFORM_SALES_URL", "")
 # Days of the default plan a new store gets free at signup when that plan is paid.
 TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
+# Who a company is told to contact when its free trial ends (shown in the lock notice).
+SALES_WHATSAPP = os.getenv("SALES_WHATSAPP", "")
+SALES_EMAIL = os.getenv("SALES_EMAIL", "")
 # Ajak teman: each side of a referral gets this percent off one month of its plan (1-90).
 REFERRAL_DISCOUNT_PERCENT = int(os.getenv("REFERRAL_DISCOUNT_PERCENT", "50"))
 # Ajak teman tiers for the inviting store: (paid invites needed, name, % off one month each).

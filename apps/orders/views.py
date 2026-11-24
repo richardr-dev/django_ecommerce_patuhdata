@@ -1033,7 +1033,9 @@ def _merchant_context(request, store, **context):
     role = _permissions.screen_role(role)
     pending_count = _Customer.objects.filter(store=store, status=_Customer.STATUS_PENDING).count()
     from apps.shops import currency as _currency
+    from apps.shops.trial import sales_contact, trial_state
     return {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
+        "trial": trial_state(store), "sales_contact": sales_contact(),
         "book_currency": _currency.for_store(store),
         "merchant_role_label": role_label, "merchant_is_accountant": is_auditor, "merchant_real_role": real_role,
         "approvals_pending": _approvals_pending(store, request.user),

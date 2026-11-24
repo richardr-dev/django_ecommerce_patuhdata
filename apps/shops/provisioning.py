@@ -47,7 +47,8 @@ def _owner(email, phone, name):
 
 @transaction.atomic
 def install(*, store_name, slug, owner_name, owner_email="", owner_phone="", legal_name="", npwp="",
-        address="", is_pkp=False, taxpayer_type="company", organization=None, plan=None, installed_by=None):
+        address="", is_pkp=False, taxpayer_type="company", organization=None, plan=None, installed_by=None,
+        trial_days=None):
     """Create a client's store, ready to use. Returns ``{"store", "owner", "owner_created", "invite_link"}``;
     ``invite_link`` is the one-time link for the owner to set a password (None when the account already
     had one)."""
@@ -91,6 +92,9 @@ def install(*, store_name, slug, owner_name, owner_email="", owner_phone="", leg
             "email atau nomor pemilik yang sama.")
     store = Store.objects.create(owner=owner, organization=organization, name=store_name, slug=slug,
         support_phone=owner_phone, support_email=owner_email)
+    if trial_days:
+        from .trial import start_trial
+        start_trial(store, trial_days)
     if plan is not None:
         Subscription.objects.create(store=store, plan=plan, current_period_end=trial_end_for(plan))
     create_store_defaults(store)

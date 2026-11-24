@@ -37,6 +37,9 @@ class Store(models.Model):
     COVER_LAYOUTS = [("split", "Teks + panel info"), ("image", "Foto latar penuh"),
         ("centered", "Teks di tengah")]
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="stores")
+    # Free trial of the back office: after this moment the company can open nothing but a "contact sales"
+    # notice. Empty means full access (every company installed before trials, and every paying one).
+    trial_ends_at = models.DateTimeField(null=True, blank=True, db_index=True)
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="stores",
         null=True, blank=True)
     name = models.CharField(max_length=120)

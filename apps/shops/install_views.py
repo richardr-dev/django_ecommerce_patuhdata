@@ -11,7 +11,7 @@ from .provisioning import InstallError, install
 from .tenancy import platform_url
 
 FIELDS = ("store_name", "slug", "owner_name", "owner_email", "owner_phone", "legal_name", "npwp", "address",
-    "taxpayer_type", "organization")
+    "taxpayer_type", "organization", "trial_days")
 
 
 def _email_owner(result):
@@ -41,6 +41,22 @@ def partner_install(request):
             "Anda masuk sebagai akun toko.")
         return redirect("merchant-dashboard")
     result, error = None, ""
+    from . import trial
+    if request.method == "POST" and request.POST.get("trial_action"):
+        company = Store.objects.filter(pk=request.POST.get("store") or 0).first()
+        action = request.POST["trial_action"]
+        if company is None:
+            messages.error(request, "Perusahaan tidak ditemukan.")
+        elif action == "extend":
+            trial.extend_trial(company, int(request.POST.get("days") or 14), request.user)
+            messages.success(request, f"Uji coba {company.name} diperpanjang.")
+        elif action == "activate":
+            trial.activate_full_access(company, request.user)
+            messages.success(request, f"{company.name} sekarang punya akses penuh.")
+        elif action == "end":
+            trial.end_trial_now(company, request.user)
+            messages.success(request, f"Uji coba {company.name} diakhiri.")
+        return redirect("partner-install")
     values = {name: request.POST.get(name, "") for name in FIELDS}
     values["is_pkp"] = request.POST.get("is_pkp") == "1"
     if request.method == "POST":
@@ -50,13 +66,16 @@ def partner_install(request):
                 owner_email=values["owner_email"], owner_phone=values["owner_phone"],
                 legal_name=values["legal_name"], npwp=values["npwp"], address=values["address"],
                 is_pkp=values["is_pkp"], taxpayer_type=values["taxpayer_type"] or "company",
-                organization=organization, installed_by=request.user)
+                organization=organization, installed_by=request.user,
+                trial_days=int(values["trial_days"]) if values["trial_days"].isdigit() else None)
         except InstallError as problem:
             error = str(problem)
         else:
             result["emailed"] = _email_owner(result)
             values = dict.fromkeys(FIELDS, "") | {"is_pkp": False}
-    stores = Store.objects.select_related("owner", "organization").order_by("-id")[:100]
+    stores = list(Store.objects.select_related("owner", "organization").order_by("-id")[:100])
+    for company in stores:
+        company.trial = trial.trial_state(company)
     return render(request, "platform/install.html", {"v": values, "result": result, "error": error,
         "stores": stores, "organizations": Organization.objects.select_related("owner").order_by("name")})
 

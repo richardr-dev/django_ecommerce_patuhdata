@@ -1,0 +1,26 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Masa uji coba berakhir · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>
+.tr-back{position:fixed;inset:0;background:rgba(1,36,65,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
+.tr-dialog{width:100%;max-width:440px;background:#fff;border-radius:24px;padding:28px 24px;box-shadow:0 24px 60px -12px rgba(1,36,65,.35);text-align:center}
+.tr-badge{width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:#eaf7fe;color:#0b6fb8;display:flex;align-items:center;justify-content:center;font-size:26px}
+.tr-dialog h1{margin:0 0 8px;font-size:21px;color:#012441}.tr-dialog p{margin:0 0 16px;color:#5b7186;font-size:14px;line-height:1.55}
+.tr-act{display:flex;flex-direction:column;gap:8px}
+.tr-btn{display:flex;align-items:center;justify-content:center;height:46px;border:0;border-radius:99px;background:#0b6fb8;color:#fff;font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.tr-btn:hover{background:#095f9e}.tr-btn.soft{background:#eaf7fe;color:#0b6fb8}
+</style></head>
+<body class="ln"><div class="tr-back"><div class="tr-dialog" role="alertdialog" aria-modal="true" aria-labelledby="tr-title">
+  <div class="tr-badge" aria-hidden="true">⏳</div>
+  <h1 id="tr-title">Masa uji coba berakhir</h1>
+  <p>Uji coba gratis <b>{{ store.name }}</b> berakhir pada {{ ended_at|date:"d F Y" }}. Data Anda aman dan tidak dihapus. Hubungi tim sales {{ platform_name }} untuk mengaktifkan paket berlangganan, lalu semua fitur bisa dipakai lagi.</p>
+  <div class="tr-act">
+    {% if contact.whatsapp_url %}<a class="tr-btn" href="{{ contact.whatsapp_url }}?text=Halo%2C%20saya%20ingin%20mengaktifkan%20paket%20{{ platform_name|urlencode }}%20untuk%20{{ store.name|urlencode }}" target="_blank" rel="noopener">Hubungi sales di WhatsApp{% if contact.whatsapp %} · {{ contact.whatsapp }}{% endif %}</a>{% endif %}
+    {% if contact.email %}<a class="tr-btn soft" href="mailto:{{ contact.email }}?subject=Aktivasi%20paket%20{{ store.name|urlencode }}">Kirim email ke {{ contact.email }}</a>{% endif %}
+    {% if not contact.whatsapp_url and not contact.email %}<a class="tr-btn" href="{{ platform_company_url }}" target="_blank" rel="noopener">Hubungi {{ platform_company_name }}</a>{% endif %}
+    <form method="post" action="{% if request.path|slice:':7' == '/kasir/' %}{% url 'pos-logout' %}{% else %}{% url 'merchant-logout' %}{% endif %}">{% csrf_token %}<button class="tr-btn soft" style="width:100%">Keluar</button></form>
+  </div>
+</div></div></body></html>

@@ -3,12 +3,14 @@
 <title>Instalasi perusahaan · {{ platform_name }}</title><meta name="robots" content="noindex">
 <link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="{% static 'css/login.css' %}"></head>
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pu-b{height:28px;padding:0 12px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}.pu-b.bad{background:#ffebeb;color:#c92a2a}</style></head>
 <body class="ln ln-wide"><main class="ln-wrap">
   <div class="ln-card">
     <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Instalasi oleh partner</span></div></div>
     <h1>Pasang perusahaan untuk klien</h1>
     <p class="ln-sub">Satu langkah membuat akun pemilik, organisasi, perusahaan, gudang utama, bagan akun, dan profil pajak. Tidak ada pendaftaran publik.</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
     {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
     {% if result %}<div class="ln-msg ok" role="status"><b>{{ result.store.name }}</b> terpasang. Pemilik masuk dengan <b>{{ result.owner.username }}</b>.
       {% if result.emailed %}<br>Link kata sandi sudah dikirim ke <b>{{ result.owner.email }}</b>.{% endif %}{% if result.invite_link %}<br>{% if result.emailed %}Salinan link{% else %}Berikan link sekali pakai ini{% endif %} agar pemilik membuat kata sandi:<br><input class="ln-copy" readonly value="{{ result.invite_link }}" onclick="this.select()" aria-label="Link kata sandi">{% else %}<br>Akun itu sudah punya kata sandi.{% endif %}</div>{% endif %}
@@ -24,14 +26,18 @@
         <label class="ln-field"><span>Jenis wajib pajak</span><span class="ln-input"><select name="taxpayer_type"><option value="company"{% if v.taxpayer_type != "individual" %} selected{% endif %}>Badan usaha</option><option value="individual"{% if v.taxpayer_type == "individual" %} selected{% endif %}>Orang pribadi</option></select></span></label>
         <label class="ln-field ln-span"><span>Alamat (sesuai NPWP)</span><span class="ln-input"><input name="address" value="{{ v.address }}"></span></label>
         <label class="ln-field"><span>Brand tambahan untuk klien</span><span class="ln-input"><select name="organization"><option value="">Klien baru</option>{% for o in organizations %}<option value="{{ o.pk }}"{% if v.organization == o.pk|stringformat:"s" %} selected{% endif %}>{{ o.name }} · {{ o.owner.username }}</option>{% endfor %}</select></span></label>
+        <label class="ln-field"><span>Masa uji coba (hari)</span><span class="ln-input"><input name="trial_days" value="{{ v.trial_days }}" inputmode="numeric" placeholder="kosong = akses penuh, mis. 14"></span></label>
         <label class="ln-check"><input type="checkbox" name="is_pkp" value="1"{% if v.is_pkp %} checked{% endif %}> Pengusaha Kena Pajak (memungut PPN)</label>
       </div>
       <button class="ln-btn">Pasang perusahaan</button>
     </form>
   </div>
   <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Perusahaan terpasang</h2>
-    <table class="ln-table"><thead><tr><th>Perusahaan</th><th>Organisasi</th><th>Pemilik</th><th>Dibuat</th></tr></thead><tbody>
-    {% for s in stores %}<tr><td><b>{{ s.name }}</b><small>{{ s.slug }}</small></td><td>{{ s.organization.name|default:"—" }}</td><td>{{ s.owner.username }}</td><td>{{ s.created_at|date:"d M Y" }}</td></tr>
-    {% empty %}<tr><td colspan="4">Belum ada perusahaan.</td></tr>{% endfor %}</tbody></table></div>
+    <table class="ln-table"><thead><tr><th>Perusahaan</th><th>Organisasi</th><th>Pemilik</th><th>Dibuat</th><th>Uji coba</th></tr></thead><tbody>
+    {% for s in stores %}<tr><td><b>{{ s.name }}</b><small>{{ s.slug }}</small></td><td>{{ s.organization.name|default:"—" }}</td><td>{{ s.owner.username }}</td><td>{{ s.created_at|date:"d M Y" }}</td>
+      <td>{% if s.trial %}{% if s.trial.expired %}<b style="color:#c92a2a">Berakhir</b>{% else %}{{ s.trial.days_left }} hari lagi{% endif %}<small>{{ s.trial.ends_at|date:"d M Y" }}</small>{% else %}Akses penuh{% endif %}
+        <form method="post" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">{% csrf_token %}<input type="hidden" name="store" value="{{ s.pk }}">
+          <button class="pu-b" name="trial_action" value="extend">+14 hari</button>{% if s.trial %}<button class="pu-b" name="trial_action" value="activate">Akses penuh</button>{% endif %}<button class="pu-b bad" name="trial_action" value="end">Akhiri</button></form></td></tr>
+    {% empty %}<tr><td colspan="5">Belum ada perusahaan.</td></tr>{% endfor %}</tbody></table></div>
   <p class="ln-foot"><a href="{% url 'platform-users' %}">Kelola pengguna</a> · <a href="{% url 'merchant-dashboard' %}">Ke back office</a> · {{ platform_company_name }}</p>
 </main></body></html>
