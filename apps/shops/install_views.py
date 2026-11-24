@@ -59,3 +59,113 @@ def partner_install(request):
     stores = Store.objects.select_related("owner", "organization").order_by("-id")[:100]
     return render(request, "platform/install.html", {"v": values, "result": result, "error": error,
         "stores": stores, "organizations": Organization.objects.select_related("owner").order_by("name")})
+
+
+def _email_invite(user, link):
+    """Mail the one-time password link; the link is also shown on screen, so a failed send blocks nothing."""
+    if not (link and user.email) or "console" in settings.EMAIL_BACKEND:
+        return False
+    try:
+        send_mail(f"Akun Anda di {settings.PLATFORM_NAME}",
+            f"Halo {user.first_name or ''},\n\nAkun {settings.PLATFORM_NAME} Anda sudah dibuat. Buat kata sandi "
+            f"lewat link ini (sekali pakai):\n{link}\n\nSetelah itu masuk di {platform_url('/login/')} "
+            f"dengan email ini.\n\n{settings.PLATFORM_NAME}",
+            settings.DEFAULT_FROM_EMAIL, [user.email])
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("platform user invite email failed")
+        return False
+    return True
+
+
+@login_required(login_url="/login/")
+def platform_users(request):
+    """/platform/users/: the partner's list of accounts. Add, switch off or on, delete."""
+    from django.contrib.auth import get_user_model
+
+    from . import platform_users as service
+    from .models import StoreStaff
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman pengguna hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    invite, error = None, ""
+    values = {"name": "", "contact": "", "store": "", "role": ""}
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        try:
+            if action == "create":
+                values = {k: request.POST.get(k, "").strip() for k in values}
+                store = Store.objects.filter(pk=values["store"]).first() if values["store"] else None
+                if values["store"] and store is None:
+                    raise service.PlatformUserError("Perusahaan tidak ditemukan.")
+                user, created, link = service.create_user(name=values["name"], contact=values["contact"],
+                    store=store, role=values["role"], actor=request.user)
+                invite = {"user": user, "link": link, "created": created,
+                    "emailed": _email_invite(user, link), "store": store}
+                values = dict.fromkeys(values, "")
+            else:
+                target = get_user_model().objects.filter(pk=request.POST.get("user") or 0).first()
+                if target is None:
+                    raise service.PlatformUserError("Akun tidak ditemukan.")
+                if action in ("deactivate", "activate"):
+                    service.set_active(target, action == "activate", request.user)
+                    messages.success(request, f"{target.get_full_name() or target.username} "
+                        f"{'diaktifkan' if action == 'activate' else 'dimatikan; ia tidak bisa masuk lagi'}.")
+                elif action == "delete":
+                    label = service.delete_user(target, request.user)
+                    messages.success(request, f"{label} dihapus.")
+                else:
+                    raise service.PlatformUserError("Tindakan tidak dikenal.")
+                return redirect(request.get_full_path())
+        except service.PlatformUserError as problem:
+            error = str(problem)
+    query = request.GET.get("q", "")
+    return render(request, "platform/users.html", {"users": service.search(query), "q": query, "v": values,
+        "invite": invite, "error": error, "stores": Store.objects.order_by("name")[:300],
+        "roles": StoreStaff._meta.get_field("role").choices})
+
+
+@login_required(login_url="/login/")
+def platform_user_detail(request, user_id):
+    """/platform/users/<id>/: edit one account: name and login, companies and roles, a new password link."""
+    from django.contrib.auth import get_user_model
+    from django.shortcuts import get_object_or_404
+
+    from . import platform_users as service
+    from .models import StoreStaff
+
+    if not request.user.is_superuser:
+        messages.error(request, "Halaman pengguna hanya untuk akun partner platform.")
+        return redirect("merchant-dashboard")
+    person = get_object_or_404(get_user_model(), pk=user_id)
+    link, error = None, ""
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        try:
+            if action == "save":
+                service.update_user(person, name=request.POST.get("name", ""),
+                    contact=request.POST.get("contact", ""), actor=request.user)
+                messages.success(request, "Data pengguna disimpan.")
+            elif action in ("role", "remove"):
+                store = get_object_or_404(Store, pk=request.POST.get("store") or 0)
+                if action == "role":
+                    service.set_membership(person, store, request.POST.get("role", ""), request.user)
+                    messages.success(request, f"Peran di {store.name} disimpan.")
+                else:
+                    service.remove_membership(person, store, request.user)
+                    messages.success(request, f"Dikeluarkan dari {store.name}.")
+            elif action == "link":
+                link = service.password_link(person, request.user)
+            else:
+                raise service.PlatformUserError("Tindakan tidak dikenal.")
+            if link is None:
+                return redirect("platform-user", user_id=person.pk)
+        except service.PlatformUserError as problem:
+            error = str(problem)
+    return render(request, "platform/user_detail.html", {"person": person, "link": link, "error": error,
+        "owned": Store.objects.filter(owner=person), "memberships": StoreStaff.objects.filter(
+            user=person).select_related("store").order_by("store__name"),
+        "stores": Store.objects.order_by("name")[:300],
+        "roles": StoreStaff._meta.get_field("role").choices,
+        "locked": person.is_superuser or person.pk == request.user.pk})

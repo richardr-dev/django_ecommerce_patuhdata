@@ -16,7 +16,7 @@ PREVIEW_SESSION_KEY = "storefront_preview"
 
 # Always reachable, whatever the store's state: the back office, payment and courier
 # callbacks, buyers' existing orders and accounts, and files.
-ALWAYS_OPEN = ("/books/", "/login/", "/registration/", "/platform-admin/", "/integrations/", "/internal/", "/static/",
+ALWAYS_OPEN = ("/books/", "/login/", "/registration/", "/platform/", "/platform-admin/", "/integrations/", "/internal/", "/static/",
     "/media/", "/healthz/", "/orders/", "/account/", "/api/", "/robots.txt", "/favicon.ico",
     "/pages/", "/privacy/", "/terms/", "/newsletter/unsubscribe/", "/cart/recover/",
     "/i/", "/q/",  # a buyer paying an invoice or answering a quote must reach it whatever the shop's state

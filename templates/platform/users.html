@@ -1,0 +1,58 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pengguna · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>
+.pu-pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;background:#eaf7fe;color:#0b6fb8}
+.pu-pill.off{background:#ffebeb;color:#c92a2a}.pu-pill.on{background:#e6f7ee;color:#0d7a3e}
+.pu-act{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.pu-btn{height:32px;padding:0 14px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.pu-btn:hover{background:#dcedf9}.pu-btn.bad{background:#ffebeb;color:#c92a2a}
+.pu-del summary{list-style:none;cursor:pointer}.pu-del summary::-webkit-details-marker{display:none}
+.pu-del[open] .pu-sure{display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px;color:#c92a2a}
+.pu-sure{display:none}
+.pu-search{display:flex;gap:8px;margin-bottom:14px}.pu-search input{flex:1;height:40px;border:1px solid #d6e6f0;border-radius:99px;padding:0 16px;font:inherit}
+.pu-wrap{overflow-x:auto}
+</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Partner platform</span></div></div>
+    <h1>Pengguna</h1>
+    <p class="ln-sub">Tambah orang baru, matikan akun yang tidak boleh masuk lagi, atau hapus akun yang belum pernah dipakai. Orang baru membuat kata sandinya sendiri lewat link sekali pakai.</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
+    {% if invite %}<div class="ln-msg ok" role="status"><b>{{ invite.user.first_name|default:invite.user.username }}</b>
+      {% if invite.created %}dibuat{% else %}sudah punya akun{% endif %}{% if invite.store %} dan ditambahkan ke <b>{{ invite.store.name }}</b>{% endif %}.
+      {% if invite.emailed %}<br>Link kata sandi dikirim ke <b>{{ invite.user.email }}</b>.{% endif %}
+      {% if invite.link %}<br>{% if invite.emailed %}Salinan link{% else %}Berikan link sekali pakai ini{% endif %}:<br><input class="ln-copy" readonly value="{{ invite.link }}" onclick="this.select()" aria-label="Link kata sandi">{% else %}<br>Akun itu sudah punya kata sandi.{% endif %}</div>{% endif %}
+    <h2 class="ln-h2">Tambah pengguna</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create">
+      <div class="ln-grid">
+        <label class="ln-field"><span>Nama</span><span class="ln-input"><input name="name" value="{{ v.name }}" maxlength="150" required></span></label>
+        <label class="ln-field"><span>Email atau WhatsApp</span><span class="ln-input"><input name="contact" value="{{ v.contact }}" required placeholder="nama@email.com atau 0812…"></span></label>
+        <label class="ln-field"><span>Masukkan ke perusahaan (boleh kosong)</span><span class="ln-input"><select name="store"><option value="">Tanpa perusahaan</option>{% for s in stores %}<option value="{{ s.pk }}"{% if v.store == s.pk|stringformat:"s" %} selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></span></label>
+        <label class="ln-field"><span>Peran di perusahaan itu</span><span class="ln-input"><select name="role">{% for code, label in roles %}<option value="{{ code }}"{% if v.role == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></span></label>
+      </div>
+      <button class="ln-btn">Tambah pengguna</button>
+    </form>
+  </div>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Semua pengguna</h2>
+    <form class="pu-search" method="get"><input name="q" value="{{ q }}" placeholder="Cari nama, email, atau nomor" aria-label="Cari pengguna"><button class="pu-btn">Cari</button></form>
+    <div class="pu-wrap"><table class="ln-table"><thead><tr><th>Pengguna</th><th>Perusahaan</th><th>Status</th><th>Dibuat</th><th></th></tr></thead><tbody>
+    {% for u in users %}<tr>
+      <td><b>{{ u.get_full_name|default:u.username }}</b><small>{{ u.username }}</small></td>
+      <td>{% for s in u.owned_stores %}<span class="pu-pill">Pemilik · {{ s.name }}</span> {% endfor %}{% for m in u.memberships %}<span class="pu-pill">{{ m.get_role_display }} · {{ m.store.name }}</span> {% endfor %}{% if u.is_superuser %}<span class="pu-pill">Partner platform</span>{% endif %}{% if not u.owned_stores and not u.memberships and not u.is_superuser %}—{% endif %}</td>
+      <td>{% if u.is_active %}<span class="pu-pill on">Aktif</span>{% else %}<span class="pu-pill off">Dimatikan</span>{% endif %}{% if not u.has_usable_password %}<small>belum buat kata sandi</small>{% endif %}</td>
+      <td>{{ u.date_joined|date:"d M Y" }}</td>
+      <td>{% if u.pk == request.user.pk or u.is_superuser %}<small>—</small>{% else %}<div class="pu-act">
+        <a class="pu-btn" style="display:inline-flex;align-items:center;text-decoration:none" href="{% url 'platform-user' u.pk %}">Ubah</a>
+        <form method="post">{% csrf_token %}<input type="hidden" name="user" value="{{ u.pk }}"><input type="hidden" name="action" value="{% if u.is_active %}deactivate{% else %}activate{% endif %}"><button class="pu-btn">{% if u.is_active %}Matikan{% else %}Aktifkan{% endif %}</button></form>
+        <details class="pu-del"><summary class="pu-btn bad">Hapus</summary>
+          <form method="post" class="pu-sure">{% csrf_token %}<input type="hidden" name="user" value="{{ u.pk }}"><input type="hidden" name="action" value="delete">Hapus permanen?<button class="pu-btn bad">Ya, hapus</button></form></details>
+      </div>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5">Tidak ada pengguna.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+  <p class="ln-foot"><a href="{% url 'partner-install' %}">Pasang perusahaan</a> · <a href="{% url 'merchant-dashboard' %}">Ke back office</a> · {{ platform_company_name }}</p>
+</main></body></html>

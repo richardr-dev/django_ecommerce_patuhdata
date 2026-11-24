@@ -1,0 +1,45 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ person.get_full_name|default:person.username }} · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>.pu-btn{height:32px;padding:0 14px;border:0;border-radius:99px;background:#eaf7fe;color:#0b6fb8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}.pu-btn.bad{background:#ffebeb;color:#c92a2a}.pu-row{display:flex;gap:8px;align-items:center}.pu-row select{height:34px;border:1px solid #d6e6f0;border-radius:99px;padding:0 10px;font:inherit}.pu-wrap{overflow-x:auto}</style></head>
+<body class="ln ln-wide"><main class="ln-wrap">
+  <div class="ln-card">
+    <div class="ln-brand"><img class="ln-logo" src="{% static 'img/brand/logo-accounting.png' %}" alt="{{ platform_name }} Accounting" width="180" height="44"><div><span>Partner platform</span></div></div>
+    <h1>{{ person.get_full_name|default:person.username }}</h1>
+    <p class="ln-sub">{{ person.username }} · {% if person.is_active %}akun aktif{% else %}akun dimatikan{% endif %}{% if not person.has_usable_password %} · belum membuat kata sandi{% endif %}</p>
+    {% for m in messages %}<p class="ln-msg {% if m.tags == 'error' %}bad{% else %}ok{% endif %}" role="status">{{ m }}</p>{% endfor %}
+    {% if error %}<p class="ln-msg bad" role="alert">{{ error }}</p>{% endif %}
+    {% if locked %}<p class="ln-msg bad">Akun ini {% if person.pk == request.user.pk %}milik Anda sendiri{% else %}akun partner platform{% endif %}, jadi tidak bisa diubah dari sini.</p>{% endif %}
+    {% if link %}<div class="ln-msg ok" role="status">Berikan link sekali pakai ini agar {{ person.first_name|default:person.username }} membuat kata sandi baru:<br><input class="ln-copy" readonly value="{{ link }}" onclick="this.select()" aria-label="Link kata sandi"></div>{% endif %}
+    {% if not locked %}
+    <h2 class="ln-h2">Data</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">
+      <div class="ln-grid">
+        <label class="ln-field"><span>Nama</span><span class="ln-input"><input name="name" value="{{ person.get_full_name|default:person.first_name }}" maxlength="150" required></span></label>
+        <label class="ln-field"><span>Email atau WhatsApp (untuk masuk)</span><span class="ln-input"><input name="contact" value="{{ person.username }}" required></span></label>
+      </div>
+      <button class="ln-btn">Simpan</button>
+    </form>
+    <form method="post" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="action" value="link"><button class="pu-btn">Buat link kata sandi baru</button></form>
+    {% endif %}
+  </div>
+  <div class="ln-card" style="margin-top:20px"><h2 class="ln-h2">Perusahaan dan peran</h2>
+    {% for s in owned %}<p><b>{{ s.name }}</b> · pemilik</p>{% endfor %}
+    <div class="pu-wrap"><table class="ln-table"><thead><tr><th>Perusahaan</th><th>Peran</th><th></th></tr></thead><tbody>
+    {% for m in memberships %}<tr><td>{{ m.store.name }}</td>
+      <td>{% if locked %}{{ m.get_role_display }}{% else %}<form method="post" class="pu-row">{% csrf_token %}<input type="hidden" name="action" value="role"><input type="hidden" name="store" value="{{ m.store_id }}"><select name="role" aria-label="Peran di {{ m.store.name }}">{% for code, label in roles %}<option value="{{ code }}"{% if code == m.role %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="pu-btn">Simpan</button></form>{% endif %}</td>
+      <td>{% if not locked %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="store" value="{{ m.store_id }}"><button class="pu-btn bad">Keluarkan</button></form>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="3">Tidak ada keanggotaan.</td></tr>{% endfor %}</tbody></table></div>
+    {% if not locked %}
+    <h2 class="ln-h2" style="margin-top:18px">Tambah ke perusahaan</h2>
+    <form method="post" class="pu-row">{% csrf_token %}<input type="hidden" name="action" value="role">
+      <select name="store" aria-label="Perusahaan" required>{% for s in stores %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select>
+      <select name="role" aria-label="Peran">{% for code, label in roles %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select>
+      <button class="pu-btn">Tambah</button></form>
+    {% endif %}
+  </div>
+  <p class="ln-foot"><a href="{% url 'platform-users' %}">Kembali ke daftar pengguna</a></p>
+</main></body></html>
