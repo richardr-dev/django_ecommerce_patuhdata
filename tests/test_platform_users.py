@@ -370,3 +370,46 @@ class TrialCompanyCanBuyTests(TestCase):
         page = self.client.get("/books/")
         self.assertContains(page, ".tr-act a.tr-btn", status_code=402)
         self.assertContains(page, "color:#fff", status_code=402)
+
+
+class ReturnFromDokuTests(TestCase):
+    def test_coming_back_to_billing_activates_a_bill_doku_says_is_paid(self):
+        from datetime import timedelta
+        from unittest import mock
+
+        from django.utils import timezone
+
+        from apps.billing.models import Plan, SubscriptionInvoice
+        from apps.integrations.payments import PaymentStatus
+        store = install(**CLIENT, trial_days=14)["store"]
+        Store.objects.filter(pk=store.pk).update(trial_ends_at=timezone.now() - timedelta(hours=1))
+        plan, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 399000,
+            "price_yearly": 3990000, "is_public": True})
+        invoice = SubscriptionInvoice.objects.create(store=store, plan=plan, months=1, amount=399000,
+            provider="doku", payment_reference="SBtest0001")
+        self.client.force_login(store.owner)
+        with mock.patch("apps.billing.services.DokuPaymentProvider") as doku:
+            doku.return_value.fetch_status.return_value = PaymentStatus("paid", amount=399000)
+            page = self.client.get("/books/billing/")
+        invoice.refresh_from_db(); store.refresh_from_db()
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(invoice.status, "paid")
+        self.assertGreater(store.trial_ends_at, timezone.now())
+        self.assertEqual(self.client.get("/books/").status_code, 200)
+
+    def test_an_unpaid_bill_stays_pending(self):
+        from unittest import mock
+
+        from apps.billing.models import Plan, SubscriptionInvoice
+        from apps.integrations.payments import PaymentStatus
+        store = install(**CLIENT, trial_days=14)["store"]
+        plan, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 399000,
+            "price_yearly": 3990000, "is_public": True})
+        invoice = SubscriptionInvoice.objects.create(store=store, plan=plan, months=1, amount=399000,
+            provider="doku", payment_reference="SBtest0002")
+        self.client.force_login(store.owner)
+        with mock.patch("apps.billing.services.DokuPaymentProvider") as doku:
+            doku.return_value.fetch_status.return_value = PaymentStatus("pending")
+            self.client.get("/books/billing/")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, "pending")

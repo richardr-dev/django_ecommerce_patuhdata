@@ -25,10 +25,27 @@ from .services import (
 BILLING_ROLES = roles("billing.manage")
 
 
+def _settle_recent_payments(store):
+    """The buyer comes back from DOKU to this page. DOKU's notification can be late or not set for the payment
+    method used, so ask DOKU about the last few open DOKU bills now; a paid one activates the plan."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    recent = store.subscription_invoices.filter(status="pending", provider="doku",
+        created_at__gte=timezone.now() - timedelta(hours=3)).order_by("-created_at")[:3]
+    paid = False
+    for invoice in recent:
+        paid = check_pending_invoice(invoice) == "paid" or paid
+    if paid:
+        store.refresh_from_db()   # the lock date moved with the payment
+
+
 @login_required(login_url="/login/")
 def merchant_billing(request):
     store = _staff_store(request)
     _require_roles(request, store, BILLING_ROLES)
+    _settle_recent_payments(store)
     subscription = getattr(store, "subscription", None)
     return render(request, "merchant/billing.html", _merchant_context(request, store,
         title="Langganan", section="billing", subscription=subscription,
