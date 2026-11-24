@@ -10,14 +10,21 @@ from apps.shops import platform_log
 
 from .models import Plan
 
-FIELDS = ("name", "tagline", "price_monthly", "price_yearly", "max_products", "max_channels", "included_outlets",
+FIELDS = ("name", "tagline", "price_monthly", "list_price_monthly", "price_yearly", "list_price_yearly", "max_products", "max_channels", "included_outlets",
     "extra_outlet_price", "allow_custom_domain", "allow_payout_reconciliation", "contact_sales", "is_public",
     "is_default", "sort_order", "features")
 
 
+MONEY_FIELDS = ("price_monthly", "list_price_monthly", "price_yearly", "list_price_yearly", "extra_outlet_price")
+
+
 def snapshot(plan):
-    return {field: ("" if getattr(plan, field) is None else (int(getattr(plan, field)) if field.startswith(
-        "price") or field == "extra_outlet_price" else getattr(plan, field))) for field in FIELDS}
+    values = {}
+    for field in FIELDS:
+        value = getattr(plan, field)
+        values[field] = "" if value is None else (int(value) if field in MONEY_FIELDS else value)
+    return values
+
 
 CODE = re.compile(r"[a-z0-9][a-z0-9-]{1,38}[a-z0-9]")
 
@@ -64,6 +71,13 @@ def save_plan(plan, data, actor=None):
     plan.tagline = (data.get("tagline") or "").strip()[:160]
     plan.price_monthly = _money(data.get("price_monthly"), "Harga bulanan")
     plan.price_yearly = _money(data.get("price_yearly"), "Harga tahunan")
+    plan.list_price_monthly = _money(data.get("list_price_monthly"), "Harga normal bulanan")
+    plan.list_price_yearly = _money(data.get("list_price_yearly"), "Harga normal tahunan")
+    for label, final, slashed in (("bulanan", plan.price_monthly, plan.list_price_monthly),
+            ("tahunan", plan.price_yearly, plan.list_price_yearly)):
+        if slashed and slashed <= final:
+            raise PlanError(f"Harga normal {label} (dicoret) harus lebih besar dari harga yang ditagih, "
+                "atau isi 0 bila tanpa diskon.")
     plan.max_products = _limit(data.get("max_products"), "Produk aktif")
     plan.max_channels = _limit(data.get("max_channels"), "Toko marketplace")
     plan.included_outlets = _limit(data.get("included_outlets"), "Outlet termasuk")

@@ -12,6 +12,12 @@ class Plan(models.Model):
     tagline = models.CharField(max_length=160, blank=True)
     price_monthly = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     price_yearly = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    # The slashed ("harga coret") price shown struck through next to the price actually charged above. 0 means no
+    # discount is shown. The discount percentage is worked out from the two, never typed.
+    list_price_monthly = models.DecimalField(max_digits=12, decimal_places=0, default=0,
+        help_text="Harga normal per bulan (dicoret). 0 = tanpa diskon.")
+    list_price_yearly = models.DecimalField(max_digits=12, decimal_places=0, default=0,
+        help_text="Harga normal per tahun (dicoret). 0 = tanpa diskon.")
     max_products = models.PositiveIntegerField(null=True, blank=True,
         help_text="Produk aktif maksimal. Kosongkan untuk tanpa batas.")
     allow_custom_domain = models.BooleanField(default=False)
@@ -47,6 +53,20 @@ class Plan(models.Model):
 
     @property
     def is_paid(self): return self.price_monthly > 0
+
+    @staticmethod
+    def _discount_pct(list_price, price):
+        """Whole-number percent off the slashed price, 0 when there is no real discount."""
+        if not list_price or list_price <= price:
+            return 0
+        from decimal import ROUND_HALF_UP, Decimal
+        return int(((list_price - price) / list_price * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+    @property
+    def discount_pct_monthly(self): return self._discount_pct(self.list_price_monthly, self.price_monthly)
+
+    @property
+    def discount_pct_yearly(self): return self._discount_pct(self.list_price_yearly, self.price_yearly)
 
     @property
     def feature_list(self): return [line.strip() for line in self.features.splitlines() if line.strip()]

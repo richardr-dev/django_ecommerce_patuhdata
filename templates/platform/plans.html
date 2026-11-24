@@ -14,8 +14,8 @@
     <div class="pp-wrap"><table class="ln-table"><thead><tr><th>Paket</th><th>Per bulan</th><th>Per tahun</th><th>Batas</th><th>Status</th><th>Dipakai</th><th></th></tr></thead><tbody>
     {% for p in plans %}<tr>
       <td><b>{{ p.name }}</b><small>{{ p.code }}{% if p.tagline %} · {{ p.tagline }}{% endif %}</small></td>
-      <td>{% if p.contact_sales %}Hubungi sales{% elif p.price_monthly %}Rp{{ p.price_monthly|floatformat:0 }}{% else %}Gratis{% endif %}</td>
-      <td>{% if p.price_yearly %}Rp{{ p.price_yearly|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td>{% if p.contact_sales %}Hubungi sales{% elif p.price_monthly %}{% if p.discount_pct_monthly %}<s style="color:#5b7186">Rp{{ p.list_price_monthly|floatformat:0 }}</s><br>{% endif %}<b>Rp{{ p.price_monthly|floatformat:0 }}</b>{% if p.discount_pct_monthly %} <span class="pp-pill">-{{ p.discount_pct_monthly }}%</span>{% endif %}{% else %}Gratis{% endif %}</td>
+      <td>{% if p.price_yearly %}{% if p.discount_pct_yearly %}<s style="color:#5b7186">Rp{{ p.list_price_yearly|floatformat:0 }}</s><br>{% endif %}<b>Rp{{ p.price_yearly|floatformat:0 }}</b>{% if p.discount_pct_yearly %} <span class="pp-pill">-{{ p.discount_pct_yearly }}%</span>{% endif %}{% else %}—{% endif %}</td>
       <td><small>{% if p.max_products is None %}Produk tanpa batas{% else %}{{ p.max_products }} produk{% endif %} · {% if p.max_channels is None %}marketplace tanpa batas{% else %}{{ p.max_channels }} marketplace{% endif %} · {% if p.included_outlets is None %}outlet tanpa batas{% else %}{{ p.included_outlets }} outlet{% endif %}</small></td>
       <td>{% if p.is_default %}<span class="pp-pill">Bawaan</span>{% endif %}{% if p.is_public %}<span class="pp-pill">Tampil</span>{% else %}<span class="pp-pill off">Disembunyikan</span>{% endif %}{% if p.contact_sales %}<span class="pp-pill">Sales</span>{% endif %}</td>
       <td>{% if p.users %}<a href="{% url 'platform-companies' %}?plan={{ p.code }}">{{ p.users }} perusahaan</a>{% else %}0{% endif %}</td>

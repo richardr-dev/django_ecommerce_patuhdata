@@ -12,7 +12,7 @@ from .models import (
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "price_monthly", "price_yearly", "max_products",
+    list_display = ("name", "code", "price_monthly", "list_price_monthly", "price_yearly", "list_price_yearly", "max_products",
         "max_channels", "allow_custom_domain", "allow_payout_reconciliation", "contact_sales",
         "is_default", "is_public", "sort_order")
 

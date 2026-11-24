@@ -539,3 +539,55 @@ class ChangeLogAndSubscriptionTests(TestCase):
         self.assertNotContains(self.client.get("/platform/log/?jenis=user"), "Zzz")
         self.client.force_login(self.store.owner)
         self.assertEqual(self.client.get("/platform/log/").status_code, 302)
+
+
+class SlashedPriceTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+        self.partner = User.objects.create_superuser("partner@x.id", "partner@x.id", "pw-partner-1")
+        self.client.force_login(self.partner)
+        self.plan, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 100000,
+            "price_yearly": 1000000, "is_public": True, "contact_sales": False})
+
+    def _form(self, **over):
+        return {"name": "Pro", "price_monthly": "99000", "list_price_monthly": "129000", "price_yearly": "990000",
+            "list_price_yearly": "1548000", "is_public": "1", **over}
+
+    def test_percentage_is_worked_out_from_the_two_prices(self):
+        self.client.post(f"/platform/plans/{self.plan.pk}/", self._form())
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.discount_pct_monthly, 23)     # (129000-99000)/129000
+        self.assertEqual(self.plan.discount_pct_yearly, 36)      # (1548000-990000)/1548000
+        self.assertEqual(int(self.plan.price_for(1)), 99000)     # what is charged stays the final price
+        self.assertEqual(int(self.plan.price_for(12)), 990000)
+
+    def test_no_slashed_price_means_no_discount(self):
+        self.client.post(f"/platform/plans/{self.plan.pk}/", self._form(list_price_monthly="0", list_price_yearly="0"))
+        self.plan.refresh_from_db()
+        self.assertEqual((self.plan.discount_pct_monthly, self.plan.discount_pct_yearly), (0, 0))
+
+    def test_a_slashed_price_not_above_the_final_price_is_refused(self):
+        page = self.client.post(f"/platform/plans/{self.plan.pk}/", self._form(list_price_monthly="90000"))
+        self.assertContains(page, "harus lebih besar")
+        self.plan.refresh_from_db()
+        self.assertEqual(int(self.plan.price_monthly), 100000)   # nothing saved
+
+    def test_buyers_see_the_struck_price_the_percent_and_pay_the_final_price(self):
+        self.client.post(f"/platform/plans/{self.plan.pk}/", self._form())
+        store = install(**CLIENT, trial_days=14)["store"]
+        self.client.force_login(store.owner)
+        page = self.client.get("/books/billing/")
+        self.assertContains(page, "Hemat 23%")
+        self.assertContains(page, "line-through")
+        from django.test import override_settings
+        with override_settings(PAYMENT_PROVIDER="demo", ALLOW_DEMO_PAYMENTS=True):
+            self.client.post("/books/billing/checkout/", {"plan": "pro", "months": "1"})
+        from apps.billing.models import SubscriptionInvoice
+        self.assertEqual(int(SubscriptionInvoice.objects.get(store=store).amount), 99000)
+
+    def test_the_change_log_records_the_slashed_price(self):
+        from apps.shops.models import PlatformLog
+        self.client.post(f"/platform/plans/{self.plan.pk}/", self._form())
+        changes = PlatformLog.objects.filter(action="plan.updated").first().changes
+        self.assertEqual(changes["list_price_monthly"], [0, 129000])
+        self.assertEqual(changes["price_monthly"], [100000, 99000])

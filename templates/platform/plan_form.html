@@ -15,8 +15,12 @@
         {% if not plan %}<label class="ln-field"><span>Kode paket (tidak bisa diubah)</span><span class="ln-input"><input name="code" value="{{ post.code }}" maxlength="40" required placeholder="pro-plus" autocapitalize="none"></span></label>{% endif %}
         <label class="ln-field"><span>Nama paket</span><span class="ln-input"><input name="name" value="{% if post %}{{ post.name }}{% else %}{{ plan.name }}{% endif %}" maxlength="60" required></span></label>
         <label class="ln-field ln-span"><span>Keterangan singkat</span><span class="ln-input"><input name="tagline" value="{% if post %}{{ post.tagline }}{% else %}{{ plan.tagline }}{% endif %}" maxlength="160"></span></label>
-        <label class="ln-field"><span>Harga per bulan (Rp)</span><span class="ln-input"><input name="price_monthly" inputmode="numeric" value="{% if post %}{{ post.price_monthly }}{% elif plan %}{{ plan.price_monthly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
-        <label class="ln-field"><span>Harga per tahun (Rp)</span><span class="ln-input"><input name="price_yearly" inputmode="numeric" value="{% if post %}{{ post.price_yearly }}{% elif plan %}{{ plan.price_yearly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <label class="ln-field"><span>Harga normal per bulan, dicoret (Rp, 0 = tanpa diskon)</span><span class="ln-input"><input name="list_price_monthly" data-list="m" inputmode="numeric" value="{% if post %}{{ post.list_price_monthly }}{% elif plan %}{{ plan.list_price_monthly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <label class="ln-field"><span>Harga akhir per bulan, yang ditagih (Rp)</span><span class="ln-input"><input name="price_monthly" data-final="m" inputmode="numeric" value="{% if post %}{{ post.price_monthly }}{% elif plan %}{{ plan.price_monthly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <p class="ln-sub ln-span" data-pct="m" aria-live="polite" style="margin:-6px 0 6px"></p>
+        <label class="ln-field"><span>Harga normal per tahun, dicoret (Rp, 0 = tanpa diskon)</span><span class="ln-input"><input name="list_price_yearly" data-list="y" inputmode="numeric" value="{% if post %}{{ post.list_price_yearly }}{% elif plan %}{{ plan.list_price_yearly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <label class="ln-field"><span>Harga akhir per tahun, yang ditagih (Rp)</span><span class="ln-input"><input name="price_yearly" data-final="y" inputmode="numeric" value="{% if post %}{{ post.price_yearly }}{% elif plan %}{{ plan.price_yearly|floatformat:0 }}{% else %}0{% endif %}"></span></label>
+        <p class="ln-sub ln-span" data-pct="y" aria-live="polite" style="margin:-6px 0 6px"></p>
         <label class="ln-field"><span>Produk aktif maksimal</span><span class="ln-input"><input name="max_products" inputmode="numeric" value="{% if post %}{{ post.max_products }}{% elif plan.max_products is not None %}{{ plan.max_products }}{% endif %}" placeholder="kosong = tanpa batas"></span></label>
         <label class="ln-field"><span>Toko marketplace maksimal</span><span class="ln-input"><input name="max_channels" inputmode="numeric" value="{% if post %}{{ post.max_channels }}{% elif plan.max_channels is not None %}{{ plan.max_channels }}{% endif %}" placeholder="kosong = tanpa batas"></span></label>
         <label class="ln-field"><span>Outlet yang termasuk</span><span class="ln-input"><input name="included_outlets" inputmode="numeric" value="{% if post %}{{ post.included_outlets }}{% elif plan %}{% if plan.included_outlets is not None %}{{ plan.included_outlets }}{% endif %}{% else %}1{% endif %}" placeholder="kosong = tanpa batas"></span></label>
@@ -33,4 +37,20 @@
     </form>
   </div>
   <p class="ln-foot"><a href="{% url 'platform-plans' %}">Kembali ke daftar paket</a></p>
-</main></body></html>
+<script>
+(function () {
+  function num(el) { return parseInt(String(el.value).replace(/\D/g, ""), 10) || 0; }
+  function fmt(n) { return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+  ["m", "y"].forEach(function (k) {
+    var list = document.querySelector('[data-list="' + k + '"]'), fin = document.querySelector('[data-final="' + k + '"]'),
+        out = document.querySelector('[data-pct="' + k + '"]');
+    function show() {
+      var l = num(list), f = num(fin);
+      if (!l) { out.textContent = "Tanpa diskon: pembeli hanya melihat " + fmt(f) + "."; return; }
+      if (l <= f) { out.textContent = "Harga normal harus lebih besar dari harga akhir."; return; }
+      out.textContent = "Pembeli melihat " + fmt(l) + " dicoret, bayar " + fmt(f) + ": hemat " + Math.round((l - f) / l * 100) + "%.";
+    }
+    list.addEventListener("input", show); fin.addEventListener("input", show); show();
+  });
+})();
+</script></main></body></html>
