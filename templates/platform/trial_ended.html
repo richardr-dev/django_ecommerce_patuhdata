@@ -15,10 +15,11 @@
 </style></head>
 <body class="ln"><div class="tr-back"><div class="tr-dialog" role="alertdialog" aria-modal="true" aria-labelledby="tr-title">
   <div class="tr-badge" aria-hidden="true">⏳</div>
-  <h1 id="tr-title">Masa uji coba berakhir</h1>
-  <p>Uji coba gratis <b>{{ store.name }}</b> berakhir pada {{ ended_at|date:"d F Y" }}. Data Anda aman dan tidak dihapus. Hubungi tim sales {{ platform_name }} untuk mengaktifkan paket berlangganan, lalu semua fitur bisa dipakai lagi.</p>
+  <h1 id="tr-title">{% if was_paid %}Masa langganan berakhir{% else %}Masa uji coba berakhir{% endif %}</h1>
+  <p>{% if was_paid %}Langganan{% else %}Uji coba gratis{% endif %} <b>{{ store.name }}</b> berakhir pada {{ ended_at|date:"d F Y" }}. Data Anda aman dan tidak dihapus. {% if can_pay %}Pilih paket dan bayar sekarang, semua fitur langsung bisa dipakai lagi.{% else %}Minta pemilik perusahaan untuk berlangganan, atau hubungi tim sales {{ platform_name }}.{% endif %}</p>
   <div class="tr-act">
-    {% if contact.whatsapp_url %}<a class="tr-btn" href="{{ contact.whatsapp_url }}?text=Halo%2C%20saya%20ingin%20mengaktifkan%20paket%20{{ platform_name|urlencode }}%20untuk%20{{ store.name|urlencode }}" target="_blank" rel="noopener">Hubungi sales di WhatsApp{% if contact.whatsapp %} · {{ contact.whatsapp }}{% endif %}</a>{% endif %}
+    {% if can_pay %}<a class="tr-btn" href="{% url 'merchant-billing' %}" data-no-soft>Pilih paket dan bayar</a>{% endif %}
+    {% if contact.whatsapp_url %}<a class="tr-btn{% if can_pay %} soft{% endif %}" href="{{ contact.whatsapp_url }}?text=Halo%2C%20saya%20ingin%20mengaktifkan%20paket%20{{ platform_name|urlencode }}%20untuk%20{{ store.name|urlencode }}" target="_blank" rel="noopener">{% if can_pay %}Butuh paket khusus? {% endif %}Hubungi sales di WhatsApp{% if contact.whatsapp %} · {{ contact.whatsapp }}{% endif %}</a>{% endif %}
     {% if contact.email %}<a class="tr-btn soft" href="mailto:{{ contact.email }}?subject=Aktivasi%20paket%20{{ store.name|urlencode }}">Kirim email ke {{ contact.email }}</a>{% endif %}
     {% if not contact.whatsapp_url and not contact.email %}<a class="tr-btn" href="{{ platform_company_url }}" target="_blank" rel="noopener">Hubungi {{ platform_company_name }}</a>{% endif %}
     <form method="post" action="{% if request.path|slice:':7' == '/kasir/' %}{% url 'pos-logout' %}{% else %}{% url 'merchant-logout' %}{% endif %}">{% csrf_token %}<button class="tr-btn soft" style="width:100%">Keluar</button></form>

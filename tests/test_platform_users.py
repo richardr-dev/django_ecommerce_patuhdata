@@ -228,3 +228,62 @@ class PlatformCompanyTests(TestCase):
         self.assertEqual((conf.sales_email, conf.default_trial_days), ("s@p.id", 21))
         self.assertEqual(sales_contact()["whatsapp_url"], "https://wa.me/62811222333")
         self.assertContains(self.client.get("/registration/"), 'value="21"')
+
+
+class SubscribeToUnlockTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.billing.models import Plan
+        self.plan, _ = Plan.objects.update_or_create(code="pro", defaults={"name": "Pro", "price_monthly": 399000,
+            "price_yearly": 3990000})
+        self.store = install(**CLIENT, trial_days=14)["store"]
+        Store.objects.filter(pk=self.store.pk).update(trial_ends_at=timezone.now() - timedelta(hours=1))
+        self.store.refresh_from_db()
+        self.client.force_login(self.store.owner)
+
+    def _pay(self, months=1):
+        from apps.billing.models import SubscriptionInvoice
+        from apps.billing.services import mark_invoice_paid
+        invoice = SubscriptionInvoice.objects.create(store=self.store, plan=self.plan, months=months,
+            amount=self.plan.price_for(months), provider="demo")
+        self.assertEqual(mark_invoice_paid(invoice.id, amount=invoice.amount), "")
+        self.store.refresh_from_db()
+        return invoice
+
+    def test_a_locked_company_can_still_open_billing_and_is_offered_to_pay(self):
+        self.assertEqual(self.client.get("/books/billing/").status_code, 200)
+        self.assertEqual(self.client.get("/books/").status_code, 402)
+        self.assertContains(self.client.get("/books/"), "Pilih paket dan bayar", status_code=402)
+
+    def test_paying_unlocks_and_the_lock_follows_the_paid_period(self):
+        invoice = self._pay()
+        invoice.refresh_from_db()
+        self.assertEqual(self.store.trial_ends_at, invoice.period_end)
+        self.assertEqual(self.client.get("/books/").status_code, 200)
+
+    def test_a_lapsed_paid_company_locks_again_after_the_grace_days(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        self._pay()
+        Store.objects.filter(pk=self.store.pk).update(trial_ends_at=timezone.now() - timedelta(days=1))
+        self.assertEqual(self.client.get("/books/").status_code, 200)   # inside the grace days
+        Store.objects.filter(pk=self.store.pk).update(trial_ends_at=timezone.now() - timedelta(days=30))
+        page = self.client.get("/books/")
+        self.assertContains(page, "Masa langganan berakhir", status_code=402)
+
+    def test_a_company_with_full_access_stays_that_way_after_paying(self):
+        Store.objects.filter(pk=self.store.pk).update(trial_ends_at=None)
+        self.store.refresh_from_db()
+        self._pay()
+        self.assertIsNone(self.store.trial_ends_at)
+
+    def test_a_staff_member_without_billing_rights_is_not_offered_payment(self):
+        from apps.shops.platform_users import create_user
+        viewer, *_ = create_user(name="V", contact="v@x.id", store=self.store, role="viewer")
+        self.client.force_login(viewer)
+        page = self.client.get("/books/")
+        self.assertNotContains(page, "Pilih paket dan bayar", status_code=402)

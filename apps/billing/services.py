@@ -112,6 +112,8 @@ def mark_invoice_paid(invoice_id, *, amount, currency="IDR"):
     invoice.period_start, invoice.period_end = start, end
     invoice.save(update_fields=["status", "paid_at", "period_start", "period_end"])
     invoice_paid(invoice)
+    from apps.shops.trial import follow_paid_period
+    follow_paid_period(invoice.store, end)   # a locked trial opens again; the lock now follows the paid period
     # Any other open renewal bill is settled by this payment.
     SubscriptionInvoice.objects.filter(store=invoice.store, kind="renewal",
         status="pending").exclude(id=invoice.id).update(status="cancelled")

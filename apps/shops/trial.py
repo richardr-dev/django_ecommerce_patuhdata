@@ -13,7 +13,8 @@ from .models import AuditLog, Store
 
 LOCKED_PREFIXES = ("/books/", "/kasir/")
 # Still reachable after the trial ends: signing out and setting a first password from an invite.
-EXEMPT_PREFIXES = ("/books/logout/", "/kasir/keluar/", "/books/invite/", "/books/static/")
+# The billing pages stay open so a locked company can pay and unlock itself.
+EXEMPT_PREFIXES = ("/books/logout/", "/kasir/keluar/", "/books/invite/", "/books/billing/")
 
 
 def trial_state(store):
@@ -22,7 +23,15 @@ def trial_state(store):
     if end is None:
         return None
     left = (end - timezone.now()).total_seconds()
-    return {"ends_at": end, "expired": left <= 0, "days_left": max(0, -(-int(left) // 86400))}
+    paid = False
+    if left <= 0:
+        # A paying company a few days late with its renewal keeps working (same grace as the plan limits).
+        paid = store.subscription_invoices.filter(status="paid").exists()
+        if paid and timezone.now() < end + timedelta(days=settings.RENEWAL_GRACE_DAYS):
+            left = 1
+    elif store.subscription_invoices.filter(status="paid").exists():
+        paid = True
+    return {"ends_at": end, "expired": left <= 0, "days_left": max(0, -(-int(left) // 86400)), "paid": paid}
 
 
 def is_expired(store):
@@ -43,6 +52,14 @@ def extend_trial(store, days, actor=None):
     store.save(update_fields=["trial_ends_at"])
     _log(store, actor, "trial.extended", days=days)
     return store
+
+
+def follow_paid_period(store, period_end):
+    """A payment moves the lock date to the end of the period just paid for. A company the partner gave full
+    access (no date) stays that way."""
+    if store.trial_ends_at is not None:
+        store.trial_ends_at = period_end
+        store.save(update_fields=["trial_ends_at"])
 
 
 def set_trial_end(store, end, actor=None):
@@ -108,6 +125,11 @@ class TrialLockMiddleware:
                 and user is not None and user.is_authenticated and not user.is_superuser):
             store = _store_of(request)
             if store is not None and is_expired(store):
+                from apps.shops.permissions import roles
+                role = "admin" if store.owner_id == user.id else getattr(
+                    store.staff_members.filter(user=user).first(), "role", "")
                 return render(request, "platform/trial_ended.html", {"store": store,
-                    "contact": sales_contact(), "ended_at": store.trial_ends_at}, status=402)
+                    "contact": sales_contact(), "ended_at": store.trial_ends_at,
+                    "was_paid": trial_state(store)["paid"], "can_pay": role in roles("billing.manage")},
+                    status=402)
         return self.get_response(request)
