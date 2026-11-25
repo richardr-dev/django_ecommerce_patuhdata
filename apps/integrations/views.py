@@ -159,7 +159,7 @@ def doku_webhook(request, webhook_key=None):
         mismatch = confirm_payment(order, provider="doku", external_id=external_id,
             provider_payment_id=external_id, amount=order_data.get("amount", -1),
             currency=order_data.get("currency", "IDR"), payload=payload,
-            note="Pembayaran DOKU diterima")
+            note="Pembayaran online diterima")
         if mismatch:
             received = mismatch.startswith("Order status")
             return JsonResponse({"error": mismatch, "received": received},

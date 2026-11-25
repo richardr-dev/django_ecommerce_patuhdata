@@ -43,7 +43,7 @@ def start_checkout(store, plan, months, user):
         return open_bill
     provider = settings.PAYMENT_PROVIDER
     if provider not in SUBSCRIPTION_PROVIDERS:
-        raise BillingError("Pembayaran langganan saat ini hanya tersedia melalui DOKU.")
+        raise BillingError("Pembayaran langganan belum dikonfigurasi. Hubungi pengelola platform.")
     if provider == "demo" and not settings.ALLOW_DEMO_PAYMENTS:
         raise BillingError("Pembayaran langganan belum dikonfigurasi. Hubungi pengelola platform.")
     invoice = SubscriptionInvoice.objects.create(store=store, plan=plan, months=months,

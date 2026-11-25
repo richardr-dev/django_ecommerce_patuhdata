@@ -278,7 +278,7 @@ PROVIDERS = {"demo": DemoPaymentProvider, "xendit": XenditPaymentProvider,
     "doku": DokuPaymentProvider, "bank_transfer": BankTransferProvider}
 
 GATEWAY_LABELS = {
-    "doku": ("DOKU Checkout", "QRIS, virtual account, e-wallet, retail outlet, atau kartu"),
+    "doku": ("Pembayaran online", "QRIS, virtual account, e-wallet, retail outlet, atau kartu"),
     "xendit": ("Xendit", "QRIS, virtual account, e-wallet, atau kartu"),
     "demo": ("Pembayaran demo", "Mode pengembangan: pesanan ditandai lunas tanpa transaksi nyata"),
 }

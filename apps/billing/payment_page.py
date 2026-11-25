@@ -23,14 +23,13 @@ from apps.shops.tenancy import platform_url
 
 from .models import SubscriptionCheckout, SubscriptionInvoice
 
-BANKS = {"bca": "BCA", "mandiri": "Mandiri", "bri": "BRI", "bni": "BNI", "permata": "Permata", "cimb": "CIMB Niaga",
-    "doku": "DOKU"}
+BANKS = {"bca": "BCA", "mandiri": "Mandiri", "bri": "BRI", "bni": "BNI", "permata": "Permata", "cimb": "CIMB Niaga"}
 # What the company does in each bank's app, shown under the number (DOKU's own page is linked too when given).
 STEPS = {
     "bca": ["Buka BCA mobile atau KlikBCA, pilih m-Transfer › BCA Virtual Account.",
         "Masukkan nomor virtual account di atas.", "Periksa nama dan jumlah, lalu konfirmasi dengan PIN."],
-    "mandiri": ["Buka Livin' by Mandiri, pilih Bayar › Buat pembayaran baru › Multipayment.",
-        "Pilih penyedia DOKU, masukkan nomor virtual account.", "Periksa jumlah, lalu konfirmasi dengan PIN."],
+    "mandiri": ["Buka Livin' by Mandiri, pilih Bayar › Virtual Account.",
+        "Masukkan nomor virtual account di atas.", "Periksa jumlah, lalu konfirmasi dengan PIN."],
     "bri": ["Buka BRImo, pilih BRIVA.", "Masukkan nomor virtual account di atas.",
         "Periksa jumlah, lalu konfirmasi dengan PIN."],
     "bni": ["Buka BNI Mobile Banking, pilih Transfer › Virtual Account Billing.",
@@ -69,7 +68,6 @@ METHODS = (
     Method("cimb", "CIMB Niaga", "va", "VIRTUAL_ACCOUNT_BANK_CIMB", "#7A1315", "CIMB"),
     Method("bsi", "BSI", "va", "VIRTUAL_ACCOUNT_BSI", "#00A39D"),
     Method("danamon", "Danamon", "va", "VIRTUAL_ACCOUNT_BANK_DANAMON", "#F7941D"),
-    Method("doku", "DOKU", "va", "VIRTUAL_ACCOUNT_DOKU", "#E1251B"),
     Method("qris", "QRIS", "qris", "QRIS", "#1A1A1A"),
     Method("ovo", "OVO", "ewallet", "EMONEY_OVO", "#4C3494"),
     Method("dana", "DANA", "ewallet", "EMONEY_DANA", "#118EEA"),

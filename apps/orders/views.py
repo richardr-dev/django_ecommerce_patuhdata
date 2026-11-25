@@ -688,7 +688,7 @@ def checkout(request):
                 if (order.payment_provider == "doku" and
                         "PLEASE USE ANOTHER PAYMENT METHOD" in str(error)):
                     messages.error(request,
-                        "Metode pembayaran DOKU belum tersedia. Silakan coba kembali atau "
+                        "Metode pembayaran online belum tersedia. Silakan coba kembali atau "
                         "hubungi toko untuk pilihan pembayaran lain.")
                 else:
                     messages.error(request,
@@ -2630,7 +2630,7 @@ def merchant_payment_settings(request):
 
 @login_required(login_url="/login/")
 def merchant_platform_balance(request):
-    """Saldo DOKU Lakuin: what buyers paid through the platform's DOKU account for this store,
+    """Saldo pembayaran Patuhdata: what buyers paid through the platform's DOKU account for this store,
     and the payouts Lakuin made or is making to the store's bank account."""
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "finance"})

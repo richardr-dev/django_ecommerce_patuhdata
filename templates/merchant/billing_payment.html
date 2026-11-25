@@ -1,5 +1,5 @@
 {% extends "merchant/base.html" %}{% load books %}{% block title %}Pembayaran langganan{% endblock %}{% block content %}
-<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-billing' %}" style="color:inherit">Langganan</a> › Pembayaran</span><h1>Pembayaran langganan</h1><p>{% if invoice.status == "paid" %}Pembayaran diterima, paket Anda sudah aktif.{% elif code %}Transfer tepat sesuai jumlah ke nomor virtual account di bawah. Paket aktif otomatis begitu pembayaran masuk.{% else %}Pilih cara bayar. Virtual account langsung tampil di halaman ini; metode lain dibayar di halaman aman DOKU.{% endif %}</p></div></div>
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-billing' %}" style="color:inherit">Langganan</a> › Pembayaran</span><h1>Pembayaran langganan</h1><p>{% if invoice.status == "paid" %}Pembayaran diterima, paket Anda sudah aktif.{% elif code %}Transfer tepat sesuai jumlah ke nomor virtual account di bawah. Paket aktif otomatis begitu pembayaran masuk.{% else %}Pilih cara bayar. Virtual account langsung tampil di halaman ini; metode lain dibayar di halaman pembayaran yang aman.{% endif %}</p></div></div>
 
 <div class="bp-review">
   <div class="bp-stack">
@@ -36,7 +36,7 @@
           <button class="pay-tile" name="method" value="{{ m.code }}"{% if not m.here %} data-no-soft{% endif %} aria-label="Bayar dengan {{ m.label }}">
             {% include "merchant/_pay_logo.html" with m=m logo=m.logo %}
             <span class="pay-name">{{ m.label }}</span>
-            <small>{% if m.here %}Nomor tampil di sini{% else %}Halaman DOKU{% endif %}</small>
+            <small>{% if m.here %}Nomor tampil di sini{% else %}Lanjut ke pembayaran{% endif %}</small>
           </button>{% endfor %}
         </div>
       </section>
@@ -54,7 +54,7 @@
     {% if invoice.discount %}<div class="bp-line save"><span>Potongan</span><b>-{{ invoice.discount|rp }}</b></div>{% endif %}
     <div class="bp-total"><span>Total bayar</span><b>{{ invoice.amount|rp }}</b></div>
     <div class="bp-line"><span>Status</span><b>{{ invoice.get_status_display }}</b></div>
-    <p class="bp-muted" style="margin:0;font-size:12px">Pembayaran diproses oleh DOKU, penyelenggara jasa pembayaran berizin Bank Indonesia. {{ platform_name }} tidak menyimpan data kartu atau rekening Anda.</p>
+    <p class="bp-muted" style="margin:0;font-size:12px">Pembayaran diproses oleh penyelenggara jasa pembayaran berizin Bank Indonesia. {{ platform_name }} tidak menyimpan data kartu atau rekening Anda.</p>
   </aside>
 </div>
 

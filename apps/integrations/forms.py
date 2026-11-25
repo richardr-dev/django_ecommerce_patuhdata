@@ -23,12 +23,12 @@ class PaymentSettingsForm(forms.ModelForm):
         labels = {"bank_transfer_enabled": "Terima transfer bank", "bank_name": "Nama bank",
             "bank_account_number": "Nomor rekening", "bank_account_holder": "Nama pemilik rekening",
             "gateway": "Payment gateway", "doku_client_id": "DOKU Client ID",
-            "use_platform_gateway": "Terima pembayaran lewat DOKU Patuhdata (PT Patuhdata Solusi Nusantara)"}
+            "use_platform_gateway": "Terima pembayaran lewat Patuhdata (PT Patuhdata Solusi Nusantara)"}
         help_texts = {"bank_transfer_enabled": "Pembeli transfer langsung ke rekening Anda, lalu Anda "
             "konfirmasi dana masuk di halaman Pesanan.",
             "gateway": "Hubungkan akun DOKU atau Xendit milik usaha Anda sendiri.",
             "use_platform_gateway": "Aktifkan untuk menerima QRIS, virtual account, dan e-wallet "
-                "tanpa mendaftar DOKU sendiri; matikan kapan saja. Dana diterima PT Patuhdata Solusi "
+                "tanpa mendaftar payment gateway sendiri; matikan kapan saja. Dana diterima PT Patuhdata Solusi "
                 "Nusantara lalu ditransfer ke rekening di atas setelah pesanan diterima pembeli."}
 
     def __init__(self, *args, **kwargs):

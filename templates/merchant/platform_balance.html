@@ -1,5 +1,5 @@
-{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Saldo DOKU {{ platform_name }}{% endblock %}{% block content %}
-<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Saldo DOKU {{ platform_name }}</h1><p>Pembayaran QRIS, virtual account, dan e-wallet yang diterima lewat akun DOKU {{ platform_name }} untuk {{ merchant_store.name }}.</p></div>
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Saldo pembayaran {{ platform_name }}{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Akuntansi</span><h1>Saldo pembayaran {{ platform_name }}</h1><p>Pembayaran QRIS, virtual account, dan e-wallet yang diterima lewat {{ platform_name }} untuk {{ merchant_store.name }}.</p></div>
   <div class="dp-actions"><a class="btn" href="{% url 'merchant-payment-settings' %}">Pengaturan pembayaran</a></div></div>
 <div class="tiles">
   <div class="tile accent"><small>Bisa dicairkan</small><strong>{{ summary.available|rp }}</strong><span>dari pesanan yang sudah diterima pembeli</span></div>
@@ -14,7 +14,7 @@
   {% for payout in payouts %}<tr><td>{{ payout.requested_at|date:"d M Y" }}</td><td class="num"><b>{{ payout.amount|rp }}</b></td><td>{{ payout.bank_name }} · {{ payout.bank_account_number }}</td>
     <td><span class="pill {% if payout.status == 'paid' %}pill-paid{% elif payout.status == 'rejected' %}pill-overdue{% else %}pill-pending{% endif %}">{{ payout.get_status_display }}</span>{% if payout.transfer_reference %}<small>Ref {{ payout.transfer_reference }}</small>{% endif %}</td></tr>
   {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada pencairan.</td></tr>{% endfor %}</tbody></table></div></section>
-<section class="panel"><header><div><h2>Pesanan lewat DOKU {{ platform_name }}</h2><p>50 pesanan terbaru.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Pembeli</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+<section class="panel"><header><div><h2>Pesanan lewat pembayaran {{ platform_name }}</h2><p>50 pesanan terbaru.</p></div></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Pesanan</th><th>Pembeli</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
   {% for order in orders %}<tr><td><b>#{{ order.id|stringformat:"s"|slice:":8"|upper }}</b><small>{{ order.created_at|date:"d M Y" }}</small></td><td>{{ order.customer_name }}</td><td class="num">{{ order.total|rp }}</td>
     <td>{% if order.status == "delivered" or order.status == "completed" %}<span class="pill pill-paid">Masuk saldo</span>{% elif order.status in "cancelled refunded returned" %}<span class="pill pill-overdue">{{ order.get_status_display }}</span>{% else %}<span class="pill pill-pending">Menunggu diterima</span>{% endif %}</td></tr>
-  {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada pesanan yang dibayar lewat DOKU {{ platform_name }}.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+  {% empty %}<tr><td colspan="4" class="!py-8 text-center text-slate-400">Belum ada pesanan yang dibayar lewat {{ platform_name }}.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}

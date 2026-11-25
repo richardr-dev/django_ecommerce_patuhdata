@@ -84,7 +84,7 @@ NAV = [
             Link("Pencairan dana", "merchant-payouts"),
             Link("Pinjaman", "merchant-loans", match=("/books/accounting/pinjaman/",)),
             Link("Penggajian", "merchant-payroll", match=("/books/penggajian/",)),
-            Link("Saldo DOKU Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
+            Link("Saldo pembayaran Patuhdata", "merchant-platform-balance", when="uses_platform_gateway"),
         ]),
     ]),
     ("Persediaan", [
