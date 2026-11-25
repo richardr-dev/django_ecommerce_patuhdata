@@ -33,7 +33,8 @@ def effective_plan(store):
         fallback = default_plan()
         if fallback and not fallback.is_paid:
             return fallback
-        return Plan(code="lapsed", name="Masa aktif berakhir", max_products=0, max_channels=0)
+        return Plan(code="lapsed", name="Masa aktif berakhir", max_products=0, max_channels=0,
+            full_books=plan.full_books)   # a lapsed plan never opens more than it had
     return plan
 
 

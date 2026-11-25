@@ -156,11 +156,14 @@ class DokuPaymentProvider:
             "Request-Timestamp": timestamp, "Signature": doku_signature(self.client_id,
                 request_id, timestamp, target, body, self.secret_key)}
 
-    def create_checkout(self, *, invoice_number, amount, customer, request_id, callback_url=""):
-        """Create a hosted checkout page and return its URL."""
+    def create_checkout(self, *, invoice_number, amount, customer, request_id, callback_url="", method_types=None):
+        """Create a hosted checkout page and return its URL. ``method_types`` limits the page to those DOKU
+        payment methods (e.g. ``["QRIS"]``) when the buyer already chose one on our own page."""
         payload = {"order": {"amount": amount, "invoice_number": invoice_number, "currency": "IDR"},
             "payment": {"payment_due_date": settings.DOKU_PAYMENT_DUE_MINUTES},
             "customer": customer}
+        if method_types:
+            payload["payment"]["payment_method_types"] = list(method_types)
         if callback_url.startswith("https://"):
             payload["callbacks"] = {"url": callback_url}
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()

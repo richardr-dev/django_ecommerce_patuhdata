@@ -2,12 +2,17 @@
 a virtual account number and show it here with the amount, the deadline and how to pay. No DOKU page is opened.
 DOKU's notification (same webhook, same ``SB`` reference) or a status check activates the plan.
 
-"Metode lain" (QRIS, e-wallet, card) still opens DOKU's own page: those methods need DOKU's SNAP API and a
-registered QRIS merchant, which this account does not have yet. With ``PAYMENT_PROVIDER=demo`` the numbers are
-made up and the page offers a button that simulates the payment."""
+Every DOKU method is listed on our page with its logo (``METHODS``). QRIS, e-wallets, cards, retail outlets,
+paylater, and a bank whose direct virtual account DOKU refuses, open DOKU's own page limited to the one method
+chosen (``payment_method_types``): those methods need DOKU's SNAP API, which this account does not use. A logo
+is ``static/img/payments/<code>.svg|png|webp`` when present, else the name on the brand's colour. With
+``PAYMENT_PROVIDER=demo`` the numbers are made up and the page offers a button that simulates the payment."""
+from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 
@@ -37,6 +42,92 @@ DEFAULT_STEPS = ["Buka aplikasi atau ATM bank Anda, pilih pembayaran Virtual Acc
 
 class PaymentPageError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Method:
+    code: str
+    label: str
+    group: str
+    doku_type: str        # DOKU Checkout's payment_method_types value
+    colour: str           # badge colour when there is no logo file
+    short: str = ""       # badge text (defaults to the label)
+
+
+GROUPS = (("va", "Transfer virtual account", "Nomor tampil di halaman ini, bayar dari m-banking, internet banking atau ATM."),
+    ("qris", "QRIS", "Scan dengan aplikasi bank atau e-wallet apa pun."),
+    ("ewallet", "E-wallet", "Bayar dari aplikasi e-wallet."),
+    ("card", "Kartu kredit / debit", "Visa, Mastercard, JCB."),
+    ("retail", "Gerai retail", "Bayar tunai di kasir."),
+    ("paylater", "Paylater", "Cicil lewat aplikasi paylater."))
+METHODS = (
+    Method("bca", "BCA", "va", "VIRTUAL_ACCOUNT_BCA", "#0060AF"),
+    Method("mandiri", "Mandiri", "va", "VIRTUAL_ACCOUNT_BANK_MANDIRI", "#003D79"),
+    Method("bri", "BRI", "va", "VIRTUAL_ACCOUNT_BRI", "#00529C"),
+    Method("bni", "BNI", "va", "VIRTUAL_ACCOUNT_BNI", "#F05A22"),
+    Method("permata", "Permata", "va", "VIRTUAL_ACCOUNT_BANK_PERMATA", "#00965E"),
+    Method("cimb", "CIMB Niaga", "va", "VIRTUAL_ACCOUNT_BANK_CIMB", "#7A1315", "CIMB"),
+    Method("bsi", "BSI", "va", "VIRTUAL_ACCOUNT_BSI", "#00A39D"),
+    Method("danamon", "Danamon", "va", "VIRTUAL_ACCOUNT_BANK_DANAMON", "#F7941D"),
+    Method("doku", "DOKU", "va", "VIRTUAL_ACCOUNT_DOKU", "#E1251B"),
+    Method("qris", "QRIS", "qris", "QRIS", "#1A1A1A"),
+    Method("ovo", "OVO", "ewallet", "EMONEY_OVO", "#4C3494"),
+    Method("dana", "DANA", "ewallet", "EMONEY_DANA", "#118EEA"),
+    Method("shopeepay", "ShopeePay", "ewallet", "EMONEY_SHOPEE_PAY", "#EE4D2D"),
+    Method("linkaja", "LinkAja", "ewallet", "EMONEY_LINKAJA", "#E82529"),
+    Method("card", "Kartu kredit", "card", "CREDIT_CARD", "#1A1F71", "VISA"),
+    Method("alfamart", "Alfamart", "retail", "ONLINE_TO_OFFLINE_ALFA", "#E31E24"),
+    Method("indomaret", "Indomaret", "retail", "ONLINE_TO_OFFLINE_INDOMARET", "#0F4C9E"),
+    Method("kredivo", "Kredivo", "paylater", "PEER_TO_PEER_KREDIVO", "#F26722"),
+    Method("akulaku", "Akulaku", "paylater", "PEER_TO_PEER_AKULAKU", "#E2231A"),
+    Method("indodana", "Indodana", "paylater", "PEER_TO_PEER_INDODANA", "#00A6A6"),
+)
+BY_CODE = {m.code: m for m in METHODS}
+LOGO_DIR = Path(__file__).resolve().parents[2] / "static" / "img" / "payments"
+
+
+def logo(code):
+    """The method's logo file when one was added to static/img/payments, else ""."""
+    for extension in ("svg", "png", "webp"):
+        if (LOGO_DIR / f"{code}.{extension}").exists():
+            return static(f"img/payments/{code}.{extension}")
+    return ""
+
+
+def offered():
+    return [m for m in METHODS if m.code not in settings.DOKU_HIDDEN_METHODS]
+
+
+def direct(method):
+    """True when this method's number is made through DOKU's direct API and shown on our page."""
+    return method.group == "va" and method.code in settings.DOKU_VA_BANKS and method.code in BANKS
+
+
+def groups():
+    """The picker: each group with its methods, logo and badge."""
+    shown = offered()
+    out = []
+    for key, title, hint in GROUPS:
+        items = [{"code": m.code, "label": m.label, "short": m.short or m.label, "colour": m.colour,
+            "logo": logo(m.code), "here": direct(m)} for m in shown if m.group == key]
+        if items:
+            out.append({"key": key, "title": title, "hint": hint, "items": items})
+    return out
+
+
+def open_method(invoice, code, user):
+    """What choosing a method does: ``("code", checkout)`` for a number shown here, ``("redirect", url)`` for
+    DOKU's page set to that method. A direct virtual account DOKU refuses falls back to DOKU's page."""
+    method = BY_CODE.get(code)
+    if method is None or method not in offered():
+        raise PaymentPageError("Pilih metode pembayaran yang tersedia.")
+    if direct(method):
+        try:
+            return "code", open_virtual_account(invoice, method.code, user)
+        except PaymentPageError:
+            if settings.PAYMENT_PROVIDER == "demo":
+                raise
+    return "redirect", open_doku_checkout(invoice, user, method_types=[method.doku_type])
 
 
 def page_url(invoice):
@@ -79,7 +170,7 @@ def _customer(invoice, user):
 def open_virtual_account(invoice, bank, user):
     """A virtual account number for this bill at ``bank``; the open one is reused while it is valid."""
     provider = _ready(invoice)
-    if bank not in dict(banks()):
+    if bank not in dict(banks()) or bank in settings.DOKU_HIDDEN_METHODS:
         raise PaymentPageError("Pilih bank yang tersedia.")
     current = open_code(invoice)
     if current and current.method == f"va_{bank}":
@@ -110,8 +201,9 @@ def open_virtual_account(invoice, bank, user):
     return checkout
 
 
-def open_doku_checkout(invoice, user):
-    """DOKU's own page for the methods our page does not offer (QRIS, e-wallet, card). Returns its URL."""
+def open_doku_checkout(invoice, user, method_types=None):
+    """DOKU's own page, limited to ``method_types`` when the buyer chose one here (when DOKU refuses that
+    filter, the page with every method). Returns its URL."""
     provider = _ready(invoice)
     from .services import SUBSCRIPTION_PREFIX
     _keep_current(invoice)
@@ -120,10 +212,17 @@ def open_doku_checkout(invoice, user):
         reference, url = f"demo-{invoice.id.hex}-{attempt}", reverse("billing-demo-pay", args=[invoice.id])
     else:
         reference = f"{SUBSCRIPTION_PREFIX}{invoice.id.hex[:24]}R{attempt}"
+        doku = DokuPaymentProvider()
+        args = {"invoice_number": reference, "amount": int(invoice.amount), "customer": _customer(invoice, user),
+            "callback_url": platform_url(reverse("merchant-billing"))}
         try:
-            url = DokuPaymentProvider().create_checkout(invoice_number=reference, amount=int(invoice.amount),
-                customer=_customer(invoice, user), request_id=f"{invoice.id.hex}-{attempt}",
-                callback_url=platform_url(reverse("merchant-billing")))
+            try:
+                url = doku.create_checkout(request_id=f"{invoice.id.hex}-{attempt}", method_types=method_types,
+                    **args)
+            except ProviderError:
+                if not method_types:
+                    raise
+                url = doku.create_checkout(request_id=f"{invoice.id.hex}-{attempt}b", **args)
         except ProviderError as error:
             raise PaymentPageError("Halaman pembayaran belum dapat dibuat. Coba lagi beberapa saat.") from error
     SubscriptionCheckout.objects.create(invoice=invoice, reference=reference, checkout_url=url)

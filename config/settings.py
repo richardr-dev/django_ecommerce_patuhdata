@@ -271,9 +271,11 @@ DOKU_API_KEY = os.getenv("DOKU_API_KEY", "")
 DOKU_SECRET_KEY = os.getenv("DOKU_SECRET_KEY", "")
 DOKU_API_URL = os.getenv("DOKU_API_URL", "https://api-sandbox.doku.com").rstrip("/")
 DOKU_PAYMENT_DUE_MINUTES = int(os.getenv("DOKU_PAYMENT_DUE_MINUTES", "60"))
-# Banks offered as a virtual account on our own subscription payment page (DOKU direct API). Each must be
-# activated on the DOKU account; an empty value leaves only DOKU's own page ("Metode lain").
+# Subscription payment page (apps/billing/payment_page.py). DOKU_VA_BANKS: banks whose virtual account number we
+# ask DOKU's direct API for and show on our own page (others, and these when DOKU refuses, open DOKU's page set
+# to that one method). DOKU_HIDDEN_METHODS: method codes not activated on the DOKU account, left off the page.
 DOKU_VA_BANKS = [b.strip() for b in os.getenv("DOKU_VA_BANKS", "bca,mandiri,bri,bni,permata").split(",") if b.strip()]
+DOKU_HIDDEN_METHODS = {m.strip() for m in os.getenv("DOKU_HIDDEN_METHODS", "").split(",") if m.strip()}
 XENDIT_SECRET_KEY = os.getenv("XENDIT_SECRET_KEY", "")
 XENDIT_WEBHOOK_VERIFICATION_TOKEN = os.getenv("XENDIT_WEBHOOK_VERIFICATION_TOKEN", "")
 XENDIT_API_URL = os.getenv("XENDIT_API_URL", "https://api.xendit.co").rstrip("/")

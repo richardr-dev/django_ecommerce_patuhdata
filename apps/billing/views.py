@@ -294,9 +294,12 @@ def merchant_billing_payment(request, invoice_id):
     invoice = get_object_or_404(SubscriptionInvoice.objects.select_related("plan"), id=invoice_id, store=store)
     if request.method == "POST":
         try:
-            if request.POST.get("method") == "lainnya":
+            choice = request.POST.get("method") or request.POST.get("bank", "")
+            if choice == "lainnya":
                 return redirect(pay.open_doku_checkout(invoice, request.user))
-            pay.open_virtual_account(invoice, request.POST.get("bank", ""), request.user)
+            kind, result = pay.open_method(invoice, choice, request.user)
+            if kind == "redirect":
+                return redirect(result)
         except pay.PaymentPageError as error:
             messages.error(request, str(error))
         return redirect("merchant-billing-payment", invoice.id)
@@ -304,8 +307,12 @@ def merchant_billing_payment(request, invoice_id):
         check_pending_invoice(invoice)
         invoice.refresh_from_db()
     code = pay.open_code(invoice) if invoice.status == "pending" else None
+    if request.GET.get("ganti"):
+        code = None        # "Pilih metode lain": the picker again, the open number stays payable
     return render(request, "merchant/billing_payment.html", _merchant_context(request, store,
-        title="Pembayaran langganan", invoice=invoice, code=code, banks=pay.banks(),
+        title="Pembayaran langganan", invoice=invoice, code=code, banks=pay.banks(), groups=pay.groups(),
+        code_logo=pay.logo(code.method.removeprefix("va_")) if code else "",
+        code_method=pay.BY_CODE.get(code.method.removeprefix("va_")) if code else None,
         bank_name=pay.BANKS.get(code.method.removeprefix("va_"), "") if code else "",
         steps=pay.steps_for(code.method) if code else [],
         demo=settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS))

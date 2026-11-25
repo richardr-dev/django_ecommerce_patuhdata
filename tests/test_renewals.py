@@ -159,7 +159,7 @@ class RenewalPageTests(TestCase):
         response = self.client.post(f"/books/billing/{invoice.id}/pay/")
         self.assertRedirects(response, f"/books/billing/{invoice.id}/bayar/",
             fetch_redirect_response=False)
-        self.assertContains(self.client.get(f"/books/billing/{invoice.id}/bayar/"), "Pilih bank")
+        self.assertContains(self.client.get(f"/books/billing/{invoice.id}/bayar/"), "Bayar dengan QRIS")
         page = self.client.post(f"/books/billing/{invoice.id}/bayar/", {"bank": "bca"}, follow=True)
         self.assertContains(page, "Simulasikan pembayaran")     # demo: a made-up number to try the page
         self.client.post(f"/books/billing/{invoice.id}/demo-pay/")

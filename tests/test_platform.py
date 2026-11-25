@@ -231,6 +231,41 @@ class DokuSubscriptionTests(TestCase):
         payload = json.loads(request_json.call_args.kwargs["encoded_payload"])
         self.assertEqual(payload["callbacks"]["url"], "https://niaga.test/books/billing/")
 
+    def test_every_method_is_on_our_page_and_one_opens_dokus_page_for_that_method_only(self):
+        self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        with patch("apps.integrations.payments.request_json", return_value={"transaction": {"status": "PENDING"}}):
+            page = self.client.get(f"/books/billing/{invoice.id}/bayar/")
+        for label in ("BCA", "Mandiri", "BSI", "QRIS", "OVO", "DANA", "ShopeePay", "Kartu kredit", "Alfamart",
+                "Indomaret", "Kredivo"):
+            self.assertContains(page, f"Bayar dengan {label}")
+        doku_page = {"response": {"payment": {"url": "https://checkout.doku.test/qris"}}}
+        with patch("apps.integrations.payments.request_json", return_value=doku_page) as call:
+            response = self.client.post(f"/books/billing/{invoice.id}/bayar/", {"method": "qris"})
+        self.assertRedirects(response, "https://checkout.doku.test/qris", fetch_redirect_response=False)
+        payload = json.loads(call.call_args.kwargs["encoded_payload"])
+        self.assertEqual(payload["payment"]["payment_method_types"], ["QRIS"])
+
+    def test_a_refused_virtual_account_falls_back_to_dokus_page_for_that_bank(self):
+        from apps.integrations.http import ProviderError
+        self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        replies = [ProviderError("HTTP 404"), {"response": {"payment": {"url": "https://checkout.doku.test/bca"}}}]
+        with patch("apps.integrations.payments.request_json", side_effect=replies) as call:
+            response = self.client.post(f"/books/billing/{invoice.id}/bayar/", {"method": "bca"})
+        self.assertRedirects(response, "https://checkout.doku.test/bca", fetch_redirect_response=False)
+        payload = json.loads(call.call_args.kwargs["encoded_payload"])
+        self.assertEqual(payload["payment"]["payment_method_types"], ["VIRTUAL_ACCOUNT_BCA"])
+
+    def test_methods_not_activated_are_left_off(self):
+        from apps.billing.payment_page import groups
+        with override_settings(DOKU_HIDDEN_METHODS={"ovo", "kredivo", "akulaku", "indodana"}):
+            codes = {item["code"] for g in groups() for item in g["items"]}
+            titles = {g["title"] for g in groups()}
+        self.assertNotIn("ovo", codes)
+        self.assertIn("dana", codes)
+        self.assertNotIn("Paylater", titles)
+
     def _notify(self, invoice, amount, request_id="sub-notification-1"):
         body = json.dumps({"order": {"invoice_number": invoice.payment_reference, "amount": amount,
             "currency": "IDR"}, "transaction": {"status": "SUCCESS"}}, separators=(",", ":")).encode()

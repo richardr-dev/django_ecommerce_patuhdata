@@ -1,0 +1,1 @@
+{# A payment method's logo: the file in static/img/payments when added, else its name on the brand colour. #}<span class="pay-logo{% if not logo %} pay-badge{% endif %}"{% if not logo %} style="--brand:{{ m.colour }}"{% endif %} aria-hidden="true">{% if logo %}<img src="{{ logo }}" alt="" loading="lazy">{% else %}{{ m.short|default:m.label }}{% endif %}</span>
