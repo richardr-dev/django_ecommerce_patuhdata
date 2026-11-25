@@ -108,16 +108,16 @@ class FlexibleFilterTests(InvoiceFilterTests):
 
     def test_mitra_filter_shows_only_that_partners_invoices(self):
         from apps.settlements.models import ConsignmentPartner
-        ab = ConsignmentPartner.objects.create(store=self.store, name="AB Shop")
+        ab = ConsignmentPartner.objects.create(store=self.store, name="Mitra Jaya")
         other = ConsignmentPartner.objects.create(store=self.store, name="Mitra Lain")
         Order.objects.filter(pk=self.a.order_id).update(consignment_partner=ab)
         Order.objects.filter(pk=self.b.order_id).update(consignment_partner=other)
         self.assertEqual(self.numbers(mitra=ab.pk), {self.a.number})
         self.assertEqual(self.numbers(mitra=[ab.pk, other.pk]), {self.a.number, self.b.number})
         page = self.client.get(self.url, {"mitra": ab.pk})
-        self.assertEqual({c["label"] for c in page.context["mitra_chips"]}, {"AB Shop", "Mitra Lain"})
+        self.assertEqual({c["label"] for c in page.context["mitra_chips"]}, {"Mitra Jaya", "Mitra Lain"})
         self.assertIn(f"mitra={ab.pk}", page.context["filter_query"])
-        self.assertContains(page, "Mitra: AB Shop")
+        self.assertContains(page, "Mitra: Mitra Jaya")
 
     def test_export_keeps_every_channel(self):
         page = self.client.get(self.url, {"channel": ["shopee", "tokopedia"], "q": "a, b"})

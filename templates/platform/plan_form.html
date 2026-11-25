@@ -31,6 +31,7 @@
         <label class="ln-check"><input type="checkbox" name="is_default" value="1"{% if post %}{% if post.is_default %} checked{% endif %}{% elif plan.is_default %} checked{% endif %}> Paket bawaan perusahaan baru</label>
         <label class="ln-check"><input type="checkbox" name="contact_sales" value="1"{% if post %}{% if post.contact_sales %} checked{% endif %}{% elif plan.contact_sales %} checked{% endif %}> Paket khusus: pembeli menghubungi sales</label>
         <label class="ln-check"><input type="checkbox" name="allow_custom_domain" value="1"{% if post %}{% if post.allow_custom_domain %} checked{% endif %}{% elif plan.allow_custom_domain %} checked{% endif %}> Boleh domain sendiri</label>
+        <label class="ln-check"><input type="checkbox" name="full_books" value="1"{% if post %}{% if post.full_books %} checked{% endif %}{% elif not plan or plan.full_books %} checked{% endif %}> Akuntansi lengkap (pembelian, kas &amp; bank, buku besar, laporan, pajak, mitra, kasir). Tanpa centang: paket marketplace saja</label>
         <label class="ln-check"><input type="checkbox" name="allow_payout_reconciliation" value="1"{% if post %}{% if post.allow_payout_reconciliation %} checked{% endif %}{% elif plan.allow_payout_reconciliation %} checked{% endif %}> Pencocokan pencairan marketplace dan gateway</label>
       </div>
       <button class="ln-btn">Simpan paket</button>

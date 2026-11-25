@@ -1,0 +1,27 @@
+{% load static %}<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fitur paket Pro · {{ platform_name }}</title><meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+<style>
+.tr-back{position:fixed;inset:0;background:rgba(1,36,65,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
+.tr-dialog{width:100%;max-width:440px;background:#fff;border-radius:24px;padding:28px 24px;box-shadow:0 24px 60px -12px rgba(1,36,65,.35);text-align:center}
+.tr-badge{width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:#eaf7fe;color:#0b6fb8;display:flex;align-items:center;justify-content:center;font-size:26px}
+.tr-dialog h1{margin:0 0 8px;font-size:21px;color:#012441}.tr-dialog p{margin:0 0 16px;color:#5b7186;font-size:14px;line-height:1.55}
+.tr-act{display:flex;flex-direction:column;gap:8px}
+.tr-btn{display:flex;align-items:center;justify-content:center;height:46px;border:0;border-radius:99px;background:#0b6fb8;color:#fff;font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.tr-act a.tr-btn,.tr-act button.tr-btn{color:#fff;text-decoration:none}
+.tr-btn:hover{background:#095f9e}
+.tr-act a.tr-btn.soft,.tr-act button.tr-btn.soft{background:#eaf7fe;color:#0b6fb8}.tr-act a.tr-btn.soft:hover,.tr-act button.tr-btn.soft:hover{background:#dcedf9}
+</style></head>
+<body class="ln"><div class="tr-back"><div class="tr-dialog" role="alertdialog" aria-modal="true" aria-labelledby="tr-title">
+  <div class="tr-badge" aria-hidden="true">🔒</div>
+  <h1 id="tr-title">Fitur ini belum termasuk paket Anda</h1>
+  <p>Paket <b>{{ plan.name|default:"Starter" }}</b> untuk <b>{{ store.name }}</b> berisi pesanan dan invoice marketplace, produk, stok dan pelanggan. Pembelian, kas &amp; bank, buku besar, laporan keuangan, pajak, mitra dan kasir ada di paket dengan akuntansi lengkap. Data Anda tetap dicatat, jadi setelah upgrade pembukuannya langsung lengkap.{% if not can_pay %} Minta pemilik perusahaan untuk upgrade paket.{% endif %}</p>
+  <div class="tr-act">
+    {% if can_pay %}<a class="tr-btn" href="{% url 'merchant-billing' %}" data-no-soft>Lihat paket dan upgrade</a>{% endif %}
+    {% if contact.whatsapp_url %}<a class="tr-btn soft" href="{{ contact.whatsapp_url }}?text=Halo%2C%20saya%20ingin%20upgrade%20paket%20{{ platform_name|urlencode }}%20untuk%20{{ store.name|urlencode }}" target="_blank" rel="noopener">Tanya sales di WhatsApp{% if contact.whatsapp %} · {{ contact.whatsapp }}{% endif %}</a>{% endif %}
+    <a class="tr-btn soft" href="{% url 'merchant-dashboard' %}" data-no-soft>Kembali ke Beranda</a>
+  </div>
+</div></div></body></html>

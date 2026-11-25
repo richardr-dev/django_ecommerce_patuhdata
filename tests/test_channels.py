@@ -230,4 +230,4 @@ class ImportWizardPageTests(ChannelTestCase):
         page = self.client.get("/books/marketplace/import/?platform=tiktok_shop")
         self.assertContains(page, 'name="platform" value="tokopedia"')
         self.assertContains(page, "yang belum selesai dilewati")
-        self.assertContains(page, "Hanya pesanan selesai dan batal yang diimpor")
+        self.assertContains(page, "Anda yang memilih status pesanan yang diimpor")

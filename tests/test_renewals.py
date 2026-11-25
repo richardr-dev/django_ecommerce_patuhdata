@@ -9,6 +9,7 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.billing.models import Plan, Subscription, SubscriptionCheckout, SubscriptionInvoice
+from apps.billing.payment_page import open_doku_checkout
 from apps.billing.plans import effective_plan
 from apps.billing.renewals import open_payment_page, run_renewals
 from apps.billing.services import check_pending_invoice, handle_doku_notification, mark_invoice_paid
@@ -89,17 +90,33 @@ class RenewalTests(TestCase):
         self.assertEqual(effective_plan(self.store).code, "lapsed")
 
     @override_settings(PAYMENT_PROVIDER="doku", DOKU_CLIENT_ID="MCH", DOKU_SECRET_KEY="secret")
-    @patch("apps.billing.renewals.DokuPaymentProvider.create_checkout",
+    @patch("apps.billing.payment_page.DokuPaymentProvider.create_checkout",
         side_effect=["https://doku.test/1", "https://doku.test/2"])
     def test_each_click_opens_a_fresh_page_and_an_older_page_still_pays(self, create_checkout):
         run_renewals()
         invoice = SubscriptionInvoice.objects.get(kind="renewal")
-        first, second = open_payment_page(invoice, self.owner), open_payment_page(invoice, self.owner)
+        self.assertEqual(open_payment_page(invoice, self.owner), f"/books/billing/{invoice.id}/bayar/")
+        first, second = open_doku_checkout(invoice, self.owner), open_doku_checkout(invoice, self.owner)
 
         self.assertEqual((first, second), ("https://doku.test/1", "https://doku.test/2"))
         old_reference = SubscriptionCheckout.objects.order_by("id").first().reference
         _, status = handle_doku_notification(old_reference, "notif-1",
             {"order": {"amount": 99000, "currency": "IDR"}})
+        invoice.refresh_from_db()
+        self.assertEqual((status, invoice.status), (200, "paid"))
+
+    @override_settings(PAYMENT_PROVIDER="doku", DOKU_CLIENT_ID="MCH", DOKU_SECRET_KEY="secret")
+    def test_a_virtual_account_is_reused_per_bank_and_its_reference_pays(self):
+        from apps.billing.payment_page import open_virtual_account
+        run_renewals()
+        invoice = SubscriptionInvoice.objects.get(kind="renewal")
+        reply = {"virtual_account_info": {"virtual_account_number": "888", "expired_date": "20990101000000"}}
+        with patch("apps.integrations.payments.request_json", return_value=reply) as call:
+            bca = open_virtual_account(invoice, "bca", self.owner)
+            again = open_virtual_account(invoice, "bca", self.owner)
+            open_virtual_account(invoice, "bri", self.owner)
+        self.assertEqual((bca.pk, call.call_count), (again.pk, 2))
+        _, status = handle_doku_notification(bca.reference, "notif-va", {"order": {"amount": 99000}})
         invoice.refresh_from_db()
         self.assertEqual((status, invoice.status), (200, "paid"))
 
@@ -140,8 +157,11 @@ class RenewalPageTests(TestCase):
         invoice = SubscriptionInvoice.objects.get(kind="renewal")
 
         response = self.client.post(f"/books/billing/{invoice.id}/pay/")
-        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/",
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/bayar/",
             fetch_redirect_response=False)
+        self.assertContains(self.client.get(f"/books/billing/{invoice.id}/bayar/"), "Pilih bank")
+        page = self.client.post(f"/books/billing/{invoice.id}/bayar/", {"bank": "bca"}, follow=True)
+        self.assertContains(page, "Simulasikan pembayaran")     # demo: a made-up number to try the page
         self.client.post(f"/books/billing/{invoice.id}/demo-pay/")
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, "paid")

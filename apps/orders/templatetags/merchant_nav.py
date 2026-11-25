@@ -299,6 +299,8 @@ def build_nav(context):
     # /kasir/, see apps/pos/views.py), so this sidebar is never built for that role; nothing to
     # special-case here.
     refused = REFUSED.get(context.get("merchant_real_role", ""), frozenset())
+    from apps.billing.modules import full_books, link_open
+    everything = full_books(store)
     sections, best, active = [], 0, None
     for title, groups in NAV:
         built_groups = []
@@ -310,6 +312,8 @@ def build_nav(context):
                 if link.roles and role not in link.roles:
                     continue
                 if link_key(link) in refused:
+                    continue
+                if not everything and not link_open(group.label, link):
                     continue
                 if link.when and not flags.get(link.when):
                     continue
@@ -348,11 +352,13 @@ def merchant_create_menu(context):
     from apps.shops.permissions import holds
     role = context.get("merchant_real_role", "")
     role = "admin" if role == "owner" else role
+    from apps.billing.modules import full_books, path_open
+    everything = full_books(context.get("merchant_store"))
     groups = []
     for title, entries in CREATE:
         items = [{"label": label, "href": href + (f"?{query}" if query else ""), "icon": icon}
             for label, name, icon, args, query, permission in entries
-            if holds(role, permission) and (href := _url(name, args))]
+            if holds(role, permission) and (href := _url(name, args)) and (everything or path_open(href))]
         if items:
             groups.append({"title": title, "items": items})
     return {"groups": groups}

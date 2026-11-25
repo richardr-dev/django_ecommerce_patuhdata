@@ -71,7 +71,7 @@ class OverviewTests(TestCase):
         self.assertEqual(row["cancel_pct"], Decimal("66.7"))
 
     def test_mitra_sales_are_valued_at_the_mitra_price(self):
-        partner = ConsignmentPartner.objects.create(store=self.store, name="AB Shop")
+        partner = ConsignmentPartner.objects.create(store=self.store, name="Mitra Jaya")
         self.order("abshop", order_type="reseller_sell_through", consignment_partner=partner,
             quantity=2)
 

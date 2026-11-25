@@ -141,7 +141,7 @@ def apply_filters(qs, params, today=None):
         names = dict(Order.CHANNELS)
         active.append({"label": " + ".join(names.get(c, c) for c in channels), "keys": ["channel"]})
     partners = [int(v) for v in values(params, "mitra") if v.isdigit()]
-    if partners:   # invoices sold to a mitra (AB Shop...) through "Jual ke mitra"
+    if partners:   # invoices sold to a mitra (a reseller...) through "Jual ke mitra"
         from apps.settlements.models import ConsignmentPartner
         qs = qs.filter(consignment_partner_id__in=partners)
         names = ConsignmentPartner.objects.filter(pk__in=partners).values_list("name", flat=True)

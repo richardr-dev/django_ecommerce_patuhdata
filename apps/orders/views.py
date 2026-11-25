@@ -1149,12 +1149,14 @@ def merchant_dashboard(request):
     loyalty = LoyaltyAccount.objects.filter(store=store).aggregate(
         members=Count("id"), outstanding=Sum("balance"), earned=Sum("lifetime_earned"))
     from apps.accounting.todo import todo_items
-    books_setup = books_setup_steps(store)
+    from apps.billing.modules import full_books
+    everything = full_books(store)   # Starter (marketplace package): no books tiles, setup or finance rows
+    books_setup = books_setup_steps(store) if everything else []
     return render(request, "merchant/dashboard.html", _merchant_context(request, store,
-        books=_books_summary(request, store, today),
+        books=_books_summary(request, store, today) if everything else None,
         books_setup=books_setup if not all(step.done for step in books_setup) else [],
         books_setup_done=sum(step.done for step in books_setup),
-        finance_todo=todo_items(store, today, request.user), live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
+        finance_todo=todo_items(store, today, request.user) if everything else [], live_state=live_state, revenue=revenue, order_count=order_count, average_order=(revenue / order_count if order_count else 0),
         customer_count=store.customers.count(), pending_count=store.orders.filter(status="pending").count(),
         daily_sales=daily, top_products=top_products, low_stock=low_stock,
         low_stock_count=low_stock_count, recent_orders=recent,
@@ -1334,7 +1336,7 @@ def merchant_orders(request):
 
 @login_required(login_url="/login/")
 def merchant_abshop(request):
-    """AB Shop & Reseller order management: sell-in, sell-through, billing queue."""
+    """Mitra & Reseller order management: sell-in, sell-through, billing queue."""
     store = _staff_store(request)
     _require_roles(request, store, {"admin", "manager", "finance", "viewer"})
 

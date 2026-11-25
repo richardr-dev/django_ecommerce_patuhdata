@@ -394,3 +394,61 @@ def merchant_customers_export(request):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="{name}.xlsx"'
     return response
+
+
+@login_required(login_url="/login/")
+def merchant_customer_import_template(request):
+    """The CSV to fill in when moving customers over from another system."""
+    import csv
+
+    from django.http import HttpResponse
+
+    from apps.orders.views import _require_roles, _staff_store
+
+    from .customer_import import COLUMNS, SAMPLE
+    store = _staff_store(request)
+    _require_roles(request, store, EDIT_ROLES)
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="template-pelanggan.csv"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(COLUMNS)
+    writer.writerows(SAMPLE)
+    return response
+
+
+@login_required(login_url="/login/")
+def merchant_customer_import(request):
+    """Impor pelanggan from the template (CSV or Excel): all rows are checked first, then saved together."""
+    from apps.orders.views import _merchant_context, _require_roles, _staff_store
+
+    from . import customer_import
+    from .tabular import read_rows
+    store = _staff_store(request)
+    _require_roles(request, store, EDIT_ROLES)
+    if request.method == "POST":
+        upload = request.FILES.get("file")
+        if not upload:
+            messages.error(request, "Pilih file terlebih dahulu.")
+        else:
+            try:
+                headers, rows = read_rows(upload)
+                if "nama" not in headers:
+                    raise ValueError("Kolom wajib: nama. Gunakan template yang bisa diunduh di halaman ini.")
+                created, updated = customer_import.import_customers(store, customer_import.parse(rows))
+                AuditLog.objects.create(store=store, actor=request.user, action="customers.imported",
+                    object_type="Customer", object_id="bulk", details={"created": created, "updated": updated,
+                        "file": upload.name[:100]})
+                messages.success(request, f"Impor selesai: {created} pelanggan baru, {updated} diperbarui.")
+                return redirect("merchant-customers")
+            except (ValueError, UnicodeDecodeError) as error:
+                messages.error(request, str(error))
+    return render(request, "merchant/customer_import.html", _merchant_context(request, store,
+        columns=[("nomor_pelanggan", "Nomor pelanggan di sistem lama (mis. Accurate). Kosong: dibuatkan otomatis, PLG-00001 dst."),
+                 ("nama", "Nama pelanggan. Wajib."), ("perusahaan", "Nama perusahaan (pelanggan B2B)."),
+                 ("telepon", "Nomor telepon / WhatsApp. Pelanggan dengan nomor yang sama diperbarui, tidak dobel."),
+                 ("email", "Alamat email."), ("alamat", "Alamat tagihan / pengiriman."),
+                 ("npwp", "NPWP / NIK, 16 digit (NPWP lama 15 digit juga boleh)."),
+                 ("termin_hari", "Termin pembayaran dalam hari, mis. 30."),
+                 ("batas_kredit", "Batas piutang dalam rupiah. Kosong: tanpa batas."),
+                 ("tag", "Label dipisah koma, mis. reseller, vip.")]))

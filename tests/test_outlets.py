@@ -96,7 +96,7 @@ class OutletBillingTests(TestCase):
         response = self._client(store).post("/books/billing/outlets/", {"action": "add",
             "count": "1"})
         invoice = SubscriptionInvoice.objects.get(kind="outlets")
-        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/",
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/bayar/",
             fetch_redirect_response=False)
         self.assertContains(self._client(store).get("/books/billing/"), "0 outlet aktif dari 1")
 

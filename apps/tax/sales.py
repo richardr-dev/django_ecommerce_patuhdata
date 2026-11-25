@@ -157,7 +157,7 @@ def _build_order(store, *, lines, buyer_name, issued_on, channel, customer, phon
     extra = {"courier_code": (courier or "").strip().lower()[:40],
         "tracking_number": (tracking_number or "").strip()[:100]}
     if partner is not None:
-        # A sale to a mitra (e.g. AB Shop): billed on this invoice at the mitra's prices, so it is
+        # A sale to a mitra (a reseller): billed on this invoice at the mitra's prices, so it is
         # not offered again when the next settlement is made.
         extra.update(consignment_partner=partner, abshop_billing_status="billed")
         channel, order_type = "abshop", "reseller_sell_in"

@@ -147,7 +147,7 @@ class CountAndAuditTests(Base):
 class ConsignmentTests(Base):
     def setUp(self):
         super().setUp()
-        self.partner = ConsignmentPartner.objects.create(store=self.store, name="AB Shop")
+        self.partner = ConsignmentPartner.objects.create(store=self.store, name="Mitra Jaya")
 
     def test_sending_is_not_a_sale_and_stock_stays_in_inventory_value(self):
         send_to_partner(self.partner, product=self.kopi, quantity=4, date=TODAY)
@@ -184,7 +184,7 @@ class ConsignmentTests(Base):
 
     def test_invoicing_a_settlement_books_the_sale_and_empties_the_mitra_stock(self):
         send_to_partner(self.partner, product=self.kopi, quantity=4, date=TODAY)
-        order = Order.objects.create(store=self.store, customer_name="AB Shop", phone="-",
+        order = Order.objects.create(store=self.store, customer_name="Mitra Jaya", phone="-",
             shipping_address="-", subtotal=Decimal(60000), total=Decimal(60000),
             channel="abshop", order_type="reseller_sell_through", idempotency_key="mitra-1",
             consignment_partner=self.partner)

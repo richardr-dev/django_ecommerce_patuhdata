@@ -104,8 +104,8 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     # ── Commerce channel & invoice ────────────────────────────────────────────
     # Channels represent WHERE the sale originated.
-    # AB Shop is a reseller/partner: orders tagged `abshop` are B2B sell-in orders
-    # where the store invoices AB Shop directly. AB Shop then resells on their own
+    # the mitra is a reseller/partner: orders tagged `abshop` are B2B sell-in orders
+    # where the store invoices the mitra directly. the mitra then resells on their own
     # Tokopedia/Shopee accounts — that downstream activity is recorded separately
     # as SELL_THROUGH (informational only, no store revenue movement).
     CHANNELS = [
@@ -119,12 +119,12 @@ class Order(models.Model):
         ("manual", "Manual / Chat"),
         ("tv", "TV Shopping"),
         # ── Reseller / partner channel ────────────────────────────────────────
-        ("abshop", "AB Shop (Reseller)"),
+        ("abshop", "Mitra / Reseller"),
     ]
     ORDER_TYPES = [
         ("direct", "Penjualan Langsung"),      # B2C: store → customer
-        ("reseller_sell_in", "Jual ke Reseller"),  # B2B: store → AB Shop (creates invoice & stock handover)
-        ("reseller_sell_through", "Penjualan Reseller"),  # Downstream: AB Shop → end customer (informational)
+        ("reseller_sell_in", "Jual ke Reseller"),  # B2B: store → the mitra (creates invoice & stock handover)
+        ("reseller_sell_through", "Penjualan Reseller"),  # Downstream: the mitra → end customer (informational)
         # Carries an invoice the business issued before its books started here (saldo awal piutang per
         # invoice, ``tax/opening_invoices.py``): not a sale, never counted in sales reports.
         ("opening", "Saldo awal piutang"),
@@ -134,10 +134,10 @@ class Order(models.Model):
         ("billed", "Sudah Ditagih"),
         ("paid", "Sudah Dibayar"),
     ]
-    # Sub-channel for AB Shop orders: which platform AB Shop sells through to end customers
+    # Sub-channel for the mitra orders: which platform the mitra sells through to end customers
     AB_SHOP_SOURCES = [
-        ("shopee", "Shopee AB Shop"),
-        ("tokopedia", "Tokopedia AB Shop"),
+        ("shopee", "Shopee mitra"),
+        ("tokopedia", "Tokopedia mitra"),
         ("tv", "TV Shopping"),
     ]
     # Sequential, gap-free invoice number per store, e.g. INV-2025-00042
@@ -148,10 +148,10 @@ class Order(models.Model):
     external_order_id = models.CharField(max_length=100, blank=True, db_index=True)
     # Raw status string from marketplace (e.g. "Selesai", "Dikirim")
     marketplace_status = models.CharField(max_length=60, blank=True)
-    # Tracks whether this AB Shop reseller sell-in has been invoiced to them
+    # Tracks whether this the mitra reseller sell-in has been invoiced to them
     abshop_billing_status = models.CharField(max_length=30, choices=ABSHOP_BILLING_STATUSES,
         default="unbilled")
-    # For AB Shop orders: which platform AB Shop used to sell to end customers
+    # For the mitra orders: which platform the mitra used to sell to end customers
     ab_shop_source = models.CharField(max_length=20, choices=AB_SHOP_SOURCES, blank=True,
         db_index=True)
     # Direct link to the consignment partner for Mitra-channel invoices
@@ -198,7 +198,7 @@ class Order(models.Model):
 
     @property
     def is_abshop(self):
-        """True when this order is a B2B sell-in to AB Shop reseller."""
+        """True when this order is a B2B sell-in to the mitra reseller."""
         return self.channel == "abshop"
 
     @property
@@ -214,7 +214,7 @@ class Order(models.Model):
 
     @property
     def is_sell_through(self):
-        """True for informational downstream AB Shop sales (no store revenue)."""
+        """True for informational downstream the mitra sales (no store revenue)."""
         return self.order_type == "reseller_sell_through"
 
     @property
@@ -362,7 +362,7 @@ class OrderItem(models.Model):
     bundle_sku = models.CharField(max_length=80, blank=True)
     # Cost per unit copied when the sale is booked, so later cost changes keep past profit.
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    # ABShop reseller price charged to AB Shop; different from regular retail unit_price.
+    # mitra reseller price charged to the mitra; different from regular retail unit_price.
     ab_shop_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
 
     @property

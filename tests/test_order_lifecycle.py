@@ -308,6 +308,16 @@ class FinishedOnlyImportTests(TestCase):
         default = import_orders(self.channel, [self.order("Dibatalkan", "N1")], finished_only=True)
         self.assertEqual((default["cancelled"], default["cancelled_skipped"]), (1, 0))  # the default records it
 
+    def test_the_person_chooses_which_statuses_are_imported(self):
+        summary = import_orders(self.channel, [self.order("Selesai", "A"), self.order("Sedang dikirim", "B"),
+            self.order("Perlu dikirim", "C"), self.order("Dibatalkan", "D")],
+            finished_only=True, states={"shipped", "active"})
+        self.assertEqual((summary["created"], summary["not_finished"], summary["cancelled_skipped"]), (2, 1, 1))
+        by_id = {o.external_order_id: o for o in Order.objects.filter(store=self.store)}
+        self.assertEqual(set(by_id), {"B", "C"})
+        self.assertEqual(by_id["B"].status, "shipped")
+        self.assertTrue(Invoice.objects.filter(order=by_id["C"]).exists())
+
     def test_finished_and_berhasil_are_sales_cancelled_is_recorded_the_rest_waits(self):
         summary = self.run_import(self.order("Selesai", "A"), self.order("Sedang dikirim", "B"),
             self.order("Perlu dikirim", "C"), self.order("Dibatalkan", "D"), self.order("Transaksi Berhasil", "E"))

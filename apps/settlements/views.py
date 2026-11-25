@@ -151,7 +151,7 @@ def settlement_new(request):
         except (SettlementError, ValueError) as exc:
             messages.error(request, str(exc))
 
-    # Pre-fill unbilled AB Shop orders for context
+    # Pre-fill unbilled mitra orders for context
     unbilled_orders = Order.objects.filter(
         store=store,
         order_type__in=["reseller_sell_in", "reseller_sell_through"],

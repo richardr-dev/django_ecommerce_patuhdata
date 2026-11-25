@@ -106,6 +106,10 @@ def merchant_channel_detail(request, channel_id):
         summary=summary, platform=PLATFORMS[channel.platform]))
 
 
+# Marketplace statuses a person can choose to import (label shown on the import page).
+IMPORT_STATES = ("completed", "shipped", "active", "cancelled")
+
+
 @login_required(login_url="/login/")
 def merchant_import(request):
     """3-step import wizard: pick platform → upload file → results saved to ImportBatch."""
@@ -178,44 +182,86 @@ def merchant_import(request):
 
     if request.method == "POST" and selected:
         form = OrdersImportForm(request.POST, request.FILES)
-        if form.is_valid():
-            upload = form.cleaned_data["file"]
+        uploads = request.FILES.getlist("file")
+        if len(uploads) > 20:
+            form.add_error("file", "Maksimal 20 file sekaligus.")
+        elif form.is_valid():
+            uploads = uploads or [form.cleaned_data["file"]]
             soft = request.POST.get("soft") == "1"
-            try:
-                from .parsers import parse_order_file
-                orders, skipped = parse_order_file(platform, upload)
-
-                channel = get_or_create_channel(store, platform,
-                    name=f"Toko {selected['label']}")
-                category = request.POST.get("category", "regular")
-                summary = import_orders(channel, orders, soft=soft,
-                    file_name=upload.name, imported_by=request.user, skipped=skipped,
-                    category=category, finished_only=platform != "manual",
-                    include_cancelled=request.POST.get("include_cancelled") == "1")
-                summary["skipped"] = skipped
-                summary["platform_label"] = selected["label"]
-
-                from apps.shops.models import AuditLog
+            category = request.POST.get("category", "regular")
+            if platform == "manual":
+                states = None
+            else:
+                chosen = set(request.POST.getlist("states"))
+                states = {st for st in IMPORT_STATES if st in chosen}
+                if "cancelled" in states:
+                    states.add("returned")
+            from .parsers import parse_order_file
+            from apps.shops.models import AuditLog
+            summary = None
+            for upload in uploads:
+                try:
+                    problem = OrdersImportForm.check_upload(upload)
+                    if problem:
+                        raise ChannelImportError(problem)
+                    orders, skipped = parse_order_file(platform, upload)
+                    channel = get_or_create_channel(store, platform,
+                        name=f"Toko {selected['label']}")
+                    one = import_orders(channel, orders, soft=soft,
+                        file_name=upload.name, imported_by=request.user, skipped=skipped,
+                        category=category, finished_only=platform != "manual",
+                        include_cancelled=True, states=states)
+                except (ChannelImportError, UnicodeDecodeError, _csv.Error) as error:
+                    if len(uploads) == 1:
+                        form.add_error("file", f"File tidak dapat dibaca: {error}")
+                    else:
+                        summary = summary or {"errors": [], "soft": soft}
+                        summary.setdefault("errors", []).append(f"{upload.name}: file tidak dapat dibaca: {error}")
+                    continue
+                one["skipped"] = skipped
+                one["platform_label"] = selected["label"]
                 AuditLog.objects.create(store=store, actor=request.user,
                     action="channel.orders_imported", object_type="SalesChannel",
                     object_id=str(channel.id),
-                    details={"platform": platform, "created": summary["created"],
-                             "duplicates": summary["duplicates"],
-                             "updated": summary["updated"], "cancelled": summary["cancelled"],
-                             "skipped": skipped, "not_finished": summary["not_finished"],
-                             "cancelled_skipped": summary["cancelled_skipped"],
-                             "soft": soft, "errors": len(summary["errors"])})
+                    details={"platform": platform, "file": upload.name, "created": one["created"],
+                             "duplicates": one["duplicates"],
+                             "updated": one["updated"], "cancelled": one["cancelled"],
+                             "skipped": skipped, "not_finished": one["not_finished"],
+                             "cancelled_skipped": one["cancelled_skipped"],
+                             "states": sorted(states) if states is not None else "all",
+                             "soft": soft, "errors": len(one["errors"])})
+                if summary is None:
+                    summary = one
+                else:
+                    for key, value in one.items():
+                        if isinstance(value, bool) or key in {"batch_id", "platform_label"}:
+                            continue
+                        if isinstance(value, int):
+                            summary[key] = summary.get(key, 0) + value
+                        elif isinstance(value, list):
+                            summary.setdefault(key, []).extend(f"{upload.name}: {v}" for v in value)
+                if len(uploads) > 1 and one["errors"]:
+                    one["errors"] = [f"{upload.name}: {e}" for e in one["errors"]]
+            if summary is not None:
+                summary.setdefault("platform_label", selected["label"])
+                for key in ("created", "updated", "cancelled", "duplicates", "not_finished",
+                            "cancelled_skipped", "no_stock", "new_products", "skipped"):
+                    summary.setdefault(key, 0)
+                summary["files"] = len(uploads)
                 if summary["created"] or summary["updated"]:
                     messages.success(request,
                         f"{summary['created']} pesanan baru dari {selected['label']} diimpor, "
                         f"{summary['updated']} pesanan diperbarui statusnya"
                         + (f", {summary['cancelled']} dibatalkan/diretur dan stoknya dikembalikan."
                            if summary["cancelled"] else "."))
-            except (ChannelImportError, UnicodeDecodeError, _csv.Error) as error:
-                form.add_error("file", f"File tidak dapat dibaca: {error}")
 
     return render(request, "merchant/import.html", _merchant_context(request, store,
         import_platforms=IMPORT_PLATFORMS,
+        import_states=[("completed", "Selesai", "Jadi penjualan penuh (invoice, stok, pembayaran)."),
+                       ("shipped", "Sedang dikirim", "Invoice dibuat, status pesanan: dikirim."),
+                       ("active", "Diproses / dikemas", "Invoice dibuat, pesanan menunggu dikirim."),
+                       ("cancelled", "Dibatalkan / diretur", "Hanya dicatat dengan statusnya, bukan penjualan.")],
+        default_states=set(request.POST.getlist("states")) if request.method == "POST" else {"completed", "cancelled"},
         platform=platform, selected=selected,
         form=form, summary=summary,
     ))

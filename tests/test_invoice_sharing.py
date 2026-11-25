@@ -124,19 +124,19 @@ class ClosedStoreTests(SharingTests):
 
 
 class MitraInvoiceTests(SharingTests):
-    """AB Shop is a mitra (a ConsignmentPartner): its own price list, its own contact, one invoice form."""
+    """Mitra Jaya is a mitra (a ConsignmentPartner): its own price list, its own contact, one invoice form."""
 
     def setUp(self):
         super().setUp()
         from apps.settlements.models import ConsignmentPartner, PartnerProductPrice
-        self.mitra = ConsignmentPartner.objects.create(store=self.store, name="AB Shop",
+        self.mitra = ConsignmentPartner.objects.create(store=self.store, name="Mitra Jaya",
             contact_phone="0811999", payment_term_days=14)
         self.other = ConsignmentPartner.objects.create(store=self.store, name="Mitra Lain")
         PartnerProductPrice.objects.create(partner=self.mitra, product=self.kabel, price=Decimal(70_000))
         PartnerProductPrice.objects.create(partner=self.other, product=self.kabel, price=Decimal(90_000))
 
     def post_invoice(self, partner=None, **extra):
-        data = {"buyer_name": "AB Shop", "issued_on": self.today.isoformat(), "payment_status": "credit",
+        data = {"buyer_name": "Mitra Jaya", "issued_on": self.today.isoformat(), "payment_status": "credit",
             "channel": "manual", "partner_id": str((partner or self.mitra).pk),
             "product[]": [str(self.kabel.pk)], "description[]": [""], "qty[]": ["3"],
             "unit_price[]": [""], "line_discount[]": [""], "unit[]": [""], "note[]": [""], "code[]": [""],
@@ -172,7 +172,7 @@ class MitraInvoiceTests(SharingTests):
         page = self.client.get(reverse("merchant-invoice-new"))
         self.assertContains(page, "Jual ke mitra")
         self.assertContains(page, 'name="courier"')
-        self.assertNotContains(page, "AB Shop (Reseller)")  # not a channel any more
+        self.assertNotContains(page, "Mitra / Reseller")  # not a channel any more
         catalog = {c["sku"]: c for c in page.context["catalog"]}
         self.assertEqual(catalog["KBL"]["mitra"], {str(self.mitra.pk): "70000", str(self.other.pk): "90000"})
         self.assertEqual(catalog["LMP"]["mitra"], {})
@@ -198,7 +198,7 @@ class MitraInvoiceTests(SharingTests):
         self.post_invoice()
         invoice = Invoice.objects.latest("created_at")
         self.client.post(reverse("merchant-invoice-edit", args=[invoice.pk]), {
-            "buyer_name": "AB Shop", "issued_on": self.today.isoformat(), "payment_status": "credit",
+            "buyer_name": "Mitra Jaya", "issued_on": self.today.isoformat(), "payment_status": "credit",
             "partner_id": str(self.mitra.pk), "product[]": [str(self.kabel.pk)], "description[]": [""],
             "qty[]": ["4"], "unit_price[]": ["70000"], "line_discount[]": [""], "unit[]": [""],
             "note[]": [""], "code[]": [""]})

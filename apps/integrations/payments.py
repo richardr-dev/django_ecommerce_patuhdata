@@ -101,6 +101,15 @@ class XenditPaymentProvider:
 TEST_INVOICE_PREFIX = "LKTEST"
 
 
+def _doku_time(text):
+    """DOKU writes times as yyyyMMddHHmmss in Jakarta time; None when absent or unreadable."""
+    from zoneinfo import ZoneInfo
+    try:
+        return datetime.strptime(str(text or ""), "%Y%m%d%H%M%S").replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+    except ValueError:
+        return None
+
+
 def doku_environment():
     return "Sandbox" if "sandbox" in settings.DOKU_API_URL else "Produksi"
 
@@ -161,6 +170,32 @@ class DokuPaymentProvider:
         if not payment.get("url"):
             raise ProviderError("DOKU returned an incomplete payment session.")
         return payment["url"]
+
+    # Direct API (no DOKU page): the payment code is shown on our own page. Each bank must be activated on the
+    # DOKU account; the paths follow DOKU's non-SNAP "payment-code" API.
+    VA_PATHS = {"bca": "/bca-virtual-account/v2/payment-code", "mandiri": "/mandiri-virtual-account/v2/payment-code",
+        "bri": "/bri-virtual-account/v2/payment-code", "bni": "/bni-virtual-account/v2/payment-code",
+        "permata": "/permata-virtual-account/v2/payment-code", "cimb": "/cimb-virtual-account/v2/payment-code",
+        "doku": "/doku-virtual-account/v2/payment-code"}
+
+    def create_virtual_account(self, bank, *, invoice_number, amount, customer, request_id, minutes, info=""):
+        """Ask DOKU for a fixed-amount, single-use virtual account number. Returns
+        ``{"number", "expires_at" (aware datetime or None), "instructions_url"}``."""
+        target = self.VA_PATHS.get(bank)
+        if not target:
+            raise ProviderError(f"Bank {bank} belum didukung.")
+        payload = {"order": {"invoice_number": invoice_number, "amount": amount},
+            "virtual_account_info": {"billing_type": "FIX_BILL", "expired_time": minutes, "reusable_status": False,
+                "info1": info[:20]}, "customer": customer}
+        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        data = request_json(f"{settings.DOKU_API_URL}{target}", method="POST",
+            headers=self._headers(request_id, target, body), encoded_payload=body, attempts=1)
+        info_out = data.get("virtual_account_info") or {}
+        number = str(info_out.get("virtual_account_number") or "").strip()
+        if not number:
+            raise ProviderError("DOKU tidak mengembalikan nomor virtual account.")
+        return {"number": number, "expires_at": _doku_time(info_out.get("expired_date")),
+            "instructions_url": str(info_out.get("how_to_pay_page") or "")}
 
     def check_credentials(self):
         """Open a Rp10.000 test payment page to prove the keys work. Nothing is charged unless

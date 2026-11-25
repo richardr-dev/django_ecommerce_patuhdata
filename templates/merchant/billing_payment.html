@@ -1,0 +1,100 @@
+{% extends "merchant/base.html" %}{% load books %}{% block title %}Pembayaran langganan{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'merchant-billing' %}" style="color:inherit">Langganan</a> › Pembayaran</span><h1>Pembayaran langganan</h1><p>{% if invoice.status == "paid" %}Pembayaran diterima, paket Anda sudah aktif.{% elif code %}Transfer tepat sesuai jumlah ke nomor virtual account di bawah. Paket aktif otomatis begitu pembayaran masuk.{% else %}Pilih bank untuk membayar lewat virtual account.{% endif %}</p></div></div>
+
+<div class="bp-review">
+  <div class="bp-stack">
+  {% if invoice.status == "paid" %}
+    <section class="bp-card" style="text-align:center;gap:12px">
+      <h3>Terima kasih, pembayaran diterima</h3>
+      <p class="bp-muted" style="margin:0">Paket {{ invoice.plan.name }} aktif{% if invoice.period_end %} sampai {{ invoice.period_end|date:"d F Y" }}{% endif %}.</p>
+      <a class="btn-primary" href="{% url 'merchant-billing' %}" style="justify-content:center">Kembali ke Langganan</a>
+    </section>
+  {% elif invoice.status != "pending" %}
+    <section class="bp-card"><h3>Tagihan ini {{ invoice.get_status_display|lower }}</h3><p class="bp-muted">Buat tagihan baru dari halaman Langganan.</p><a class="btn" href="{% url 'merchant-billing' %}">Kembali ke Langganan</a></section>
+  {% elif code %}
+    <section class="bp-card" id="pay-code" data-status-url="{% url 'merchant-billing-payment-status' invoice.id %}" data-expires="{{ code.expires_at|date:'c' }}" style="gap:16px">
+      <div class="bp-plan-head"><div><span class="bp-kicker">Virtual account {{ bank_name }}</span>
+        <h3 style="font-size:28px;margin-top:6px;letter-spacing:.04em;font-variant-numeric:tabular-nums;user-select:all;word-break:break-all" data-number>{{ code.pay_code }}</h3></div>
+        <button type="button" class="btn" data-copy="{{ code.pay_code }}">Salin nomor</button></div>
+      <div class="bp-line"><span>Jumlah yang ditransfer</span><b style="font-size:18px">{{ invoice.amount|rp }}</b></div>
+      <div class="bp-line"><span>Bayar sebelum</span><b>{{ code.expires_at|date:"d F Y, H:i" }} WIB · <span data-countdown></span></b></div>
+      <div class="notice" data-waiting>Menunggu pembayaran… halaman ini diperbarui sendiri begitu uang masuk.</div>
+      <div>
+        <h3 style="font-size:15px;margin-bottom:8px">Cara bayar</h3>
+        <ol class="bp-steps">{% for step in steps %}<li><span>{{ step }}</span></li>{% endfor %}</ol>
+        {% if code.instructions_url %}<p style="margin:8px 0 0"><a href="{{ code.instructions_url }}" target="_blank" rel="noopener">Panduan lengkap dari bank</a></p>{% endif %}
+      </div>
+      <form method="post" class="toolbar" style="gap:8px;flex-wrap:wrap">{% csrf_token %}
+        <label class="field" style="min-width:180px"><span>Ganti bank</span><select name="bank">{% for c, label in banks %}<option value="{{ c }}"{% if code.method == "va_"|add:c %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <button class="btn">Buat nomor baru</button>
+      </form>
+      {% if demo %}<form method="post" action="{% url 'billing-demo-pay' invoice.id %}">{% csrf_token %}<button class="btn-primary" style="width:100%;justify-content:center">Simulasikan pembayaran berhasil (demo)</button></form>{% endif %}
+    </section>
+  {% else %}
+    <section class="bp-card" style="gap:14px"><h3>Pilih bank</h3>
+      {% if banks %}<form method="post" style="display:grid;gap:10px">{% csrf_token %}
+        <div class="pay-banks">{% for c, label in banks %}<label class="pay-bank"><input type="radio" name="bank" value="{{ c }}"{% if forloop.first %} checked{% endif %}><span><b>{{ label }}</b><small>Virtual account</small></span></label>{% endfor %}</div>
+        <button class="btn-primary" style="justify-content:center;height:48px">Tampilkan nomor virtual account</button>
+      </form>{% else %}<p class="bp-muted" style="margin:0">Virtual account belum diaktifkan. Gunakan metode lain di bawah.</p>{% endif %}
+    </section>
+  {% endif %}
+  {% if invoice.status == "pending" %}
+    <section class="bp-card" style="gap:10px"><h3>Metode lain</h3>
+      <p class="bp-muted" style="margin:0">QRIS, e-wallet (OVO, DANA, ShopeePay) atau kartu kredit dibayar di halaman aman DOKU.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="method" value="lainnya"><button class="btn" data-no-soft>Bayar dengan QRIS, e-wallet atau kartu</button></form>
+    </section>
+  {% endif %}
+  </div>
+
+  <aside class="bp-card bp-summary" aria-label="Ringkasan tagihan">
+    <h3>Ringkasan</h3>
+    <div class="bp-line"><span>Paket</span><b>{{ invoice.plan.name }}</b></div>
+    <div class="bp-line"><span>Periode</span><b>{{ invoice.get_months_display }}</b></div>
+    {% if invoice.extra_outlets %}<div class="bp-line"><span>Outlet tambahan</span><b>{{ invoice.extra_outlets }}</b></div>{% endif %}
+    {% if invoice.discount %}<div class="bp-line save"><span>Potongan</span><b>-{{ invoice.discount|rp }}</b></div>{% endif %}
+    <div class="bp-total"><span>Total bayar</span><b>{{ invoice.amount|rp }}</b></div>
+    <div class="bp-line"><span>Status</span><b>{{ invoice.get_status_display }}</b></div>
+    <p class="bp-muted" style="margin:0;font-size:12px">Pembayaran diproses oleh DOKU, bank Indonesia berizin BI. {{ platform_name }} tidak menyimpan data kartu atau rekening Anda.</p>
+  </aside>
+</div>
+
+<style>
+.pay-banks{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pay-bank{position:relative;display:block;cursor:pointer}
+.pay-bank input{position:absolute;opacity:0}
+.pay-bank span{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border-radius:16px;border:1px solid var(--ds-line,#d6e6f0);background:#fff}
+.pay-bank small{color:var(--ds-muted,#5b7186);font-size:12px}
+.pay-bank input:checked+span{border-color:var(--ds-primary,#0b6fb8);box-shadow:0 0 0 3px rgba(11,111,184,.15);background:var(--ds-frost,#eaf7fe)}
+.pay-bank input:focus-visible+span{outline:2px solid var(--ds-primary,#0b6fb8)}
+</style>
+<script>
+(function(){
+  var box=document.getElementById("pay-code"); if(!box) return;
+  var copy=box.querySelector("[data-copy]"), number=box.querySelector("[data-number]");
+  function copied(){if(window.pdToast)pdToast("Nomor virtual account disalin","success");
+    if(copy){copy.textContent="Tersalin ✓";setTimeout(function(){copy.textContent="Salin nomor";},2000);}}
+  function fallback(text){   // older browsers and plain-http pages have no clipboard API
+    var area=document.createElement("textarea");area.value=text;area.setAttribute("readonly","");
+    area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();
+    try{document.execCommand("copy");copied();}catch(e){if(window.pdToast)pdToast("Tekan lama nomornya untuk menyalin","info");}
+    document.body.removeChild(area);}
+  function copyNumber(){var text=copy.getAttribute("data-copy");
+    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(copied,function(){fallback(text);});}
+    else{fallback(text);}}
+  if(copy) copy.addEventListener("click",copyNumber);
+  if(number){number.style.cursor="pointer";number.title="Ketuk untuk menyalin";number.addEventListener("click",copyNumber);}
+  var end=new Date(box.getAttribute("data-expires")), cd=box.querySelector("[data-countdown]");
+  function tick(){var s=Math.max(0,Math.floor((end-new Date())/1000));
+    cd.textContent=s?("sisa "+Math.floor(s/60)+" menit "+(s%60)+" detik"):"kedaluwarsa";}
+  tick();
+  var timer=setInterval(function(){
+    if(!document.body.contains(box)){clearInterval(timer);clearInterval(poll);return;} tick();},1000);
+  var poll=setInterval(function(){
+    if(!document.body.contains(box)){clearInterval(poll);return;}
+    fetch(box.getAttribute("data-status-url"),{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(d){
+      if(d.status&&d.status!=="pending"){clearInterval(poll);window.location.reload();}
+    }).catch(function(){});
+  },5000);
+})();
+</script>
+{% endblock %}

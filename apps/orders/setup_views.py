@@ -1,5 +1,4 @@
 import csv
-import io
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -206,11 +205,13 @@ def merchant_quick_defaults(request):
 @login_required(login_url="/login/")
 def merchant_product_import_template(request):
     _setup_store(request)
-    response = HttpResponse(content_type="text/csv")
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="template-produk.csv"'
+    response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(["name", "sku", "price", "stock", "category", "description", "weight_grams", "image_url", "cost_price"])
-    writer.writerow(["Contoh Produk", "SKU-001", "99000", "10", "Kategori", "Deskripsi produk", "500", "https://example.com/image.jpg", "60000"])
+    writer.writerow(["Kemeja Putih M", "KMJ-001", "99000", "10", "Pakaian", "Kemeja katun", "500", "https://example.com/image.jpg", "60000"])
+    writer.writerow(["Celana Hitam L", "CLN-002", "149000", "25", "Pakaian", "", "600", "", "90000"])
     return response
 
 
@@ -225,16 +226,15 @@ def merchant_product_import(request):
             messages.error(request, "Ukuran CSV maksimal 10 MB.")
         else:
             try:
-                text = upload.read().decode("utf-8-sig")
-                reader = csv.DictReader(io.StringIO(text))
-                required = {"name", "sku", "price", "stock"}
-                if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
-                    raise ValueError("Kolom wajib: name, sku, price, stock.")
-                rows = list(reader)
-                if not rows:
-                    raise ValueError("CSV tidak berisi produk.")
-                if len(rows) > MAX_IMPORT_ROWS:
-                    raise ValueError(f"Maksimal {MAX_IMPORT_ROWS:,} produk per impor.".replace(",", "."))
+                from apps.shops.tabular import read_rows
+                headers, rows = read_rows(upload, max_rows=MAX_IMPORT_ROWS)
+                if not {"name", "sku", "price"}.issubset(headers):
+                    raise ValueError("Kolom wajib: name, sku, price. Gunakan template yang bisa diunduh di halaman ini.")
+                for row in rows:   # spreadsheets write 99000.0 and may leave stock empty
+                    row["stock"] = row.get("stock") or "0"
+                    for key in ("stock", "price", "cost_price", "weight_grams"):
+                        if row.get(key, "").endswith(".0"):
+                            row[key] = row[key][:-2]
                 parsed = parse_import_rows(rows)
                 with transaction.atomic():
                     created, updated = import_products(store, parsed, actor=request.user)

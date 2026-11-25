@@ -262,9 +262,9 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
 - **A return needs a photo before it is approved** (buyer uploads it with the request; a seller can add
   it on the return page). An exchange can only ask for a size that is in stock now. Photos are
   verified with Pillow (PNG/JPG/WebP, max 5 MB). Seller-recorded returns start as `requested`.
-- **AB Shop is a mitra** (a `ConsignmentPartner`), not a sales channel. Its prices live in
+- **A reseller is a mitra** (a `ConsignmentPartner`, added by the person in Mitra; no partner is built in), not a sales channel. Its prices live in
   `PartnerProductPrice` ("Harga mitra" on a product) and are read through
-  `settlements/pricing.py:partner_price` (own list, then the general `ab_shop_price`, then retail);
+  `settlements/pricing.py:partner_price` (own list, then the general `ab_shop_price` field, shown as "Harga mitra", then retail);
   `OrderItem.effective_ab_shop_price`, settlements and the invoice form all use it. On the one invoice
   form, "Jual ke mitra" prices the lines from that list, fills the mitra's contact, and records an
   order with `consignment_partner`, type `reseller_sell_in`, billed on this invoice (so a settlement
@@ -346,6 +346,13 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   store directory `/stores/`, and the Ajak teman pages and `/r/` links (the referral models and bill
   discounts in `billing/referrals.py` remain only so existing bills still compute). Buyer accounts on a
   storefront (`/account/register/`) are part of the online shop and stay.
+- **Starter is the marketplace package** (`Plan.full_books`, off for Starter `code="free"`, migration `billing/0013`;
+  `apps/billing/modules.py`; tests `tests/test_plan_modules.py`, decided 2026-11-25): Starter keeps Penjualan (without
+  Penawaran, Pesanan penjualan, Surat jalan, Kasir, Daftar harga, Rekap produksi), Stok & Produk (without Satuan, Lot, Stok
+  opname, Permintaan stok, Stok minus), Marketplace, Pelanggan, Pengaturan and the three channel reports. Everything else
+  is hidden from the sidebar and Buat baru and answers 402 with `platform/plan_locked.html` (`PlanModulesMiddleware`,
+  judged by the sidebar link that claims the path, so detail pages follow their list). The ledger still posts underneath.
+  A new sidebar group is locked for Starter unless added to `STARTER_GROUPS`.
 - **The system's name is one setting**: `PLATFORM_NAME` (default `Patuhdata`). Templates print `{{ platform_name }}`;
   never type the name into a template. The sign-in page (`registration/merchant_login.html`, `static/css/login.css`)
   is a standalone centered card: name, two labelled fields, show-password, one blue Masuk button, forgot-password.

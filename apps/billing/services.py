@@ -6,14 +6,12 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.db import transaction
-from django.urls import reverse
 from django.utils import timezone
 
 from apps.integrations.http import ProviderError
 from apps.integrations.payments import DokuPaymentProvider
 from apps.orders.models import PaymentEvent
 from apps.shops.models import AuditLog
-from apps.shops.tenancy import platform_url
 
 from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
 from .plans import PERIOD_DAYS, plan_amount
@@ -52,22 +50,11 @@ def start_checkout(store, plan, months, user):
         amount=amount, provider=provider, extra_outlets=extra)
     apply_rewards(invoice)  # before the payment page, which carries the amount
     amount = invoice.amount
-    if provider == "demo":
-        invoice.payment_reference = f"demo-{invoice.id.hex}"
-        invoice.checkout_url = reverse("billing-demo-pay", args=[invoice.id])
-    else:
-        invoice.payment_reference = f"{SUBSCRIPTION_PREFIX}{invoice.id.hex[:26]}"
-        customer = {"name": store.name[:100]}
-        if user.email:
-            customer["email"] = user.email
-        try:
-            invoice.checkout_url = DokuPaymentProvider().create_checkout(
-                invoice_number=invoice.payment_reference, amount=int(amount), customer=customer,
-                request_id=invoice.id.hex, callback_url=platform_url(reverse("merchant-billing")))
-        except ProviderError as error:
-            invoice.status = "failed"
-            invoice.save(update_fields=["payment_reference", "status"])
-            raise BillingError("Halaman pembayaran belum dapat dibuat. Coba lagi beberapa saat.") from error
+    # The company pays on our own payment page (apps/billing/payment_page.py), which asks DOKU for the code.
+    from .payment_page import page_url
+    invoice.payment_reference = (f"demo-{invoice.id.hex}" if provider == "demo"
+        else f"{SUBSCRIPTION_PREFIX}{invoice.id.hex[:26]}")
+    invoice.checkout_url = page_url(invoice)
     invoice.save(update_fields=["payment_reference", "checkout_url"])
     AuditLog.objects.create(store=store, actor=user, action="billing.checkout_started",
         object_type="SubscriptionInvoice", object_id=str(invoice.id),
@@ -160,11 +147,20 @@ def check_pending_invoice(invoice):
     if status.state == "paid":
         if not mark_invoice_paid(invoice.id, amount=status.amount, currency=status.currency):
             return "paid"
-    elif status.state == "unpaid" and invoice.kind == "checkout" and invoice.created_at < timezone.now() - timedelta(
-            minutes=settings.DOKU_PAYMENT_DUE_MINUTES + 5):
+    elif status.state == "unpaid" and invoice.kind == "checkout" and _last_payable(invoice) < timezone.now() - timedelta(
+            minutes=5):
         SubscriptionInvoice.objects.filter(id=invoice.id, status="pending").update(status="cancelled")
         return "cancelled"
     return invoice.status
+
+
+def _last_payable(invoice):
+    """When the newest payment code or page of this bill stops being payable."""
+    due = timedelta(minutes=settings.DOKU_PAYMENT_DUE_MINUTES)
+    moments = [invoice.created_at + due]
+    for checkout in invoice.checkouts.all():
+        moments.append(checkout.expires_at or checkout.created_at + due)
+    return max(moments)
 
 
 def _refresh_open_renewal(subscription):

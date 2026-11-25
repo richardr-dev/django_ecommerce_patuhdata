@@ -83,7 +83,7 @@ def add_sell_through_orders(settlement: Settlement, order_ids: list) -> int:
             if existing.is_locked:
                 continue
 
-        # Compute AB Shop total for this order
+        # Compute the mitra total for this order
         ab_total = sum(
             (item.effective_ab_shop_price or item.unit_price) * item.quantity
             for item in order.items.all()

@@ -2,7 +2,7 @@
 {% block title %}Penerimaan Pembayaran{% endblock %}
 {% block content %}
 <div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Penerimaan pembayaran</h1><p>Setiap uang masuk dari pelanggan yang dialokasikan ke satu atau beberapa invoice.</p></div>
-  {% if can_edit %}<div class="dp-actions"><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "plus" %} Terima pembayaran</a></div>{% endif %}</div>
+  {% if can_edit %}<div class="dp-actions"><a class="btn" href="{% url 'merchant-receipt-import' %}">{% icon "upload" %} Impor Excel</a><a class="btn-primary" href="{% url 'merchant-receive-payment' %}">{% icon "plus" %} Terima pembayaran</a></div>{% endif %}</div>
 <div class="tiles"><div class="tile accent"><small>Total diterima</small><strong>{{ total|rp }}</strong></div></div>
 <section class="panel">{% if page.object_list %}<div class="scroll-x"><table class="tbl">
   <thead><tr><th>Nomor</th><th>Tanggal</th><th>Pelanggan</th><th>Rekening</th><th class="num">Diterima</th><th class="num">Jadi kredit</th></tr></thead>

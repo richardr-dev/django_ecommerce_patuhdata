@@ -6,7 +6,7 @@
   <div class="tile accent"><small>Total tagihan</small><strong>{{ settlement.total_due|rp }}</strong><span>sudah dibayar {{ settlement.amount_paid|rp }}</span></div>
   <div class="tile {% if settlement.balance_due > 0 %}warn{% endif %}"><small>Sisa</small><strong>{{ settlement.balance_due|rp }}</strong><span>{% if settlement.balance_due > 0 %}belum dibayar mitra{% else %}lunas{% endif %}</span></div></div>
 <div class="dp-grid"><div class="space-y-5">
-  <section class="panel"><header><h2>Rincian pesanan ({{ lines|length }})</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Deskripsi</th><th>Channel</th><th class="num">Total AB Shop</th><th class="num">Ongkir</th><th>Pesanan</th></tr></thead><tbody>
+  <section class="panel"><header><h2>Rincian pesanan ({{ lines|length }})</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Tanggal</th><th>Deskripsi</th><th>Channel</th><th class="num">Total harga mitra</th><th class="num">Ongkir</th><th>Pesanan</th></tr></thead><tbody>
     {% for line in lines %}<tr><td>{{ line.sale_date|date:"d M Y" }}</td><td>{{ line.description }}</td><td>{{ line.ab_shop_source|default:"—" }}</td><td class="num">{{ line.line_total|rp }}</td><td class="num">{{ line.shipping_contribution|rp }}</td>
       <td>{% if line.order %}<a href="{% url 'merchant-orders' %}?q={{ line.order.invoice_number }}">{{ line.order.invoice_number|default:line.order.id|stringformat:"s"|slice:":8" }}</a>{% else %}—{% endif %}</td></tr>
     {% empty %}<tr><td colspan="6" class="!py-8 text-center text-slate-400">Belum ada pesanan dalam settlement ini.</td></tr>{% endfor %}</tbody></table></div>

@@ -35,7 +35,7 @@ class PartnerProductPrice(models.Model):
 
 
 class ConsignmentPartner(models.Model):
-    """An external partner (e.g. AB Shop) who sells the store's products on consignment.
+    """An external partner (a reseller) who sells the store's products on consignment.
     Partners sell through their own channels (Shopee, Tokopedia, TV) and are invoiced
     periodically based on their actual sell-through."""
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="consignment_partners")
@@ -190,9 +190,9 @@ class SettlementLine(models.Model):
     description = models.CharField(max_length=300)
     # Date the downstream sale occurred (from the sell-through order)
     sale_date = models.DateField()
-    # Channel AB Shop sold through for this line
+    # Channel the mitra sold through for this line
     ab_shop_source = models.CharField(max_length=20, blank=True)
-    # Totals for this order at AB Shop prices
+    # Totals for this order at the mitra prices
     line_total = models.DecimalField(max_digits=14, decimal_places=2)
     # Shipping charged to partner for this order
     shipping_contribution = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))

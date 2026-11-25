@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pg-head"><div><span class="pg-kicker">Mitra konsinyasi</span><h1>Mitra konsinyasi</h1><p>Kelola mitra konsinyasi dan rekanan penjualan.</p></div><div class="dp-actions"><a class="btn" href="{% url 'settlement-list' %}">Semua settlement</a></div></div>
 <form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="action" value="add_partner"><header><h2>Tambah mitra baru</h2></header>
-  <div class="dp-card-body"><div class="field-row"><label class="field"><span>Nama mitra</span><input name="name" placeholder="AB Shop Jakarta" required></label><label class="field"><span>Nama kontak</span><input name="contact_name" placeholder="Budi Santoso"></label></div>
+  <div class="dp-card-body"><div class="field-row"><label class="field"><span>Nama mitra</span><input name="name" placeholder="CV Mitra Jaya" required></label><label class="field"><span>Nama kontak</span><input name="contact_name" placeholder="Budi Santoso"></label></div>
     <div class="field-row"><label class="field"><span>No. HP kontak</span><input name="contact_phone" placeholder="08xxx"></label><label class="field"><span>Jatuh tempo (hari)</span><input type="number" name="payment_term_days" value="30" min="1"></label></div></div>
   <footer><button class="btn-primary">{% icon "plus" %} Tambah mitra</button></footer></form>
 <section class="panel"><header><h2>Daftar mitra</h2></header><div class="scroll-x"><table class="tbl"><thead><tr><th>Nama</th><th>Kontak</th><th>Jatuh tempo</th><th class="num">Total settlement</th><th class="num">Sisa tagihan</th></tr></thead><tbody>

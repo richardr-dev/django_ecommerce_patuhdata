@@ -15,6 +15,7 @@ from apps.shops.models import AuditLog, Customer
 from apps.shops.permissions import can, roles
 
 from . import invoice_batch as batch
+from . import sheet_import
 from .invoice_form_views import _warehouse, _warehouses
 from .services import InvoiceError, vat_for
 
@@ -45,6 +46,29 @@ def _plan(store, post, mode):
 
 
 @login_required(login_url="/login/")
+def merchant_invoice_batch_template(request):
+    """The Excel/CSV to fill in: the columns of a sales sheet kept by hand, one invoice per row."""
+    import csv
+
+    from django.http import HttpResponse
+    store = _staff_store(request)
+    _require_roles(request, store, roles("sales.edit"))
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="template-invoice-penjualan.csv"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(["Date", "Ref", "SKU", "Qty", "Customer Name", "Phone Number", "Address", "District",
+                     "Province", "Sales Channel", "Status", "Sales"])
+    writer.writerow(["03/08/2026", "", "M2601-41-Black", 1, "Budi", "081234567890", "Jl. Pakan Dalam 29",
+                     "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee", "Sales", 1198000])
+    writer.writerow(["04/08/2026", "INV-A", "W2601-38-White", 2, "Marulak Purba", "082115108880",
+                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1996000])
+    writer.writerow(["04/08/2026", "INV-A", "M2601-41-Black", 1, "Marulak Purba", "082115108880",
+                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1198000])
+    return response
+
+
+@login_required(login_url="/login/")
 def merchant_invoice_batch(request):
     store = _staff_store(request)
     _require_roles(request, store, roles("sales.edit"))
@@ -52,6 +76,20 @@ def merchant_invoice_batch(request):
     mode = (post or request.GET).get("cara", "tempel")
     mode = mode if mode in dict(MODES) else "tempel"
     plans, error = None, ""
+    if post is not None and post.get("action") == "upload":
+        # A file becomes the pasted rows and is checked like any paste: nothing is written yet.
+        post = post.copy()
+        upload = request.FILES.get("file")
+        try:
+            if not upload:
+                raise ValueError("Pilih file Excel atau CSV terlebih dahulu.")
+            post["rows"], notes = sheet_import.invoice_rows(store, upload)
+            post["action"], mode = "preview", "tempel"
+            for note in notes:
+                messages.info(request, note)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            post = None
     may_override = can(request.user, store, "sales.credit")
     if post is not None:
         try:

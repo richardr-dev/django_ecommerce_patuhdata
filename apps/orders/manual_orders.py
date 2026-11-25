@@ -38,10 +38,10 @@ class ManualOrderForm(forms.Form):
         widget=forms.TextInput(attrs={"inputmode": "tel", "placeholder": "081234567890"}))
     email = forms.EmailField(label="Email (opsional)", required=False)
     channel = forms.ChoiceField(label="Channel penjualan", required=False,
-        choices=[("manual", "Manual / Chat"), ("abshop", "AB Shop (Reseller)")])
-    ab_shop_source = forms.ChoiceField(label="Sub-channel AB Shop", required=False,
-        choices=[("", "— pilih sub-channel —"), ("shopee", "Shopee AB Shop"),
-            ("tokopedia", "Tokopedia AB Shop"), ("tv", "TV Shopping")])
+        choices=[("manual", "Manual / Chat"), ("abshop", "Mitra / Reseller")])
+    ab_shop_source = forms.ChoiceField(label="Sub-channel mitra", required=False,
+        choices=[("", "— pilih sub-channel —"), ("shopee", "Shopee mitra"),
+            ("tokopedia", "Tokopedia mitra"), ("tv", "TV Shopping")])
     order_type = forms.ChoiceField(label="Tipe pesanan", required=False,
         choices=[("direct", "Penjualan Langsung"), ("reseller_sell_in", "Jual ke Reseller")])
     fulfilment = forms.ChoiceField(label="Pengiriman", choices=[("ship", "Dikirim ke alamat")])

@@ -16,13 +16,21 @@ class OrdersImportForm(forms.Form):
         help_text="XLSX dari Shopee Seller Center, atau CSV template Patuhdata. Maks 10 MB.",
     )
 
-    def clean_file(self):
-        upload = self.cleaned_data["file"]
+    @staticmethod
+    def check_upload(upload):
+        """The reason an uploaded file is refused, else an empty string."""
         if upload.size > 10 * 1024 * 1024:
-            raise forms.ValidationError("File terlalu besar (maksimal 10 MB).")
+            return "File terlalu besar (maksimal 10 MB)."
         name = upload.name.lower()
         if not (name.endswith(".csv") or name.endswith(".xlsx")):
-            raise forms.ValidationError("Format tidak didukung. Gunakan .xlsx atau .csv.")
+            return "Format tidak didukung. Gunakan .xlsx atau .csv."
+        return ""
+
+    def clean_file(self):
+        upload = self.cleaned_data["file"]
+        problem = self.check_upload(upload)
+        if problem:
+            raise forms.ValidationError(problem)
         return upload
 
 

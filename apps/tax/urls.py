@@ -3,6 +3,7 @@ from django.urls import path
 from . import (
     price_list_views,
     public_views,
+    receipt_import_views,
     receivable_views,
     sales_order_views,
     sales_views,
@@ -40,6 +41,9 @@ urlpatterns = [
     path("books/sales/receive/", sales_views.merchant_receive_payment,
         name="merchant-receive-payment"),
     path("books/sales/receipts/", sales_views.merchant_receipts, name="merchant-receipts"),
+    path("books/sales/receipts/impor/", receipt_import_views.merchant_receipt_import, name="merchant-receipt-import"),
+    path("books/sales/receipts/impor/template/", receipt_import_views.merchant_receipt_import_template,
+        name="merchant-receipt-import-template"),
     path("books/sales/receipts/<uuid:receipt_id>/", sales_views.merchant_receipt_detail,
         name="merchant-receipt-detail"),
     path("books/sales/credit/", sales_views.merchant_customer_credit,

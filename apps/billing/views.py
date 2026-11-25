@@ -282,3 +282,45 @@ def merchant_billing_cancel_invoice(request, invoice_id):
     except BillingError as error:
         messages.error(request, str(error))
     return redirect("merchant-billing")
+
+
+@login_required(login_url="/login/")
+def merchant_billing_payment(request, invoice_id):
+    """Our own payment page: the bill, a choice of bank, then the virtual account number to pay."""
+    from . import payment_page as pay
+
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    invoice = get_object_or_404(SubscriptionInvoice.objects.select_related("plan"), id=invoice_id, store=store)
+    if request.method == "POST":
+        try:
+            if request.POST.get("method") == "lainnya":
+                return redirect(pay.open_doku_checkout(invoice, request.user))
+            pay.open_virtual_account(invoice, request.POST.get("bank", ""), request.user)
+        except pay.PaymentPageError as error:
+            messages.error(request, str(error))
+        return redirect("merchant-billing-payment", invoice.id)
+    if invoice.status == "pending" and invoice.provider == "doku":
+        check_pending_invoice(invoice)
+        invoice.refresh_from_db()
+    code = pay.open_code(invoice) if invoice.status == "pending" else None
+    return render(request, "merchant/billing_payment.html", _merchant_context(request, store,
+        title="Pembayaran langganan", invoice=invoice, code=code, banks=pay.banks(),
+        bank_name=pay.BANKS.get(code.method.removeprefix("va_"), "") if code else "",
+        steps=pay.steps_for(code.method) if code else [],
+        demo=settings.PAYMENT_PROVIDER == "demo" and settings.ALLOW_DEMO_PAYMENTS))
+
+
+@login_required(login_url="/login/")
+def merchant_billing_payment_status(request, invoice_id):
+    """What the payment page polls. DOKU is asked at most every 15 seconds per bill."""
+    from django.core.cache import cache
+    from django.http import JsonResponse
+
+    store = _staff_store(request)
+    _require_roles(request, store, BILLING_ROLES)
+    invoice = get_object_or_404(SubscriptionInvoice, id=invoice_id, store=store)
+    status = invoice.status
+    if status == "pending" and invoice.provider == "doku" and cache.add(f"billing-poll:{invoice.id}", 1, 15):
+        status = check_pending_invoice(invoice)
+    return JsonResponse({"status": status})

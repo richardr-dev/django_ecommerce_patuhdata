@@ -1,0 +1,9 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Impor pelanggan{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Pelanggan</span><h1>Impor pelanggan</h1><p>Pindahkan data pelanggan dari Accurate atau Excel dengan satu file. Pelanggan yang sudah ada diperbarui, tidak dobel.</p></div><div class="dp-actions"><a class="btn" href="{% url 'merchant-customers' %}">← Kembali ke pelanggan</a></div></div>
+<section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><div><h2>Unduh template</h2><p>Salin data pelanggan ke kolom template ini (baris contoh boleh dihapus), atau unggah langsung file “Template Impor Pelanggan” dari Accurate: kolom ID Pelanggan, Nama, Handphone, Email, Alamat Penagihan, NPWP, dan Limit Piutang dibaca otomatis.</p></div></div><a class="btn" href="{% url 'merchant-customer-import-template' %}" data-no-soft>{% icon "download" %} Template CSV</a></header></section>
+<form method="post" enctype="multipart/form-data" class="panel" data-unsaved>{% csrf_token %}<header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><h2>Unggah file</h2></div></header>
+  <div class="dp-card-body"><label class="field"><span>File CSV atau Excel (.xlsx)</span><input type="file" name="file" accept=".csv,.xlsx" required><small>Maksimal 10 MB atau 10.000 baris. Bila ada satu baris yang salah, tidak ada yang disimpan dan Anda diberi tahu barisnya.</small></label></div>
+  <footer><button class="btn-primary">{% icon "upload" %} Impor pelanggan</button></footer></form>
+<section class="panel"><header><h2>Kolom template</h2><p>Setiap pelanggan juga mendapat ID unik dari sistem secara otomatis.</p></header><div class="scroll-x"><table class="tbl"><tbody>
+{% for name, help in columns %}<tr><td><b>{{ name }}</b></td><td>{{ help }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

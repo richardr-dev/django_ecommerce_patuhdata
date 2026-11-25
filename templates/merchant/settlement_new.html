@@ -1,5 +1,5 @@
 {% extends "merchant/base.html" %}{% load icons books %}{% block title %}Buat settlement{% endblock %}{% block content %}
-<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'settlement-list' %}">Settlement mitra</a></span><h1>Buat settlement baru</h1><p>Pesanan AB Shop dalam periode yang dipilih otomatis ditambahkan ke settlement.</p></div></div>
+<div class="pg-head"><div><span class="pg-kicker"><a href="{% url 'settlement-list' %}">Settlement mitra</a></span><h1>Buat settlement baru</h1><p>Pesanan mitra dalam periode yang dipilih otomatis ditambahkan ke settlement.</p></div></div>
 <form method="post" data-unsaved class="dp-grid">{% csrf_token %}
   <div class="space-y-5"><section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><h2>Detail settlement</h2></div></header><div class="dp-card-body">
     <label class="field"><span>Mitra konsinyasi</span><select name="partner_id" required><option value="">Pilih mitra…</option>{% for p in partners %}<option value="{{ p.pk }}">{{ p.name }}</option>{% endfor %}</select></label>

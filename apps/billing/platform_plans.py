@@ -11,7 +11,7 @@ from apps.shops import platform_log
 from .models import Plan
 
 FIELDS = ("name", "tagline", "price_monthly", "list_price_monthly", "price_yearly", "list_price_yearly", "max_products", "max_channels", "included_outlets",
-    "extra_outlet_price", "allow_custom_domain", "allow_payout_reconciliation", "contact_sales", "is_public",
+    "extra_outlet_price", "allow_custom_domain", "allow_payout_reconciliation", "full_books", "contact_sales", "is_public",
     "is_default", "sort_order", "features")
 
 
@@ -86,6 +86,7 @@ def save_plan(plan, data, actor=None):
     plan.features = (data.get("features") or "").strip()
     plan.allow_custom_domain = bool(data.get("allow_custom_domain"))
     plan.allow_payout_reconciliation = bool(data.get("allow_payout_reconciliation"))
+    plan.full_books = bool(data.get("full_books"))
     plan.contact_sales = bool(data.get("contact_sales"))
     plan.is_public = bool(data.get("is_public"))
     plan.is_default = bool(data.get("is_default"))

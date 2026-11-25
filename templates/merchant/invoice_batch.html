@@ -10,6 +10,12 @@
 
 <div class="tabs" aria-label="Cara membuat">{% for key, label in modes %}<a href="?cara={{ key }}" class="{% if mode == key %}on{% endif %}">{{ label }}</a>{% endfor %}</div>
 
+{% if mode == "tempel" %}<form method="post" enctype="multipart/form-data" class="panel" style="margin-bottom:16px">{% csrf_token %}<input type="hidden" name="cara" value="tempel">
+  <header><div><h2><span class="bb-bubble step">A</span> Unggah file Excel atau CSV</h2><p>Paling mudah: isi template (kolom Date, SKU, Qty, Customer Name, Phone Number, Address, District, Province, Sales Channel, Status, Sales), atau unggah file impor faktur penjualan Accurate. Baris diperiksa dulu di bawah; belum ada yang disimpan.</p></div>
+    <a class="btn" href="{% url 'merchant-invoice-batch-template' %}" data-no-soft>{% icon "download" %} Template</a></header>
+  <div class="dp-card-body"><label class="field"><span>File .xlsx atau .csv</span><input type="file" name="file" accept=".csv,.xlsx" required><small><b>Sales</b> adalah total harga baris itu (harga satuan = Sales ÷ Qty). Baris dengan <b>Ref</b> yang sama menjadi satu invoice; tanpa Ref, satu baris satu invoice. Baris dengan Status selain Sales dilewati.</small></label></div>
+  <footer><button class="btn-primary" name="action" value="upload">{% icon "upload" %} Unggah dan periksa</button></footer></form>
+{% endif %}
 <form method="post" data-unsaved class="ib-grid">{% csrf_token %}<input type="hidden" name="cara" value="{{ mode }}"><input type="hidden" name="idem" value="{{ idem_key }}">
   <div class="ib-main">
   {% if mode == "tempel" %}

@@ -21,7 +21,7 @@
 {# ── Langkah 2: unggah file ── #}
 <div class="dp-grid">
   <form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}
-    <header><div><h2><span class="pick-mark" style="display:inline-grid;width:28px;height:28px;font-size:13px;vertical-align:middle;margin-right:8px;background:{{ selected.color }}" aria-hidden="true">{{ selected.mark }}</span>File pesanan {{ selected.label }}</h2><p>Format {{ selected.accept }}, maksimal 10 MB.</p></div></header>
+    <header><div><h2><span class="pick-mark" style="display:inline-grid;width:28px;height:28px;font-size:13px;vertical-align:middle;margin-right:8px;background:{{ selected.color }}" aria-hidden="true">{{ selected.mark }}</span>File pesanan {{ selected.label }}</h2><p>Format {{ selected.accept }}, maksimal 10 MB per file. Boleh memilih beberapa file sekaligus (maks 20).</p></div></header>
     <div class="dp-card-body">
       <input type="hidden" name="platform" value="{{ platform }}">
       {% if form.file.errors %}<div class="notice">{% icon "alert" %}<span>{{ form.file.errors.0 }}</span></div>{% endif %}
@@ -29,7 +29,7 @@
         {% icon "upload" %}
         <strong id="drop-title">Klik untuk memilih file</strong>
         <span id="drop-help">atau seret file ke kotak ini</span>
-        <input type="file" name="file" id="id_file" accept="{{ selected.accept }}" required>
+        <input type="file" name="file" id="id_file" accept="{{ selected.accept }}" multiple required>
       </label></div>
 
       <label class="field" style="margin-top:18px"><span>Kategori penjualan</span>
@@ -42,8 +42,9 @@
           <option value="consignment">Konsinyasi</option>
         </select><small style="color:var(--ds-muted)">Untuk pengelompokan dan laporan di Invoice penjualan.</small></label>
 
-      {% if platform != "manual" %}<div class="ds-check-wrap" style="margin-top:18px"><label class="ds-check"><input type="checkbox" name="include_cancelled" value="1" checked> Ikut impor pesanan <b>dibatalkan / diretur</b></label>
-        <small>Dicentang: pesanan batal dicatat dengan statusnya (tidak menjadi penjualan) agar riwayat lengkap. Dikosongkan: pesanan batal yang belum pernah diimpor dilewati. Pesanan yang sudah ada tetap diperbarui bila kemudian dibatalkan, supaya penjualannya ditarik kembali.</small></div>{% endif %}
+      {% if platform != "manual" %}<fieldset class="field" style="margin-top:18px;border:0;padding:0"><legend style="font-weight:600;margin-bottom:6px">Status pesanan yang diimpor</legend>
+        {% for code, label, help in import_states %}<div class="ds-check-wrap" style="margin-bottom:8px"><label class="ds-check"><input type="checkbox" name="states" value="{{ code }}"{% if code in default_states %} checked{% endif %}> {{ label }}</label> <small>{{ help }}</small></div>{% endfor %}
+        <small style="color:var(--ds-muted)">Pesanan dengan status lain dilewati dan masuk saat file berikutnya diimpor. Pesanan yang sudah pernah diimpor selalu diperbarui statusnya; bila kemudian dibatalkan atau diretur, penjualannya ditarik kembali.</small></fieldset>{% endif %}
       <div class="ds-check-wrap" style="margin-top:14px"><label class="ds-check"><input type="checkbox" name="soft" value="1"> Impor data historis (tanpa potong stok)</label>
         <small>Centang bila produk belum ada di katalog. Pesanan tetap masuk, stok tidak dikurangi. Cocok untuk data lama.</small></div>
     </div>
@@ -56,7 +57,7 @@
         {% for step in selected.instructions %}<li>{{ step }}</li>{% endfor %}</ol>
         {% if selected.file_type == "csv" %}<p style="margin:14px 0 0"><a class="btn" href="{% url 'merchant-channel-template' %}" data-no-soft>{% icon "download" %} Unduh template CSV {{ platform_name }}</a></p>{% endif %}
       </div></section>
-    {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Hanya pesanan selesai dan batal yang diimpor.</b> Pesanan <b>selesai / berhasil</b> menjadi penjualan, lengkap dengan nomor resi dan nama ekspedisinya. Pesanan <b>batal</b> dicatat dengan statusnya, bukan penjualan. Pesanan yang masih dikemas atau dalam pengiriman dilewati dan masuk saat Anda mengimpor file berikutnya. Pesanan yang sudah pernah diimpor selalu diperbarui: status, resi, dan ekspedisinya, termasuk bila kemudian diretur.</span></div>{% endif %}
+    {% if platform != "manual" %}<div class="notice info">{% icon "check-circle" %}<span><b>Anda yang memilih status pesanan yang diimpor.</b> Selesai menjadi penjualan penuh; sedang dikirim atau diproses tetap dibuatkan invoice dengan statusnya; dibatalkan atau diretur hanya dicatat, bukan penjualan. Pesanan berstatus lain dilewati dan masuk saat Anda mengimpor file berikutnya. Pesanan yang sudah pernah diimpor selalu diperbarui: status, resi, dan ekspedisinya, termasuk bila kemudian diretur.</span></div>{% endif %}
     <section class="panel"><header><h2>Agar stok terpotong otomatis</h2></header>
       <div class="dp-card-body"><ol style="margin:0;padding-left:22px;list-style:decimal;display:grid;gap:8px;color:var(--ds-ink)">
         {% if platform == "shopee" %}<li>Di <b>Shopee Seller Center → Produk</b>, isi kolom <b>Nomor Referensi SKU</b> tiap produk.</li>
@@ -73,7 +74,7 @@
   function show() {
     var file = input.files && input.files[0];
     drop.classList.toggle("has-file", !!file);
-    document.getElementById("drop-title").textContent = file ? file.name : "Klik untuk memilih file";
+    document.getElementById("drop-title").textContent = file ? (input.files.length > 1 ? input.files.length + " file dipilih" : file.name) : "Klik untuk memilih file";
     document.getElementById("drop-help").textContent = file ? "Klik untuk mengganti file" : "atau seret file ke kotak ini";
   }
   input.addEventListener("change", show);

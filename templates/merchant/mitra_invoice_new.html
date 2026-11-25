@@ -14,7 +14,7 @@
       </div>
       <label class="field"><span>Nama pembeli / periode</span><input name="buyer_name" maxlength="120" value="{{ post.buyer_name|default:partner.name }}" placeholder="mis. {{ partner.name }} · Desember 2026"><small class="dp-help">Isi nama pembeli akhir, atau periode laporan bila mitra melaporkan rekap.</small></label>
     </div></section>
-    <section class="panel"><header><div><h2>2. Produk yang terjual</h2><p>Ketik SKU atau nama. Harga terisi dari harga mitra (lalu harga AB Shop, lalu harga eceran).</p></div><button type="button" class="btn" id="add-line">{% icon "plus" %} Tambah baris</button></header>
+    <section class="panel"><header><div><h2>2. Produk yang terjual</h2><p>Ketik SKU atau nama. Harga terisi dari harga mitra (lalu harga mitra umum, lalu harga eceran).</p></div><button type="button" class="btn" id="add-line">{% icon "plus" %} Tambah baris</button></header>
       <div class="scroll-x"><table class="tbl editor"><thead><tr><th>Produk (SKU atau nama)</th><th class="num" style="width:90px">Jumlah</th><th class="num" style="width:160px">Harga satuan</th><th class="num" style="width:140px">Subtotal</th><th style="width:40px"></th></tr></thead>
         <tbody id="line-body">{% for line in post_lines %}<tr>
           <td><input name="sku[]" list="mitra-products" value="{{ line.sku }}" aria-label="Produk" required></td>

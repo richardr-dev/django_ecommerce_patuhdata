@@ -23,6 +23,8 @@ urlpatterns = [
         name="merchant-channel-stock"),
     path("books/sales/invoices/new/", invoice_form_views.merchant_invoice_form,
         name="merchant-invoice-new"),
+    path("books/sales/invoices/banyak/template/", batch_views.merchant_invoice_batch_template,
+        name="merchant-invoice-batch-template"),
     path("books/sales/invoices/banyak/", batch_views.merchant_invoice_batch, name="merchant-invoice-batch"),
     path("books/sales/invoices/<uuid:invoice_id>/", views.merchant_invoice_detail,
         name="merchant-invoice-detail"),

@@ -14,12 +14,10 @@ from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.integrations.http import ProviderError
-from apps.integrations.payments import DokuPaymentProvider
 from apps.shops.models import AuditLog
 from apps.shops.tenancy import platform_url
 
-from .models import Subscription, SubscriptionCheckout, SubscriptionInvoice
+from .models import Subscription, SubscriptionInvoice
 from .plans import plan_amount
 
 logger = logging.getLogger(__name__)
@@ -123,40 +121,12 @@ def run_renewals(now=None):
 
 
 def open_payment_page(invoice, user):
-    """A fresh payment page for a pending invoice. Returns its URL."""
-    from .services import SUBSCRIPTION_PREFIX, SUBSCRIPTION_PROVIDERS
+    """Where the company pays a pending bill: our own payment page (bank virtual account, or DOKU's page for
+    other methods from there). Returns its URL."""
+    from .payment_page import PaymentPageError, _ready, page_url
 
-    if invoice.status != "pending":
-        raise RenewalError("Tagihan ini sudah tidak menunggu pembayaran.")
-    provider = settings.PAYMENT_PROVIDER
-    if provider not in SUBSCRIPTION_PROVIDERS or (provider == "demo" and
-            not settings.ALLOW_DEMO_PAYMENTS):
-        raise RenewalError("Pembayaran langganan belum dikonfigurasi. Hubungi pengelola platform.")
-    if invoice.payment_reference:
-        # Keep the page opened at checkout matchable before a new one replaces it.
-        SubscriptionCheckout.objects.get_or_create(reference=invoice.payment_reference,
-            defaults={"invoice": invoice, "checkout_url": invoice.checkout_url})
-    attempt = invoice.checkouts.count() + 1
-    if provider == "demo":
-        reference, url = f"demo-{invoice.id.hex}-{attempt}", reverse("billing-demo-pay",
-            args=[invoice.id])
-    else:
-        reference = f"{SUBSCRIPTION_PREFIX}{invoice.id.hex[:24]}R{attempt}"
-        customer = {"name": invoice.store.name[:100]}
-        if user.email:
-            customer["email"] = user.email
-        try:
-            url = DokuPaymentProvider().create_checkout(invoice_number=reference,
-                amount=int(invoice.amount), customer=customer,
-                request_id=f"{invoice.id.hex}-{attempt}",
-                callback_url=platform_url(reverse("merchant-billing")))
-        except ProviderError as error:
-            raise RenewalError("Halaman pembayaran belum dapat dibuat. Coba lagi beberapa saat."
-                ) from error
-    SubscriptionCheckout.objects.create(invoice=invoice, reference=reference, checkout_url=url)
-    # The newest page is the one a status check asks DOKU about.
-    SubscriptionInvoice.objects.filter(id=invoice.id).update(provider=provider,
-        payment_reference=reference, checkout_url=url)
-    AuditLog.objects.create(store=invoice.store, actor=user, action="billing.payment_page_opened",
-        object_type="SubscriptionInvoice", object_id=str(invoice.id), details={"attempt": attempt})
-    return url
+    try:
+        _ready(invoice)
+    except PaymentPageError as error:
+        raise RenewalError(str(error)) from None
+    return page_url(invoice)

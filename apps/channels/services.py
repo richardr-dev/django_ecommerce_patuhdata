@@ -456,7 +456,8 @@ IMPORT_FINISHED = {STATE_COMPLETED} | REVERSING
 
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
-                  category: str = "regular", finished_only: bool = False, include_cancelled: bool = True):
+                  category: str = "regular", finished_only: bool = False, include_cancelled: bool = True,
+                  states=None):
     """Import each order, create an ImportBatch record, return summary.
 
     ``finished_only``: a marketplace file lists orders at every stage. An order the marketplace calls
@@ -466,8 +467,20 @@ def import_orders(channel, orders, soft: bool = False,
 
     ``include_cancelled=False``: a cancelled or returned order that was never imported is skipped (counted in
     ``cancelled_skipped``) instead of being recorded. One already imported is still updated, whatever the
-    option says, because a cancellation after the sale must take the sale back."""
+    option says, because a cancellation after the sale must take the sale back.
+
+    ``states``: the person's own choice of which marketplace statuses to import (a set of ``STATE_*``
+    values, e.g. completed, shipped, active, cancelled, returned). It replaces ``finished_only`` and
+    ``include_cancelled``. An order of any other status that was never imported is left for a later file;
+    one already imported is still brought up to date."""
     from decimal import Decimal
+    if states is not None:
+        states = set(states)
+        finished_only = True
+        include_cancelled = bool(states & REVERSING)
+        wanted = states | REVERSING if include_cancelled else states
+    else:
+        wanted = IMPORT_FINISHED
     batch = ImportBatch.objects.create(
         store=channel.store, channel=channel, imported_by=imported_by,
         file_name=file_name[:255], is_soft=soft,
@@ -489,7 +502,7 @@ def import_orders(channel, orders, soft: bool = False,
         if not include_cancelled and data.state in REVERSING and data.external_id not in known:
             summary["cancelled_skipped"] += 1
             continue
-        if finished_only and data.state not in IMPORT_FINISHED and data.external_id not in known:
+        if finished_only and data.state not in wanted and data.external_id not in known:
             summary["not_finished"] += 1
             continue
         try:
@@ -498,7 +511,7 @@ def import_orders(channel, orders, soft: bool = False,
             # A finished order is a sale that already happened: refusing it only hides it. Record it
             # without taking stock (as in historical mode) and flag it, so someone corrects the stock
             # or maps the SKU (Pemetaan SKU).
-            if not (finished_only and data.state == STATE_COMPLETED):
+            if not (finished_only and data.state in wanted and data.state not in REVERSING):
                 summary["errors"].append(f"{data.external_id}: {error}")
                 continue
             try:

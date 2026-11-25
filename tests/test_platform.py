@@ -155,9 +155,10 @@ class BillingTests(TestCase):
 
     def test_demo_upgrade_activates_and_renewal_extends(self):
         response, invoice = self._checkout()
-        self.assertRedirects(response, f"/books/billing/{invoice.id}/demo-pay/")
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/bayar/")   # our own payment page
         self.assertEqual(invoice.amount, Decimal(399000))
-        self.client.post(response["Location"])
+        demo_pay = f"/books/billing/{invoice.id}/demo-pay/"
+        self.client.post(demo_pay)
         subscription = Subscription.objects.get(store=self.store)
         self.assertEqual(subscription.plan, self.pro)
         first_end = subscription.current_period_end
@@ -165,15 +166,15 @@ class BillingTests(TestCase):
 
         response, renewal = self._checkout(months=12)
         self.assertEqual(renewal.amount, Decimal(3990000))
-        self.client.post(response["Location"])
-        self.client.post(response["Location"])  # paying twice must not extend twice
+        self.client.post(f"/books/billing/{renewal.id}/demo-pay/")
+        self.client.post(f"/books/billing/{renewal.id}/demo-pay/")  # paying twice must not extend twice
         subscription.refresh_from_db()
         self.assertEqual(subscription.current_period_end, first_end + timedelta(days=365))
 
     def test_demo_payment_page_is_closed_once_a_real_gateway_is_configured(self):
-        response, _invoice = self._checkout()
+        _response, invoice = self._checkout()
         with override_settings(PAYMENT_PROVIDER="doku"):
-            self.assertEqual(self.client.post(response["Location"]).status_code, 404)
+            self.assertEqual(self.client.post(f"/books/billing/{invoice.id}/demo-pay/").status_code, 404)
         self.assertEqual(Subscription.objects.get(store=self.store).plan.code, "free")
 
     def test_only_owner_admin_or_finance_manage_billing(self):
@@ -197,15 +198,38 @@ class DokuSubscriptionTests(TestCase):
         self.store = _store("doku", plan=Plan.objects.get(code="free"))
         self.client.force_login(self.store.owner)
 
+    VA = {"virtual_account_info": {"virtual_account_number": "1900800000123456", "expired_date": "20990101120000",
+        "how_to_pay_page": "https://sandbox.doku.test/how-to-pay"}}
+
+    def _start(self):
+        """Checkout lands on our own page; choosing BCA asks DOKU's direct API for a virtual account number."""
+        response = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        self.assertRedirects(response, f"/books/billing/{invoice.id}/bayar/", fetch_redirect_response=False)
+        with patch("apps.integrations.payments.request_json", return_value=self.VA) as request_json:
+            self.client.post(f"/books/billing/{invoice.id}/bayar/", {"bank": "bca"})
+        self.assertTrue(request_json.call_args.args[0].endswith("/bca-virtual-account/v2/payment-code"))
+        payload = json.loads(request_json.call_args.kwargs["encoded_payload"])
+        self.assertEqual((payload["order"]["amount"], payload["virtual_account_info"]["billing_type"]),
+            (399000, "FIX_BILL"))
+        with patch("apps.integrations.payments.request_json",       # only a status check; the number is stored
+                return_value={"transaction": {"status": "PENDING"}}) as status_call:
+            page = self.client.get(f"/books/billing/{invoice.id}/bayar/")
+        self.assertIn("/orders/v1/status/", status_call.call_args.args[0])
+        self.assertContains(page, "1900800000123456")
+        self.assertContains(page, "Rp399.000")
+        invoice.refresh_from_db()
+        return invoice
+
     @patch("apps.integrations.payments.request_json",
         return_value={"response": {"payment": {"url": "https://checkout.doku.test/pay"}}})
-    def _start(self, request_json):
-        response = self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
+    def test_other_methods_open_dokus_page(self, request_json):
+        self.client.post("/books/billing/checkout/", {"plan": "pro", "months": 1})
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        response = self.client.post(f"/books/billing/{invoice.id}/bayar/", {"method": "lainnya"})
         self.assertRedirects(response, "https://checkout.doku.test/pay", fetch_redirect_response=False)
         payload = json.loads(request_json.call_args.kwargs["encoded_payload"])
-        self.assertEqual(payload["order"]["amount"], 399000)
         self.assertEqual(payload["callbacks"]["url"], "https://niaga.test/books/billing/")
-        return SubscriptionInvoice.objects.get(store=self.store)
 
     def _notify(self, invoice, amount, request_id="sub-notification-1"):
         body = json.dumps({"order": {"invoice_number": invoice.payment_reference, "amount": amount,

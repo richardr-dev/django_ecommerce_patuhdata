@@ -64,9 +64,8 @@ class TierLimitTests(TestCase):
         upload = {"provider": "xendit", "file": SimpleUploadedFile("p.csv",
             b"payout_reference,payout_date,order_reference,amount\nPO,2026-11-02,NK,1\n")}
 
-        page = self._client(store).post("/books/payouts/", upload)
-        self.assertContains(page, "tersedia mulai paket Pro")
-        self.assertIsNone(page.context["summary"])
+        page = self._client(store).post("/books/payouts/", upload)   # Starter has no Kas & bank at all
+        self.assertContains(page, "belum termasuk paket", status_code=402)
 
         pro_store = _store("lengkap", plan=Plan.objects.get(code="pro"))
         upload["file"].seek(0)

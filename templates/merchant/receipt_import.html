@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons books %}
+{% block title %}Impor penerimaan{% endblock %}
+{% block content %}
+<nav class="dp-crumb"><a href="{% url 'merchant-receipts' %}">Penerimaan pembayaran</a> › <span>Impor penerimaan</span></nav>
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Impor penerimaan pembayaran</h1><p>Catat banyak pembayaran pelanggan dari Excel. Tiap penerimaan dibukukan seperti “Terima pembayaran”; semua dibuat, atau tidak sama sekali.</p></div>
+  <div class="dp-actions"><a class="btn" href="{% url 'merchant-receive-payment' %}">{% icon "file" %} Satu penerimaan</a></div></div>
+
+<form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}
+  <header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><div><h2>Unggah file Excel atau CSV</h2><p>Isi template: satu baris per invoice yang dibayar. Pelanggan boleh diisi nomor atau namanya. Kosongkan Pelanggan pada baris berikutnya untuk menambah invoice ke penerimaan yang sama. File impor penerimaan Accurate juga bisa dipakai.</p></div></div>
+    <a class="btn" href="{% url 'merchant-receipt-import-template' %}" data-no-soft>{% icon "download" %} Template</a></header>
+  <div class="dp-card-body"><label class="field"><span>File .xlsx atau .csv</span><input type="file" name="file" accept=".csv,.xlsx" required><small>Metode: Tunai, Transfer Bank, QRIS, Cek/Giro. Rekening kosong memakai rekening pilihan di langkah 2. Invoice harus sudah ada; impor invoice dulu. No. invoice boleh nomor dari sistem ini atau nomor lama yang tersimpan sebagai Referensi.</small></label>
+    <label class="field"><span>Rekening penerima bila kolom Rekening kosong</span><select name="bank">{% for b in banks %}<option value="{{ b.pk }}"{% if post.bank == b.pk|stringformat:"s" %} selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label></div>
+  <footer><button class="btn-primary" name="action" value="upload">{% icon "upload" %} Unggah dan periksa</button></footer></form>
+
+{% if plans %}
+<form method="post" class="panel" data-unsaved>{% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}"><input type="hidden" name="bank" value="{{ post.bank }}">
+  <header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><div><h2>Periksa</h2><p>{{ summary.count }} penerimaan, {{ summary.ready }} siap{% if summary.bad %}, <b>{{ summary.bad }} perlu diperbaiki</b>{% endif %}. Total {{ summary.total|rp }}.</p></div></div></header>
+  <div class="scroll-x"><table class="tbl"><thead><tr><th>Pelanggan</th><th>Tanggal</th><th>Invoice dibayar</th><th class="num">Jumlah</th><th>Status</th></tr></thead><tbody>
+  {% for p in plans %}<tr><td>{{ p.customer.name|default:"—" }}</td><td>{{ p.on|date:"d M Y" }}</td>
+    <td>{% for inv, amount in p.allocations %}<div>{{ inv.number }} · {{ amount|rp }}</div>{% endfor %}</td><td class="num">{{ p.total|rp }}</td>
+    <td>{% if p.ok %}<span class="pill pill-paid">Siap</span>{% else %}<span class="pill pill-overdue">Perbaiki</span>{% for e in p.errors %}<div style="color:var(--ds-bad);font-size:12px">{{ e }}</div>{% endfor %}{% endif %}{% for w in p.warnings %}<div style="color:var(--ds-warn);font-size:12px">{{ w }}</div>{% endfor %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <details class="dp-card-body"><summary>Baris yang dibaca (bisa diubah)</summary>
+    <label class="field"><span>{{ columns|join:" · " }}</span><textarea name="rows" rows="8" spellcheck="false" class="ib-paste">{{ post.rows }}</textarea></label></details>
+  <footer><button class="btn" name="action" value="preview">{% icon "search" %} Periksa lagi</button>
+    {% if not summary.bad %}<button class="btn-primary" name="action" value="create" data-confirm="Buat {{ summary.count }} penerimaan dengan total {{ summary.total|rp }}?" data-confirm-ok="Impor" data-confirm-tone="neutral">{% icon "check" %} Impor {{ summary.count }} penerimaan</button>{% endif %}</footer>
+</form>
+{% endif %}
+{% endblock %}

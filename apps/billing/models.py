@@ -30,6 +30,9 @@ class Plan(models.Model):
         help_text="Toko marketplace yang dapat dihubungkan. Kosongkan untuk tanpa batas.")
     allow_payout_reconciliation = models.BooleanField(default=False,
         help_text="Catat dan cocokkan pencairan dana gateway & marketplace.")
+    full_books = models.BooleanField(default=True, verbose_name="Akuntansi lengkap",
+        help_text="Pembelian, kas & bank, buku besar, laporan keuangan, pajak, mitra dan kasir. Tanpa ini "
+            "paket hanya untuk marketplace: pesanan, invoice, produk, stok dan pelanggan.")
     contact_sales = models.BooleanField(default=False,
         help_text="Paket khusus: penjual menghubungi tim sales, tidak bisa dibeli sendiri. "
             "Pengelola platform menetapkannya ke toko lewat admin.")
@@ -140,6 +143,11 @@ class SubscriptionCheckout(models.Model):
         related_name="checkouts")
     reference = models.CharField(max_length=80, unique=True)
     checkout_url = models.URLField(max_length=500, blank=True)
+    # "checkout" = DOKU's own page; "va_<bank>" = a virtual account shown on our payment page.
+    method = models.CharField(max_length=20, default="checkout")
+    pay_code = models.CharField(max_length=40, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    instructions_url = models.URLField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

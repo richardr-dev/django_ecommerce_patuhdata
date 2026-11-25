@@ -1,6 +1,6 @@
 """What a mitra pays: its own price list first, then the general mitra price, then retail.
 
-A mitra (for example AB Shop) is a ConsignmentPartner. Its prices live in PartnerProductPrice (the
+A mitra (a reseller) is a ConsignmentPartner. Its prices live in PartnerProductPrice (the
 "Harga mitra" editor on a product). Billing a mitra, in a settlement or on an invoice, must read
 them from here, so a price is changed in one place."""
 from .models import PartnerProductPrice

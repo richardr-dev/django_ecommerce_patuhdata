@@ -10,13 +10,13 @@ class MitraSaleEntryTests(Base):
     def setUp(self):
         super().setUp()
         self.client.force_login(self.owner)
-        self.partner = ConsignmentPartner.objects.create(store=self.store, name="AB Shop")
+        self.partner = ConsignmentPartner.objects.create(store=self.store, name="Mitra Jaya")
         self.product = self.store.products.get(sku="KBL")
         PartnerProductPrice.objects.create(partner=self.partner, product=self.product, price=80_000)
         self.url = reverse("mitra-invoice-new", args=[self.partner.pk])
 
     def post(self, **extra):
-        data = {"idem": "key-1", "invoice_date": self.today.isoformat(), "buyer_name": "AB Shop Nov",
+        data = {"idem": "key-1", "invoice_date": self.today.isoformat(), "buyer_name": "Mitra Jaya Nov",
             "sku[]": ["KBL"], "qty[]": ["3"], "unit_price[]": ["80000"], "discount": "0"}
         data.update(extra)
         return self.client.post(self.url, data)

@@ -32,7 +32,15 @@ ZERO = Decimal(0)
 MAX_INVOICES = 300
 HEADER_WORDS = {"no", "no.", "ref", "referensi", "no ref", "no. ref", "nomor", "kelompok"}
 COLUMNS = ["No. ref", "Pelanggan", "Tanggal", "Jatuh tempo", "Barang (SKU) atau jasa", "Jumlah", "Harga",
-    "Diskon"]
+    "Diskon", "Telepon", "Alamat", "Saluran"]
+# Order.channel for the words a sales sheet uses ("Shopee Toko Mitra", "Tokopedia", "TikTok"...).
+CHANNEL_WORDS = (("shopee", "shopee"), ("tokopedia", "tokopedia"), ("tiktok", "tiktok_shop"), ("lazada", "lazada"),
+    ("pos", "pos"), ("kasir", "pos"), ("web", "web"), ("tv", "tv"))
+
+
+def channel_for(text):
+    text = (text or "").lower()
+    return next((code for word, code in CHANNEL_WORDS if word in text), "manual")
 
 
 class BatchError(InvoiceError):
@@ -58,6 +66,9 @@ class Planned:
     discount: Decimal = ZERO
     rounding: Decimal = ZERO
     inclusive: bool = False                        # prices typed with PPN in them
+    phone: str = ""                                # optional: for a customer that is not in the CRM yet
+    address: str = ""
+    channel: str = "manual"
 
     @property
     def ok(self):
@@ -136,16 +147,17 @@ def parse_paste(store, text, *, inclusive=False):
         cells = [c.strip() for c in (raw.split("\t") if "\t" in raw else raw.split(";"))]
         if not order and cells and cells[0].lower() in HEADER_WORDS:
             continue
-        cells += [""] * (8 - len(cells))
-        ref, name, issued, due, item, qty, price, discount = cells[:8]
+        cells += [""] * (11 - len(cells))
+        ref, name, issued, due, item, qty, price, discount, phone, address, channel = cells[:11]
         key = ref or f"baris-{number}"   # a row without a reference is an invoice of its own
         planned = plans.get(key)
         if planned is None:
-            customer = find_customer(store, name)
+            customer = find_customer(store, name) or (find_customer(store, phone) if phone else None)
             issued_on = parse_date(issued) if issued else timezone.localdate()
             planned = Planned(key=key, customer=customer, buyer_name=(customer.name if customer else name)[:120],
                 issued_on=issued_on or timezone.localdate(), due_date=parse_date(due) if due else None,
-                reference=ref[:100], new_customer=customer is None and bool(name))
+                reference=ref[:100], new_customer=customer is None and bool(name),
+                phone=phone[:30], address=address, channel=channel_for(channel))
             if not name:
                 planned.errors.append(f"baris {number}: nama pelanggan wajib")
             if issued and issued_on is None:
@@ -221,15 +233,20 @@ def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True):
     bad = [p for p in plans if not p.ok]
     if bad:
         raise BatchError(f"{_label(bad[0])}: {bad[0].errors[0]}.")
-    created = []
+    created, added = [], {}
     for planned in plans:
-        customer = planned.customer or Customer.objects.create(store=store, name=planned.buyer_name,
-            status=Customer.STATUS_ACTIVE)
+        customer = planned.customer or added.get(planned.buyer_name.lower())
+        if customer is None:
+            customer = Customer.objects.create(store=store, name=planned.buyer_name, address=planned.address,
+                phone=planned.phone if not Customer.objects.filter(store=store, phone=planned.phone).exists() else "",
+                status=Customer.STATUS_ACTIVE)
+            added[planned.buyer_name.lower()] = customer
         planned.customer = customer
         try:
             created.append(create_sales_invoice(store, lines=planned.lines, buyer_name=planned.buyer_name,
                 customer=customer, company_name=customer.company_name, buyer_npwp=customer.npwp or "",
-                phone=customer.phone or "-", address=customer.address or "-", issued_on=planned.issued_on,
+                phone=customer.phone or planned.phone or "-", address=customer.address or planned.address or "-",
+                channel=planned.channel, issued_on=planned.issued_on,
                 due_date=planned.due_date, on_credit=True, external_order_id=planned.reference,
                 discount=planned.discount, rounding=planned.rounding, warehouse=warehouse, actor=actor,
                 credit_check=credit_check, prices_include_tax=planned.inclusive))
