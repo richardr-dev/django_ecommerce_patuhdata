@@ -17,3 +17,7 @@ backups/
 
 # local database backups taken before migrations
 db.sqlite3*.bak
+
+# Working files (exports, samples, screenshots) stay local; only the design notes are kept.
+docs/*
+!docs/*.md

@@ -232,9 +232,9 @@ class TestParseShopeeXlsx:
         assert len(orders) == 1 and len(orders[0].lines) == 2
 
     def test_real_shopee_export_file(self):
-        """Smoke test against the actual Shopee export sample in docs/."""
+        """Smoke test against the actual Shopee export sample in tests/fixtures/."""
         import os
-        sample = "docs/Order.all.20251201_20251231.xlsx"
+        sample = "tests/fixtures/Order.all.20251201_20251231.xlsx"
         if not os.path.exists(sample):
             pytest.skip("Sample file not present")
         with open(sample, "rb") as f:

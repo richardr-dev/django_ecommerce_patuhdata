@@ -365,7 +365,7 @@ class FinishedOnlyImportTests(TestCase):
 
     def test_the_real_tokopedia_tiktok_export_follows_status_resi_and_courier(self):
         from apps.channels.parsers.tokopedia import parse_tokopedia_xlsx
-        with open("docs/formattokped.xlsx", "rb") as sample:
+        with open("tests/fixtures/formattokped.xlsx", "rb") as sample:
             orders, skipped = parse_tokopedia_xlsx(sample)
         summary = import_orders(self.channel, orders, soft=True, skipped=skipped, finished_only=True)
         self.assertEqual((summary["created"], summary["cancelled"], summary["not_finished"], summary["errors"]),
@@ -414,7 +414,7 @@ class FinishedOnlyImportTests(TestCase):
         """Order.all (Shopee): 3 Selesai and 2 Batal, no SKU anywhere, courier inside Opsi Pengiriman."""
         from apps.channels.parsers.shopee import parse_shopee_xlsx
         shopee = SalesChannel.objects.create(store=self.store, platform="shopee", name="Toko Shopee")
-        with open("docs/Order.all.20251201_20251231.xlsx", "rb") as sample:
+        with open("tests/fixtures/Order.all.20251201_20251231.xlsx", "rb") as sample:
             orders, skipped = parse_shopee_xlsx(sample)
         summary = import_orders(shopee, orders, skipped=skipped, finished_only=True)          # strict mode
         self.assertEqual((summary["created"], summary["cancelled"], summary["not_finished"], summary["errors"]),
