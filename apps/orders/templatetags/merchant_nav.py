@@ -218,7 +218,7 @@ CORE = {
     "Piutang & pembayaran": {"Piutang pelanggan", "Terima pembayaran"},
     "Pembelian": {"Tagihan supplier", "Beli tunai", "Supplier"},
     "Kas & bank": {"Kas & bank", "Biaya operasional", "Pencairan dana"},
-    "Stok & Produk": {"Semua produk", "Stok gudang", "Impor produk"},
+    "Stok & Produk": {"Semua produk", "Kategori", "Stok gudang", "Impor produk"},
     "Laporan Keuangan": {"Laba rugi", "Neraca", "Arus kas"},
     "Pajak": {"PPN & PPh", "Pajak marketplace"},
     "Marketplace": {"Bulan marketplace", "Toko marketplace", "Impor pesanan", "Penghasilan & biaya"},

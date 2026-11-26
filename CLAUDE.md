@@ -269,6 +269,12 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   load `branding` and use `{% brand store obj as b %}`, never `merchant_store.logo` directly. PDFs
   embed the logo (`b.data_uri`); web pages use `b.logo_url`. Logos are PNG/JPG/WebP, verified with
   Pillow, max 2 MB and 4000 px (no SVG).
+- **Accurate receipts and "biaya lain"** (2026-11-27): a settlement discount (Accurate TOTAL DISCOUNT, one per receipt, or
+  our 9th paste column "Diskon" per row) is a credit note reason `discount` "Diskon pelunasan" per invoice
+  (`receipt_import._discount_note`, PPN backed out of the amount), spread over the receipt's invoices in order up to
+  each balance; more than the balance is refused. In Accurate's invoice file an expense may share a row with an item:
+  `invoice_rows` reads it on every row; a name matching `SHIPPING_WORDS` is the invoice's ongkir (4200), any other is
+  an invoice line under that name, so the total equals Accurate's.
 - **Impor data and Bulan marketplace** (2026-11-26; `channels/import_hub.py`, `channels/marketplace_month.py`,
   `channels/hub_views.py`, pages `/books/impor/` and `/books/marketplace/bulan/`; tests `tests/test_marketplace_month.py`).
   Impor data lists every import as a card (what it does, files accepted incl. Accurate, template, last run from
@@ -409,6 +415,11 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
+- **Sub-categories** (2026-11-27, `Category.parent`, migration `catalog/0030`, `catalog/categories.py`; tests
+  `tests/test_categories.py`): up to 3 levels (`Category.MAX_DEPTH`), shown as a path "Sepatu › Sneakers" (`__str__` is
+  the path, so every picker shows it); `clean` refuses a loop or a 4th level. Impor produk reads "Sepatu > Sneakers"
+  (`ensure_paths` creates missing levels; a single name finds an existing category anywhere). Kategori is in the short
+  menu.
 - **Product dimensions and attributes** (2026-11-26, migration `catalog/0028`): `length_cm`/`width_cm`/`height_cm` (P × L × T),
   `weight_grams`, and `brand` (Merek), `barcode`, `color` (Warna), `size` (Ukuran), `material` (Bahan), plus
   `attributes` JSON for any other "Nama: Nilai" (form field `attributes_text`, `forms.parse_attributes`). The product

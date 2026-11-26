@@ -12,7 +12,6 @@ from django.utils.text import slugify
 
 from apps.billing.plans import product_limit_error
 from apps.catalog.models import (
-    Category,
     InventoryLevel,
     Product,
     ProductVariant,
@@ -322,24 +321,15 @@ def import_products(store, parsed, *, actor=None, key="sku"):
     warehouse, _ = Warehouse.objects.get_or_create(store=store, code="MAIN",
         defaults={"name": "Gudang Utama", "priority": 10})
 
-    categories = {category.slug: category for category in Category.objects.filter(store=store)}
-    missing = {}
-    for row in parsed:
-        if row["category"]:
-            slug = slugify(row["category"])[:50] or "category"
-            row["category_slug"] = slug
-            if slug not in categories:
-                missing.setdefault(slug, Category(store=store, slug=slug, name=row["category"][:100]))
-    if missing:
-        Category.objects.bulk_create(missing.values(), batch_size=BULK_BATCH_SIZE)
-        categories = {category.slug: category for category in Category.objects.filter(store=store)}
+    from apps.catalog.categories import ensure_paths
+    categories = ensure_paths(store, [row["category"] for row in parsed])
 
     taken_slugs = set(Product.objects.filter(store=store).values_list("slug", flat=True))
     to_create, to_update, product_of = [], [], {}
     for row, planned in zip(parsed, plans, strict=True):
         values = dict(row["values"])
         if row["category"]:
-            values["category"] = categories.get(row.get("category_slug"))
+            values["category"] = categories.get(row["category"])
         product = planned.product
         if product is not None:
             for name, value in values.items():

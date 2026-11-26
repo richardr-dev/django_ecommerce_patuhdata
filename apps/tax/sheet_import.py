@@ -3,6 +3,7 @@ the rows the two bulk pages already understand: ``invoice_rows`` for Buat banyak
 paste format) and ``receipt_rows`` for Impor penerimaan. Nothing is written here; the pages check the rows and
 show what is wrong before anything is saved."""
 import re
+from decimal import Decimal
 
 from apps.shops.models import Customer
 from apps.shops.tabular import read_rows
@@ -76,6 +77,10 @@ def _sales_headers(headers, rows):
             [{rename.get(key, key): value for key, value in row.items()} for row in rows])
 
 
+SHIPPING_WORDS = re.compile(r"ongkir|ongkos|kirim|pengiriman|ekspedisi|shipping|freight|delivery|transport|"
+    r"angkut", re.IGNORECASE)
+
+
 def _customer_names(store):
     return {c.customer_code.lower(): c.name for c in Customer.objects.filter(store=store, customer_code__gt="")}
 
@@ -98,7 +103,7 @@ def invoice_rows(store, upload):
     headers, rows = read_rows(upload)
     notes, out = [], []
     if "item:item no" in headers:
-        names, unknown, skipped, fees = _customer_names(store), [], 0, 0
+        names, unknown, skipped, shipping_rows, charge_rows = _customer_names(store), [], 0, 0, 0
         code = number = date = due = ""
         for index, row in enumerate(rows, 2):
             if row.get("customer no"):
@@ -109,37 +114,43 @@ def invoice_rows(store, upload):
                 if code not in unknown:
                     unknown.append(code)
                 continue
-            if not row.get("item:item no"):
-                fee = _amount(row.get("expense:expense value", ""))
-                try:
-                    value = float(fee.replace(",", ".") or 0)
-                except ValueError:
-                    value = 0
-                if value > 0:
-                    fees += 1
-                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee, "", ""])
+            if row.get("item:item no"):
+                qty, price = row.get("item:quantity", ""), row.get("item:unitprice", "")
+                discount = row.get("item:item discount (rp)", "")
+                percent = row.get("item:item discount (%)", "")
+                if not discount and percent and price:
+                    try:
+                        discount = str(round(float(qty or 1) * float(price) * float(percent.replace(",", ".")) / 100))
+                    except ValueError:
+                        discount = ""
+                out.append([number, name, date, due, row["item:item no"], qty, _amount(price), _amount(discount),
+                            "", "", "", "", "", ""])
+            # An expense ("biaya lain") may share the row with an item or stand alone. Shipping by its name is the
+            # invoice's ongkir; any other is a line on the invoice under that name, so the total matches Accurate.
+            fee = _number(row.get("expense:expense value", ""))
+            if fee and fee > 0:
+                label = (row.get("expense:expense name") or row.get("expense:expense note") or "Biaya lain").strip()
+                if SHIPPING_WORDS.search(label):
+                    shipping_rows += 1
+                    out.append([number, name, date, due, "", "", "", "", "", "", "", _paste_number(fee), "", ""])
                 else:
-                    skipped += 1
-                continue
-            qty, price = row.get("item:quantity", ""), row.get("item:unitprice", "")
-            discount = row.get("item:item discount (rp)", "")
-            percent = row.get("item:item discount (%)", "")
-            if not discount and percent and price:
-                try:
-                    discount = str(round(float(qty or 1) * float(price) * float(percent.replace(",", ".")) / 100))
-                except ValueError:
-                    discount = ""
-            out.append([number, name, date, due, row["item:item no"], qty, _amount(price), _amount(discount),
-                        "", "", "", "", "", ""])
+                    charge_rows += 1
+                    out.append([number, name, date, due, label[:120], "1", _paste_number(fee), "", "", "", "",
+                                "", "", ""])
+            elif not row.get("item:item no"):
+                skipped += 1
         if unknown:
             shown = ", ".join(unknown[:10]) + (" …" if len(unknown) > 10 else "")
             raise ValueError(f"Nomor pelanggan {shown} belum ada di Pelanggan. Impor pelanggan dulu "
                              "(Pelanggan › Impor pelanggan), lalu unggah file ini lagi.")
         if skipped:
-            notes.append(f"{skipped} baris tanpa kode barang dan tanpa biaya positif dilewati.")
-        if fees:
-            notes.append(f"{fees} baris biaya lain (expense Accurate) dicatat sebagai ongkir invoice (akun 4200, "
-                         "tanpa PPN). Periksa bila biaya itu bukan ongkos kirim.")
+            notes.append(f"{skipped} baris tanpa kode barang dan tanpa biaya dilewati.")
+        if shipping_rows:
+            notes.append(f"{shipping_rows} biaya lain bernama ongkos kirim dicatat sebagai ongkir invoice (akun 4200, "
+                         "tanpa PPN).")
+        if charge_rows:
+            notes.append(f"{charge_rows} biaya lain (mis. jasa, biaya administrasi) menjadi baris tagihan di invoice "
+                         "dengan nama dari Accurate, jadi total invoice sama dengan Accurate.")
         if any(row.get("total including vat", "").lower() in {"yes", "ya"} for row in rows):
             notes.append("File menyebut total sudah termasuk PPN: centang “Harga sudah termasuk PPN” bila benar.")
     else:
@@ -194,7 +205,8 @@ def invoice_rows(store, upload):
     return "\n".join("\t".join(_clean(cell) for cell in line) for line in out), notes
 
 
-RECEIPT_COLUMNS = ["Tanggal", "Pelanggan", "No. penerimaan", "No. invoice", "Jumlah", "Metode", "Rekening", "Catatan"]
+RECEIPT_COLUMNS = ["Tanggal", "Pelanggan", "No. penerimaan", "No. invoice", "Jumlah", "Metode", "Rekening", "Catatan",
+    "Diskon"]
 
 
 def receipt_rows(upload):
@@ -208,7 +220,7 @@ def receipt_rows(upload):
     if not accurate and not {"no. invoice", "jumlah"}.issubset(headers):
         raise ValueError("Kolom wajib: Tanggal, Pelanggan, No. invoice, Jumlah. Gunakan template yang bisa diunduh "
                          "di halaman ini.")
-    out, notes, discount, head = [], [], 0, {}
+    out, notes, discount, head = [], [], Decimal(0), {}
     for row in rows:
         if accurate:
             if row.get("customer no"):
@@ -216,25 +228,27 @@ def receipt_rows(upload):
                         "method": row.get("paying bank", ""), "bank": row.get("bank account no", ""),
                         "note": row.get("description", "")}
             invoice, value = row.get("payment number", ""), row.get("payment value", "")
-            try:
-                discount += int(float(_amount(row.get("total discount", "")).replace(",", ".") or 0))
-            except ValueError:
-                pass
-            current = head
+            # TOTAL DISCOUNT stands on the receipt's first row (with the customer number): one per receipt.
+            row_discount = _amount(row.get("total discount", "")) if row.get("customer no") else ""
+            number_value = _number(row_discount) if row_discount else None
+            if number_value:
+                discount += Decimal(str(number_value))
+            current = {**head, "discount": _paste_number(number_value) if number_value else ""}
         else:
             if row.get("pelanggan"):
                 head = {"date": row.get("tanggal", ""), "customer": row["pelanggan"],
                         "number": row.get("no. penerimaan", ""), "method": row.get("metode", ""),
                         "bank": row.get("rekening", ""), "note": row.get("catatan", "")}
             invoice, value = row.get("no. invoice", ""), row.get("jumlah", "")
-            current = head
+            current = {**head, "discount": _amount(row.get("diskon", ""))}
         if not invoice and not value:
             continue
         out.append([current.get("date", ""), current.get("customer", ""), current.get("number", ""), invoice,
-                    _amount(value), current.get("method", ""), current.get("bank", ""), current.get("note", "")])
+                    _amount(value), current.get("method", ""), current.get("bank", ""), current.get("note", ""),
+                    current.get("discount", "")])
     if discount:
-        notes.append("Kolom diskon pelunasan Accurate tidak dibukukan: hanya nilai pembayaran yang dicatat, jadi "
-                     "invoice yang dilunasi dengan diskon masih punya sisa.")
+        notes.append(f"Diskon pelunasan Rp{discount:,.0f} dibukukan sebagai nota kredit “Diskon pelunasan” pada "
+                     "invoice yang dilunasi (penjualan dan PPN-nya berkurang).".replace(",", "."))
     if not out:
         raise ValueError("Tidak ada baris pembayaran yang bisa dibaca di file ini.")
     return "\n".join("\t".join(_clean(cell) for cell in line) for line in out), notes

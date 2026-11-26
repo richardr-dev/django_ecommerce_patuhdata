@@ -29,7 +29,7 @@ def xlsx(rows, name="f.xlsx"):
 SALES_HEAD = ["Date", "SKU", "Qty", "Customer Name", "Address", "Phone Number", "District", "Province",
               "Sales Channel", "Status", "Sales", "Net Sales", "Ongkir"]
 ACC_HEAD = ["CUSTOMER NO", "NUMBER", "DATE", "DUE DATE", "ITEM:ITEM NO", "ITEM:QUANTITY", "ITEM:UNITPRICE",
-            "ITEM:ITEM DISCOUNT (RP)", "EXPENSE:EXPENSE VALUE"]
+            "ITEM:ITEM DISCOUNT (RP)", "EXPENSE:EXPENSE VALUE", "EXPENSE:EXPENSE NAME"]
 
 
 class InvoiceSheetTests(Base):
@@ -54,17 +54,19 @@ class InvoiceSheetTests(Base):
 
     def test_accurate_invoice_file_continues_rows_and_needs_known_customers(self):
         rows = [ACC_HEAD,
-            ["C.00001", "SI.1", "21/04/2026", "", "KBL", 5, 20000, "", ""],
-            ["", "", "", "", "LMP", 6, 60000, 1000, ""],
-            ["", "", "", "", "", "", "", "", 1000000]]            # an expense row: no item
+            ["C.00001", "SI.1", "21/04/2026", "", "KBL", 5, 20000, "", "", ""],
+            ["", "", "", "", "LMP", 6, 60000, 1000, 25000, "Biaya administrasi"],   # item and a charge, one row
+            ["", "", "", "", "", "", "", "", 1000000, "Ongkos kirim"]]             # an expense row: no item
         with self.assertRaisesRegex(ValueError, "C.00001 belum ada"):
             sheet_import.invoice_rows(self.store, xlsx(rows))
         Customer.objects.create(store=self.store, name="PT Cipta", customer_code="C.00001")
         text, notes = sheet_import.invoice_rows(self.store, xlsx(rows))
         plans = batch.parse_paste(self.store, text)
         self.assertEqual(len(plans), 1)
-        self.assertEqual((plans[0].reference, plans[0].buyer_name, len(plans[0].lines)), ("SI.1", "PT Cipta", 2))
-        self.assertEqual(plans[0].shipping, D(1000000))          # the expense row is the invoice's ongkir
+        self.assertEqual((plans[0].reference, plans[0].buyer_name, len(plans[0].lines)), ("SI.1", "PT Cipta", 3))
+        self.assertEqual((plans[0].lines[2]["description"], plans[0].lines[2]["unit_price"]),
+            ("Biaya administrasi", D(25000)))                      # a charge on an item row is not lost
+        self.assertEqual(plans[0].shipping, D(1000000))          # the shipping expense is the invoice's ongkir
         self.assertTrue(any("ongkir" in n for n in notes))
         made = batch.create_all(self.store, plans)[0]
         self.assertEqual(made.shipping, D(1000000))
@@ -189,14 +191,32 @@ class ReceiptSheetTests(Base):
         text, notes = sheet_import.receipt_rows(xlsx([head,
             ["C.00001", "RCP-1", "Pusat", "01/06/2026", "110101", "Bayar", 0, one.number, 100000, "Transfer Bank", "", 5000],
             ["", "", "", "", "", "", None, two.number, 50000, "", "", ""]]))
-        self.assertTrue(any("diskon" in n for n in notes))
+        self.assertTrue(any("Diskon pelunasan" in n and "nota kredit" in n for n in notes))
         plans = receipt_import.plan(self.store, text, default_bank=self.main)
         self.assertEqual((len(plans), plans[0].ok, plans[0].total), (1, True, D(150000)))
         self.assertIn("tidak dikenal", plans[0].warnings[0])        # their account code is not ours: the chosen one
+        self.assertEqual(plans[0].discounts, [(one, D(5000))])   # the receipt's discount goes to its first invoice
         made = receipt_import.create_all(self.store, plans)
         self.assertEqual(made[0].amount, D(150000))
         one.refresh_from_db()
         self.assertEqual(one.amount_paid, D(100000))
+        from apps.tax.models import CreditNote
+        note = CreditNote.objects.get(invoice=one)
+        self.assertEqual((note.reason, note.total, note.subtotal + note.tax), ("discount", D(5000), D(5000)))
+        self.assertEqual(one.amount_due, D(222000) - D(100000) - D(5000))
+
+    def test_a_discount_that_settles_the_rest_and_one_too_big_is_refused(self):
+        invoice = self.invoice(kabel=1)                          # 111.000
+        text = f"01/06/2026\tBudi\tRCP-7\t{invoice.number}\t108000\tTransfer\t\t\t3000\n"
+        plans = receipt_import.plan(self.store, text, default_bank=self.main)
+        self.assertTrue(plans[0].ok, plans[0].errors)
+        receipt_import.create_all(self.store, plans)
+        invoice.refresh_from_db()
+        self.assertEqual((invoice.amount_due, invoice.status), (0, "paid"))
+        other = self.invoice(kabel=1)
+        too_big = receipt_import.plan(self.store, f"01/06/2026\tBudi\tRCP-8\t{other.number}\t108000\t\t\t\t9000\n",
+            default_bank=self.main)
+        self.assertIn("melebihi sisa tagihan", too_big[0].errors[0])
 
     def test_an_old_invoice_number_kept_as_reference_is_found(self):
         from apps.tax import invoice_batch as batch

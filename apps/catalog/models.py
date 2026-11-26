@@ -42,9 +42,52 @@ class Category(models.Model):
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         help_text="Ikon kategori di beranda, persegi (misalnya 300 × 300 px). Kosongkan untuk "
             "memakai foto produk pertama di kategori ini.")
+    parent = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="children",
+        verbose_name="Induk kategori", help_text="Kosongkan untuk kategori utama. Paling dalam 3 tingkat.")
+
+    MAX_DEPTH = 3
+    SEPARATOR = " › "
+
     class Meta:
         constraints = [models.UniqueConstraint(fields=["store", "slug"], name="unique_category_slug")]
-    def __str__(self): return self.name
+
+    def __str__(self): return self.path
+
+    @property
+    def lineage(self):
+        """From the main category down to this one: ``[Sepatu, Sneakers]``."""
+        chain, node, seen = [], self, set()
+        while node is not None and node.pk not in seen:
+            seen.add(node.pk)
+            chain.append(node)
+            node = node.parent
+        return list(reversed(chain))
+
+    @property
+    def path(self):
+        """"Sepatu › Sneakers"."""
+        return self.SEPARATOR.join(node.name for node in self.lineage)
+
+    @property
+    def root(self):
+        return self.lineage[0]
+
+    @property
+    def product_count(self):
+        return self.product_set.count()
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.parent_id:
+            if self.parent.store_id != self.store_id:
+                raise ValidationError({"parent": "Induk kategori harus dari perusahaan yang sama."})
+            node = self.parent
+            while node is not None:
+                if self.pk and node.pk == self.pk:
+                    raise ValidationError({"parent": "Kategori tidak bisa menjadi induk dirinya sendiri."})
+                node = node.parent
+            if len(self.parent.lineage) + 1 > self.MAX_DEPTH:
+                raise ValidationError({"parent": f"Paling dalam {self.MAX_DEPTH} tingkat kategori."})
 
 class Product(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="products")

@@ -175,7 +175,8 @@ class ProductForm(StyledModelForm):
             widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Satu per baris, mis.\nGaransi: 1 tahun\nNegara asal: Indonesia"}),
             help_text="Satu atribut per baris dengan format Nama: Nilai.",
             initial="\n".join(f"{key}: {value}" for key, value in (self.instance.attributes or {}).items()))
-        self.fields["category"].queryset = Category.objects.filter(store=self.store)
+        self.fields["category"].queryset = Category.objects.filter(store=self.store).select_related("parent__parent")
+        self.fields["category"].label_from_instance = lambda c: c.path
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store, is_active=True)
         self.stock_level = None
         if self.instance.pk:
@@ -414,7 +415,40 @@ class CustomerRegistrationForm(UserCreationForm):
 
 
 class CategoryForm(StyledModelForm):
-    class Meta: model = Category; exclude = ("store",)
+    """A category and, optionally, the one above it (Sepatu › Sneakers). The slug follows the path when left empty."""
+    class Meta:
+        model = Category
+        fields = ("name", "parent", "slug", "image")
+        labels = {"name": "Nama kategori", "slug": "Slug (alamat)"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["slug"].required = False
+        self.fields["slug"].help_text = "Kosongkan: dibuat dari nama dan induknya."
+        if self.store and not self.instance.store_id:
+            self.instance.store = self.store
+        below = set()
+        if self.instance.pk:   # a category may not move under itself or one of its own children
+            frontier = [self.instance.pk]
+            while frontier:
+                below.update(frontier)
+                frontier = list(Category.objects.filter(parent_id__in=frontier).values_list("pk", flat=True))
+        choices = [c for c in Category.objects.filter(store=self.store).select_related("parent__parent")
+            if c.pk not in below and len(c.lineage) < Category.MAX_DEPTH]
+        self.fields["parent"].queryset = Category.objects.filter(pk__in=[c.pk for c in choices])
+        self.fields["parent"].label_from_instance = lambda c: c.path
+
+    def clean(self):
+        from django.utils.text import slugify
+        cleaned = super().clean()
+        if not cleaned.get("slug") and cleaned.get("name"):
+            parent = cleaned.get("parent")
+            base = slugify(f"{parent.path if parent else ''} {cleaned['name']}".replace("›", " "))[:45] or "kategori"
+            slug, n = base, 2
+            while Category.objects.filter(store=self.store, slug=slug).exclude(pk=self.instance.pk).exists():
+                slug, n = f"{base}-{n}", n + 1
+            cleaned["slug"] = slug
+        return cleaned
 
 
 class WarehouseForm(StyledModelForm):

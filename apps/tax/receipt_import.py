@@ -1,11 +1,14 @@
 """Impor penerimaan: many customer payments in one go, every one through ``receipts.receive_payment`` (so each
 is an ordinary Penerimaan pembayaran with its journal). Rows are ``tanggal; pelanggan; no. penerimaan;
-no. invoice; jumlah; metode; rekening; catatan``. Rows with the same customer, receipt number (else date, method
+no. invoice; jumlah; metode; rekening; catatan; diskon``. A discount given at settlement (Accurate's TOTAL DISCOUNT)
+is a credit note "Diskon pelunasan" per invoice (sale and PPN come down; the payment stays the money received). A
+discount on a row is that invoice's; Accurate's one total per receipt is spread over the receipt's invoices in order,
+as far as each still has a balance. Rows with the same customer, receipt number (else date, method
 and account) are one receipt that settles several invoices. ``plan`` checks everything and writes nothing;
 ``create_all`` makes all receipts or none."""
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 from django.utils import timezone
@@ -35,6 +38,8 @@ class PlannedReceipt:
     number: str = ""
     note: str = ""
     allocations: list = field(default_factory=list)     # [(invoice, amount)]
+    discounts: list = field(default_factory=list)       # [(invoice, discount incl. PPN)]
+    pool: Decimal = Decimal(0)                          # a receipt-wide discount still to spread
     errors: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
     rows: list = field(default_factory=list)
@@ -72,8 +77,8 @@ def plan(store, text, *, default_bank=None):
     for number, raw in enumerate((text or "").splitlines(), start=1):
         if not raw.strip():
             continue
-        cells = [c.strip() for c in raw.split("\t")] + [""] * 8
-        day, who, ref, inv_no, value, method, bank_text, note = cells[:8]
+        cells = [c.strip() for c in raw.split("\t")] + [""] * 9
+        day, who, ref, inv_no, value, method, bank_text, note, disc_text = cells[:9]
         if number == 1 and who.lower() in {"pelanggan", "customer no"}:
             continue
         customer = _customer(store, who)
@@ -116,13 +121,50 @@ def plan(store, text, *, default_bank=None):
             else:
                 spent[invoice.pk] = already + amount
                 planned.allocations.append((invoice, amount))
+        if disc_text:
+            discount = parse_amount(disc_text)
+            if discount is None or discount < 0:
+                planned.errors.append(f"baris {number}: diskon “{disc_text}” tidak terbaca")
+            elif discount:
+                planned.pool += discount
+    for key in order:
+        _spread_discount(plans[key], spent)
     return [plans[k] for k in order]
+
+
+def _spread_discount(planned, spent):
+    """Give the receipt's discount to its invoices in order, up to what each still owes after this payment."""
+    left = planned.pool
+    for invoice, _amount in planned.allocations:
+        if left <= 0:
+            break
+        room = invoice.amount_due - spent.get(invoice.pk, Decimal(0))
+        take = min(room, left)
+        if take > 0:
+            planned.discounts.append((invoice, take))
+            spent[invoice.pk] = spent.get(invoice.pk, Decimal(0)) + take
+            left -= take
+    if left > 0 and planned.allocations:
+        planned.errors.append(f"diskon Rp{planned.pool:,.0f} melebihi sisa tagihan setelah pembayaran".replace(",", "."))
+
+
+def _discount_note(invoice, amount, on, actor, receipt_number):
+    """A credit note "Diskon pelunasan" worth ``amount`` with PPN, so the invoice is settled and PPN comes down."""
+    from .credit_notes import create_credit_note
+    rate = invoice.tax_rate or Decimal(0)
+    base = (amount * 100 / (100 + rate)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    while base > 0 and base + (base * rate / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) > amount:
+        base -= Decimal("0.01")
+    return create_credit_note(invoice, issued_on=on, reason="discount", actor=actor,
+        notes=f"Diskon pelunasan{' ' + receipt_number if receipt_number else ''}",
+        lines=[{"item": None, "description": "Diskon pelunasan", "quantity": 1, "unit_price": base}])
 
 
 def summary(plans):
     good = [p for p in plans if p.ok]
     return {"count": len(plans), "ready": len(good), "bad": len(plans) - len(good),
-            "total": sum((p.total for p in good), Decimal(0))}
+            "total": sum((p.total for p in good), Decimal(0)),
+            "discount": sum((d for p in good for _i, d in p.discounts), Decimal(0))}
 
 
 @transaction.atomic
@@ -143,6 +185,8 @@ def create_all(store, plans, *, actor=None):
                 method=planned.method if planned.method in dict(InvoicePayment.METHOD_CHOICES) else "transfer",
                 allocations=planned.allocations, reference=planned.number, bank_account=planned.bank,
                 note=planned.note or "Impor penerimaan", keep_rest=False, actor=actor))
-        except (receipts.ReceiptError, LedgerError) as error:
+            for invoice, discount in planned.discounts:
+                _discount_note(invoice, discount, planned.on, actor, planned.number)
+        except (receipts.ReceiptError, LedgerError, ValueError) as error:
             raise receipts.ReceiptError(f"{planned.customer.name}: {error}") from error
     return made

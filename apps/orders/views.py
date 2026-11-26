@@ -2187,7 +2187,7 @@ BACKOFFICE = {
     "products": (Product, ProductForm, "Produk", ("name", "sku", "price", "variant_count",
         "stock_available", "is_active")),
     "images": (ProductImage, ProductImageForm, "Foto produk", ("product", "alt_text", "position")),
-    "categories": (Category, CategoryForm, "Kategori", ("name", "slug")),
+    "categories": (Category, CategoryForm, "Kategori", ("path", "product_count")),
     "warehouses": (Warehouse, WarehouseForm, "Gudang & outlet", ("name", "code", "is_outlet",
         "pickup_enabled", "is_active")),
     "inventory": (InventoryLevel, InventoryForm, "Persediaan", ("warehouse", "product", "on_hand", "reserved", "safety_stock", "available")),
@@ -2253,7 +2253,7 @@ def merchant_entity_list(request, section):
 
 
 # Column headers of the back-office lists, in Indonesian.
-COLUMN_LABELS = {"name": "Nama", "sku": "SKU", "price": "Harga", "stock_available": "Stok tersedia",
+COLUMN_LABELS = {"path": "Kategori", "product_count": "Produk", "name": "Nama", "sku": "SKU", "price": "Harga", "stock_available": "Stok tersedia",
     "is_active": "Status", "code": "Kode", "is_outlet": "Outlet", "priority": "Prioritas",
     "headline": "Judul", "starts_at": "Mulai", "ends_at": "Berakhir", "button_label": "Tombol",
     "position": "Urutan", "product": "Produk", "alt_text": "Keterangan", "stock": "Stok",
