@@ -122,6 +122,74 @@
       </div>
     </div>
 
+    {# Dimensions and attributes #}
+    <section class="pf-card" aria-labelledby="pf-attr-title">
+      <h2 id="pf-attr-title">Dimensi &amp; atribut</h2>
+      <p class="pf-help">Untuk ongkir, label, katalog, dan pencarian. Tidak mengubah harga, stok, atau pembukuan.</p>
+      <div class="pf-dims">
+        <div><label for="{{ form.weight_grams.id_for_label }}">Berat (gram)</label>{{ form.weight_grams }}{% if form.weight_grams.errors %}<p class="pf-err">{{ form.weight_grams.errors.0 }}</p>{% endif %}</div>
+        <div class="pf-plt"><span class="pf-label">Dimensi P × L × T (cm)</span>
+          <div class="pf-plt-row">
+            <label class="sr-only" for="{{ form.length_cm.id_for_label }}">Panjang (cm)</label>{{ form.length_cm }}<span aria-hidden="true">×</span>
+            <label class="sr-only" for="{{ form.width_cm.id_for_label }}">Lebar (cm)</label>{{ form.width_cm }}<span aria-hidden="true">×</span>
+            <label class="sr-only" for="{{ form.height_cm.id_for_label }}">Tinggi (cm)</label>{{ form.height_cm }}
+          </div>
+          {% for f in form %}{% if f.name == "length_cm" or f.name == "width_cm" or f.name == "height_cm" %}{% if f.errors %}<p class="pf-err">{{ f.label }}: {{ f.errors.0 }}</p>{% endif %}{% endif %}{% endfor %}
+          <p class="pf-help" id="pf-volume" aria-live="polite"></p>
+        </div>
+      </div>
+      <div class="pf-attrs">
+        {% for f in form %}{% if f.name == "brand" or f.name == "barcode" or f.name == "color" or f.name == "size" or f.name == "material" %}
+        <div><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% if f.errors %}<p class="pf-err">{{ f.errors.0 }}</p>{% endif %}</div>
+        {% endif %}{% endfor %}
+      </div>
+      <div><label for="{{ form.attributes_text.id_for_label }}">{{ form.attributes_text.label }}</label>{{ form.attributes_text }}<p class="pf-help">{{ form.attributes_text.help_text }}</p>{% if form.attributes_text.errors %}<p class="pf-err">{{ form.attributes_text.errors.0 }}</p>{% endif %}</div>
+    </section>
+    <style>
+    .pf-card{background:#fff;border:1px solid var(--ds-line,#d6e6f0);border-radius:14px;padding:20px;display:grid;gap:14px}
+    .pf-card h2{margin:0;font-size:15px;font-weight:700;color:var(--ds-ink,#012441)}
+    .pf-card label,.pf-label{display:block;margin-bottom:5px;font-size:12px;font-weight:600;color:var(--ds-muted,#5b7186)}
+    .pf-help{margin:2px 0 0;font-size:12px;color:var(--ds-muted,#5b7186)}
+    .pf-err{margin:4px 0 0;font-size:12px;color:var(--ds-bad,#c92a2a);font-weight:600}
+    .pf-dims{display:grid;grid-template-columns:minmax(120px,1fr) 2fr;gap:14px;align-items:start}
+    .pf-plt-row{display:flex;align-items:center;gap:8px}.pf-plt-row input{min-width:0;text-align:center}
+    .pf-plt-row span{color:var(--ds-muted,#5b7186);font-weight:600}
+    .pf-attrs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+    @media (max-width:640px){.pf-dims{grid-template-columns:1fr}}
+    </style>
+    <script>
+    (function () {   /* live volume weight: P × L × T / 6000 kg */
+      var ids = ["{{ form.length_cm.id_for_label }}", "{{ form.width_cm.id_for_label }}", "{{ form.height_cm.id_for_label }}", "{{ form.weight_grams.id_for_label }}"];
+      var els = ids.map(function (id) { return document.getElementById(id); });
+      var out = document.getElementById("pf-volume");
+      if (!out || els.some(function (el) { return !el; })) return;
+      function show() {
+        var p = +els[0].value || 0, l = +els[1].value || 0, t = +els[2].value || 0, real = +els[3].value || 0;
+        if (!(p && l && t)) { out.textContent = ""; return; }
+        var volume = Math.round(p * l * t / 6);
+        out.textContent = "Berat volume " + volume.toLocaleString("id-ID") + " g · kurir menagih yang lebih berat: " +
+          Math.max(volume, real).toLocaleString("id-ID") + " g";
+      }
+      els.forEach(function (el) { el.addEventListener("input", show); });
+      show();
+    })();
+    </script>
+
+    {# Listing details Shopee and Tokopedia / TikTok Shop ask for #}
+    <section class="pf-card" aria-labelledby="pf-mp-title">
+      <h2 id="pf-mp-title">Detail marketplace</h2>
+      <p class="pf-help">Isian yang diminta Shopee dan Tokopedia / TikTok Shop saat upload produk. Atribut khusus kategori lain tulis di Atribut lain.</p>
+      <div class="pf-attrs">
+        {% for f in form %}{% if f.name in form.MP_FIELDS %}
+        <div{% if f.name == "shopee_category" or f.name == "tokopedia_category" or f.name == "video_url" or f.name == "size_chart_url" %} class="pf-wide"{% endif %}>
+          {% if f.name == "insurance_required" %}<label class="pf-check">{{ f }} {{ f.label }}</label>{% else %}<label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+          {% if f.help_text %}<p class="pf-help">{{ f.help_text }}</p>{% endif %}{% if f.errors %}<p class="pf-err">{{ f.errors.0 }}</p>{% endif %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+    <style>.pf-wide{grid-column:1/-1}.pf-check{display:flex!important;align-items:center;gap:8px;margin-top:24px;font-size:13px!important;color:var(--ds-ink,#012441)!important}.pf-check input{width:18px;height:18px}</style>
+
     {# SEO (collapsible) #}
     <details class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none select-none text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -203,16 +271,6 @@
         {{ form.category }}
         {% if form.category.errors %}<p class="text-xs text-red-500 mt-1">{{ form.category.errors.0 }}</p>{% endif %}
       </div>{% endif %}
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.weight_grams.label }}</label>
-        {{ form.weight_grams }}
-        {% if form.weight_grams.errors %}<p class="text-xs text-red-500 mt-1">{{ form.weight_grams.errors.0 }}</p>{% endif %}
-      </div>
-      {% for field in form %}{% if field.name == "length_cm" or field.name == "width_cm" or field.name == "height_cm" %}<div>
-        <label class="block text-xs font-medium text-gray-600 mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}
-        {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors.0 }}</p>{% endif %}
-      </div>{% endif %}{% endfor %}
       {% if form.preorder_days %}<div>
         <label class="block text-xs font-medium text-gray-600 mb-1">{{ form.preorder_days.label }}</label>
         {{ form.preorder_days }}

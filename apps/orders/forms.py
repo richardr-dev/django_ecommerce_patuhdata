@@ -106,6 +106,19 @@ class ProductSkuFormMixin:
         self.fields["product"].store = self.store
 
 
+def parse_attributes(text):
+    """"Garansi: 1 tahun" lines → {"Garansi": "1 tahun"}; None when a line has no name or no colon."""
+    found = {}
+    for line in (text or "").splitlines():
+        if not line.strip():
+            continue
+        name, sep, value = line.partition(":")
+        if not sep or not name.strip():
+            return None
+        found[name.strip()[:60]] = value.strip()[:200]
+    return found
+
+
 class ProductForm(StyledModelForm):
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.none(), required=False,
         label="Gudang awal", help_text="Lokasi stok awal produk ini.")
@@ -124,8 +137,12 @@ class ProductForm(StyledModelForm):
     # post as empty, so keeping them would wipe their saved value (or, for a required number, refuse
     # every save without showing why). They are left out and keep what is stored.
     NOT_ON_PAGE = ("ab_shop_price", "image_url", "photo", "seo_title", "is_preorder", "preorder_daily_quota",
-        "base_unit", "tracks_lots")
+        "base_unit", "tracks_lots", "attributes")
     DIMENSIONS = ("weight_grams", "length_cm", "width_cm", "height_cm")
+    # Shown in the "Detail marketplace" card, in this order.
+    MP_FIELDS = ("condition", "model_number", "min_order", "max_order", "country_of_origin", "warranty_type",
+        "warranty_months", "shelf_life_days", "bpom_number", "halal_number", "sni_number", "dangerous_goods",
+        "showcase", "insurance_required", "shopee_category", "tokopedia_category", "video_url", "size_chart_url")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,6 +156,25 @@ class ProductForm(StyledModelForm):
         self.fields["length_cm"].label = "Panjang (cm)"
         self.fields["width_cm"].label = "Lebar (cm)"
         self.fields["height_cm"].label = "Tinggi (cm)"
+        self.fields["weight_grams"].label = "Berat (gram)"
+        for name, label in (("name", "Nama produk"), ("description", "Deskripsi"), ("price", "Harga jual"),
+                ("compare_at_price", "Harga coret"), ("cost_price", "Harga pokok"), ("sku", "SKU"),
+                ("category", "Kategori"), ("is_active", "Aktif"), ("is_featured", "Produk unggulan"),
+                ("seo_description", "Deskripsi SEO")):
+            if name in self.fields:
+                self.fields[name].label = label
+        placeholders = {"brand": "mis. Nike", "barcode": "EAN / UPC", "color": "mis. Hitam", "size": "mis. 41",
+            "material": "mis. Kulit sintetis"}
+        for name, text in placeholders.items():
+            self.fields[name].widget.attrs.setdefault("placeholder", text)
+        self.fields["min_order"].required = False
+        self.fields["condition"].required = False
+        self.fields["warranty_type"].required = False
+        self.fields["dangerous_goods"].required = False
+        self.fields["attributes_text"] = forms.CharField(required=False, label="Atribut lain",
+            widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Satu per baris, mis.\nGaransi: 1 tahun\nNegara asal: Indonesia"}),
+            help_text="Satu atribut per baris dengan format Nama: Nilai.",
+            initial="\n".join(f"{key}: {value}" for key, value in (self.instance.attributes or {}).items()))
         self.fields["category"].queryset = Category.objects.filter(store=self.store)
         self.fields["warehouse"].queryset = Warehouse.objects.filter(store=self.store, is_active=True)
         self.stock_level = None
@@ -270,6 +306,15 @@ class ProductForm(StyledModelForm):
         if cleaned.get("is_digital") and not (cleaned.get("digital_file") or cleaned.get("digital_url")):
             self.add_error("digital_file", "Unggah file atau isi link digital untuk produk digital.")
         self._clean_wholesale(cleaned)
+        cleaned["min_order"] = cleaned.get("min_order") or 1
+        cleaned["condition"] = cleaned.get("condition") or "new"
+        if cleaned.get("max_order") and cleaned["max_order"] < cleaned["min_order"]:
+            self.add_error("max_order", "Maksimal pembelian tidak boleh lebih kecil dari minimal pembelian.")
+        attributes = parse_attributes(cleaned.get("attributes_text", ""))
+        if attributes is None:
+            self.add_error("attributes_text", "Tulis satu atribut per baris dengan format Nama: Nilai.")
+        else:
+            self.instance.attributes = attributes
         if self.store and cleaned.get("is_active") and not (self.instance.pk and self.instance.is_active):
             error = product_limit_error(self.store,
                 Product.objects.filter(store=self.store, is_active=True).count() + 1)

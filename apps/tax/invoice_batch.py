@@ -101,7 +101,9 @@ def find_customer(store, name):
 
 def _products(store):
     """``{sku: product or variant}``: a variant's SKU (or barcode) sells that size or colour."""
-    found = {p.sku.lower(): p for p in Product.objects.filter(store=store, is_active=True).exclude(sku="")}
+    products = list(Product.objects.filter(store=store, is_active=True))
+    found = {p.barcode.lower(): p for p in products if p.barcode}   # a product barcode scans like its SKU
+    found.update({p.sku.lower(): p for p in products if p.sku})
     for variant in ProductVariant.objects.filter(product__store=store, product__is_active=True,
             is_active=True).select_related("product"):
         for code in (variant.barcode, variant.sku):

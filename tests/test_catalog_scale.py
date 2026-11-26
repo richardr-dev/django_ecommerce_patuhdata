@@ -151,7 +151,9 @@ class BulkImportTests(TestCase):
         self.assertEqual(Product.objects.filter(store=self.store).count(), 2500)
         self.assertEqual(self.store.categories.count(), 5)
         self.assertEqual(InventoryLevel.objects.filter(product__store=self.store).count(), 2500)
-        self.assertLess(len(queries), 150)
+        # Bounded, never one query per row (2500 here). SQLite caps a query at 999 parameters, so its batches of a
+        # wide product row are smaller than PostgreSQL's.
+        self.assertLess(len(queries), 150 if connection.vendor != "sqlite" else 400)
 
     def test_reimport_updates_by_sku_and_preserves_reservations(self):
         self._upload(["Kopi,K-1,10000,5,Kopi", "Teh,T-1,8000,3,"])

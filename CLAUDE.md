@@ -409,13 +409,26 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
+- **Product dimensions and attributes** (2026-11-26, migration `catalog/0028`): `length_cm`/`width_cm`/`height_cm` (P × L × T),
+  `weight_grams`, and `brand` (Merek), `barcode`, `color` (Warna), `size` (Ukuran), `material` (Bahan), plus
+  `attributes` JSON for any other "Nama: Nilai" (form field `attributes_text`, `forms.parse_attributes`). The product
+  page shows them in one "Dimensi & atribut" card with the live volume weight (P × L × T ÷ 6000 kg;
+  `Product.volume_weight_grams`, `shipping_weight_grams`). They describe the product only: prices, stock and the books
+  never read them. A product barcode is looked up like its SKU in `invoice_batch._products`.
+  Marketplace listing fields (migration `catalog/0029`, card "Detail marketplace", `ProductForm.MP_FIELDS`): `condition`
+  (Baru/Bekas), `model_number`, `min_order`/`max_order`, `country_of_origin`, `warranty_type` + `warranty_months`,
+  `shelf_life_days`, `bpom_number`, `halal_number`, `sni_number`, `dangerous_goods`, `insurance_required`, `showcase`
+  (etalase), `video_url`, `size_chart_url`, `shopee_category`, `tokopedia_category`. Impor produk reads them in English or
+  Indonesian and maps sellers' words (`CHOICE_WORDS`: "Bekas", "Garansi toko", "Baterai", Ya/Tidak); an unknown word or
+  number names the row. Its bulk update writes only the columns the file filled (`used`), so batches stay large.
 - **Impor produk** (`orders/setup_views.py`: `parse_import_rows(key=)`, `plan_import`, `import_products(key=)`, page
   Stok & Produk › Impor produk; tests `tests/test_product_import.py`): switch "Pakai SKU sebagai kunci utama" (on: match by
   SKU; off: match by name and give that product the file's SKU, refused when the SKU belongs to another product or two
   products share the name). A blank cell keeps what the product has (stock too); a new product needs name, sku, price.
   "Periksa dulu" (htmx, `_product_import_preview.html`) shows per row baru / perbarui (what changes) / perbaiki and writes
   nothing; one bad row refuses the whole file. Headers in Indonesian and Accurate's item list are mapped by
-  `HEADER_ALIASES`. Variant SKUs are refused (variants are not imported).
+  `HEADER_ALIASES` (incl. panjang/lebar/tinggi, one "dimensi" column "32x20x12", merek, barcode, warna, ukuran, bahan; any
+  column "Atribut: X" merges into `attributes`). Variant SKUs are refused (variants are not imported).
 - **Siapkan pembukuan** (`orders/onboarding.py:books_setup_steps`, Beranda; tests `tests/test_books_setup.py`): five steps in a
   shop's order (tax profile, kas & bank, products with cost price, saldo awal, first sale), each ticked from data with a hint
   saying what is missing. The automatic "Kas & bank utama" alone does not tick the bank step. The CSV product import

@@ -57,12 +57,64 @@ HEADER_ALIASES = {
     "weight_grams": ("weight_grams", "berat", "berat (gram)", "weight", "berat gram"),
     "image_url": ("image_url", "foto", "url foto", "gambar", "image"),
     "cost_price": ("cost_price", "harga pokok", "harga modal", "hpp", "unit cost", "cost", "harga beli"),
+    "length_cm": ("length_cm", "panjang", "panjang (cm)", "length", "p (cm)"),
+    "width_cm": ("width_cm", "lebar", "lebar (cm)", "width", "l (cm)"),
+    "height_cm": ("height_cm", "tinggi", "tinggi (cm)", "height", "t (cm)"),
+    "dimensions": ("dimensions", "dimensi", "dimensi (cm)", "ukuran paket", "p x l x t", "pxlxt"),
+    "brand": ("brand", "merek", "merk"),
+    "barcode": ("barcode", "kode barcode", "ean", "upc"),
+    "color": ("color", "colour", "warna"),
+    "size": ("size", "ukuran"),
+    "material": ("material", "bahan"),
 }
+HEADER_ALIASES.update({
+    "condition": ("condition", "kondisi", "kondisi produk"),
+    "model_number": ("model_number", "model", "no. artikel", "nomor artikel", "kode model"),
+    "min_order": ("min_order", "minimal pembelian", "min. pembelian", "min order", "minimum pembelian"),
+    "max_order": ("max_order", "maksimal pembelian", "maks. pembelian", "max order", "batas pembelian"),
+    "country_of_origin": ("country_of_origin", "negara asal", "asal negara", "country of origin"),
+    "warranty_type": ("warranty_type", "jenis garansi", "tipe garansi"),
+    "warranty_months": ("warranty_months", "masa garansi (bulan)", "masa garansi", "garansi (bulan)"),
+    "shelf_life_days": ("shelf_life_days", "masa simpan (hari)", "masa simpan", "masa kedaluwarsa (hari)"),
+    "bpom_number": ("bpom_number", "no. bpom", "nomor bpom", "bpom"),
+    "halal_number": ("halal_number", "no. sertifikat halal", "sertifikat halal", "no. halal", "halal"),
+    "sni_number": ("sni_number", "no. sni", "nomor sni", "sni"),
+    "dangerous_goods": ("dangerous_goods", "barang berbahaya", "dangerous goods"),
+    "insurance_required": ("insurance_required", "wajib asuransi", "asuransi"),
+    "showcase": ("showcase", "etalase", "etalase toko"),
+    "video_url": ("video_url", "video", "link video", "url video"),
+    "size_chart_url": ("size_chart_url", "tabel ukuran", "size chart", "link tabel ukuran"),
+    "shopee_category": ("shopee_category", "kategori shopee"),
+    "tokopedia_category": ("tokopedia_category", "kategori tokopedia", "kategori tiktok", "kategori tiktok shop"),
+})
+ATTRIBUTE_PREFIXES = ("atribut:", "atribut ", "attribute:")
+TEXT_FIELDS = ("brand", "barcode", "color", "size", "material", "model_number", "country_of_origin", "bpom_number",
+    "halal_number", "sni_number", "showcase", "shopee_category", "tokopedia_category")
+URL_FIELDS = ("video_url", "size_chart_url")
+SMALL_NUMBERS = ("min_order", "max_order", "warranty_months", "shelf_life_days")
+# Words a sheet may use for a choice → the stored code.
+CHOICE_WORDS = {
+    "condition": {"baru": "new", "new": "new", "bekas": "used", "used": "used", "second": "used"},
+    "warranty_type": {"tidak ada": "", "tidak": "", "tanpa garansi": "", "-": "", "toko": "shop",
+        "garansi toko": "shop", "shop": "shop", "seller": "shop", "distributor": "distributor",
+        "garansi distributor": "distributor", "resmi": "manufacturer", "produsen": "manufacturer",
+        "garansi resmi": "manufacturer", "garansi resmi produsen": "manufacturer", "manufacturer": "manufacturer",
+        "internasional": "international", "garansi internasional": "international", "international": "international"},
+    "dangerous_goods": {"tidak": "", "tidak berbahaya": "", "-": "", "baterai": "battery", "battery": "battery",
+        "mengandung baterai": "battery", "cairan": "liquid", "liquid": "liquid", "mudah terbakar": "flammable",
+        "flammable": "flammable", "magnet": "magnet", "mengandung magnet": "magnet"},
+}
+MARKETPLACE_COLUMNS = ("condition", "model_number", "min_order", "max_order", "country_of_origin", "warranty_type",
+    "warranty_months", "shelf_life_days", "bpom_number", "halal_number", "sni_number", "dangerous_goods",
+    "insurance_required", "showcase", "video_url", "size_chart_url", "shopee_category", "tokopedia_category")
+YES = {"ya", "yes", "y", "1", "true", "wajib"}
+NO = {"tidak", "no", "n", "0", "false", "-"}
 KEYS = (("sku", "SKU"), ("name", "Nama produk"))
 
 
 def normalise_headers(rows):
-    """Rows keyed by our field names, whatever names the file used for them (first match wins)."""
+    """Rows keyed by our field names, whatever names the file used for them (first match wins). Columns named
+    "Atribut: Garansi" become ``{"attributes": {"Garansi": value}}``."""
     out = []
     for row in rows:
         clean = {}
@@ -70,8 +122,27 @@ def normalise_headers(rows):
             found = next((name for name in names if name in row), None)
             if found is not None:
                 clean[target] = row[found]
+        extra = {}
+        for header, value in row.items():
+            prefix = next((p for p in ATTRIBUTE_PREFIXES if header.startswith(p)), None)
+            if prefix and header[len(prefix):].strip() and (value or "").strip():
+                extra[header[len(prefix):].strip().title()[:60]] = value.strip()[:200]
+        if extra:
+            clean["attributes"] = extra
         out.append(clean)
     return out
+
+
+def _dimensions(text):
+    """"30x20x12", "30 × 20 × 12 cm", "30*20*12" → (30, 20, 12); None when unreadable."""
+    import re
+    parts = re.split(r"\s*[x×*]\s*", re.sub(r"(?i)\s*cm\s*$", "", (text or "").strip().lower()))
+    if len(parts) != 3:
+        return None
+    try:
+        return tuple(round(float(part.replace(",", "."))) for part in parts)
+    except ValueError:
+        return None
 
 
 def _number(text, kind):
@@ -104,21 +175,58 @@ def parse_import_rows(rows, *, key="sku"):
             stock = _number(row.get("stock"), int)
             weight = _number(row.get("weight_grams"), int)
             cost = _number(row.get("cost_price"), Decimal)
+            dims = [_number(row.get(name), int) for name in ("length_cm", "width_cm", "height_cm")]
         except (InvalidOperation, ValueError):
             raise ValueError(f"Baris {number}: price, stock, weight_grams, atau cost_price "
                 "tidak valid.") from None
-        numbers = [value for value in (price, stock, weight, cost) if value is not None]
+        combined = (row.get("dimensions") or "").strip()
+        if combined:
+            parsed_dims = _dimensions(combined)
+            if parsed_dims is None:
+                raise ValueError(f"Baris {number}: dimensi “{combined}” tidak terbaca (pakai P x L x T, mis. 30x20x12).")
+            dims = [dims[i] if dims[i] is not None else parsed_dims[i] for i in range(3)]
+        numbers = [value for value in (price, stock, weight, cost, *dims) if value is not None]
         if any(not Decimal(value).is_finite() or value < 0 for value in numbers):
             raise ValueError(f"Baris {number}: angka tidak boleh negatif.")
         if (price or 0) >= 10 ** 12 or (cost or 0) >= 10 ** 12:
             raise ValueError(f"Baris {number}: price atau cost_price terlalu besar.")
+        extra = {}
+        for col in SMALL_NUMBERS:
+            text = (row.get(col) or "").strip().removesuffix(".0")
+            if text:
+                if not text.isdigit() or int(text) > 32000:
+                    raise ValueError(f"Baris {number}: {col} “{text}” harus angka bulat.")
+                extra[col] = int(text)
+        for col, words in CHOICE_WORDS.items():
+            text = (row.get(col) or "").strip().lower()
+            if text:
+                if text not in words:
+                    raise ValueError(f"Baris {number}: isi {col} “{row[col]}” tidak dikenali "
+                        f"(pilihan: {', '.join(sorted({w for w in words if w != '-'}))}).")
+                extra[col] = words[text] or None   # None: set back to "none" (kept apart from a blank cell)
+        insured = (row.get("insurance_required") or "").strip().lower()
+        if insured:
+            if insured not in YES | NO:
+                raise ValueError(f"Baris {number}: wajib asuransi “{insured}” harus Ya atau Tidak.")
+            extra["insurance_required"] = insured in YES
+        for col in URL_FIELDS:
+            link = (row.get(col) or "").strip()
+            if link:
+                if not link.startswith(("http://", "https://")):
+                    raise ValueError(f"Baris {number}: {col} harus berupa link (http…).")
+                extra[col] = link[:300]
+        if extra.get("min_order") is not None and extra.get("max_order") and extra["max_order"] < extra["min_order"]:
+            raise ValueError(f"Baris {number}: maksimal pembelian lebih kecil dari minimal pembelian.")
         values = {"name": name[:160], "price": price, "weight_grams": weight,
             "description": (row.get("description") or "").strip(),
-            "image_url": (row.get("image_url") or "").strip()[:200], "cost_price": cost}
-        parsed.append({"number": number, "sku": sku, "key": ident, "stock": stock,
+            "image_url": (row.get("image_url") or "").strip()[:200], "cost_price": cost,
+            "length_cm": dims[0], "width_cm": dims[1], "height_cm": dims[2],
+            **{field: (row.get(field) or "").strip()[:160 if field.endswith("category") else 80] for field in TEXT_FIELDS}}
+        parsed.append({"number": number, "sku": sku, "key": ident, "stock": stock, "attributes": row.get("attributes") or {},
             "category": (row.get("category") or "").strip(),
             # A blank cell keeps what the product already has.
-            "values": {field: value for field, value in values.items() if value not in (None, "")}})
+            "values": {**{field: value for field, value in values.items() if value not in (None, "")},
+                **{field: ("" if value is None else value) for field, value in extra.items()}}})
     return parsed
 
 
@@ -166,7 +274,19 @@ def plan_import(store, parsed, *, key="sku"):
                 planned.name = planned.name or product.name
                 planned.changes = [label for field, label in (("name", "nama"), ("price", "harga"),
                     ("cost_price", "harga pokok"), ("description", "deskripsi"), ("weight_grams", "berat"),
-                    ("image_url", "foto")) if field in values and values[field] != getattr(product, field)]
+                    ("image_url", "foto"), ("brand", "merek"), ("barcode", "barcode"), ("color", "warna"),
+                    ("size", "ukuran"), ("material", "bahan"), ("condition", "kondisi"), ("model_number", "model"),
+                    ("min_order", "min. beli"), ("max_order", "maks. beli"), ("country_of_origin", "negara asal"),
+                    ("warranty_type", "garansi"), ("warranty_months", "masa garansi"), ("shelf_life_days", "masa simpan"),
+                    ("bpom_number", "BPOM"), ("halal_number", "halal"), ("sni_number", "SNI"),
+                    ("dangerous_goods", "barang berbahaya"), ("insurance_required", "asuransi"), ("showcase", "etalase"),
+                    ("video_url", "video"), ("size_chart_url", "tabel ukuran"), ("shopee_category", "kategori Shopee"),
+                    ("tokopedia_category", "kategori Tokopedia")) if field in values and values[field] != getattr(product, field)]
+                if any(name in values and values[name] != getattr(product, name)
+                        for name in ("length_cm", "width_cm", "height_cm")):
+                    planned.changes.append("dimensi")
+                if any((product.attributes or {}).get(key) != value for key, value in row["attributes"].items()):
+                    planned.changes.append("atribut")
                 if key == "name" and sku and sku != product.sku:
                     planned.changes.append("SKU")
                 if row["category"]:
@@ -224,6 +344,8 @@ def import_products(store, parsed, *, actor=None, key="sku"):
         if product is not None:
             for name, value in values.items():
                 setattr(product, name, value)
+            if row["attributes"]:
+                product.attributes = {**(product.attributes or {}), **row["attributes"]}
             if row["sku"]:
                 product.sku = row["sku"]
             product.is_active = True
@@ -235,10 +357,17 @@ def import_products(store, parsed, *, actor=None, key="sku"):
         while candidate in taken_slugs:
             candidate, suffix = f"{base_slug}-{suffix}", suffix + 1
         taken_slugs.add(candidate)
-        product = Product(store=store, sku=row["sku"], slug=candidate, is_active=True, **values)
+        product = Product(store=store, sku=row["sku"], slug=candidate, is_active=True, attributes=row["attributes"],
+            **values)
         to_create.append(product)
-    Product.objects.bulk_update(to_update, ["name", "sku", "price", "category", "description",
-        "weight_grams", "image_url", "is_active", "cost_price"], batch_size=BULK_BATCH_SIZE)
+    # Only the columns the file filled: fewer columns keep the batches large (SQLite caps the parameters).
+    used = {name for row in parsed for name in row["values"]} | {"sku", "is_active"}
+    if any(row["category"] for row in parsed):
+        used.add("category")
+    if any(row["attributes"] for row in parsed):
+        used.add("attributes")
+    if to_update:
+        Product.objects.bulk_update(to_update, sorted(used), batch_size=BULK_BATCH_SIZE)
     Product.objects.bulk_create(to_create, batch_size=BULK_BATCH_SIZE)
     created_ids = dict(Product.objects.filter(store=store, sku__in=[p.sku for p in to_create])
         .values_list("sku", "id"))
@@ -327,9 +456,18 @@ def merchant_product_import_template(request):
     response["Content-Disposition"] = 'attachment; filename="template-produk.csv"'
     response.write("\ufeff")
     writer = csv.writer(response)
-    writer.writerow(["name", "sku", "price", "stock", "category", "description", "weight_grams", "image_url", "cost_price"])
-    writer.writerow(["Kemeja Putih M", "KMJ-001", "99000", "10", "Pakaian", "Kemeja katun", "500", "https://example.com/image.jpg", "60000"])
-    writer.writerow(["Celana Hitam L", "CLN-002", "149000", "25", "Pakaian", "", "600", "", "90000"])
+    writer.writerow(["name", "sku", "price", "stock", "category", "description", "weight_grams", "length_cm",
+        "width_cm", "height_cm", "brand", "barcode", "color", "size", "material", "image_url", "cost_price",
+        "condition", "model_number", "min_order", "max_order", "country_of_origin", "warranty_type", "warranty_months",
+        "shelf_life_days", "bpom_number", "halal_number", "sni_number", "dangerous_goods", "insurance_required",
+        "showcase", "video_url", "size_chart_url", "shopee_category", "tokopedia_category", "Atribut: Gaya"])
+    writer.writerow(["Sepatu M 41 Hitam", "M2601-41-Black", "1198000", "10", "Sepatu", "Sepatu kets pria", "900", "32",
+        "20", "12", "Patuh", "8991234567890", "Hitam", "41", "Kulit sintetis", "", "450000",
+        "Baru", "M2601", "1", "5", "Indonesia", "Garansi toko", "6", "", "", "", "", "Tidak", "Tidak",
+        "Sepatu Pria", "", "", "Sepatu Pria > Sneakers", "Sepatu Pria > Sneakers", "Kasual"])
+    writer.writerow(["Celana Hitam L", "CLN-002", "149000", "25", "Pakaian", "", "600", "30", "25", "4", "", "", "Hitam",
+        "L", "Katun", "", "90000", "Baru", "", "1", "", "Indonesia", "", "", "", "", "", "", "", "",
+        "Celana", "", "", "Pakaian Pria > Celana", "", ""])
     return response
 
 

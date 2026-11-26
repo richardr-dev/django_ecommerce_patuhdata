@@ -99,3 +99,94 @@ class ProductImportKeyTests(TestCase):
         page = self.client.post(url, {"file": csv_file("name,price\nCelana Hitam,1\n"), "key": "sku",
             "action": "preview"})
         self.assertContains(page, "Kolom sku tidak ditemukan")
+
+
+class ProductAttributeTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user("pa-owner")
+        self.store = Store.objects.create(owner=self.owner, name="Toko", slug="toko-pa")
+        Warehouse.objects.create(store=self.store, code="MAIN", name="Gudang Utama")
+        self.client = Client()
+        self.client.force_login(self.owner)
+
+    def test_dimensions_and_attributes_come_in_with_indonesian_headers(self):
+        text = ("kode barang;nama;harga jual;panjang;lebar;tinggi;berat;merek;warna;ukuran;bahan;barcode;"
+                "Atribut: Garansi\nM41;Sepatu 41;1198000;32;20;12;900;Patuh;Hitam;41;Kulit;899123;6 bulan\n")
+        self.client.post(reverse("merchant-product-import"), {"file": csv_file(text),
+            "key": "sku", "action": "import"})
+        shoe = Product.objects.get(sku="M41")
+        self.assertEqual((shoe.length_cm, shoe.width_cm, shoe.height_cm, shoe.weight_grams), (32, 20, 12, 900))
+        self.assertEqual((shoe.brand, shoe.color, shoe.size, shoe.material, shoe.barcode),
+            ("Patuh", "Hitam", "41", "Kulit", "899123"))
+        self.assertEqual(shoe.attributes, {"Garansi": "6 bulan"})
+        self.assertEqual((shoe.dimensions, shoe.volume_weight_grams, shoe.shipping_weight_grams),
+            ("32 × 20 × 12 cm", 1280, 1280))
+
+    def test_one_dimensi_column_and_blank_cells_keep_what_is_saved(self):
+        import_products(self.store, parse_import_rows([{"sku": "B1", "name": "Botol", "price": "5000",
+            "dimensions": "10 x 8 x 25 cm", "brand": "Aqua", "attributes": {"Isi": "600 ml"}}]))
+        import_products(self.store, parse_import_rows([{"sku": "B1", "price": "5500"}]))
+        bottle = Product.objects.get(sku="B1")
+        self.assertEqual((bottle.length_cm, bottle.width_cm, bottle.height_cm, bottle.brand, bottle.attributes,
+            bottle.price), (10, 8, 25, "Aqua", {"Isi": "600 ml"}, D(5500)))
+        with self.assertRaisesRegex(ValueError, "dimensi"):
+            parse_import_rows([{"sku": "B2", "name": "X", "price": "1", "dimensions": "10 x 8"}])
+
+    def test_the_product_form_saves_attributes_written_one_per_line(self):
+        from apps.orders.forms import ProductForm, parse_attributes
+        self.assertEqual(parse_attributes("Garansi: 1 tahun\nNegara asal: Indonesia"),
+            {"Garansi": "1 tahun", "Negara asal": "Indonesia"})
+        self.assertIsNone(parse_attributes("tanpa titik dua"))
+        form = ProductForm(data={"name": "Tas", "slug": "tas", "sku": "TAS-1", "price": "100000", "is_active": "on",
+            "length_cm": "40", "width_cm": "30", "height_cm": "10", "brand": "Eiger",
+            "attributes_text": "Garansi: 1 tahun"}, store=self.store)
+        self.assertTrue(form.is_valid(), form.errors)
+        bag = form.save()
+        self.assertEqual((bag.brand, bag.attributes, bag.dimensions), ("Eiger", {"Garansi": "1 tahun"},
+            "40 × 30 × 10 cm"))
+
+
+class MarketplaceFieldTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user("mf-owner")
+        self.store = Store.objects.create(owner=self.owner, name="Toko", slug="toko-mf")
+        Warehouse.objects.create(store=self.store, code="MAIN", name="Gudang Utama")
+
+    def test_listing_fields_come_in_with_the_words_sellers_use(self):
+        row = {"sku": "S41", "name": "Sepatu", "price": "1198000", "condition": "Bekas", "min_order": "2",
+            "max_order": "5", "country_of_origin": "Indonesia", "warranty_type": "Garansi toko", "warranty_months": "6",
+            "dangerous_goods": "Baterai", "insurance_required": "Ya", "showcase": "Sepatu Pria",
+            "video_url": "https://youtu.be/x", "shopee_category": "Sepatu Pria > Sneakers", "bpom_number": "NA123"}
+        import_products(self.store, parse_import_rows([row]))
+        shoe = Product.objects.get(sku="S41")
+        self.assertEqual((shoe.condition, shoe.min_order, shoe.max_order, shoe.warranty_type, shoe.warranty_months,
+            shoe.dangerous_goods, shoe.insurance_required, shoe.showcase, shoe.shopee_category, shoe.bpom_number),
+            ("used", 2, 5, "shop", 6, "battery", True, "Sepatu Pria", "Sepatu Pria > Sneakers", "NA123"))
+        import_products(self.store, parse_import_rows([{"sku": "S41", "warranty_type": "Tidak ada",
+            "insurance_required": "Tidak"}]))
+        shoe.refresh_from_db()
+        self.assertEqual((shoe.warranty_type, shoe.insurance_required, shoe.condition, shoe.showcase),
+            ("", False, "used", "Sepatu Pria"))                   # blank cells kept the rest
+
+    def test_unknown_words_and_bad_numbers_are_named(self):
+        for extra, message in (({"condition": "rusak"}, "condition"), ({"min_order": "dua"}, "min_order"),
+                ({"insurance_required": "mungkin"}, "Ya atau Tidak"), ({"video_url": "youtube"}, "link"),
+                ({"min_order": "5", "max_order": "2"}, "maksimal")):
+            with self.assertRaisesRegex(ValueError, message):
+                parse_import_rows([{"sku": "X", "name": "X", "price": "1", **extra}])
+
+    def test_indonesian_headers_and_the_template_cover_the_listing_fields(self):
+        from apps.orders.setup_views import normalise_headers
+        rows = normalise_headers([{"kode barang": "S1", "kondisi": "Baru", "minimal pembelian": "3",
+            "kategori shopee": "A > B", "etalase": "Promo", "wajib asuransi": "ya"}])
+        self.assertEqual({k: rows[0][k] for k in ("condition", "min_order", "shopee_category", "showcase",
+            "insurance_required")}, {"condition": "Baru", "min_order": "3", "shopee_category": "A > B",
+            "showcase": "Promo", "insurance_required": "ya"})
+        client = Client()
+        client.force_login(self.owner)
+        template = client.get(reverse("merchant-product-import-template")).content.decode()
+        for column in ("condition", "min_order", "warranty_type", "shopee_category", "tokopedia_category"):
+            self.assertIn(column, template)
+        page = client.get(reverse("merchant-entity-new", args=["products"]))
+        self.assertContains(page, "Detail marketplace")
+        self.assertContains(page, "Kategori Shopee")

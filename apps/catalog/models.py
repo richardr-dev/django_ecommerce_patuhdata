@@ -82,6 +82,43 @@ class Product(models.Model):
     length_cm = models.PositiveIntegerField(default=0)
     width_cm = models.PositiveIntegerField(default=0)
     height_cm = models.PositiveIntegerField(default=0)
+    # Descriptive attributes (Merek, Barcode, Warna, Ukuran, Bahan) and any others the company keeps
+    # ({"Garansi": "1 tahun"}). They describe the product; prices, stock and the books never read them.
+    brand = models.CharField("Merek", max_length=80, blank=True)
+    barcode = models.CharField("Barcode", max_length=60, blank=True)
+    color = models.CharField("Warna", max_length=60, blank=True)
+    size = models.CharField("Ukuran", max_length=40, blank=True)
+    material = models.CharField("Bahan", max_length=80, blank=True)
+    attributes = models.JSONField("Atribut lain", default=dict, blank=True)
+    # The listing fields Shopee and Tokopedia / TikTok Shop ask for when a product is uploaded. Descriptive only:
+    # prices, stock and the books never read them (category-specific extras go into ``attributes``).
+    CONDITIONS = [("new", "Baru"), ("used", "Bekas")]
+    WARRANTIES = [("", "Tidak ada garansi"), ("shop", "Garansi toko"), ("distributor", "Garansi distributor"),
+        ("manufacturer", "Garansi resmi produsen"), ("international", "Garansi internasional")]
+    DANGEROUS = [("", "Tidak berbahaya"), ("battery", "Mengandung baterai"), ("liquid", "Cairan"),
+        ("flammable", "Mudah terbakar"), ("magnet", "Mengandung magnet")]
+    condition = models.CharField("Kondisi", max_length=10, choices=CONDITIONS, default="new")
+    model_number = models.CharField("Model / no. artikel", max_length=80, blank=True)
+    min_order = models.PositiveSmallIntegerField("Minimal pembelian", default=1)
+    max_order = models.PositiveSmallIntegerField("Maksimal pembelian", null=True, blank=True,
+        help_text="Kosong: tanpa batas.")
+    country_of_origin = models.CharField("Negara asal", max_length=60, blank=True)
+    warranty_type = models.CharField("Jenis garansi", max_length=20, choices=WARRANTIES, blank=True)
+    warranty_months = models.PositiveSmallIntegerField("Masa garansi (bulan)", null=True, blank=True)
+    shelf_life_days = models.PositiveSmallIntegerField("Masa simpan (hari)", null=True, blank=True,
+        help_text="Untuk makanan, minuman, kosmetik.")
+    bpom_number = models.CharField("No. BPOM", max_length=40, blank=True)
+    halal_number = models.CharField("No. sertifikat halal", max_length=60, blank=True)
+    sni_number = models.CharField("No. SNI", max_length=40, blank=True)
+    dangerous_goods = models.CharField("Barang berbahaya", max_length=20, choices=DANGEROUS, blank=True)
+    insurance_required = models.BooleanField("Wajib asuransi pengiriman", default=False)
+    showcase = models.CharField("Etalase toko", max_length=80, blank=True,
+        help_text="Etalase di Tokopedia / kategori toko di Shopee.")
+    video_url = models.URLField("Link video produk", blank=True, max_length=300)
+    size_chart_url = models.URLField("Link tabel ukuran", blank=True, max_length=300)
+    shopee_category = models.CharField("Kategori Shopee", max_length=160, blank=True,
+        help_text="Jalur kategori, mis. Fashion Pria > Sepatu > Sneakers.")
+    tokopedia_category = models.CharField("Kategori Tokopedia / TikTok Shop", max_length=160, blank=True)
     seo_title = models.CharField(max_length=160, blank=True)
     seo_description = models.CharField(max_length=320, blank=True)
     is_active = models.BooleanField(default=True)
@@ -112,6 +149,23 @@ class Product(models.Model):
             models.Index(fields=["store", "is_featured", "is_active"], name="product_featured_idx"),
         ]
     def __str__(self): return self.name
+
+    @property
+    def dimensions(self):
+        """"30 × 20 × 12 cm", or "" when not measured."""
+        if not (self.length_cm or self.width_cm or self.height_cm):
+            return ""
+        return f"{self.length_cm} × {self.width_cm} × {self.height_cm} cm"
+
+    @property
+    def volume_weight_grams(self):
+        """Couriers' volume weight: P × L × T (cm) ÷ 6000 in kg, as grams. 0 when not measured."""
+        return round(self.length_cm * self.width_cm * self.height_cm / 6)
+
+    @property
+    def shipping_weight_grams(self):
+        """What a courier charges for: the heavier of the real weight and the volume weight."""
+        return max(self.weight_grams or 0, self.volume_weight_grams)
 
     def clean(self):
         super().clean()
