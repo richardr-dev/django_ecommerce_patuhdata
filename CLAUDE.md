@@ -269,6 +269,14 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   load `branding` and use `{% brand store obj as b %}`, never `merchant_store.logo` directly. PDFs
   embed the logo (`b.data_uri`); web pages use `b.logo_url`. Logos are PNG/JPG/WebP, verified with
   Pillow, max 2 MB and 4000 px (no SVG).
+- **Impor data and Bulan marketplace** (2026-11-26; `channels/import_hub.py`, `channels/marketplace_month.py`,
+  `channels/hub_views.py`, pages `/books/impor/` and `/books/marketplace/bulan/`; tests `tests/test_marketplace_month.py`).
+  Impor data lists every import as a card (what it does, files accepted incl. Accurate, template, last run from
+  `AuditLog` / `ImportBatch.imported_at`), only those the person may use and the plan opens; a new import gets a card in
+  `import_hub.CARDS`. Bulan marketplace shows per active shop five steps (pesanan, invoice, penghasilan, cek selisih,
+  tutup bulan) with ok/warn/todo and the button that fixes each, figures from `marketplace_tax.build`. Reads only.
+  Live Shopee/TikTok API: not built; needs the company's partner accounts (`SalesChannel.connection="api"`,
+  `external_shop_id`, `encrypted_credentials` wait for it).
 - **Tukar barang on an invoice** (`tax/exchanges.py:exchange_line`, `InvoiceExchange`, button and dialog on the invoice page,
   `tax/exchange_views.py`, route `merchant-invoice-exchange`, permission `sales.edit`, idem scope `invoice_exchange`;
   tests `tests/test_invoice_exchange.py`; built 2026-11-26). Works with sizes kept as separate SKUs (any SKU, variant SKU

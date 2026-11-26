@@ -52,6 +52,7 @@ NAV = [
             Link("Daftar harga", "merchant-price-lists", match=("/books/sales/price-lists/",)),
             Link("Retur & penukaran", "merchant-returns"),
             Link("Rekap produksi", "merchant-production-recap"),
+            Link("Impor data", "merchant-import-hub"),
         ]),
         Group("Piutang & pembayaran", "cash", [
             Link("Piutang pelanggan", "merchant-receivables"),
@@ -154,6 +155,7 @@ NAV = [
     # Where the company sells. The online shop is one channel among these, not the product itself.
     ("Saluran penjualan", [
         Group("Marketplace", "link", [
+            Link("Bulan marketplace", "merchant-marketplace-month"),
             Link("Toko marketplace", "merchant-channels"),
             Link("Impor pesanan", "merchant-import"),
             Link("Penghasilan & biaya", "merchant-income-import"),
@@ -212,14 +214,14 @@ NAV = [
 # "Menu ringkas" (the default sidebar): the pages a small company uses every week. Everything else is one
 # click away under "Menu lengkap", stays in the menu search, and shows anyway while it is the page you are on.
 CORE = {
-    "Penjualan": {"Ringkasan penjualan", "Pesanan", "Invoice penjualan", "Retur & penukaran"},
+    "Penjualan": {"Ringkasan penjualan", "Pesanan", "Invoice penjualan", "Retur & penukaran", "Impor data"},
     "Piutang & pembayaran": {"Piutang pelanggan", "Terima pembayaran"},
     "Pembelian": {"Tagihan supplier", "Beli tunai", "Supplier"},
     "Kas & bank": {"Kas & bank", "Biaya operasional", "Pencairan dana"},
     "Stok & Produk": {"Semua produk", "Stok gudang", "Impor produk"},
     "Laporan Keuangan": {"Laba rugi", "Neraca", "Arus kas"},
     "Pajak": {"PPN & PPh", "Pajak marketplace"},
-    "Marketplace": {"Toko marketplace", "Impor pesanan", "Penghasilan & biaya"},
+    "Marketplace": {"Bulan marketplace", "Toko marketplace", "Impor pesanan", "Penghasilan & biaya"},
     "Mitra konsinyasi": {"Daftar mitra", "Settlement"},
     "Pelanggan": {"Semua pelanggan"},
     "Pengaturan": {"Pembayaran", "Staf & akses", "Paket langganan"},

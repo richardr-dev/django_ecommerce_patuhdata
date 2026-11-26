@@ -1,0 +1,29 @@
+{% extends "merchant/base.html" %}{% load icons %}{% block title %}Impor data{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Penjualan</span><h1>Impor data</h1><p>Semua impor di satu tempat. Setiap file diperiksa dulu dan ditampilkan sebelum disimpan; bila ada baris yang salah, tidak ada yang tersimpan.</p></div></div>
+
+<div class="notice info" style="margin-bottom:16px"><b>Pindah dari Accurate atau Excel?</b> Urutannya: <b>1</b> Produk → <b>2</b> Pelanggan → <b>3</b> Saldo awal (piutang dan utang lama) → <b>4</b> Penjualan → <b>5</b> Penerimaan pembayaran. Penjualan dan pembayaran sebelum tanggal mulai masuk ke Saldo awal, bukan diimpor sebagai penjualan baru.</div>
+
+<div class="ih-grid">
+{% for c in cards %}
+  <article class="ih-card">
+    <header><span class="ih-tag">{{ c.group }}</span><h2>{{ c.title }}</h2></header>
+    <p>{{ c.what }}</p>
+    <p class="ih-accepts"><b>File:</b> {{ c.accepts }}</p>
+    <p class="ih-last">{% if c.last %}{% icon "clock" %} Terakhir {{ c.last.0|date:"d M Y H:i" }}{% if c.last.1 %} oleh {{ c.last.1.get_full_name|default:c.last.1.username }}{% endif %} · {{ c.last.2 }}{% else %}Belum pernah diimpor.{% endif %}</p>
+    <footer><a class="btn-primary" href="{{ c.url }}">{% icon "upload" %} Impor</a>{% if c.template %}<a class="btn" href="{{ c.template }}" data-no-soft>{% icon "download" %} Template</a>{% endif %}</footer>
+  </article>
+{% empty %}
+  <div class="empty-box"><strong>Tidak ada impor yang bisa Anda pakai</strong>Hubungi admin perusahaan untuk hak akses.</div>
+{% endfor %}
+</div>
+<style>
+.ih-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.ih-card{display:flex;flex-direction:column;gap:8px;padding:18px 20px;background:#fff;border:1px solid var(--ds-line,#d6e6f0);border-radius:14px}
+.ih-card header h2{margin:4px 0 0;font-size:16px;font-weight:700;color:var(--ds-ink,#012441)}
+.ih-tag{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ds-primary,#0b6fb8)}
+.ih-card p{margin:0;font-size:13.5px;color:var(--ds-ink,#012441);line-height:1.5}
+.ih-card .ih-accepts,.ih-card .ih-last{font-size:12.5px;color:var(--ds-muted,#5b7186)}
+.ih-last{display:flex;align-items:center;gap:6px}.ih-last svg{width:14px;height:14px}
+.ih-card footer{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px}
+</style>
+{% endblock %}

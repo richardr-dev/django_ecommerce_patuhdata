@@ -1,14 +1,16 @@
 from django.urls import path
 
-from apps.tax import batch_views, invoice_form_views
+from apps.tax import batch_views, exchange_views, invoice_form_views
 
-from . import income_views, mapping_views, report_views, views
+from . import hub_views, income_views, mapping_views, report_views, views
 
 urlpatterns = [
     path("books/marketplace/", views.merchant_channels, name="merchant-channels"),
     path("books/sales/", views.merchant_sales, name="merchant-sales"),
     path("books/sales/stats/", views.merchant_sales_stats, name="merchant-sales-stats"),
     path("books/marketplace/import/", views.merchant_import, name="merchant-import"),
+    path("books/marketplace/bulan/", hub_views.merchant_marketplace_month, name="merchant-marketplace-month"),
+    path("books/impor/", hub_views.merchant_import_hub, name="merchant-import-hub"),
     path("books/marketplace/invoices/", views.merchant_sales_invoices, name="merchant-sales-invoices"),
     path("books/marketplace/buyers/", views.merchant_channel_buyers, name="merchant-channel-buyers"),
     path("books/marketplace/template.csv", views.channel_orders_template,
@@ -26,6 +28,8 @@ urlpatterns = [
     path("books/sales/invoices/banyak/template/", batch_views.merchant_invoice_batch_template,
         name="merchant-invoice-batch-template"),
     path("books/sales/invoices/banyak/", batch_views.merchant_invoice_batch, name="merchant-invoice-batch"),
+    path("books/sales/invoices/<uuid:invoice_id>/tukar/", exchange_views.merchant_invoice_exchange,
+        name="merchant-invoice-exchange"),
     path("books/sales/invoices/<uuid:invoice_id>/", views.merchant_invoice_detail,
         name="merchant-invoice-detail"),
     path("books/sales/invoices/<uuid:invoice_id>/edit/", invoice_form_views.merchant_invoice_form,

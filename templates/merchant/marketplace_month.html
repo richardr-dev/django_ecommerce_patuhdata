@@ -1,0 +1,48 @@
+{% extends "merchant/base.html" %}{% load icons books %}{% block title %}Bulan marketplace{% endblock %}{% block content %}
+<div class="pg-head"><div><span class="pg-kicker">Marketplace</span><h1>Bulan marketplace</h1><p>Ikuti lima langkah per toko sampai semua ✓: pesanan, invoice, penghasilan, cek selisih, tutup bulan. Angkanya sama dengan pembukuan dan Pajak marketplace.</p></div>
+  <div class="dp-actions"><form method="get"><label class="field" style="margin:0"><span class="sr-only">Bulan</span><input type="month" name="month" value="{{ month }}" onchange="this.form.submit()" aria-label="Bulan"></label></form>
+    {% if everything %}<a class="btn" href="{% url 'merchant-marketplace-tax' %}?month={{ month }}">{% icon "percent" %} Pajak marketplace</a>{% endif %}</div></div>
+
+{% for shop in shops %}
+<section class="panel mm-shop">
+  <header><div><h2>{{ shop.channel.name }} <span class="pill pill-info">{{ shop.channel.get_platform_display }}</span></h2>
+    <p>{{ start|date:"F Y" }} · {{ shop.done }} dari {{ shop.steps|length }} langkah selesai</p></div>
+    {% if shop.complete %}<span class="pill pill-ok">Bulan ini beres</span>{% endif %}</header>
+  <ol class="mm-steps">
+    {% for step in shop.steps %}
+    <li class="mm-step {{ step.state }}">
+      <span class="mm-mark" aria-hidden="true">{% if step.state == "ok" %}✓{% elif step.state == "warn" %}!{% else %}{{ forloop.counter }}{% endif %}</span>
+      <div><b>{{ step.title }}</b><p>{{ step.text }}</p></div>
+      {% if step.url and step.state != "ok" %}<a class="{% if step.state == 'warn' %}btn-primary{% else %}btn{% endif %}" href="{{ step.url }}">{{ step.action }}</a>{% elif step.url %}<a class="mm-link" href="{{ step.url }}">{{ step.action }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if shop.row.invoices or shop.row.released_count %}
+  <dl class="mm-sum">
+    <div><dt>Penjualan bersih</dt><dd>{{ shop.row.net_sales|rp }}</dd></div>
+    <div><dt>Biaya marketplace</dt><dd>{{ shop.row.fees_total|rp }}</dd></div>
+    <div><dt>PPh 22 dipungut</dt><dd>{{ shop.row.pph22|rp }}</dd></div>
+    <div><dt>Dana cair</dt><dd>{{ shop.row.net|rp }}</dd></div>
+    <div><dt>Belum cair</dt><dd>{{ shop.row.awaiting_value|rp }}</dd></div>
+  </dl>
+  {% endif %}
+</section>
+{% empty %}
+<div class="empty-box"><strong>Belum ada toko marketplace</strong>Tambahkan toko Shopee, TikTok Shop, Tokopedia, atau Lazada dulu, lalu impor pesanannya.<br><a class="btn-primary" href="{% url 'merchant-channels' %}" style="margin-top:12px">Tambah toko marketplace</a></div>
+{% endfor %}
+<style>
+.mm-steps{list-style:none;margin:0;padding:6px 20px 14px;display:grid;gap:2px}
+.mm-step{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #e8f0f5}
+.mm-step:last-child{border-bottom:0}
+.mm-step b{font-size:14.5px;color:var(--ds-ink,#012441)}
+.mm-step p{margin:2px 0 0;font-size:13px;color:var(--ds-muted,#5b7186);line-height:1.45}
+.mm-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font-weight:700;font-size:13px;background:#eef3f7;color:var(--ds-muted,#5b7186)}
+.mm-step.ok .mm-mark{background:var(--ds-ok-bg,#e6f7ee);color:var(--ds-ok,#0d7a3e)}
+.mm-step.warn .mm-mark{background:var(--ds-warn-bg,#fff4e5);color:var(--ds-warn,#b85d00)}
+.mm-step.ok b{color:var(--ds-muted,#5b7186)}
+.mm-link{font-size:13px;font-weight:600}
+.mm-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0;padding:14px 20px 18px;border-top:1px solid var(--ds-line,#d6e6f0);background:var(--ds-head,#f4f8fb)}
+.mm-sum dt{font-size:12px;color:var(--ds-muted,#5b7186)}.mm-sum dd{margin:2px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+@media (max-width:640px){.mm-step{grid-template-columns:28px 1fr}.mm-step>a{grid-column:2}}
+</style>
+{% endblock %}
