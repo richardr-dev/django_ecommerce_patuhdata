@@ -43,6 +43,39 @@ def _paste_number(value):
     return str(int(value)) if value == int(value) else f"{value:.2f}".replace(".", ",")
 
 
+# Indonesian headers of the sales sheet → the English ones the reader works with (both are accepted).
+SALES_ALIASES = {
+    "date": ("tanggal", "tgl", "tanggal penjualan"),
+    "sku": ("kode barang", "kode produk", "sku produk"),
+    "qty": ("jumlah", "kuantitas", "jumlah barang"),
+    "customer name": ("nama pelanggan", "nama pembeli", "pembeli"),
+    "address": ("alamat", "alamat kirim", "alamat pengiriman"),
+    "phone number": ("no. hp", "no hp", "nomor hp", "no. whatsapp", "whatsapp", "telepon", "no. telepon"),
+    "district": ("kecamatan", "kota", "kabupaten/kota", "kota/kabupaten", "kecamatan/kota"),
+    "province": ("provinsi",),
+    "sales channel": ("saluran penjualan", "saluran", "channel"),
+    "sales": ("penjualan", "total penjualan", "harga jual total"),
+    "net sales": ("penjualan bersih", "diterima", "net"),
+    "unit price": ("harga satuan",),
+    "due date": ("jatuh tempo",),
+}
+
+
+def _sales_headers(headers, rows):
+    """Rename Indonesian headers to the English names; a header already in English is left as it is."""
+    rename = {}
+    for english, names in SALES_ALIASES.items():
+        if english in headers:
+            continue
+        found = next((name for name in names if name in headers), None)
+        if found:
+            rename[found] = english
+    if not rename:
+        return headers, rows
+    return ([rename.get(h, h) for h in headers],
+            [{rename.get(key, key): value for key, value in row.items()} for row in rows])
+
+
 def _customer_names(store):
     return {c.customer_code.lower(): c.name for c in Customer.objects.filter(store=store, customer_code__gt="")}
 
@@ -110,10 +143,11 @@ def invoice_rows(store, upload):
         if any(row.get("total including vat", "").lower() in {"yes", "ya"} for row in rows):
             notes.append("File menyebut total sudah termasuk PPN: centang “Harga sudah termasuk PPN” bila benar.")
     else:
+        headers, rows = _sales_headers(headers, rows)
         need = {"sku", "qty"}
         if not need.issubset(headers) or not ({"customer name", "pelanggan"} & set(headers)):
-            raise ValueError("Kolom wajib: Date, SKU, Qty, Customer Name. Gunakan template yang bisa diunduh di "
-                             "halaman ini.")
+            raise ValueError("Kolom wajib: Tanggal, SKU, Jumlah, Nama Pelanggan (atau Date, SKU, Qty, Customer Name). "
+                             "Gunakan template yang bisa diunduh di halaman ini.")
         left, cut, returned = 0, 0, 0
         for row in rows:
             status = row.get("status", "").lower()
@@ -145,13 +179,13 @@ def invoice_rows(store, upload):
                         _first(row, "sales channel", "saluran"), _first(row, "ongkir ditagih"),
                         _first(row, "ongkir", "ongkos kirim", "ongkir dibayar"), "retur" if is_return else ""])
         if left:
-            notes.append(f"{left} baris dengan Status selain Sales atau Retur dilewati.")
+            notes.append(f"{left} baris dengan Status selain Sales atau Retur (mis. Batal) dilewati.")
         if returned:
             notes.append(f"{returned} baris Retur: penjualannya dibuat lalu langsung dibuatkan nota kredit (barang "
                          "kembali ke stok, ongkirnya tetap dicatat sebagai biaya).")
         if cut:
-            notes.append(f"{cut} baris: selisih Sales dan Net Sales dicatat sebagai diskon baris, jadi invoice "
-                         "bernilai Net Sales dan harga jualnya tetap terlihat.")
+            notes.append(f"{cut} baris: selisih Penjualan dan Penjualan Bersih dicatat sebagai diskon baris, "
+                         "jadi invoice bernilai Penjualan Bersih dan harga jualnya tetap terlihat.")
         if any(row.get("ongkir") or row.get("ongkos kirim") for row in rows):
             notes.append("Ongkir dicatat sebagai biaya ongkos kirim yang dibayar perusahaan (akun 6700), tidak "
                          "ditagihkan ke pembeli. Pilih rekening pembayarnya sebelum membuat invoice.")

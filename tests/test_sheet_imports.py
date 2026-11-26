@@ -82,7 +82,7 @@ class InvoiceSheetTests(Base):
              "Lampung", "ABShop", "Sales", 998000, 598800, 26996],
             ["05/08/2026", "KBL", 1, "H. Aidil Azwar", "JL. Palem Raya no. 9", "", "Bekasi", "Jawa Barat",
              "Tokopedia", "Sales", "1,198,000", "", ""]]))
-        self.assertTrue(any("Net Sales" in n for n in notes) and any("6700" in n for n in notes))
+        self.assertTrue(any("Penjualan Bersih" in n for n in notes) and any("6700" in n for n in notes))
         plans = batch.parse_paste(self.store, text)
         self.assertTrue(all(p.ok for p in plans), [p.errors for p in plans])
         budi, marulak, aidil = plans
@@ -143,12 +143,26 @@ class InvoiceSheetTests(Base):
         self.assertEqual(self.on_hand(self.kabel), before - 2)        # Budi and Aidil keep theirs; Sari's came back
         self.assertEqual(sorted(int(e.amount) for e in Expense.objects.all()), [18500, 19000, 21000, 26996])
 
+    def test_indonesian_headers_read_like_the_english_ones(self):
+        head = ["Tanggal", "No. Pesanan", "SKU", "Jumlah", "Nama Pelanggan", "Alamat", "No. HP", "Kecamatan", "Provinsi",
+                "Saluran Penjualan", "Status", "Penjualan", "Penjualan Bersih", "Ongkir"]
+        text, _notes = sheet_import.invoice_rows(self.store, xlsx([head,
+            ["03/08/2026", "A-1", "KBL", 2, "Budi", "Jl. Pakan 29", "08123", "Hulu", "Kalsel", "Shopee", "Sales",
+             240000, 150000, 9000],
+            ["04/08/2026", "A-2", "LMP", 1, "Sari", "", "", "", "", "Manual", "Sales", 50000, "", ""]]))
+        plans = batch.parse_paste(self.store, text)
+        self.assertEqual([(p.reference, p.buyer_name, p.channel, p.phone) for p in plans],
+            [("A-1", "Budi", "shopee", "08123"), ("A-2", "Sari", "manual", "")])
+        self.assertEqual((plans[0].lines[0]["unit_price"], plans[0].lines[0]["discount"], plans[0].shipping_cost,
+            plans[0].address), (D(120000), D(90000), D(9000), "Jl. Pakan 29, Hulu, Kalsel"))
+
     def test_the_template_downloads_as_a_workbook_with_help(self):
         from openpyxl import load_workbook
         self.client.force_login(self.owner)
         response = self.client.get(reverse("merchant-invoice-batch-template"))
         book = load_workbook(io.BytesIO(response.content))
-        self.assertEqual([c.value for c in book["Penjualan"][1]][:13], SALES_HEAD)
+        self.assertEqual([c.value for c in book["Penjualan"][1]][:5], ["Tanggal", "No. Pesanan", "SKU", "Jumlah",
+            "Nama Pelanggan"])
         self.assertIn("Petunjuk", book.sheetnames)
         text, _notes = sheet_import.invoice_rows(self.store, SimpleUploadedFile("t.xlsx", response.content))
         self.assertEqual(len(text.splitlines()), 3)

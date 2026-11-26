@@ -101,7 +101,9 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   the invoice's `shipping` (4200, outside PPN; Accurate's expense rows fill it), "ongkir dibayar" is the courier cost the
   company paid: one `Expense` 6700 per invoice from the "Ongkir dibayar dari" account (approval as any expense); a row
   with only ongkir adds to the invoice above; a Saluran text containing a mitra's name passes `partner=` (the text goes
-  to notes). The upload template (`template-penjualan.xlsx`, sheet Penjualan + Petunjuk) is the owner's own sales sheet:
+  to notes). The upload template (`template-penjualan.xlsx`, Indonesian headers Tanggal / No. Pesanan / SKU / Jumlah / Nama
+  Pelanggan / Alamat / No. HP / Kecamatan / Provinsi / Saluran Penjualan / Status / Penjualan / Penjualan Bersih / Ongkir,
+  mapped to the English ones by `sheet_import.SALES_ALIASES`; sheet Penjualan + Petunjuk) is the owner's own sales sheet:
   Sales = line total at retail, Net Sales → line discount (invoice worth Net Sales), Ongkir → ongkir dibayar. A Status
   "Retur" row is invoiced and then credited (`invoice_batch._credit_returns`: one credit note, restocked, on the invoice date; paste
   column 14 "Status"); other non-Sales statuses are skipped. Rows sharing a No. Pesanan are one invoice (user decision).

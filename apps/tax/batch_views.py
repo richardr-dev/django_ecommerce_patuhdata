@@ -46,33 +46,36 @@ def _plan(store, post, mode):
         inclusive=inclusive)
 
 
-TEMPLATE_HEAD = ["Date", "SKU", "Qty", "Customer Name", "Address", "Phone Number", "District", "Province",
-                 "Sales Channel", "Status", "Sales", "Net Sales", "Ongkir", "No. Pesanan"]
+TEMPLATE_HEAD = ["Tanggal", "No. Pesanan", "SKU", "Jumlah", "Nama Pelanggan", "Alamat", "No. HP", "Kecamatan",
+                 "Provinsi", "Saluran Penjualan", "Status", "Penjualan", "Penjualan Bersih", "Ongkir"]
 TEMPLATE_ROWS = [
-    ["03/08/2026", "M2601-41-Black", 1, "Budi", "Jalan Pakan Dalam no.29, Kec. Daha Utara", "", "Hulu Sungai Selatan",
-     "Kalimantan Selatan", "Shopee ABShop", "Sales", 1198000, 718800, None, None],
-    ["04/08/2026", "W2601-38-White", 1, "Marulak Purba", "Jl. Cut Mutia No. 42, Kec. Teluk Betung Utara",
-     "082115108880", "Bandar Lampung", "Lampung", "ABShop", "Sales", 998000, 598800, 26996, None],
-    ["05/08/2026", "M2601-45-Black", 1, "H. Aidil Azwar", "Jl. Palem Raya no. 9, Jatiasih", "", "Bekasi",
-     "Jawa Barat", "Shopee ABShop", "Sales", 1198000, 718800, None, None],
+    ["03/08/2026", "SHP-260803-0001", "M2601-41-Black", 1, "Budi", "Jalan Pakan Dalam no.29, Kec. Daha Utara", "",
+     "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee ABShop", "Sales", 1198000, 718800, 18500],
+    ["04/08/2026", "ABS-260804-0001", "W2601-38-White", 1, "Marulak Purba", "Jl. Cut Mutia No. 42, Kec. Teluk Betung Utara",
+     "082115108880", "Bandar Lampung", "Lampung", "ABShop", "Sales", 998000, 598800, 26996],
+    ["05/08/2026", "SHP-260805-0002", "M2601-45-Black", 1, "H. Aidil Azwar", "Jl. Palem Raya no. 9, Jatiasih", "",
+     "Bekasi", "Jawa Barat", "Shopee ABShop", "Sales", 1198000, 718800, 21000],
 ]
 TEMPLATE_HELP = [
-    ("Date", "Tanggal penjualan, mis. 03/08/2026 (hari/bulan/tahun). Kosong: hari ini."),
+    ("Tanggal", "Tanggal penjualan, mis. 03/08/2026 (hari/bulan/tahun). Kosong: hari ini."),
+    ("No. Pesanan", ("Opsional. Nomor pesanan (Shopee, mitra...) disimpan sebagai Referensi invoice. Baris dengan nomor "
+     "yang sama menjadi satu invoice dengan beberapa barang; kosong: satu baris satu invoice.")),
     ("SKU", "SKU produk atau SKU varian (ukuran/warna) persis seperti di Produk. Stok keluar dan HPP dibukukan."),
-    ("Qty", "Jumlah barang. Kosong: 1."),
-    ("Customer Name", "Nama pembeli. Nama baru ditambahkan ke Pelanggan."),
-    ("Address, District, Province", "Alamat kirim pembeli; disimpan di pelanggan baru dan di pesanan."),
-    ("Phone Number", "Nomor WhatsApp pembeli (opsional)."),
-    ("Sales Channel", ("Tempat terjual. Bila memuat nama mitra (mis. Shopee ABShop), penjualan dicatat atas mitra itu; "
+    ("Jumlah", "Jumlah barang. Kosong: 1."),
+    ("Nama Pelanggan", "Nama pembeli. Nama baru ditambahkan ke Pelanggan."),
+    ("Alamat, Kecamatan, Provinsi", "Alamat kirim pembeli; disimpan di pelanggan baru dan di pesanan."),
+    ("No. HP", "Nomor WhatsApp pembeli (opsional)."),
+    ("Saluran Penjualan", ("Tempat terjual. Bila memuat nama mitra (mis. Shopee ABShop), penjualan dicatat atas mitra itu; "
      "daftarkan mitranya dulu di Mitra. Shopee, Tokopedia, TikTok, Lazada dikenali sebagai saluran.")),
-    ("Status", "Hanya baris Sales yang dibuat invoice; Retur dan lainnya dilewati."),
-    ("Sales", "Total harga jual baris itu (harga satuan = Sales ÷ Qty)."),
-    ("Net Sales", ("Yang diterima perusahaan setelah potongan mitra/marketplace. Selisihnya menjadi diskon baris, "
-     "jadi invoice bernilai Net Sales. Kosong: tanpa diskon.")),
+    ("Status", ("Sales: dibuat invoice. Retur: dibuat invoice lalu nota kredit (barang kembali ke stok). Status lain "
+     "(mis. Batal) dilewati.")),
+    ("Penjualan", "Total harga jual baris itu (harga satuan = Penjualan ÷ Jumlah)."),
+    ("Penjualan Bersih", ("Yang diterima perusahaan setelah potongan mitra/marketplace. Selisihnya menjadi diskon baris, "
+     "jadi invoice bernilai Penjualan Bersih. Kosong: tanpa diskon.")),
     ("Ongkir", ("Ongkos kirim yang dibayar perusahaan ke kurir. Dicatat sebagai biaya (6700) dari rekening yang "
      "dipilih di halaman impor; tidak ditagihkan ke pembeli.")),
-    ("No. Pesanan", ("Opsional. Nomor pesanan (Shopee, mitra...) disimpan sebagai Referensi invoice. Baris dengan nomor "
-     "yang sama menjadi satu invoice; kosong: satu baris satu invoice.")),
+    ("Nama kolom", ("Kolom bahasa Inggris (Date, Qty, Customer Name, Address, Phone Number, District, Province, Sales "
+     "Channel, Sales, Net Sales) juga dikenali.")),
 ]
 
 
@@ -97,11 +100,11 @@ def merchant_invoice_batch_template(request):
     for cell in sheet[1]:
         cell.font, cell.fill = Font(bold=True, color="012441"), head_fill
         cell.alignment = Alignment(horizontal="center")
-    widths = [12, 18, 6, 22, 44, 16, 22, 20, 18, 10, 14, 14, 12, 10]
+    widths = [12, 18, 18, 8, 22, 44, 16, 20, 20, 18, 9, 14, 16, 11]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[sheet.cell(1, index).column_letter].width = width
     for row in sheet.iter_rows(min_row=2, max_row=500):
-        for cell in row[10:13]:
+        for cell in row[11:14]:
             cell.number_format = "#,##0"
         row[0].number_format = "@"
     sheet.freeze_panes = "A2"
