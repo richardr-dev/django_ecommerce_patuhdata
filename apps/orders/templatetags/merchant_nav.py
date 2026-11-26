@@ -225,7 +225,7 @@ CORE = {
     "Pengaturan": {"Pembayaran", "Staf & akses", "Paket langganan"},
 }
 # Roles whose work is the full ledger start on "Menu lengkap".
-FULL_MENU_ROLES = {"accountant", "finance"}
+FULL_MENU_ROLES = ("accountant", "finance")  # menu default only, not a permission
 
 
 # The header "Buat baru" menu: every document a person starts by hand, grouped like the sidebar.
