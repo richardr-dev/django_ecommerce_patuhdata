@@ -142,7 +142,14 @@ class Invoice(models.Model):
         """Settled by credit notes alone (everything came back), with no money received: shown as "Diretur",
         never as "Lunas"."""
         return (self.status == self.STATUS_PAID and self.credited >= self.total
-            and not any(p.method != "writeoff" for p in self.payments.all()))
+            and not any(p.method != "writeoff" for p in self.payments.all())
+            and not self.exchanges_out.all())
+
+    @property
+    def exchange_state(self):
+        """"Ditukar", "Sebagian ditukar" or "" (see tax/exchanges.py)."""
+        from .exchanges import exchange_state
+        return exchange_state(self)
 
     @property
     def has_line_discount(self):
@@ -756,3 +763,31 @@ class DeliveryLine(models.Model):
     @property
     def value(self):
         return self.unit_cost * self.quantity
+
+
+class InvoiceExchange(models.Model):
+    """Goods swapped after the sale (another size, another item): the original invoice stays as issued; a credit
+    note takes the returned line back and a replacement invoice sells the new one, paid from that credit as far
+    as it reaches. This row ties the three documents together so each one can show the others."""
+    CONDITIONS = [("good", "Baik, masuk stok lagi"), ("damaged", "Rusak, tidak bisa dijual")]
+
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="invoice_exchanges")
+    original_invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="exchanges_out")
+    original_item = models.ForeignKey(InvoiceItem, on_delete=models.PROTECT, related_name="exchanges")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    condition = models.CharField(max_length=10, choices=CONDITIONS, default="good")
+    credit_note = models.OneToOneField(CreditNote, on_delete=models.PROTECT, related_name="exchange")
+    replacement_invoice = models.OneToOneField(Invoice, on_delete=models.PROTECT, related_name="exchange_in")
+    replacement_product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+")
+    replacement_variant = models.ForeignKey("catalog.ProductVariant", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="+")
+    replacement_sku = models.CharField(max_length=80, blank=True)
+    reason = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.original_invoice.number} → {self.replacement_invoice.number}"

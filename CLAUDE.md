@@ -269,6 +269,17 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   load `branding` and use `{% brand store obj as b %}`, never `merchant_store.logo` directly. PDFs
   embed the logo (`b.data_uri`); web pages use `b.logo_url`. Logos are PNG/JPG/WebP, verified with
   Pillow, max 2 MB and 4000 px (no SVG).
+- **Tukar barang on an invoice** (`tax/exchanges.py:exchange_line`, `InvoiceExchange`, button and dialog on the invoice page,
+  `tax/exchange_views.py`, route `merchant-invoice-exchange`, permission `sales.edit`, idem scope `invoice_exchange`;
+  tests `tests/test_invoice_exchange.py`; built 2026-11-26). Works with sizes kept as separate SKUs (any SKU, variant SKU
+  or barcode as the replacement). The original invoice is never edited or struck through. One transaction: a credit note
+  takes the line back at what the buyer paid (restocked when "Baik", a damaged unit stays in HPP), a replacement invoice
+  sells the new item through `create_sales_invoice` (same buyer, channel, mitra, location; price defaults to the
+  original's, typed price otherwise), and customer credit left by the note pays it (`apply_credit`). Same price: nothing
+  new to collect; dearer: the difference stays open on the replacement; cheaper: customer credit. The original shows
+  "↳ Ditukar … dengan SKU · INV · nota kredit" under the line, a "Riwayat dokumen" block, status "Ditukar" / "Sebagian
+  ditukar" and a grey DITUKAR stamp (screen, PDF, buyer link); the replacement shows "Pengganti dari …". Not for lines
+  sold per dus (unit_factor > 1) or opening invoices. The old return-request exchange (variants only) is unchanged.
 - **A return needs a photo before it is approved** (buyer uploads it with the request; a seller can add
   it on the return page). An exchange can only ask for a size that is in stock now. Photos are
   verified with Pillow (PNG/JPG/WebP, max 5 MB). Seller-recorded returns start as `requested`.

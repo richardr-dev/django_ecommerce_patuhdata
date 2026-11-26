@@ -1550,3 +1550,13 @@ html, body, .pd-body, .pd-shell, .pd-main { background: #ffffff; }
 .nav-mode .nav-mode-simple { display: inline-flex; align-items: center; gap: 8px; }
 .pd-nav:not(.is-simple) .nav-mode .nav-mode-full { display: inline-flex; }
 .pd-nav:not(.is-simple) .nav-mode .nav-mode-simple { display: none; }
+
+/* Tukar barang on an invoice: a note under the swapped line, a history block, a grey stamp; never a strike-through */
+.dp-items tr.dp-swap-row td { padding-top: 0; padding-bottom: 10px; border-top: 0; font-size: 12.5px; color: var(--ds-muted); }
+.dp-items tr.dp-swap-row td b { color: var(--ds-ink); }
+.dp-history p { margin: 2px 0; font-size: 12.5px; color: var(--ds-muted); }
+.dp-stamp.swap { color: #667085; }
+.swap-cond { border: 0; padding: 0; margin: 0 0 14px; display: grid; gap: 8px; }
+.swap-cond legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--ds-muted); }
+.swap-cond label { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ds-ink); cursor: pointer; }
+.swap-cond input[type=radio] { width: 18px; height: 18px; flex: none; margin: 0; box-shadow: none; accent-color: var(--ds-primary); }

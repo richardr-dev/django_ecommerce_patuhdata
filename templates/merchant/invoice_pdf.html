@@ -98,7 +98,7 @@
       <div class="inv-title" style="color:{{ b.accent }}">INVOICE</div>
       <div class="inv-number">{{ invoice.number }}</div>
       <div>
-        <span class="status-badge status-{{ invoice.status }}">{{ invoice.get_status_display }}</span>
+        {% with state=invoice.exchange_state %}{% if state == "Ditukar" %}<span class="status-badge status-void">Ditukar</span>{% elif invoice.fully_returned %}<span class="status-badge status-void">Diretur</span>{% else %}<span class="status-badge status-{{ invoice.status }}">{{ invoice.get_status_display }}</span>{% if state %} <span class="status-badge status-void">{{ state }}</span>{% endif %}{% endif %}{% endwith %}
       </div>
     </div>
   </div>
@@ -163,6 +163,7 @@
         {% endif %}
         <td class="r">{{ item.line_total|rp }}</td>
       </tr>
+      {% for x in item.exchanges.all %}<tr><td colspan="{% if invoice.has_line_discount %}5{% else %}4{% endif %}" style="padding-top:0;font-size:7.5pt;color:#6b7280">↳ Ditukar {{ x.quantity|floatformat:"-2" }} dengan {{ x.replacement_sku }} · {{ x.replacement_invoice.number }} · nota kredit {{ x.credit_note.number }}</td></tr>{% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -185,7 +186,7 @@
       <tr class="grand"><td>TOTAL</td><td class="r">{{ invoice.total|rp }}</td></tr>
       {% with paid=invoice.amount_paid credited=invoice.credited %}
       {% if credited %}
-      <tr><td style="font-size:8pt;color:#6b7280">Nota Kredit</td><td class="r" style="font-size:8pt;color:#6b7280">−{{ credited|rp }}</td></tr>
+      {% for note in invoice.credit_notes.all %}{% if note.status != 'void' and note.applied %}<tr><td style="font-size:8pt;color:#6b7280">Nota Kredit {{ note.number }}</td><td class="r" style="font-size:8pt;color:#6b7280">−{{ note.applied|rp }}</td></tr>{% endif %}{% endfor %}
       {% endif %}
       {% if paid and invoice.status != 'paid' or credited and invoice.status != 'paid' %}
       {% if paid %}<tr><td style="font-size:8pt;color:#6b7280">Sudah Dibayar</td><td class="r" style="font-size:8pt;color:#6b7280">−{{ paid|rp }}</td></tr>{% endif %}

@@ -414,7 +414,8 @@ def merchant_sales_invoices(request):
 
     qs = qs.annotate(inv_paid=Coalesce(Sum("invoice__payments__amount"), Value(Decimal(0))))
     # Each row shows amount_due, which reads the invoice's payments and credit notes: load them once per page.
-    qs = qs.prefetch_related("invoice__payments", "invoice__credit_notes")
+    qs = qs.prefetch_related("invoice__payments", "invoice__credit_notes", "invoice__exchanges_out",
+        "invoice__items")
     page, page_range, page_query = paginate(request, qs, 50)
     today = _dt.date.today()
     for order in page.object_list:
@@ -673,11 +674,14 @@ def merchant_invoice_detail(request, invoice_id):
             label="Piutang usaha")
     from datetime import date as _date
 
+    from apps.accounting import idempotency
     from apps.accounting.attachments import for_record as attachment_list
     from apps.shops.audit import trail as audit_trail
     from apps.tax import sharing
+    from apps.tax.exchanges import exchange_context
 
     from .invoice_recap import marketplace_summary
+    swap = exchange_context(store, invoice, items)
     share_url, text = "", ""
     if invoice.status not in (Invoice.STATUS_VOID, Invoice.STATUS_DRAFT):
         share_url = sharing.public_url(request, invoice)
@@ -695,8 +699,14 @@ def merchant_invoice_detail(request, invoice_id):
         credit_available=max(credit_balance(store, order.customer, invoice.buyer_name), 0),
         amount_paid=amount_paid, amount_due=amount_due, paid_pct=paid_pct,
         today=today, journal=journal, ledger_tie=ledger_tie,
-        payment_methods=InvoicePayment.METHOD_CHOICES,
+        payment_methods=InvoicePayment.METHOD_CHOICES, swap=swap, idem_key=idempotency.new_key(),
+        may_exchange=_can_exchange(request, store),
     ))
+
+
+def _can_exchange(request, store):
+    from apps.shops.permissions import can
+    return can(request.user, store, "sales.edit")
 
 
 def credit_notes_off_ledger(notes):

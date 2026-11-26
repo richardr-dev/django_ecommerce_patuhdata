@@ -8,7 +8,7 @@
 
 <div class="dp-head">
   <div>
-    <h1 class="dp-title">{{ invoice.number }} {% if invoice.fully_returned %}<span class="pill pill-void">Diretur</span>{% else %}<span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span>{% endif %}</h1>
+    <h1 class="dp-title">{{ invoice.number }} {% if swap.state == "Ditukar" %}<span class="pill pill-void">Ditukar</span>{% elif invoice.fully_returned %}<span class="pill pill-void">Diretur</span>{% else %}<span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span>{% if swap.state %} <span class="pill pill-void">{{ swap.state }}</span>{% endif %}{% endif %}</h1>
     <p class="dp-sub">
       Kepada <b>{{ invoice.buyer_name }}</b>
       {% if invoice.status != 'void' %} · Sisa tagihan <b>{{ amount_due|rp }}</b>{% endif %}
@@ -36,6 +36,7 @@
       </div>
     </details>
     {% endif %}
+    {% if may_exchange and swap.lines and invoice.status != 'void' and invoice.status != 'draft' and invoice.order.order_type != 'opening' %}<button type="button" class="btn" data-open="swap-dialog">{% icon "swap" %} Tukar barang</button>{% endif %}
     <a class="btn" href="{% url 'merchant-invoice-pdf' invoice.id %}">{% icon "download" %} PDF</a>
     {% if invoice.status != 'void' and invoice.order.order_type != 'opening' %}<a class="btn" href="{% url 'merchant-invoice-edit' invoice.id %}">Edit</a>{% endif %}
     <details class="dp-more">
@@ -61,6 +62,7 @@
   </div>
 </div>
 
+{% if swap.replaces %}<div class="notice" style="margin-bottom:16px;display:flex;align-items:center;gap:10px"><span class="bb-bubble">{% icon "swap" %}</span><span><b>Invoice pengganti</b> dari <a href="{% url 'merchant-invoice-detail' swap.replaces.original_invoice.pk %}">{{ swap.replaces.original_invoice.number }}</a> (penukaran barang). Barang lama dikembalikan lewat nota kredit {{ swap.replaces.credit_note.number }}.</span></div>{% endif %}
 <div class="dp-grid">
   {# ── The invoice as the customer sees it ─────────────────────────────── #}
   {% if invoice.order.order_type == 'opening' %}<div class="notice" style="margin-bottom:16px;display:flex;align-items:center;gap:10px"><span class="bb-bubble">{% icon "book" %}</span><span><b>Saldo awal dari pembukuan lama.</b> Penjualan dan PPN-nya sudah dibukukan di sistem lama, jadi di sini hanya piutangnya yang dicatat. Terima pembayaran, kirim pengingat, atau hapus piutangnya seperti invoice lain.</span></div>{% endif %}
@@ -124,6 +126,7 @@
           {% if invoice.has_line_discount %}<td class="num">{% if item.discount %}−{{ item.discount|rp }}{% else %}—{% endif %}</td>{% endif %}
           <td class="num"><strong>{{ item.line_total|rp }}</strong></td>
         </tr>
+        {% for x in item.exchange_rows %}<tr class="dp-swap-row"><td colspan="{% if invoice.has_line_discount %}5{% else %}4{% endif %}">↳ Ditukar {{ x.quantity|floatformat:"-2" }} dengan <b>{{ x.replacement_sku }}</b> · <a href="{% url 'merchant-invoice-detail' x.replacement_invoice.pk %}">{{ x.replacement_invoice.number }}</a> · nota kredit {{ x.credit_note.number }}{% if x.condition == "damaged" %} · barang kembali rusak{% endif %}</td></tr>{% endfor %}
       {% empty %}
         <tr><td colspan="5" class="dp-empty">Invoice ini belum punya baris barang.</td></tr>
       {% endfor %}
@@ -145,15 +148,20 @@
         {% if invoice.shipping %}<div><span>Ongkos kirim</span><span>{{ invoice.shipping|rp }}</span></div>{% endif %}
         {% if invoice.other_charges %}<div><span>Biaya lain</span><span>{{ invoice.other_charges|rp }}</span></div>{% endif %}
         <div class="grand"><span>Total</span><span>{{ invoice.total|rp }}</span></div>
-        {% if credited %}<div><span>Nota kredit</span><span>−{{ credited|rp }}</span></div>{% endif %}
+        {% for note in credit_notes %}{% if note.status != 'void' and note.applied %}<div><span>Nota kredit {{ note.number }}</span><span>−{{ note.applied|rp }}</span></div>{% endif %}{% endfor %}
         {% if amount_paid %}<div><span>Sudah dibayar</span><span>−{{ amount_paid|rp }}</span></div>{% endif %}
         {% if invoice.status != 'void' %}
-        <div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa tagihan{% endif %}</span><span>{{ amount_due|rp }}</span></div>
+        {% if swap.state == "Ditukar" or invoice.fully_returned %}<div class="due"><span>Sisa tagihan</span><span>{{ amount_due|rp }}</span></div>
+        {% else %}<div class="due{% if amount_due <= 0 %} settled{% endif %}"><span>{% if amount_due <= 0 %}Lunas{% else %}Sisa tagihan{% endif %}</span><span>{{ amount_due|rp }}</span></div>{% endif %}
         {% endif %}
       </div>
     </div>
     {% if b.footer %}<div class="dp-notes" style="padding:0 32px 22px"><h4>Info pembayaran &amp; syarat</h4><p>{{ b.footer }}</p></div>{% endif %}
-    {% if invoice.status == 'paid' %}<span class="dp-stamp paid">LUNAS</span>{% elif invoice.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
+    {% if swap.swaps or swap.replaces %}<div class="dp-notes dp-history" style="padding:0 32px 18px"><h4>Riwayat dokumen</h4>
+      {% for x in swap.swaps %}<p>{{ x.credit_note.issued_on|date:"d M Y" }} · Ditukar {{ x.quantity|floatformat:"-2" }} × {{ x.original_item.sku|default:x.original_item.description }} → {{ x.replacement_sku }} · nota kredit {{ x.credit_note.number }} · invoice pengganti <a href="{% url 'merchant-invoice-detail' x.replacement_invoice.pk %}">{{ x.replacement_invoice.number }}</a></p>{% endfor %}
+      {% if swap.replaces %}<p>{{ invoice.issued_on|date:"d M Y" }} · Pengganti dari <a href="{% url 'merchant-invoice-detail' swap.replaces.original_invoice.pk %}">{{ swap.replaces.original_invoice.number }}</a> · nota kredit {{ swap.replaces.credit_note.number }}</p>{% endif %}
+    </div>{% endif %}
+    {% if swap.state == "Ditukar" %}<span class="dp-stamp swap">DITUKAR</span>{% elif invoice.fully_returned %}<span class="dp-stamp swap">DIRETUR</span>{% elif invoice.status == 'paid' %}<span class="dp-stamp paid">LUNAS</span>{% elif invoice.status == 'void' %}<span class="dp-stamp void">DIBATALKAN</span>{% endif %}
   </article>
 
   {# ── Side panel: money, history, books ──────────────────────────────── #}
@@ -161,7 +169,7 @@
     <section class="dp-card">
       <header><h2>Pembayaran</h2><small>{{ paid_pct }}% terselesaikan</small></header>
       <div class="dp-card-body">
-        <p class="dp-help" style="margin:0 0 2px">{% if invoice.status == 'void' %}Invoice dibatalkan{% elif amount_due <= 0 %}Sudah lunas{% else %}Sisa tagihan{% endif %}</p>
+        <p class="dp-help" style="margin:0 0 2px">{% if invoice.status == 'void' %}Invoice dibatalkan{% elif swap.state == "Ditukar" %}Diselesaikan dengan penukaran barang{% elif invoice.fully_returned %}Diselesaikan dengan retur{% elif amount_due <= 0 %}Sudah lunas{% else %}Sisa tagihan{% endif %}</p>
         <div class="dp-amount {% if amount_due <= 0 %}ok{% elif invoice.status == 'overdue' %}alert{% endif %}">{{ amount_due|rp }}</div>
         <div class="progress{% if paid_pct >= 100 %} done{% endif %}"><span style="width:{{ paid_pct }}%"></span></div>
         <div class="kv">
@@ -229,6 +237,33 @@
   {% include "merchant/_audit_card.html" %}
   </aside>
 </div>
+
+{% if may_exchange and swap.lines %}
+{# ── Swap goods (another size or item) ──────────────────────────────── #}
+<dialog id="swap-dialog" class="pd-dialog" aria-labelledby="swap-title" style="width:min(560px,calc(100vw - 32px))">
+  <form method="post" action="{% url 'merchant-invoice-exchange' invoice.id %}">
+    {% csrf_token %}<input type="hidden" name="idem" value="{{ idem_key }}">
+    <header><h2 id="swap-title">Tukar barang</h2><button type="button" data-close aria-label="Tutup">&times;</button></header>
+    <div>
+      <p class="dp-help" style="margin-top:0">Invoice ini tetap seperti yang diterima pembeli. Barang lama dikembalikan dengan nota kredit, barang pengganti dibuatkan invoice pengganti yang langsung dibayar dari nota kredit itu. Harga sama: tidak ada tagihan baru.</p>
+      <label class="field"><span>Barang yang ditukar</span><select name="item" required>{% for row in swap.lines %}<option value="{{ row.item.pk }}" data-left="{{ row.left }}">{{ row.item.description }}{% if row.item.sku %} ({{ row.item.sku }}){% endif %} · sisa {{ row.left }}</option>{% endfor %}</select></label>
+      <div class="field-row">
+        <label class="field"><span>Jumlah</span><input type="number" name="quantity" value="1" min="1" step="1" required></label>
+        <label class="field"><span>Tanggal penukaran</span><input type="date" name="issued_on" value="{{ today }}" required></label>
+      </div>
+      <label class="field"><span>Barang pengganti (SKU)</span><input name="replacement" list="swap-offer" required autocomplete="off" placeholder="mis. M2601-42-Black"><small class="dp-help">Ketik SKU atau nama; stok tersedia terlihat di daftar.</small></label>
+      <datalist id="swap-offer">{% for sku, name, left in swap.offer %}<option value="{{ sku }}">{{ name }} · stok {{ left }}</option>{% endfor %}</datalist>
+      <fieldset class="swap-cond"><legend>Kondisi barang yang kembali</legend>
+        <label><input type="radio" name="condition" value="good" checked> Baik, masuk stok lagi</label>
+        <label><input type="radio" name="condition" value="damaged"> Rusak, tidak bisa dijual (dicatat sebagai kerugian)</label>
+      </fieldset>
+      <label class="field"><span>Harga pengganti per unit <em>(opsional)</em></span><input type="text" inputmode="numeric" name="unit_price" data-rupiah placeholder="Sama dengan yang dibayar"><small class="dp-help">Kosongkan bila harganya sama. Lebih mahal: selisihnya ditagih di invoice pengganti. Lebih murah: kelebihannya menjadi kredit pelanggan.</small></label>
+      <label class="field"><span>Alasan <em>(opsional)</em></span><input type="text" name="reason" maxlength="200" placeholder="mis. ukuran kekecilan"></label>
+    </div>
+    <footer><button type="button" class="btn" data-close>Batal</button><button type="submit" class="btn-primary">Simpan penukaran</button></footer>
+  </form>
+</dialog>
+{% endif %}
 
 {# ── Write off the balance ───────────────────────────────────────────── #}
 <dialog id="writeoff-dialog" class="pd-dialog" aria-labelledby="writeoff-title">
