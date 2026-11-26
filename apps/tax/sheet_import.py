@@ -56,7 +56,7 @@ def invoice_rows(store, upload):
       A row with no item but an EXPENSE:EXPENSE VALUE (Accurate's "biaya lain") becomes the invoice's ongkir
       (4200, outside PPN); a negative one is left out and counted.
     - **Sales sheet** (our template: Date, SKU, Qty, Customer Name, Address, Phone Number, District, Province,
-      Sales Channel, Status, Sales, Net Sales, Ongkir, optional Ref): one invoice per row, or per Ref. ``Sales`` is
+      Sales Channel, Status, Sales, Net Sales, Ongkir, optional No. Pesanan / Ref): one invoice per row, or per Ref. ``Sales`` is
       the line total at the retail price, so the price is Sales / Qty; ``Net Sales`` (what the company keeps
       after the mitra or marketplace cut) makes the rest a line discount, so the invoice shows both. ``Ongkir``
       is the courier cost the company paid (an expense, not billed). A Sales Channel naming a mitra puts the
@@ -134,7 +134,8 @@ def invoice_rows(store, upload):
             address = row.get("address", "")
             place = ", ".join([address] + [x for x in (row.get("district", ""), row.get("province", ""))
                                            if x and x.lower() not in address.lower()]).strip(", ")
-            out.append([_first(row, "ref", "no. ref", "referensi"), _first(row, "customer name", "pelanggan"),
+            out.append([_first(row, "no. pesanan", "no pesanan", "nomor pesanan", "order id", "ref", "no. ref",
+                                   "referensi"), _first(row, "customer name", "pelanggan"),
                         _first(row, "date", "tanggal"), _first(row, "due date", "jatuh tempo"),
                         _first(row, "sku", "barang"), qty, price, discount,
                         _first(row, "phone number", "telepon", "phone"), place,

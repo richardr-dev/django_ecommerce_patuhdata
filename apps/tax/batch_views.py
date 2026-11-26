@@ -47,7 +47,7 @@ def _plan(store, post, mode):
 
 
 TEMPLATE_HEAD = ["Date", "SKU", "Qty", "Customer Name", "Address", "Phone Number", "District", "Province",
-                 "Sales Channel", "Status", "Sales", "Net Sales", "Ongkir", "Ref"]
+                 "Sales Channel", "Status", "Sales", "Net Sales", "Ongkir", "No. Pesanan"]
 TEMPLATE_ROWS = [
     ["03/08/2026", "M2601-41-Black", 1, "Budi", "Jalan Pakan Dalam no.29, Kec. Daha Utara", "", "Hulu Sungai Selatan",
      "Kalimantan Selatan", "Shopee ABShop", "Sales", 1198000, 718800, None, None],
@@ -71,7 +71,8 @@ TEMPLATE_HELP = [
      "jadi invoice bernilai Net Sales. Kosong: tanpa diskon.")),
     ("Ongkir", ("Ongkos kirim yang dibayar perusahaan ke kurir. Dicatat sebagai biaya (6700) dari rekening yang "
      "dipilih di halaman impor; tidak ditagihkan ke pembeli.")),
-    ("Ref", "Opsional. Baris dengan Ref yang sama menjadi satu invoice; tanpa Ref, satu baris satu invoice."),
+    ("No. Pesanan", ("Opsional. Nomor pesanan (Shopee, mitra...) disimpan sebagai Referensi invoice. Baris dengan nomor "
+     "yang sama menjadi satu invoice; kosong: satu baris satu invoice.")),
 ]
 
 

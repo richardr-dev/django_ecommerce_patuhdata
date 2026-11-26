@@ -100,6 +100,15 @@ class InvoiceSheetTests(Base):
         self.assertTrue(JournalLine.objects.filter(entry__expense=cost, account__code="6700",
             debit=D(26996)).exists())
 
+    def test_no_pesanan_groups_rows_into_one_invoice_and_is_its_reference(self):
+        head = ["Date", "No. Pesanan", "SKU", "Qty", "Customer Name", "Status", "Sales", "Net Sales", "Ongkir"]
+        text, _notes = sheet_import.invoice_rows(self.store, xlsx([head,
+            ["05/08/2026", "SHP-2", "KBL", 1, "Aidil", "Sales", 100000, 60000, 21000],
+            ["05/08/2026", "SHP-2", "LMP", 1, "Aidil", "Sales", 50000, 30000, ""]]))
+        plans = batch.parse_paste(self.store, text)
+        self.assertEqual((len(plans), plans[0].reference, len(plans[0].lines), plans[0].subtotal,
+            plans[0].shipping_cost), (1, "SHP-2", 2, D(90000), D(21000)))
+
     def test_the_template_downloads_as_a_workbook_with_help(self):
         from openpyxl import load_workbook
         self.client.force_login(self.owner)
