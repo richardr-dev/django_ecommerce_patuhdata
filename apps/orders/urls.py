@@ -76,6 +76,7 @@ urlpatterns = [
     path("orders/<uuid:order_id>/buy-again/", views.order_buy_again, name="order-buy-again"),
     path("books/", views.merchant_dashboard, name="merchant-dashboard"),
     path("books/orders/", views.merchant_orders, name="merchant-orders"),
+    path("books/orders/tampilan/", views.merchant_orders_view, name="merchant-orders-view"),
     path("books/gift-cards/", gift_card_views.merchant_gift_cards, name="merchant-gift-cards"),
     path("books/gift-cards/<int:card_id>/toggle/", gift_card_views.merchant_gift_card_toggle,
         name="merchant-gift-card-toggle"),

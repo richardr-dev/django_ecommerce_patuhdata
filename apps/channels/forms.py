@@ -22,7 +22,7 @@ class OrdersImportForm(forms.Form):
         if upload.size > 10 * 1024 * 1024:
             return "File terlalu besar (maksimal 10 MB)."
         name = upload.name.lower()
-        if not (name.endswith(".csv") or name.endswith(".xlsx")):
+        if not name.endswith((".csv", ".xlsx")):
             return "Format tidak didukung. Gunakan .xlsx atau .csv."
         return ""
 

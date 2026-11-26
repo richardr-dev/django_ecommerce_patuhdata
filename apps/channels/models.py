@@ -139,6 +139,9 @@ class ImportBatch(models.Model):
         help_text="Jenis penjualan untuk pengelompokan invoice.")
     is_soft = models.BooleanField(default=False,
         help_text="True when imported without stock deduction (historical mode).")
+    # The person importing chose whether these orders also appear on Pesanan (they are in Invoice penjualan and
+    # the books either way). An order keeps the choice of the import that first brought it in.
+    show_in_orders = models.BooleanField(default=True)
     order_count = models.PositiveIntegerField(default=0)
     duplicate_count = models.PositiveIntegerField(default=0)
     updated_count = models.PositiveIntegerField(default=0)  # existing orders whose status moved
@@ -253,3 +256,21 @@ class ChannelOrderIncome(models.Model):
     @property
     def total_fees(self):
         return sum((getattr(self, name) for name in self.FEE_FIELDS), 0)
+
+
+class ImportPreference(models.Model):
+    """One person's own defaults in one company: what Impor pesanan starts with, and what Pesanan shows when
+    opened. Saved only when the person ticks "simpan sebagai bawaan"; without a row the built-in defaults apply."""
+    VIEW_ALL, VIEW_WEB = "all", "web"
+    VIEWS = [(VIEW_ALL, "Semua pesanan, termasuk marketplace"), (VIEW_WEB, "Tanpa pesanan marketplace")]
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="import_preferences")
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="import_preferences")
+    states = models.JSONField(default=list)          # marketplace statuses ticked on the import page
+    category = models.CharField(max_length=20, default="regular")
+    soft = models.BooleanField(default=False)
+    show_in_orders = models.BooleanField(default=True)
+    orders_view = models.CharField(max_length=10, choices=VIEWS, default=VIEW_ALL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "store"], name="one_import_preference_per_user")]

@@ -457,7 +457,7 @@ IMPORT_FINISHED = {STATE_COMPLETED} | REVERSING
 def import_orders(channel, orders, soft: bool = False,
                   file_name: str = "", imported_by=None, skipped: int = 0,
                   category: str = "regular", finished_only: bool = False, include_cancelled: bool = True,
-                  states=None):
+                  states=None, show_in_orders: bool = True):
     """Import each order, create an ImportBatch record, return summary.
 
     ``finished_only``: a marketplace file lists orders at every stage. An order the marketplace calls
@@ -485,6 +485,7 @@ def import_orders(channel, orders, soft: bool = False,
         store=channel.store, channel=channel, imported_by=imported_by,
         file_name=file_name[:255], is_soft=soft,
         category=category if category in {c for c, _ in ImportBatch.CAT_CHOICES} else "regular",
+        show_in_orders=show_in_orders,
     )
 
     summary = {"created": 0, "duplicates": 0, "updated": 0, "cancelled": 0, "errors": [],

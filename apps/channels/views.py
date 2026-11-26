@@ -15,6 +15,9 @@ from apps.shops.permissions import roles
 
 from .adapters import PLATFORMS
 from .forms import OrdersImportForm, SalesChannelForm
+from .import_prefs import (
+    STATES as IMPORT_STATES,  # marketplace statuses a person can choose to import
+)
 from .models import ChannelBuyer, ImportBatch, SalesChannel
 from .services import (
     CSV_COLUMNS,
@@ -106,8 +109,6 @@ def merchant_channel_detail(request, channel_id):
         summary=summary, platform=PLATFORMS[channel.platform]))
 
 
-# Marketplace statuses a person can choose to import (label shown on the import page).
-IMPORT_STATES = ("completed", "shipped", "active", "cancelled")
 
 
 @login_required(login_url="/login/")
@@ -179,6 +180,13 @@ def merchant_import(request):
     selected = IMPORT_PLATFORMS.get(platform)
     form = OrdersImportForm()
     summary = None
+    from . import import_prefs
+    pref = import_prefs.get(request.user, store)
+    if request.method == "POST" and selected and request.POST.get("save_default") == "1":
+        import_prefs.save_import_defaults(request.user, store, states=set(request.POST.getlist("states")),
+            category=request.POST.get("category", "regular"), soft=request.POST.get("soft") == "1",
+            show_in_orders=request.POST.get("show_in_orders", "1") == "1")
+        pref = import_prefs.get(request.user, store)
 
     if request.method == "POST" and selected:
         form = OrdersImportForm(request.POST, request.FILES)
@@ -189,6 +197,7 @@ def merchant_import(request):
             uploads = uploads or [form.cleaned_data["file"]]
             soft = request.POST.get("soft") == "1"
             category = request.POST.get("category", "regular")
+            show_in_orders = request.POST.get("show_in_orders", "1") == "1"
             if platform == "manual":
                 states = None
             else:
@@ -196,8 +205,9 @@ def merchant_import(request):
                 states = {st for st in IMPORT_STATES if st in chosen}
                 if "cancelled" in states:
                     states.add("returned")
-            from .parsers import parse_order_file
             from apps.shops.models import AuditLog
+
+            from .parsers import parse_order_file
             summary = None
             for upload in uploads:
                 try:
@@ -210,7 +220,7 @@ def merchant_import(request):
                     one = import_orders(channel, orders, soft=soft,
                         file_name=upload.name, imported_by=request.user, skipped=skipped,
                         category=category, finished_only=platform != "manual",
-                        include_cancelled=True, states=states)
+                        include_cancelled=True, states=states, show_in_orders=show_in_orders)
                 except (ChannelImportError, UnicodeDecodeError, _csv.Error) as error:
                     if len(uploads) == 1:
                         form.add_error("file", f"File tidak dapat dibaca: {error}")
@@ -229,6 +239,7 @@ def merchant_import(request):
                              "skipped": skipped, "not_finished": one["not_finished"],
                              "cancelled_skipped": one["cancelled_skipped"],
                              "states": sorted(states) if states is not None else "all",
+                             "show_in_orders": show_in_orders,
                              "soft": soft, "errors": len(one["errors"])})
                 if summary is None:
                     summary = one
@@ -261,7 +272,12 @@ def merchant_import(request):
                        ("shipped", "Sedang dikirim", "Invoice dibuat, status pesanan: dikirim."),
                        ("active", "Diproses / dikemas", "Invoice dibuat, pesanan menunggu dikirim."),
                        ("cancelled", "Dibatalkan / diretur", "Hanya dicatat dengan statusnya, bukan penjualan.")],
-        default_states=set(request.POST.getlist("states")) if request.method == "POST" else {"completed", "cancelled"},
+        default_states=set(request.POST.getlist("states")) if request.method == "POST" else import_prefs.states_of(pref),
+        pref=pref, saved_default=bool(pref.pk),
+        categories=ImportBatch.CAT_CHOICES,
+        chosen_category=request.POST.get("category") if request.method == "POST" else pref.category,
+        chosen_soft=(request.POST.get("soft") == "1") if request.method == "POST" else pref.soft,
+        chosen_show=(request.POST.get("show_in_orders", "1") == "1") if request.method == "POST" else pref.show_in_orders,
         platform=platform, selected=selected,
         form=form, summary=summary,
     ))

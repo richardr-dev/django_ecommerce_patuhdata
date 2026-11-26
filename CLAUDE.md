@@ -364,6 +364,12 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   (`scope.marketplace_orders` excluded): a marketplace moves its own parcels, so a marketplace card has no pack or
   ship buttons, only courier, resi (with copy), the marketplace status and the review flag (`ChannelOrder.attention`).
   "Unggah label resi" (`orders/resi_labels.py`, `label_views.py`) reads PDF labels with pypdf, no OCR engine.
+- **Each person's import and Pesanan defaults** (`channels.ImportPreference` per user and company, `channels/import_prefs.py`;
+  tests `tests/test_import_preferences.py`, 2026-11-26): Impor pesanan starts on the person's saved statuses, category,
+  historical mode and "Tampil di Pesanan", saved only when "Simpan pilihan ini sebagai bawaan saya" is ticked. An import
+  marked "Tidak" sets `ImportBatch.show_in_orders=False`: its orders stay in Invoice penjualan and the books but Pesanan
+  hides them (banner "Tampilkan juga" → `?sumber=semua`). Pesanan without `?sumber` opens on the person's saved view
+  (`all` or `web`, "Jadikan tampilan bawaan saya" → `merchant-orders-view`).
 - **The back office lives under `/books/`** (it was `/merchant/`, a word that suits a shop, not an accounting
   product). Old `/merchant/...` addresses redirect (`config/views.py:legacy_merchant`: 301 for GET, 308 for
   anything else, `/merchant/login/` goes to `/login/`), so bookmarks, invite emails and forms in flight keep

@@ -32,21 +32,24 @@
         <input type="file" name="file" id="id_file" accept="{{ selected.accept }}" multiple required>
       </label></div>
 
+      {% if saved_default %}<div class="notice info" style="margin-top:14px">{% icon "check-circle" %}<span>Pilihan di bawah memakai <b>bawaan Anda</b> yang tersimpan. Ubah untuk impor ini saja, atau centang “Simpan sebagai bawaan saya”.</span></div>{% endif %}
       <label class="field" style="margin-top:18px"><span>Kategori penjualan</span>
-        <select name="category" id="id_category">
-          <option value="regular">Penjualan reguler</option>
-          <option value="flash_sale">Flash sale</option>
-          <option value="harbolnas">Harbolnas / hari belanja</option>
-          <option value="wholesale">Grosir / wholesale</option>
-          <option value="campaign">Promo / kampanye</option>
-          <option value="consignment">Konsinyasi</option>
-        </select><small style="color:var(--ds-muted)">Untuk pengelompokan dan laporan di Invoice penjualan.</small></label>
+        <select name="category" id="id_category">{% for code, label in categories %}<option value="{{ code }}"{% if code == chosen_category %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <small style="color:var(--ds-muted)">Untuk pengelompokan dan laporan di Invoice penjualan.</small></label>
 
       {% if platform != "manual" %}<fieldset class="field" style="margin-top:18px;border:0;padding:0"><legend style="font-weight:600;margin-bottom:6px">Status pesanan yang diimpor</legend>
         {% for code, label, help in import_states %}<div class="ds-check-wrap" style="margin-bottom:8px"><label class="ds-check"><input type="checkbox" name="states" value="{{ code }}"{% if code in default_states %} checked{% endif %}> {{ label }}</label> <small>{{ help }}</small></div>{% endfor %}
         <small style="color:var(--ds-muted)">Pesanan dengan status lain dilewati dan masuk saat file berikutnya diimpor. Pesanan yang sudah pernah diimpor selalu diperbarui statusnya; bila kemudian dibatalkan atau diretur, penjualannya ditarik kembali.</small></fieldset>{% endif %}
-      <div class="ds-check-wrap" style="margin-top:14px"><label class="ds-check"><input type="checkbox" name="soft" value="1"> Impor data historis (tanpa potong stok)</label>
+
+      <label class="field" style="margin-top:18px"><span>Tampil di Pesanan</span>
+        <select name="show_in_orders"><option value="1"{% if chosen_show %} selected{% endif %}>Ya, tampilkan juga di Pesanan</option><option value="0"{% if not chosen_show %} selected{% endif %}>Tidak, cukup di Invoice penjualan</option></select>
+        <small style="color:var(--ds-muted)">Pesanan hasil impor selalu tercatat di Invoice penjualan, rekap channel dan pembukuan. Pilih “Tidak” bila halaman Pesanan hanya untuk pesanan yang Anda kemas sendiri; Anda tetap bisa melihatnya lewat “Tampilkan juga” di Pesanan.</small></label>
+
+      <div class="ds-check-wrap" style="margin-top:14px"><label class="ds-check"><input type="checkbox" name="soft" value="1"{% if chosen_soft %} checked{% endif %}> Impor data historis (tanpa potong stok)</label>
         <small>Centang bila produk belum ada di katalog. Pesanan tetap masuk, stok tidak dikurangi. Cocok untuk data lama.</small></div>
+
+      <div class="ds-check-wrap" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--ds-line,#d6e6f0)"><label class="ds-check"><input type="checkbox" name="save_default" value="1"> Simpan pilihan ini sebagai bawaan saya</label>
+        <small>Kategori, status, tampil di Pesanan dan mode historis akan langsung terpilih setiap kali Anda membuka Impor pesanan. Hanya untuk akun Anda di perusahaan ini.</small></div>
     </div>
     <footer><button class="btn-primary btn-block btn-lg">{% icon "upload" %} Impor pesanan {{ selected.label }}</button></footer>
   </form>

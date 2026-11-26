@@ -1210,16 +1210,40 @@ def _order_kpis(orders, own=None):
 
 
 @login_required(login_url="/login/")
+def merchant_orders_view(request):
+    """Save what Pesanan shows this person when opened: every order, or without marketplace orders."""
+    if request.method != "POST":
+        raise Http404
+    store = _staff_store(request)
+    from apps.channels import import_prefs
+    pref = import_prefs.save_orders_view(request.user, store, request.POST.get("view", "all"))
+    messages.success(request, "Tampilan bawaan Pesanan disimpan: " + pref.get_orders_view_display().lower() + ".")
+    return redirect(reverse("merchant-orders") + "?tab=all")
+
+
+@login_required(login_url="/login/")
 def merchant_orders(request):
     from .scope import MARKETPLACE_CHANNELS, marketplace_orders, website_orders
     store = _staff_store(request)
-    # Everything is shown by default. "?sumber=web" narrows to website, manual and cash-register orders
-    # (the old default); picking a marketplace channel always shows marketplace orders.
+    # What is shown: "?sumber=web" website, manual and cash-register orders only; "?sumber=all" everything
+    # except imports the importer chose to keep out of Pesanan; "?sumber=semua" those too. Without the parameter
+    # the person's saved view applies (Impor pesanan / Pesanan "Jadikan tampilan bawaan"), else "all". Picking a
+    # marketplace channel always shows marketplace orders.
+    from apps.channels import import_prefs
+    pref = import_prefs.get(request.user, store)
     chosen = set(request.GET.getlist("channel")) | {c for v in request.GET.getlist("channel") for c in v.split(",")}
-    web_only = request.GET.get("sumber") == "web" and not (chosen & MARKETPLACE_CHANNELS)
+    sumber = request.GET.get("sumber") or pref.orders_view
+    if sumber not in {"web", "all", "semua"}:
+        sumber = "all"
+    web_only = sumber == "web" and not (chosen & MARKETPLACE_CHANNELS)
     with_marketplace = not web_only
     hidden_marketplace = marketplace_orders(store).count() if web_only else 0
     all_orders = website_orders(store) if web_only else Order.objects.filter(store=store).exclude(order_type="opening")
+    hidden_imports = 0
+    if not web_only and sumber != "semua":
+        kept_out = all_orders.filter(channel_order__batch__show_in_orders=False)
+        hidden_imports = kept_out.count()
+        all_orders = all_orders.exclude(pk__in=kept_out.values("pk"))
     # Old clean-ups renamed superseded copies of an order to "<id>~dibersihkan": cancelled leftovers that were
     # never sales. They stay in the data but are hidden here unless asked for (?arsip=1).
     show_archive = request.GET.get("arsip") == "1"
@@ -1313,7 +1337,8 @@ def merchant_orders(request):
         _merchant_context(request, store,
         orders=page.object_list, page_obj=page, page_range=page_range, page_query=page_query,
         active_filters=active_filters, presets=PRESETS, sorts=SORTS, sort=sort or "newest",
-        with_marketplace=with_marketplace, hidden_marketplace=hidden_marketplace,
+        with_marketplace=with_marketplace, hidden_marketplace=hidden_marketplace, hidden_imports=hidden_imports,
+        sumber=sumber, saved_view=pref.orders_view,
         archived_count=archived_count, show_archive=show_archive,
         marketplace_chosen=bool(chosen & MARKETPLACE_CHANNELS),
         has_printable=any(order.can_print_label for order in page.object_list),
