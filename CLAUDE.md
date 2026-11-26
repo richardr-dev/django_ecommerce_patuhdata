@@ -673,6 +673,11 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
   on every visit, so never add `document`/`window` listeners there (bind to elements). Opt a
   link out with `data-no-soft`. Links with `hx-*`, `data-confirm`, `onclick`, pdf/csv/print stay
   normal.
+- **Menu ringkas / lengkap** (2026-11-26, `merchant_nav.CORE`, `FULL_MENU_ROLES`; tests `tests/test_nav_simple.py`): the sidebar
+  starts short: only the links named in `CORE` (per group label), plus any link with a badge, plus the page you are on
+  and its group. The rest carry `nav-extra` and are hidden by `.pd-nav.is-simple`; they stay in the DOM so the menu
+  search finds them. "Tampilkan menu lengkap" at the foot switches per device (`localStorage` `pd-nav-mode`); accountant
+  and finance start on the full menu. A new everyday page is added to `CORE`; anything else needs no change.
 - Invoice lines carry optional enterprise columns: Kode (`code[]` → `InvoiceItem.sku` for
   services), Satuan (`unit[]`), Keterangan (`note[]`), Diskon Rp and a Diskon % helper. The form's
   "Kolom" menu shows them (remembered per device); detail and PDF show them when filled.

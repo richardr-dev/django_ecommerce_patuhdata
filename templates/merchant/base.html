@@ -34,6 +34,25 @@
   </a>
 
   <nav class="pd-nav" id="pd-nav">{% merchant_nav %}</nav>
+  <script>
+  /* Menu ringkas / lengkap: chosen per device, default by role; set before the sidebar paints. */
+  (function () {
+    var nav = document.getElementById("pd-nav"), btn = document.getElementById("pd-nav-mode");
+    if (!nav || !btn) return;
+    var mode = btn.getAttribute("data-default");
+    try { mode = window.localStorage.getItem("pd-nav-mode") || mode; } catch (e) {}
+    function apply(next) {
+      nav.classList.toggle("is-simple", next === "simple");
+      btn.setAttribute("aria-pressed", next === "full" ? "true" : "false");
+    }
+    apply(mode);
+    btn.addEventListener("click", function () {
+      mode = nav.classList.contains("is-simple") ? "full" : "simple";
+      try { window.localStorage.setItem("pd-nav-mode", mode); } catch (e) {}
+      apply(mode);
+    });
+  })();
+  </script>
 
   <div class="pd-sidebar-foot">
     {% if storefront_enabled %}<a href="{{ merchant_preview_url|default:merchant_store_url }}" target="_blank" rel="noopener" class="view-store">{% icon "external" %}<span>Lihat toko online</span></a>{% endif %}

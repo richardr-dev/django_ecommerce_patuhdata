@@ -1537,3 +1537,16 @@ html, body, .pd-body, .pd-shell, .pd-main { background: #ffffff; }
 .bb-btn { border-radius: 8px; box-shadow: none; }
 .bb-pill { border-radius: 8px; }
 .bb-bubble.step { box-shadow: none; }
+
+/* Menu ringkas (default) / lengkap: the short sidebar hides what is marked .nav-extra; the page you are on is
+   never marked, and the menu search still finds every page (the links stay in the page). */
+.pd-nav.is-simple .nav-extra { display: none !important; }
+.nav-mode { display: flex; align-items: center; width: calc(100% - 16px); margin: 14px 8px 18px; padding: 9px 12px; gap: 8px;
+  border: 1px dashed var(--ds-line-strong, #9fbfd6); border-radius: 8px; background: #fff; color: var(--ds-primary, #0b6fb8);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.nav-mode:hover { background: var(--ds-nested, #eaf7fe); border-style: solid; }
+.nav-mode .ico, .nav-mode svg { width: 16px; height: 16px; }
+.nav-mode .nav-mode-full { display: none; align-items: center; gap: 8px; }
+.nav-mode .nav-mode-simple { display: inline-flex; align-items: center; gap: 8px; }
+.pd-nav:not(.is-simple) .nav-mode .nav-mode-full { display: inline-flex; }
+.pd-nav:not(.is-simple) .nav-mode .nav-mode-simple { display: none; }

@@ -209,6 +209,25 @@ NAV = [
     ]),
 ]
 
+# "Menu ringkas" (the default sidebar): the pages a small company uses every week. Everything else is one
+# click away under "Menu lengkap", stays in the menu search, and shows anyway while it is the page you are on.
+CORE = {
+    "Penjualan": {"Ringkasan penjualan", "Pesanan", "Invoice penjualan", "Retur & penukaran"},
+    "Piutang & pembayaran": {"Piutang pelanggan", "Terima pembayaran"},
+    "Pembelian": {"Tagihan supplier", "Beli tunai", "Supplier"},
+    "Kas & bank": {"Kas & bank", "Biaya operasional", "Pencairan dana"},
+    "Stok & Produk": {"Semua produk", "Stok gudang", "Impor produk"},
+    "Laporan Keuangan": {"Laba rugi", "Neraca", "Arus kas"},
+    "Pajak": {"PPN & PPh", "Pajak marketplace"},
+    "Marketplace": {"Toko marketplace", "Impor pesanan", "Penghasilan & biaya"},
+    "Mitra konsinyasi": {"Daftar mitra", "Settlement"},
+    "Pelanggan": {"Semua pelanggan"},
+    "Pengaturan": {"Pembayaran", "Staf & akses", "Paket langganan"},
+}
+# Roles whose work is the full ledger start on "Menu lengkap".
+FULL_MENU_ROLES = {"accountant", "finance"}
+
+
 # The header "Buat baru" menu: every document a person starts by hand, grouped like the sidebar.
 # ``query`` lands on a list page with its dialog open (``?buka=<dialog id>``, see _dialog_js.html).
 # A sale is always an invoice: there is no "Pesanan" here on purpose (tests pin it).
@@ -320,30 +339,38 @@ def build_nav(context):
                 href = _url(link.url, link.args)
                 if href is None:
                     continue
+                badge = context.get(link.badge) if link.badge else None
                 item = {"label": link.label, "href": href + (f"?{link.query}" if link.query else ""),
-                    "badge": context.get(link.badge) if link.badge else None, "active": False}
+                    "badge": badge, "active": False,
+                    "core": link.label in CORE.get(group.label, ()) or bool(badge)}
                 score = _score(link, path, href, query)
                 if score > best:
                     best, active = score, item
                 links.append(item)
             if links:
-                built_groups.append({"label": group.label, "icon": group.icon, "links": links})
+                built_groups.append({"label": group.label, "icon": group.icon, "links": links,
+                    "core": any(item["core"] for item in links)})
         if built_groups:
-            sections.append({"title": title, "groups": built_groups})
+            sections.append({"title": title, "groups": built_groups,
+                "core": any(group["core"] for group in built_groups)})
     if active:
         active["active"] = True
     for section in sections:
         for group in section["groups"]:
             group["open"] = any(item["active"] for item in group["links"])
+            group["active"] = group["open"]
+        section["active"] = any(group["active"] for group in section["groups"])
     return sections
 
 
 @register.inclusion_tag("merchant/_nav.html", takes_context=True)
 def merchant_nav(context):
     request = context.get("request")
+    role = context.get("merchant_real_role", "") or context.get("merchant_role", "")
     return {"sections": build_nav(context),
         "home_active": bool(request and request.path == "/books/"),
-        "home_href": _url("merchant-dashboard")}
+        "home_href": _url("merchant-dashboard"),
+        "default_mode": "full" if role in FULL_MENU_ROLES else "simple"}
 
 
 @register.inclusion_tag("merchant/_create_menu.html", takes_context=True)

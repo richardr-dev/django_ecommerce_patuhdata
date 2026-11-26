@@ -1,13 +1,13 @@
 {% load icons %}
 <a href="{{ home_href }}" class="nav-home{% if home_active %} is-active{% endif %}">{% icon "home" %}<span>Beranda</span></a>
 {% for section in sections %}
-  {% if section.title %}<p class="nav-section">{{ section.title }}</p>{% else %}<div class="nav-divider"></div>{% endif %}
+  {% if section.title %}<p class="nav-section{% if not section.core and not section.active %} nav-extra{% endif %}">{{ section.title }}</p>{% else %}<div class="nav-divider"></div>{% endif %}
   {% for group in section.groups %}
-  <details class="nav-group"{% if group.open %} open{% endif %}>
+  <details class="nav-group{% if not group.core and not group.active %} nav-extra{% endif %}"{% if group.open %} open{% endif %}>
     <summary>{% icon group.icon %}{{ group.label }}</summary>
     <div class="nav-links">
       {% for item in group.links %}
-      <a href="{{ item.href }}" class="nav-link{% if item.active %} is-active{% endif %}" data-group="{{ group.label }}"{% if item.active %} aria-current="page"{% endif %}>
+      <a href="{{ item.href }}" class="nav-link{% if item.active %} is-active{% endif %}{% if not item.core and not item.active %} nav-extra{% endif %}" data-group="{{ group.label }}"{% if item.active %} aria-current="page"{% endif %}>
         <span>{{ item.label }}</span>{% if item.badge %}<b class="nav-badge">{{ item.badge }}</b>{% endif %}
       </a>
       {% endfor %}
@@ -15,3 +15,7 @@
   </details>
   {% endfor %}
 {% endfor %}
+<button type="button" class="nav-mode" id="pd-nav-mode" data-default="{{ default_mode }}" aria-pressed="false" data-no-loading>
+  <span class="nav-mode-simple">{% icon "layers" %}Tampilkan menu lengkap</span>
+  <span class="nav-mode-full">{% icon "layers" %}Tampilkan menu ringkas</span>
+</button>
