@@ -1,4 +1,5 @@
 import csv
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -45,58 +46,161 @@ MAX_IMPORT_BYTES = 10 * 1024 * 1024
 BULK_BATCH_SIZE = 500
 
 
-def parse_import_rows(rows):
-    """Validate every row before touching the database, so a bad row fails fast."""
+# Column names a catalogue export may use (ours, Indonesian, Accurate's item list) → our field.
+HEADER_ALIASES = {
+    "name": ("name", "nama", "nama produk", "nama barang", "item name", "item description", "product name"),
+    "sku": ("sku", "kode", "kode barang", "kode produk", "item no", "item no.", "no. barang", "seller sku"),
+    "price": ("price", "harga", "harga jual", "unit price", "unitprice", "sales price"),
+    "stock": ("stock", "stok", "qty", "quantity", "kuantitas", "jumlah"),
+    "category": ("category", "kategori", "item category", "kategori barang"),
+    "description": ("description", "deskripsi", "keterangan"),
+    "weight_grams": ("weight_grams", "berat", "berat (gram)", "weight", "berat gram"),
+    "image_url": ("image_url", "foto", "url foto", "gambar", "image"),
+    "cost_price": ("cost_price", "harga pokok", "harga modal", "hpp", "unit cost", "cost", "harga beli"),
+}
+KEYS = (("sku", "SKU"), ("name", "Nama produk"))
+
+
+def normalise_headers(rows):
+    """Rows keyed by our field names, whatever names the file used for them (first match wins)."""
+    out = []
+    for row in rows:
+        clean = {}
+        for target, names in HEADER_ALIASES.items():
+            found = next((name for name in names if name in row), None)
+            if found is not None:
+                clean[target] = row[found]
+        out.append(clean)
+    return out
+
+
+def _number(text, kind):
+    text = (text or "").strip()
+    text = text.removesuffix(".0")          # spreadsheets write 99000.0
+    if not text:
+        return None
+    return int(text) if kind is int else Decimal(text)
+
+
+def parse_import_rows(rows, *, key="sku"):
+    """Validate every row before touching the database, so a bad row fails fast.
+
+    ``key`` is what identifies a product: its SKU (the default), or its name (to give products made by hand
+    their SKU, or rename nothing and only refresh prices). A blank cell means "keep what the product has";
+    a new product needs a name, a SKU and a price."""
     parsed, seen = [], {}
     for number, row in enumerate(rows, 2):
         name, sku = (row.get("name") or "").strip(), (row.get("sku") or "").strip()[:80]
-        if not name or not sku:
-            raise ValueError(f"Baris {number}: name dan sku wajib diisi.")
-        if sku in seen:
-            raise ValueError(f"Baris {number}: SKU {sku} sudah muncul di baris {seen[sku]}.")
-        seen[sku] = number
+        ident = sku if key == "sku" else name.lower()
+        if not ident:
+            raise ValueError(f"Baris {number}: {'sku' if key == 'sku' else 'name'} wajib diisi "
+                f"(kunci impor: {dict(KEYS)[key]}).")
+        if ident in seen:
+            raise ValueError(f"Baris {number}: {'SKU ' + sku if key == 'sku' else 'nama ' + name} sudah muncul di "
+                f"baris {seen[ident]}.")
+        seen[ident] = number
         try:
-            price = Decimal((row.get("price") or "").strip())
-            stock = int((row.get("stock") or "").strip())
-            weight = int((row.get("weight_grams") or "0").strip() or 0)
-            cost = (row.get("cost_price") or "").strip()
-            cost = Decimal(cost) if cost else None
+            price = _number(row.get("price"), Decimal)
+            stock = _number(row.get("stock"), int)
+            weight = _number(row.get("weight_grams"), int)
+            cost = _number(row.get("cost_price"), Decimal)
         except (InvalidOperation, ValueError):
             raise ValueError(f"Baris {number}: price, stock, weight_grams, atau cost_price "
                 "tidak valid.") from None
-        if not price.is_finite() or price < 0 or stock < 0 or weight < 0 or (
-                cost is not None and (not cost.is_finite() or cost < 0)):
+        numbers = [value for value in (price, stock, weight, cost) if value is not None]
+        if any(not Decimal(value).is_finite() or value < 0 for value in numbers):
             raise ValueError(f"Baris {number}: angka tidak boleh negatif.")
-        if price >= 10 ** 12 or (cost or 0) >= 10 ** 12:
+        if (price or 0) >= 10 ** 12 or (cost or 0) >= 10 ** 12:
             raise ValueError(f"Baris {number}: price atau cost_price terlalu besar.")
-        parsed.append({"number": number, "sku": sku, "stock": stock,
+        values = {"name": name[:160], "price": price, "weight_grams": weight,
+            "description": (row.get("description") or "").strip(),
+            "image_url": (row.get("image_url") or "").strip()[:200], "cost_price": cost}
+        parsed.append({"number": number, "sku": sku, "key": ident, "stock": stock,
             "category": (row.get("category") or "").strip(),
-            "values": {"name": name[:160], "price": price, "weight_grams": weight,
-                "description": (row.get("description") or "").strip(),
-                "image_url": (row.get("image_url") or "").strip()[:200], "is_active": True,
-                # A blank cost_price keeps the cost already saved on the product.
-                **({"cost_price": cost} if cost is not None else {})}})
+            # A blank cell keeps what the product already has.
+            "values": {field: value for field, value in values.items() if value not in (None, "")}})
     return parsed
 
 
-def import_products(store, parsed, *, actor=None):
-    """Upsert products by SKU with a fixed number of queries per batch rather than per row.
+@dataclass
+class PlannedRow:
+    number: int
+    sku: str
+    name: str
+    action: str                     # "create", "update" or "error"
+    product: object = None
+    error: str = ""
+    changes: list = field(default_factory=list)
+
+
+def plan_import(store, parsed, *, key="sku"):
+    """What the import would do to each row, without writing: ``[PlannedRow]``."""
+    products = Product.objects.filter(store=store)
+    by_sku = {p.sku: p for p in products.exclude(sku="")}
+    by_name = {}
+    for product in products:
+        by_name.setdefault(product.name.strip().lower(), []).append(product)
+    variant_skus = set(ProductVariant.objects.filter(product__store=store).exclude(sku="")
+        .values_list("sku", flat=True))
+    out = []
+    for row in parsed:
+        values, sku = row["values"], row["sku"]
+        planned = PlannedRow(number=row["number"], sku=sku, name=values.get("name", ""), action="create")
+        if key == "sku":
+            planned.product = by_sku.get(sku)
+        else:
+            matches = by_name.get(row["key"], [])
+            if len(matches) > 1:
+                planned.action, planned.error = "error", f"{len(matches)} produk bernama “{planned.name}”; pakai kunci SKU"
+            planned.product = matches[0] if len(matches) == 1 else None
+        product = planned.product
+        if planned.action != "error":
+            if sku and sku in variant_skus:
+                planned.action, planned.error = "error", f"SKU {sku} sudah dipakai varian produk"
+            elif sku and key == "name" and by_sku.get(sku) not in (None, product):
+                planned.action, planned.error = "error", f"SKU {sku} sudah dipakai produk {by_sku[sku].name}"
+            elif product is None and not (values.get("name") and sku and "price" in values):
+                planned.action, planned.error = "error", "produk baru perlu name, sku, dan price"
+            elif product is not None:
+                planned.action = "update"
+                planned.name = planned.name or product.name
+                planned.changes = [label for field, label in (("name", "nama"), ("price", "harga"),
+                    ("cost_price", "harga pokok"), ("description", "deskripsi"), ("weight_grams", "berat"),
+                    ("image_url", "foto")) if field in values and values[field] != getattr(product, field)]
+                if key == "name" and sku and sku != product.sku:
+                    planned.changes.append("SKU")
+                if row["category"]:
+                    planned.changes.append("kategori")
+                if row["stock"] is not None:
+                    planned.changes.append("stok")
+        out.append(planned)
+    return out
+
+
+def import_summary(plans):
+    return {"create": sum(p.action == "create" for p in plans), "update": sum(p.action == "update" for p in plans),
+        "unchanged": sum(p.action == "update" and not p.changes for p in plans),
+        "error": sum(p.action == "error" for p in plans)}
+
+
+def import_products(store, parsed, *, actor=None, key="sku"):
+    """Add or update products, matched by SKU (``key="sku"``) or by name, with a fixed number of queries per
+    batch rather than per row. Refuses the whole file when any row cannot be applied (``plan_import``).
     The store row lock serialises this with Product.save()'s SKU uniqueness check."""
     _lock_store(store.id)
-    skus = [row["sku"] for row in parsed]
+    plans = plan_import(store, parsed, key=key)
+    bad = next((p for p in plans if p.action == "error"), None)
+    if bad:
+        raise ValueError(f"Baris {bad.number}: {bad.error}.")
+    new_count = sum(p.action == "create" for p in plans)
     # Imported rows are saved active, so they all count toward the plan's product limit.
-    limit_error = product_limit_error(store, len(skus) + Product.objects.filter(
-        store=store, is_active=True).exclude(sku__in=skus).count())
+    touched = [p.product.pk for p in plans if p.product is not None]
+    limit_error = product_limit_error(store, new_count + len(touched) + Product.objects.filter(
+        store=store, is_active=True).exclude(pk__in=touched).count())
     if limit_error:
         raise ValueError(limit_error)
     warehouse, _ = Warehouse.objects.get_or_create(store=store, code="MAIN",
         defaults={"name": "Gudang Utama", "priority": 10})
-    variant_skus = set(ProductVariant.objects.filter(product__store=store, sku__in=skus)
-        .values_list("sku", flat=True))
-    if variant_skus:
-        row = next(row for row in parsed if row["sku"] in variant_skus)
-        raise ValueError(f"Baris {row['number']}: SKU {row['sku']} sudah dipakai varian "
-            "produk lain di toko ini.")
 
     categories = {category.slug: category for category in Category.objects.filter(store=store)}
     missing = {}
@@ -110,40 +214,53 @@ def import_products(store, parsed, *, actor=None):
         Category.objects.bulk_create(missing.values(), batch_size=BULK_BATCH_SIZE)
         categories = {category.slug: category for category in Category.objects.filter(store=store)}
 
-    existing = {product.sku: product for product in Product.objects.filter(store=store, sku__in=skus)}
     taken_slugs = set(Product.objects.filter(store=store).values_list("slug", flat=True))
-    to_create, to_update = [], []
-    for row in parsed:
-        values = {**row["values"], "category": categories.get(row.get("category_slug"))}
-        product = existing.get(row["sku"])
-        if product:
-            for field, value in values.items():
-                setattr(product, field, value)
+    to_create, to_update, product_of = [], [], {}
+    for row, planned in zip(parsed, plans, strict=True):
+        values = dict(row["values"])
+        if row["category"]:
+            values["category"] = categories.get(row.get("category_slug"))
+        product = planned.product
+        if product is not None:
+            for name, value in values.items():
+                setattr(product, name, value)
+            if row["sku"]:
+                product.sku = row["sku"]
+            product.is_active = True
             to_update.append(product)
+            product_of[row["number"]] = product
             continue
         base_slug = slugify(values["name"])[:45] or slugify(row["sku"])[:45] or "product"
         candidate, suffix = base_slug, 2
         while candidate in taken_slugs:
             candidate, suffix = f"{base_slug}-{suffix}", suffix + 1
         taken_slugs.add(candidate)
-        to_create.append(Product(store=store, sku=row["sku"], slug=candidate, **values))
-    Product.objects.bulk_update(to_update, ["name", "price", "category", "description",
-        "weight_grams", "image_url", "is_active",
-        "cost_price"], batch_size=BULK_BATCH_SIZE)
+        product = Product(store=store, sku=row["sku"], slug=candidate, is_active=True, **values)
+        to_create.append(product)
+    Product.objects.bulk_update(to_update, ["name", "sku", "price", "category", "description",
+        "weight_grams", "image_url", "is_active", "cost_price"], batch_size=BULK_BATCH_SIZE)
     Product.objects.bulk_create(to_create, batch_size=BULK_BATCH_SIZE)
+    created_ids = dict(Product.objects.filter(store=store, sku__in=[p.sku for p in to_create])
+        .values_list("sku", "id"))
+    product_ids = {}
+    for row, planned in zip(parsed, plans, strict=True):
+        product_ids[row["number"]] = (product_of[row["number"]].pk if planned.product is not None
+            else created_ids[row["sku"]])
 
-    product_ids = dict(Product.objects.filter(store=store, sku__in=skus).values_list("sku", "id"))
     levels = {level.product_id: level for level in InventoryLevel.objects.select_for_update()
         .filter(warehouse=warehouse, product_id__in=product_ids.values())}
     now, new_levels, changed_levels, before = timezone.now(), [], [], {}
+    actions = {p.number: p.action for p in plans}
     for row in parsed:
-        product_id = product_ids[row["sku"]]
+        product_id = product_ids[row["number"]]
         level = levels.get(product_id)
         if level is None:
+            if row["stock"] is None and actions[row["number"]] == "update":
+                continue                 # an existing product with a blank stock cell keeps its stock
             before[product_id] = 0
             new_levels.append(InventoryLevel(warehouse=warehouse, product_id=product_id,
-                on_hand=row["stock"]))
-        else:
+                on_hand=row["stock"] or 0))
+        elif row["stock"] is not None:
             before[product_id] = level.on_hand
             level.on_hand, level.updated_at = max(row["stock"], level.reserved), now
             changed_levels.append(level)
@@ -175,6 +292,7 @@ def import_products(store, parsed, *, actor=None):
         for level in changed]
     InventoryMovement.objects.bulk_create(movements, batch_size=BULK_BATCH_SIZE)
     return len(to_create), len(to_update)
+
 
 
 def create_store_defaults(store):
@@ -215,36 +333,47 @@ def merchant_product_import_template(request):
     return response
 
 
+def _read_import(upload, key):
+    """``(parsed, rows)`` from an uploaded catalogue; raises ValueError with the message to show."""
+    if not upload:
+        raise ValueError("Pilih file CSV atau Excel terlebih dahulu.")
+    if upload.size > MAX_IMPORT_BYTES:
+        raise ValueError("Ukuran file maksimal 10 MB.")
+    from apps.shops.tabular import read_rows
+    headers, rows = read_rows(upload, max_rows=MAX_IMPORT_ROWS)
+    rows = normalise_headers(rows)
+    found = {target for target, names in HEADER_ALIASES.items() if set(names) & set(headers)}
+    need = {"sku"} if key == "sku" else {"name"}
+    if not need <= found or not ({"name", "sku"} & found):
+        raise ValueError(f"Kolom {'sku' if key == 'sku' else 'name'} tidak ditemukan. Gunakan template yang bisa "
+            "diunduh di halaman ini (nama kolom Indonesia dan Accurate juga dikenali).")
+    return parse_import_rows(rows, key=key), rows
+
+
 @login_required(login_url="/login/")
 def merchant_product_import(request):
     store, stores, role = _setup_store(request)
-    if request.method == "POST":
-        upload = request.FILES.get("file")
-        if not upload:
-            messages.error(request, "Pilih file CSV terlebih dahulu.")
-        elif upload.size > MAX_IMPORT_BYTES:
-            messages.error(request, "Ukuran CSV maksimal 10 MB.")
-        else:
-            try:
-                from apps.shops.tabular import read_rows
-                headers, rows = read_rows(upload, max_rows=MAX_IMPORT_ROWS)
-                if not {"name", "sku", "price"}.issubset(headers):
-                    raise ValueError("Kolom wajib: name, sku, price. Gunakan template yang bisa diunduh di halaman ini.")
-                for row in rows:   # spreadsheets write 99000.0 and may leave stock empty
-                    row["stock"] = row.get("stock") or "0"
-                    for key in ("stock", "price", "cost_price", "weight_grams"):
-                        if row.get(key, "").endswith(".0"):
-                            row[key] = row[key][:-2]
-                parsed = parse_import_rows(rows)
-                with transaction.atomic():
-                    created, updated = import_products(store, parsed, actor=request.user)
-                    AuditLog.objects.create(store=store, actor=request.user, action="products.csv_imported",
-                        object_type="Product", object_id="bulk", details={"created": created,
-                            "updated": updated, "rows": len(rows)})
-                messages.success(request, f"Impor selesai: {created} produk dibuat, {updated} diperbarui.")
-                return redirect("merchant-entity-list", section="products")
-            except (UnicodeDecodeError, csv.Error, ValueError) as error:
-                messages.error(request, str(error))
+    key = (request.POST or request.GET).get("key", "sku")
+    key = key if key in dict(KEYS) else "sku"
     context = {"merchant_store": store, "merchant_stores": stores, "merchant_role": role,
-        "merchant_store_url": store_url(store)}
+        "merchant_store_url": store_url(store), "keys": KEYS, "key": key}
+    if request.method == "POST":
+        try:
+            parsed, rows = _read_import(request.FILES.get("file"), key)
+            if request.POST.get("action") == "preview":
+                plans = plan_import(store, parsed, key=key)
+                context.update(plans=plans[:300], more=max(0, len(plans) - 300), summary=import_summary(plans))
+                return render(request, "merchant/_product_import_preview.html", context)
+            with transaction.atomic():
+                created, updated = import_products(store, parsed, actor=request.user, key=key)
+                AuditLog.objects.create(store=store, actor=request.user, action="products.csv_imported",
+                    object_type="Product", object_id="bulk", details={"created": created,
+                        "updated": updated, "rows": len(rows), "key": key})
+            messages.success(request, f"Impor selesai: {created} produk dibuat, {updated} diperbarui.")
+            return redirect("merchant-entity-list", section="products")
+        except (UnicodeDecodeError, csv.Error, ValueError) as error:
+            if request.POST.get("action") == "preview":
+                context["error"] = str(error)
+                return render(request, "merchant/_product_import_preview.html", context)
+            messages.error(request, str(error))
     return render(request, "merchant/product_import.html", context)

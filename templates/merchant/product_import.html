@@ -1,10 +1,32 @@
 {% extends "merchant/base.html" %}{% load icons %}{% block title %}Impor produk{% endblock %}{% block content %}
-<div class="pg-head"><div><span class="pg-kicker">Setup cepat</span><h1>Impor produk</h1><p>Pindahkan katalog dari Accurate atau Excel: tambahkan atau perbarui hingga 10.000 produk sekaligus berdasarkan SKU.</p></div><div class="dp-actions"><a class="btn" href="{% url 'merchant-entity-list' 'products' %}">← Kembali ke produk</a></div></div>
-<section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><div><h2>Unduh format</h2><p>Gunakan header yang sama. Salin data dari Accurate ke kolom template. Kolom minimal adalah <b>name, sku, price</b>; stok kosong dianggap 0.</p></div></div><a class="btn" href="{% url 'merchant-product-import-template' %}" data-no-soft>{% icon "download" %} Template CSV</a></header></section>
-<form method="post" enctype="multipart/form-data" class="panel" data-unsaved>{% csrf_token %}<header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><h2>Unggah produk</h2></div></header>
-  <div class="dp-card-body"><label class="field"><span>File CSV atau Excel (.xlsx)</span><input type="file" name="file" accept=".csv,.xlsx" required><small>Maksimal 10 MB atau 10.000 baris. SKU yang sudah ada akan diperbarui; setiap SKU hanya boleh muncul sekali.</small></label></div>
-  <footer><button class="btn-primary">{% icon "upload" %} Impor produk</button></footer></form>
+<div class="pg-head"><div><span class="pg-kicker">Stok &amp; Produk</span><h1>Impor produk</h1><p>Pindahkan katalog dari Accurate atau Excel: tambahkan atau perbarui hingga 10.000 produk sekaligus. Periksa dulu, baru impor.</p></div><div class="dp-actions"><a class="btn" href="{% url 'merchant-entity-list' 'products' %}">← Kembali ke produk</a></div></div>
+<section class="panel"><header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">1</span><div><h2>Unduh format</h2><p>Kolom template: <b>name, sku, price, stock, category, description, weight_grams, image_url, cost_price</b>. Nama kolom Indonesia (nama, kode barang, harga jual, stok, harga pokok…) dan daftar barang Accurate juga dikenali.</p></div></div><a class="btn" href="{% url 'merchant-product-import-template' %}" data-no-soft>{% icon "download" %} Template CSV</a></header></section>
+<form method="post" enctype="multipart/form-data" class="panel" data-unsaved id="pi-form">{% csrf_token %}<header><div style="display:flex;gap:12px;align-items:center"><span class="bb-bubble step">2</span><h2>Unggah produk</h2></div></header>
+  <div class="dp-card-body" style="display:grid;gap:16px">
+    <label class="field"><span>File CSV atau Excel (.xlsx)</span><input type="file" name="file" accept=".csv,.xlsx" required><small>Maksimal 10 MB atau 10.000 baris. Setiap produk hanya boleh muncul sekali di file.</small></label>
+    <div class="pi-key">
+      <input type="hidden" name="key" value="name">
+      <label class="pi-switch"><input type="checkbox" name="key" value="sku" class="switch" role="switch"{% if key == "sku" %} checked{% endif %}>
+        <span><b>Pakai SKU sebagai kunci utama</b><small>Aktif: baris dengan SKU yang sudah ada memperbarui produk itu; SKU baru menjadi produk baru. Nonaktif: produk dicocokkan dengan <b>nama</b>, dan SKU di file diberikan ke produk itu (untuk produk yang dibuat tanpa SKU atau dengan kode lama).</small></span></label>
+    </div>
+    <ul class="pi-help">
+      <li>Sel kosong tidak mengubah apa pun: harga, stok, harga pokok, kategori, dan isi lain produk tetap seperti sekarang.</li>
+      <li>Produk baru wajib punya name, sku, dan price; stok kosong dianggap 0.</li>
+      <li>Setelah pembukuan berjalan, perubahan stok dibukukan sebagai Penyesuaian stok ke Persediaan.</li>
+    </ul>
+  </div>
+  <footer style="display:flex;gap:10px;flex-wrap:wrap">
+    <button type="button" class="btn" hx-post="{% url 'merchant-product-import' %}" hx-encoding="multipart/form-data" hx-vals='{"action": "preview"}' hx-target="#pi-preview" hx-swap="innerHTML" data-no-loading>{% icon "search" %} Periksa dulu</button>
+    <button class="btn-primary" name="action" value="import" data-confirm="Impor produk dari file ini? Produk yang cocok diperbarui." data-confirm-ok="Impor" data-confirm-tone="neutral">{% icon "upload" %} Impor produk</button>
+  </footer></form>
+<div id="pi-preview" aria-live="polite"></div>
 <section class="panel"><header><h2>Kolom yang tersedia</h2></header><div class="scroll-x"><table class="tbl"><tbody>
-  <tr><td><b>name</b></td><td>Nama produk</td></tr><tr><td><b>sku</b></td><td>Kode unik produk</td></tr><tr><td><b>price / stock</b></td><td>Harga jual dan stok awal</td></tr><tr><td><b>cost_price</b></td><td>Harga pokok / modal per unit (dipakai untuk HPP)</td></tr><tr><td><b>category</b></td><td>Kategori dibuat otomatis</td></tr>
-  <tr><td><b>description</b></td><td>Deskripsi produk</td></tr><tr><td><b>weight_grams</b></td><td>Berat untuk ongkir</td></tr><tr><td><b>image_url</b></td><td>URL foto publik</td></tr></tbody></table></div></section>
+  <tr><td><b>name</b> / nama</td><td>Nama produk</td></tr><tr><td><b>sku</b> / kode barang</td><td>Kode unik produk</td></tr><tr><td><b>price</b> / harga jual</td><td>Harga jual</td></tr><tr><td><b>stock</b> / stok</td><td>Stok di Gudang Utama (kosong: tidak diubah)</td></tr><tr><td><b>cost_price</b> / harga pokok</td><td>Harga pokok / modal per unit (dipakai untuk HPP)</td></tr><tr><td><b>category</b> / kategori</td><td>Kategori dibuat otomatis</td></tr>
+  <tr><td><b>description</b> / deskripsi</td><td>Deskripsi produk</td></tr><tr><td><b>weight_grams</b> / berat</td><td>Berat dalam gram untuk ongkir</td></tr><tr><td><b>image_url</b> / foto</td><td>URL foto publik</td></tr></tbody></table></div></section>
+<style>
+.pi-switch{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:16px;background:var(--ds-frost,#eaf7fe);cursor:pointer}
+.pi-switch small{display:block;color:var(--ds-muted,#5b7186);font-size:12.5px;margin-top:4px;line-height:1.5}
+.pi-switch input{margin-top:2px;flex:none}
+.pi-help{margin:0;padding-left:18px;color:var(--ds-muted,#5b7186);font-size:13px;display:grid;gap:4px}
+</style>
 {% endblock %}

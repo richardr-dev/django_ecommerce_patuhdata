@@ -142,7 +142,7 @@
         <th style="width:40%">Produk / Deskripsi</th>
         <th class="r" style="width:8%">Qty</th>
         <th class="r" style="width:18%">Harga Satuan</th>
-        {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
+        {% if invoice.has_line_discount %}
         <th class="r" style="width:10%">Diskon</th>
         {% endif %}
         <th class="r" style="width:18%">Subtotal</th>
@@ -158,7 +158,7 @@
         </td>
         <td class="r">{{ item.quantity|floatformat:"-2" }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
         <td class="r">{{ item.unit_price|rp }}</td>
-        {% if invoice.items.all|length > 0 and invoice.items.first.discount %}
+        {% if invoice.has_line_discount %}
         <td class="r">{% if item.discount %}−{{ item.discount|rp }}{% else %}—{% endif %}</td>
         {% endif %}
         <td class="r">{{ item.line_total|rp }}</td>

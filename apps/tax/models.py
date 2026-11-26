@@ -138,6 +138,11 @@ class Invoice(models.Model):
             if note.status != CreditNote.STATUS_VOID), Decimal(0))
 
     @property
+    def has_line_discount(self):
+        """True when any line carries its own discount: documents then show a Diskon column."""
+        return any(item.discount for item in self.items.all())
+
+    @property
     def amount_due(self):
         return max(self.total - self.amount_paid - self.credited, Decimal(0))
 

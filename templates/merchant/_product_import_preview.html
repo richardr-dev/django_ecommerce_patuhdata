@@ -1,0 +1,22 @@
+{% load books %}<section class="panel">
+{% if error %}
+  <header><div><h2>Periksa file</h2></div></header>
+  <div class="dp-card-body"><div class="notice warn" role="alert">{{ error }}</div></div>
+{% else %}
+  <header><div><h2>Hasil pemeriksaan</h2><p>Kunci: <b>{% if key == "sku" %}SKU{% else %}Nama produk{% endif %}</b>. Belum ada yang disimpan.{% if summary.error %} Perbaiki baris yang ditandai lalu periksa lagi: file ditolak seluruhnya bila ada satu baris salah.{% else %} Tekan "Impor produk" untuk menyimpan.{% endif %}</p></div></header>
+  <div class="tiles" style="padding:0 20px">
+    <div class="tile"><span>Produk baru</span><b>{{ summary.create }}</b></div>
+    <div class="tile"><span>Diperbarui</span><b>{{ summary.update }}</b>{% if summary.unchanged %}<small>{{ summary.unchanged }} tanpa perubahan</small>{% endif %}</div>
+    <div class="tile"><span>Perlu diperbaiki</span><b>{{ summary.error }}</b></div>
+  </div>
+  <div class="scroll-x"><table class="tbl">
+    <thead><tr><th>Baris</th><th>SKU</th><th>Produk</th><th>Tindakan</th><th>Keterangan</th></tr></thead>
+    <tbody>{% for p in plans %}<tr>
+      <td>{{ p.number }}</td><td>{{ p.sku|default:"—" }}</td><td>{{ p.name|default:"—" }}</td>
+      <td>{% if p.action == "create" %}<span class="pill pill-info">baru</span>{% elif p.action == "update" %}<span class="pill pill-paid">perbarui</span>{% else %}<span class="pill pill-overdue">perbaiki</span>{% endif %}</td>
+      <td>{% if p.error %}{{ p.error }}{% elif p.action == "update" %}{% if p.changes %}{{ p.changes|join:", " }}{% else %}tidak ada perubahan{% endif %}{% if p.product.sku and p.product.sku != p.sku %} · SKU lama {{ p.product.sku }}{% endif %}{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% if more %}<p class="dp-help" style="padding:0 20px 16px">Dan {{ more }} baris lagi.</p>{% endif %}
+{% endif %}
+</section>

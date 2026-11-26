@@ -386,6 +386,13 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   own address redirects to `/login/` (or the dashboard when signed in), and the storefront gate lets
   it through. A store's own subdomain or custom domain, and `?store=slug` links ("Lihat toko"), keep the
   storefront; `/start/` and `/stores/` stay reachable. Tests run with it off (`tests/conftest.py`).
+- **Impor produk** (`orders/setup_views.py`: `parse_import_rows(key=)`, `plan_import`, `import_products(key=)`, page
+  Stok & Produk › Impor produk; tests `tests/test_product_import.py`): switch "Pakai SKU sebagai kunci utama" (on: match by
+  SKU; off: match by name and give that product the file's SKU, refused when the SKU belongs to another product or two
+  products share the name). A blank cell keeps what the product has (stock too); a new product needs name, sku, price.
+  "Periksa dulu" (htmx, `_product_import_preview.html`) shows per row baru / perbarui (what changes) / perbaiki and writes
+  nothing; one bad row refuses the whole file. Headers in Indonesian and Accurate's item list are mapped by
+  `HEADER_ALIASES`. Variant SKUs are refused (variants are not imported).
 - **Siapkan pembukuan** (`orders/onboarding.py:books_setup_steps`, Beranda; tests `tests/test_books_setup.py`): five steps in a
   shop's order (tax profile, kas & bank, products with cost price, saldo awal, first sale), each ticked from data with a hint
   saying what is missing. The automatic "Kas & bank utama" alone does not tick the bank step. The CSV product import
