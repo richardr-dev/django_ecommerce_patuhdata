@@ -16,27 +16,42 @@
     <div class="flex flex-wrap items-center gap-2">
       <a href="{% url 'merchant-receive-payment' %}" class="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "cash" %}</span>Terima pembayaran</a>
       <a href="{% url 'merchant-invoice-new' %}" class="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-bold text-blue-700 shadow-md shadow-blue-900/10 transition hover:-translate-y-0.5 hover:shadow-lg"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "plus" %}</span>Buat invoice</a>
-      <details class="relative">
-        <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">Lainnya <span class="text-xs">▾</span></summary>
-        <div class="absolute right-0 z-30 mt-2 w-64 rounded-2xl bg-white p-1.5 text-sm text-slate-700 shadow-xl ring-1 ring-slate-900/5">
-          <a href="{% url 'merchant-invoice-batch' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "layers" %}</span>Buat banyak invoice sekaligus</a>
-          <a href="{% url 'merchant-quote-new' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "note" %}</span>Buat penawaran</a>
-          <a href="{% url 'merchant-recurring-new' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "calendar" %}</span>Jadwalkan invoice berulang</a>
-          <a href="{% url 'merchant-import' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "upload" %}</span>Impor pesanan marketplace</a>
-          <hr class="my-1.5 border-slate-100">
-          <a href="{% url 'merchant-channel-recap' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "bar-chart" %}</span>Rekap invoice per channel</a>
-          <a href="{% url 'merchant-sales-export' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor data penjualan lengkap</a>
-          <a href="{% url 'merchant-receivables' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "clock" %}</span>Piutang & surat tagihan</a>
-          <a href="{% url 'merchant-credit-notes' %}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "undo" %}</span>Nota kredit</a>
-          <hr class="my-1.5 border-slate-100">
-          <a href="{% url 'merchant-invoices-pdf' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "file" %}</span>Ekspor PDF (terfilter)</a>
-          <a href="{% url 'merchant-invoices-xlsx' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor Excel</a>
-          <a href="{% url 'merchant-invoices-csv' %}?{{ filter_query }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-blue-50 hover:text-blue-700"><span class="text-slate-400 [&>svg]:h-4 [&>svg]:w-4">{% icon "download" %}</span>Ekspor CSV</a>
-        </div>
-      </details>
     </div>
   </div>
 </section>
+
+{# Shortcuts: outside the hero, which clips anything that overflows it (a dropdown there was invisible). #}
+<nav class="si-shortcuts" aria-label="Pintasan invoice">
+  <a href="{% url 'merchant-invoice-batch' %}" class="si-chip si-chip-main">{% icon "upload" %}Impor Excel / banyak invoice</a>
+  <a href="{% url 'merchant-import' %}" class="si-chip">{% icon "link" %}Impor pesanan marketplace</a>
+  <a href="{% url 'merchant-quote-new' %}" class="si-chip">{% icon "note" %}Buat penawaran</a>
+  <a href="{% url 'merchant-recurring-new' %}" class="si-chip">{% icon "calendar" %}Invoice berulang</a>
+  <a href="{% url 'merchant-channel-recap' %}" class="si-chip">{% icon "bar-chart" %}Rekap per channel</a>
+  <a href="{% url 'merchant-receivables' %}" class="si-chip">{% icon "clock" %}Piutang &amp; surat tagihan</a>
+  <a href="{% url 'merchant-credit-notes' %}" class="si-chip">{% icon "undo" %}Nota kredit</a>
+  <details class="si-more">
+    <summary class="si-chip">{% icon "download" %}Ekspor <span aria-hidden="true">▾</span></summary>
+    <div class="si-menu">
+      <a href="{% url 'merchant-invoices-xlsx' %}?{{ filter_query }}" data-no-soft>Excel (sesuai filter)</a>
+      <a href="{% url 'merchant-invoices-pdf' %}?{{ filter_query }}" data-no-soft>PDF (sesuai filter)</a>
+      <a href="{% url 'merchant-invoices-csv' %}?{{ filter_query }}" data-no-soft>CSV (sesuai filter)</a>
+      <a href="{% url 'merchant-sales-export' %}">Data penjualan lengkap</a>
+    </div>
+  </details>
+</nav>
+<style>
+.si-shortcuts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;position:relative;z-index:20}
+.si-chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:999px;background:#fff;border:1px solid var(--ds-line,#d6e6f0);color:var(--ds-ink,#012441);font-size:13px;font-weight:600;cursor:pointer;list-style:none;white-space:nowrap;transition:border-color .15s,box-shadow .15s}
+.si-chip::-webkit-details-marker{display:none}
+.si-chip svg{width:15px;height:15px;color:var(--ds-primary,#0b6fb8)}
+.si-chip:hover,.si-chip:focus-visible{border-color:var(--ds-primary,#0b6fb8);box-shadow:0 0 0 3px rgba(11,111,184,.12);outline:none}
+.si-chip-main{background:var(--ds-frost,#eaf7fe);border-color:var(--ds-ice,#bfe8fb);color:var(--ds-primary,#0b6fb8)}
+.si-more{position:relative}
+.si-menu{position:absolute;right:0;top:42px;min-width:220px;padding:6px;border-radius:16px;background:#fff;box-shadow:0 12px 32px -6px rgba(1,36,65,.18);border:1px solid var(--ds-line,#d6e6f0);display:grid;z-index:40}
+.si-menu a{padding:9px 12px;border-radius:10px;font-size:13px;color:var(--ds-ink,#012441)}
+.si-menu a:hover{background:var(--ds-frost,#eaf7fe);color:var(--ds-primary,#0b6fb8)}
+@media (max-width:640px){.si-chip{height:34px;padding:0 12px;font-size:12.5px}.si-menu{right:auto;left:0}}
+</style>
 
 {# Orders without an invoice: only when there are some #}
 {% for code, label, count in invoice_tabs %}{% if code == 'none' and count %}

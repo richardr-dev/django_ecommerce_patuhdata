@@ -3,10 +3,8 @@
   <div class="ord-hero-text"><span class="bb-pill ord-eyebrow">Pesanan</span><h1>Pesanan &amp; pengiriman</h1><p>Cek pembayaran, kemas, lalu kirim. Satu tombol untuk setiap langkah.</p></div>
   <div class="ord-hero-actions">
     <a class="btn" href="{% url 'merchant-order-labels' %}?tab={% if tab == 'all' %}pack{% else %}{{ tab }}{% endif %}&print=1" target="_blank" rel="noopener">{% icon "printer" %} Cetak label tab ini</a>
-    <details class="ord-more-menu"><summary class="btn">Lainnya <span aria-hidden="true">▾</span></summary><div class="ord-menu-panel">
-      <a href="{% url 'merchant-orders-csv' %}">{% icon "download" %} Unduh CSV</a>
-      {% if can_set_resi %}<a href="{% url 'merchant-resi-labels' %}">{% icon "upload" %} Unggah label resi</a>{% endif %}
-    </div></details>
+    {% if can_set_resi %}<a class="btn" href="{% url 'merchant-resi-labels' %}">{% icon "upload" %} Unggah label resi</a>{% endif %}
+    <a class="btn" href="{% url 'merchant-orders-csv' %}" data-no-soft>{% icon "download" %} Unduh CSV</a>
     {% if merchant_role != "viewer" and merchant_role != "warehouse" and merchant_role != "finance" %}<a class="btn-primary" href="{% url 'merchant-order-new' %}">+ Buat pesanan</a>{% endif %}
   </div>
 </section>
