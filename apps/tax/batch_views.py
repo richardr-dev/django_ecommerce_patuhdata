@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from apps.accounting import idempotency
+from apps.accounting.models import BankAccount
 from apps.orders.views import _merchant_context, _require_roles, _staff_store
 from apps.shops.models import AuditLog, Customer
 from apps.shops.permissions import can, roles
@@ -45,26 +46,76 @@ def _plan(store, post, mode):
         inclusive=inclusive)
 
 
+TEMPLATE_HEAD = ["Date", "SKU", "Qty", "Customer Name", "Address", "Phone Number", "District", "Province",
+                 "Sales Channel", "Status", "Sales", "Net Sales", "Ongkir", "Ref"]
+TEMPLATE_ROWS = [
+    ["03/08/2026", "M2601-41-Black", 1, "Budi", "Jalan Pakan Dalam no.29, Kec. Daha Utara", "", "Hulu Sungai Selatan",
+     "Kalimantan Selatan", "Shopee ABShop", "Sales", 1198000, 718800, None, None],
+    ["04/08/2026", "W2601-38-White", 1, "Marulak Purba", "Jl. Cut Mutia No. 42, Kec. Teluk Betung Utara",
+     "082115108880", "Bandar Lampung", "Lampung", "ABShop", "Sales", 998000, 598800, 26996, None],
+    ["05/08/2026", "M2601-45-Black", 1, "H. Aidil Azwar", "Jl. Palem Raya no. 9, Jatiasih", "", "Bekasi",
+     "Jawa Barat", "Shopee ABShop", "Sales", 1198000, 718800, None, None],
+]
+TEMPLATE_HELP = [
+    ("Date", "Tanggal penjualan, mis. 03/08/2026 (hari/bulan/tahun). Kosong: hari ini."),
+    ("SKU", "SKU produk atau SKU varian (ukuran/warna) persis seperti di Produk. Stok keluar dan HPP dibukukan."),
+    ("Qty", "Jumlah barang. Kosong: 1."),
+    ("Customer Name", "Nama pembeli. Nama baru ditambahkan ke Pelanggan."),
+    ("Address, District, Province", "Alamat kirim pembeli; disimpan di pelanggan baru dan di pesanan."),
+    ("Phone Number", "Nomor WhatsApp pembeli (opsional)."),
+    ("Sales Channel", ("Tempat terjual. Bila memuat nama mitra (mis. Shopee ABShop), penjualan dicatat atas mitra itu; "
+     "daftarkan mitranya dulu di Mitra. Shopee, Tokopedia, TikTok, Lazada dikenali sebagai saluran.")),
+    ("Status", "Hanya baris Sales yang dibuat invoice; Retur dan lainnya dilewati."),
+    ("Sales", "Total harga jual baris itu (harga satuan = Sales ÷ Qty)."),
+    ("Net Sales", ("Yang diterima perusahaan setelah potongan mitra/marketplace. Selisihnya menjadi diskon baris, "
+     "jadi invoice bernilai Net Sales. Kosong: tanpa diskon.")),
+    ("Ongkir", ("Ongkos kirim yang dibayar perusahaan ke kurir. Dicatat sebagai biaya (6700) dari rekening yang "
+     "dipilih di halaman impor; tidak ditagihkan ke pembeli.")),
+    ("Ref", "Opsional. Baris dengan Ref yang sama menjadi satu invoice; tanpa Ref, satu baris satu invoice."),
+]
+
+
 @login_required(login_url="/login/")
 def merchant_invoice_batch_template(request):
-    """The Excel/CSV to fill in: the columns of a sales sheet kept by hand, one invoice per row."""
-    import csv
+    """The Excel to fill in, laid out like a sales sheet kept by hand: one invoice per row, with a help sheet."""
+    import io
 
     from django.http import HttpResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
     store = _staff_store(request)
     _require_roles(request, store, roles("sales.edit"))
-    response = HttpResponse(content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = 'attachment; filename="template-invoice-penjualan.csv"'
-    response.write("\ufeff")
-    writer = csv.writer(response)
-    writer.writerow(["Date", "Ref", "SKU", "Qty", "Customer Name", "Phone Number", "Address", "District",
-                     "Province", "Sales Channel", "Status", "Sales", "Ongkir"])
-    writer.writerow(["03/08/2026", "", "M2601-41-Black", 1, "Budi", "081234567890", "Jl. Pakan Dalam 29",
-                     "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee", "Sales", 1198000, ""])
-    writer.writerow(["04/08/2026", "INV-A", "W2601-38-White", 2, "Marulak Purba", "082115108880",
-                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1996000, 25000])
-    writer.writerow(["04/08/2026", "INV-A", "M2601-41-Black", 1, "Marulak Purba", "082115108880",
-                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1198000, ""])
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Penjualan"
+    sheet.append(TEMPLATE_HEAD)
+    for row in TEMPLATE_ROWS:
+        sheet.append(row)
+    head_fill = PatternFill("solid", fgColor="BFE8FB")
+    for cell in sheet[1]:
+        cell.font, cell.fill = Font(bold=True, color="012441"), head_fill
+        cell.alignment = Alignment(horizontal="center")
+    widths = [12, 18, 6, 22, 44, 16, 22, 20, 18, 10, 14, 14, 12, 10]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[sheet.cell(1, index).column_letter].width = width
+    for row in sheet.iter_rows(min_row=2, max_row=500):
+        for cell in row[10:13]:
+            cell.number_format = "#,##0"
+        row[0].number_format = "@"
+    sheet.freeze_panes = "A2"
+    guide = book.create_sheet("Petunjuk")
+    guide.append(["Kolom", "Isi"])
+    for row in TEMPLATE_HELP:
+        guide.append(list(row))
+    for cell in guide[1]:
+        cell.font, cell.fill = Font(bold=True, color="012441"), head_fill
+    guide.column_dimensions["A"].width, guide.column_dimensions["B"].width = 26, 110
+    buffer = io.BytesIO()
+    book.save(buffer)
+    response = HttpResponse(buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="template-penjualan.xlsx"'
     return response
 
 
@@ -106,7 +157,7 @@ def merchant_invoice_batch(request):
             override = post.get("credit_override") == "1" and may_override
             try:
                 created = batch.create_all(store, plans, actor=request.user, warehouse=warehouse,
-                    credit_check=not override)
+                    credit_check=not override, cost_account=_cost_account(store, post.get("cost_account")))
             except InvoiceError as exc:
                 idempotency.release(store, SCOPE, idem)
                 error = str(exc)
@@ -136,4 +187,12 @@ def merchant_invoice_batch(request):
         lines=lines or [{"item": "", "qty": "1", "price": "", "discount": ""}] * 2,
         post=post or {}, idem_key=idempotency.new_key(), warehouses=_warehouses(store),
         is_pkp=bool(vat_for(store, Decimal(100))[1]), may_override_credit=may_override,
-        today=timezone.localdate().isoformat(), max_invoices=batch.MAX_INVOICES))
+        today=timezone.localdate().isoformat(), max_invoices=batch.MAX_INVOICES,
+        cost_accounts=BankAccount.objects.filter(store=store, is_active=True).order_by("account__code")))
+
+
+def _cost_account(store, value):
+    """The money account the courier was paid from; None (the main cash account) when not chosen."""
+    if not (value or "").isdigit():
+        return None
+    return BankAccount.objects.filter(store=store, is_active=True, pk=value).first()

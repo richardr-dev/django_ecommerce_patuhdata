@@ -68,22 +68,51 @@ class InvoiceSheetTests(Base):
         self.assertEqual(made.shipping, D(1000000))
         self.assertEqual(made.total, made.subtotal - made.discount + made.tax + D(1000000))
 
-    def test_our_template_invoices_the_ongkir_and_a_sales_sheet_does_not(self):
-        head = ["Date", "Ref", "SKU", "Qty", "Customer Name", "Status", "Sales", "Ongkir"]
-        text, notes = sheet_import.invoice_rows(self.store, xlsx([head,
-            ["03/08/2026", "A", "KBL", 1, "Budi", "Sales", 100000, 15000],
-            ["03/08/2026", "A", "LMP", 1, "Budi", "Sales", 50000, ""]]))
-        plans = batch.parse_paste(self.store, text)
-        self.assertEqual((len(plans), plans[0].shipping, len(plans[0].lines)), (1, D(15000), 2))
-        self.assertFalse(any("Ongkir dan Net Sales" in n for n in notes))
+    def test_the_owners_sales_sheet_keeps_net_sales_ongkir_and_the_mitra(self):
+        """The sheet from the photo: Sales at retail, Net Sales after the mitra's cut, Ongkir paid to the courier."""
+        from apps.accounting.models import Expense, JournalLine
+        from apps.settlements.models import ConsignmentPartner
+        abshop = ConsignmentPartner.objects.create(store=self.store, name="ABShop")
         text, notes = sheet_import.invoice_rows(self.store, xlsx([SALES_HEAD,
-            ["03/08/2026", "KBL", 1, "Budi", "", "", "", "", "Shopee", "Sales", 100000, 90000, 15000]]))
-        self.assertEqual(batch.parse_paste(self.store, text)[0].shipping, 0)
-        self.assertTrue(any("Ongkir dan Net Sales" in n for n in notes))
+            ["03/08/2026", "KBL", 1, "Budi", "Jalan Pakan Dalam no.29, Kec. Daha Utara, Kab. Hulu Sungai Selatan",
+             "", "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee ABShop", "Sales", 1198000, 718800, ""],
+            ["04/08/2026", "LMP", 1, "Marulak Purba", "Jl. Cut Mutia No. 42", "082115108880", "Bandar Lampung",
+             "Lampung", "ABShop", "Sales", 998000, 598800, 26996],
+            ["05/08/2026", "KBL", 1, "H. Aidil Azwar", "JL. Palem Raya no. 9", "", "Bekasi", "Jawa Barat",
+             "Tokopedia", "Sales", "1,198,000", "", ""]]))
+        self.assertTrue(any("Net Sales" in n for n in notes) and any("6700" in n for n in notes))
+        plans = batch.parse_paste(self.store, text)
+        self.assertTrue(all(p.ok for p in plans), [p.errors for p in plans])
+        budi, marulak, aidil = plans
+        self.assertEqual((budi.lines[0]["unit_price"], budi.lines[0]["discount"]), (D(1198000), D(479200)))
+        self.assertEqual(budi.subtotal, D(718800))                        # the invoice is worth Net Sales
+        self.assertEqual((budi.partner, marulak.partner, aidil.partner), (abshop, abshop, None))
+        self.assertEqual((budi.address, aidil.channel), (
+            "Jalan Pakan Dalam no.29, Kec. Daha Utara, Kab. Hulu Sungai Selatan, Kalimantan Selatan", "tokopedia"))
+        self.assertEqual((marulak.shipping, marulak.shipping_cost), (0, D(26996)))
+        self.assertEqual(aidil.lines[0]["discount"], 0)                   # no Net Sales: no discount
+        made = batch.create_all(self.store, plans, cost_account=self.main)
+        self.assertEqual(made[0].order.consignment_partner, abshop)
+        self.assertIn("Shopee ABShop", made[0].notes)
+        self.assertEqual(made[1].total, D(598800) + D("65868"))          # Net Sales + PPN; ongkir not billed
+        cost = Expense.objects.get(store=self.store)
+        self.assertEqual((cost.amount, cost.category, cost.bank_account), (D(26996), "6700", self.main))
+        self.assertTrue(JournalLine.objects.filter(entry__expense=cost, account__code="6700",
+            debit=D(26996)).exists())
+
+    def test_the_template_downloads_as_a_workbook_with_help(self):
+        from openpyxl import load_workbook
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("merchant-invoice-batch-template"))
+        book = load_workbook(io.BytesIO(response.content))
+        self.assertEqual([c.value for c in book["Penjualan"][1]][:13], SALES_HEAD)
+        self.assertIn("Petunjuk", book.sheetnames)
+        text, _notes = sheet_import.invoice_rows(self.store, SimpleUploadedFile("t.xlsx", response.content))
+        self.assertEqual(len(text.splitlines()), 3)
 
     def test_a_pasted_ongkir_that_is_not_a_number_is_named(self):
-        plans = batch.parse_paste(self.store, "A;Budi;03/08/2026;;KBL;1;100000;;;;;abc")
-        self.assertIn("ongkir “abc” tidak terbaca", plans[0].errors[0])
+        plans = batch.parse_paste(self.store, "A;Budi;03/08/2026;;KBL;1;100000;;;;;;abc")
+        self.assertIn("ongkir dibayar “abc” tidak terbaca", plans[0].errors[0])
 
     def test_the_page_checks_an_upload_then_creates(self):
         self.client.force_login(self.owner)
@@ -91,7 +120,6 @@ class InvoiceSheetTests(Base):
         page = self.client.post(reverse("merchant-invoice-batch"), {"action": "upload", "file": upload})
         self.assertContains(page, "Buat 1 invoice")
         self.assertEqual(Invoice.objects.count(), 0)
-        self.assertContains(self.client.get(reverse("merchant-invoice-batch-template")), "Customer Name")
 
 
 class ReceiptSheetTests(Base):

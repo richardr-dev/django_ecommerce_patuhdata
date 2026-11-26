@@ -4,9 +4,12 @@ price, tax, take stock and post exactly like an invoice made on the form.
 Two ways in, one plan:
 
 - **Paste from Excel**: one row per line, ``no. ref; pelanggan; tanggal; jatuh tempo; barang atau jasa; jumlah;
-  harga; diskon; telepon; alamat; saluran; ongkir`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
+  harga; diskon; telepon; alamat; saluran; ongkir ditagih; ongkir dibayar`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
   invoice's Referensi. "Barang atau jasa" is a product SKU (stock and HPP) or else the text of a service line.
   An empty price takes the customer's price list, else the product's price.
+  "Saluran" naming a mitra (its name inside the text, e.g. "Shopee ABShop") records the sale under that mitra.
+  "Ongkir ditagih" is charged to the buyer (4200); "ongkir dibayar" is the courier cost the company paid: an
+  Expense (6700 Transportasi & ongkos kirim) from the account chosen on the page, one per invoice.
 - **The same lines to many customers** (a monthly fee, a rent): the lines once, the customers ticked.
 
 ``plan`` reads the input and prices every invoice without writing anything, naming what is wrong per invoice,
@@ -32,7 +35,8 @@ ZERO = Decimal(0)
 MAX_INVOICES = 300
 HEADER_WORDS = {"no", "no.", "ref", "referensi", "no ref", "no. ref", "nomor", "kelompok"}
 COLUMNS = ["No. ref", "Pelanggan", "Tanggal", "Jatuh tempo", "Barang (SKU) atau jasa", "Jumlah", "Harga",
-    "Diskon", "Telepon", "Alamat", "Saluran", "Ongkir"]
+    "Diskon", "Telepon", "Alamat", "Saluran", "Ongkir ditagih", "Ongkir dibayar"]
+SHIPPING_COST_CATEGORY = "6700"   # Transportasi & ongkos kirim
 # Order.channel for the words a sales sheet uses ("Shopee Toko Mitra", "Tokopedia", "TikTok"...).
 CHANNEL_WORDS = (("shopee", "shopee"), ("tokopedia", "tokopedia"), ("tiktok", "tiktok_shop"), ("lazada", "lazada"),
     ("pos", "pos"), ("kasir", "pos"), ("web", "web"), ("tv", "tv"))
@@ -66,6 +70,9 @@ class Planned:
     discount: Decimal = ZERO
     rounding: Decimal = ZERO
     shipping: Decimal = ZERO                       # ongkir charged to the buyer (4200, no PPN)
+    shipping_cost: Decimal = ZERO                  # ongkir the company paid the courier (an Expense)
+    partner: object = None                         # the mitra the sale went through
+    channel_text: str = ""
     inclusive: bool = False                        # prices typed with PPN in them
     phone: str = ""                                # optional: for a customer that is not in the CRM yet
     address: str = ""
@@ -94,6 +101,30 @@ def _products(store):
             if code:
                 found[code.lower()] = variant
     return found
+
+
+def _squash(text):
+    return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
+def _partners(store):
+    from apps.settlements.models import ConsignmentPartner
+    found = [(_squash(p.name), p) for p in ConsignmentPartner.objects.filter(store=store, is_active=True)]
+    return sorted([item for item in found if len(item[0]) >= 3], key=lambda item: -len(item[0]))
+
+
+def partner_for(partners, text):
+    """The mitra whose name appears in a sales-channel text ("Shopee ABShop" → ABShop), longest name first."""
+    squashed = _squash(text)
+    return next((partner for name, partner in partners if name in squashed), None)
+
+
+def _fee(text, label, planned, number):
+    value = parse_amount(text)
+    if value is None or value < 0:
+        planned.errors.append(f"baris {number}: {label} “{text}” tidak terbaca")
+        return ZERO
+    return value
 
 
 def _line(text, qty, price, discount, *, products, customer):
@@ -141,15 +172,15 @@ def _price(store, planned, *, inclusive):
 
 def parse_paste(store, text, *, inclusive=False):
     """Pasted rows → ``[Planned]`` in the order their references first appear."""
-    products, plans, order = _products(store), {}, []
+    products, plans, order, partners = _products(store), {}, [], _partners(store)
     for number, raw in enumerate((text or "").splitlines(), start=1):
         if not raw.strip():
             continue
         cells = [c.strip() for c in (raw.split("\t") if "\t" in raw else raw.split(";"))]
         if not order and cells and cells[0].lower() in HEADER_WORDS:
             continue
-        cells += [""] * (12 - len(cells))
-        ref, name, issued, due, item, qty, price, discount, phone, address, channel, ongkir = cells[:12]
+        cells += [""] * (13 - len(cells))
+        ref, name, issued, due, item, qty, price, discount, phone, address, channel, ongkir, paid = cells[:13]
         key = ref or f"baris-{number}"   # a row without a reference is an invoice of its own
         planned = plans.get(key)
         if planned is None:
@@ -158,7 +189,8 @@ def parse_paste(store, text, *, inclusive=False):
             planned = Planned(key=key, customer=customer, buyer_name=(customer.name if customer else name)[:120],
                 issued_on=issued_on or timezone.localdate(), due_date=parse_date(due) if due else None,
                 reference=ref[:100], new_customer=customer is None and bool(name),
-                phone=phone[:30], address=address, channel=channel_for(channel))
+                phone=phone[:30], address=address, channel=channel_for(channel),
+                partner=partner_for(partners, channel), channel_text=channel[:100])
             if not name:
                 planned.errors.append(f"baris {number}: nama pelanggan wajib")
             if issued and issued_on is None:
@@ -172,12 +204,10 @@ def parse_paste(store, text, *, inclusive=False):
             planned.errors.append(f"baris {number}: pelanggan berbeda dari baris pertama ref {ref}")
         planned.rows.append(number)
         if ongkir:
-            fee = parse_amount(ongkir)
-            if fee is None or fee < 0:
-                planned.errors.append(f"baris {number}: ongkir “{ongkir}” tidak terbaca")
-            else:
-                planned.shipping += fee
-        if not item and ongkir:
+            planned.shipping += _fee(ongkir, "ongkir", planned, number)
+        if paid:
+            planned.shipping_cost += _fee(paid, "ongkir dibayar", planned, number)
+        if not item and (ongkir or paid):
             continue        # a row carrying only the ongkir of the invoice above
         if not item:
             planned.errors.append(f"baris {number}: isi barang (SKU) atau nama jasa")
@@ -228,15 +258,18 @@ def _finish(store, plans, *, inclusive):
 def summary(plans):
     good = [p for p in plans if p.ok]
     return {"count": len(plans), "ready": len(good), "bad": len(plans) - len(good),
+        "shipping_cost": sum((p.shipping_cost for p in good), ZERO),
         "total": sum((p.total for p in good), ZERO), "new_customers": sorted({p.buyer_name for p in plans
             if p.new_customer})}
 
 
 @transaction.atomic
-def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True):
+def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True, cost_account=None):
     """Make every planned invoice, or none: ``[Invoice]``. Raises ``BatchError`` naming the invoice that
     could not be made (stock short, credit limit, a closed period...). A customer not in the CRM yet is added
-    by name. Every invoice is on credit (Piutang usaha) with its due date; receive the money afterwards."""
+    by name. Every invoice is on credit (Piutang usaha) with its due date; receive the money afterwards.
+    Ongkir the company paid becomes one Expense per invoice from ``cost_account`` (a ``BankAccount``; the main
+    cash account when None), through the expense approval like any other."""
     if not plans:
         raise BatchError("Tidak ada invoice untuk dibuat.")
     if len(plans) > MAX_INVOICES:
@@ -253,6 +286,7 @@ def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True):
                 status=Customer.STATUS_ACTIVE)
             added[planned.buyer_name.lower()] = customer
         planned.customer = customer
+        notes = f"Saluran: {planned.channel_text}" if planned.partner and planned.channel_text else ""
         try:
             created.append(create_sales_invoice(store, lines=planned.lines, buyer_name=planned.buyer_name,
                 customer=customer, company_name=customer.company_name, buyer_npwp=customer.npwp or "",
@@ -260,10 +294,35 @@ def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True):
                 channel=planned.channel, issued_on=planned.issued_on,
                 due_date=planned.due_date, on_credit=True, external_order_id=planned.reference,
                 discount=planned.discount, shipping=planned.shipping, rounding=planned.rounding, warehouse=warehouse, actor=actor,
-                credit_check=credit_check, prices_include_tax=planned.inclusive))
+                credit_check=credit_check, prices_include_tax=planned.inclusive, partner=planned.partner,
+                notes=notes))
+            if planned.shipping_cost:
+                _shipping_expense(store, created[-1], planned.shipping_cost, cost_account, actor)
         except (InvoiceError, LedgerError) as error:
             raise BatchError(f"{_label(planned)}: {error}") from error
     return created
+
+
+def _shipping_expense(store, invoice, amount, cost_account, actor):
+    from apps.accounting import approvals
+    from apps.accounting.ledger import post_expense
+    from apps.accounting.models import Expense
+    from apps.shops.models import AuditLog
+
+    expense = Expense.objects.create(store=store, date=invoice.issued_on, category=SHIPPING_COST_CATEGORY,
+        description=f"Ongkir {invoice.number} · {invoice.buyer_name}"[:200], amount=amount,
+        bank_account=cost_account, created_by=actor)
+    if actor is not None and approvals.required(store, "expense", amount, actor):
+        expense.approval_pending = True
+        expense.save(update_fields=["approval_pending"])
+        approvals.submit(store, "expense", amount, f"Biaya: ongkos kirim · {expense.description}",
+            {"expense_id": expense.pk, "pph_kind": "", "pph_rate": ""}, actor, subject=expense)
+    else:
+        post_expense(expense)
+    AuditLog.objects.create(store=store, actor=actor, action="expense.created", object_type="Expense",
+        object_id=str(expense.pk), details={"amount": str(amount), "category": SHIPPING_COST_CATEGORY,
+            "label": expense.description})
+    return expense
 
 
 def _label(planned):

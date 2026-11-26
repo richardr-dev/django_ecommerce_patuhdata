@@ -22,6 +22,27 @@ def _amount(text):
     return re.sub(r"[^\d,.-]", "", text)
 
 
+def _number(text):
+    """A sheet amount as a float: "1,198,000", "1.198.000" or 1198000.0. None when unreadable."""
+    text = _amount(text)
+    if not text:
+        return None
+    if re.fullmatch(r"-?\d{1,3}([.,]\d{3})+", text):          # thousands separators only
+        text = re.sub(r"[.,]", "", text)
+    else:
+        text = text.replace(",", ".") if text.count(",") == 1 and "." not in text else text.replace(",", "")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _paste_number(value):
+    """A number as the paste reads it: whole rupiah plain, cents after a comma (a dot is a thousands mark)."""
+    value = round(value, 2)
+    return str(int(value)) if value == int(value) else f"{value:.2f}".replace(".", ",")
+
+
 def _customer_names(store):
     return {c.customer_code.lower(): c.name for c in Customer.objects.filter(store=store, customer_code__gt="")}
 
@@ -34,12 +55,12 @@ def invoice_rows(store, upload):
       without customer number continues the invoice above it. Customer numbers must already be in Pelanggan.
       A row with no item but an EXPENSE:EXPENSE VALUE (Accurate's "biaya lain") becomes the invoice's ongkir
       (4200, outside PPN); a negative one is left out and counted.
-    - **Sales sheet** (Date, SKU, Qty, Customer Name, Address, Phone Number, District, Province, Sales Channel,
-      Status, Sales, Net Sales, Ongkir): one invoice per row. ``Sales`` is the line total, so the price is
-      Sales / Qty. Rows whose Status is not Sales are left out and counted.
-      Its Ongkir is not invoiced (on a marketplace the buyer pays it to the marketplace).
-    - Our template has the same columns plus an optional Ref and an Ongkir charged to the buyer; told from the
-      sales sheet by having no Net Sales column."""
+    - **Sales sheet** (our template: Date, SKU, Qty, Customer Name, Address, Phone Number, District, Province,
+      Sales Channel, Status, Sales, Net Sales, Ongkir, optional Ref): one invoice per row, or per Ref. ``Sales`` is
+      the line total at the retail price, so the price is Sales / Qty; ``Net Sales`` (what the company keeps
+      after the mitra or marketplace cut) makes the rest a line discount, so the invoice shows both. ``Ongkir``
+      is the courier cost the company paid (an expense, not billed). A Sales Channel naming a mitra puts the
+      sale under that mitra. Rows whose Status is not Sales are left out and counted."""
     headers, rows = read_rows(upload)
     notes, out = [], []
     if "item:item no" in headers:
@@ -62,7 +83,7 @@ def invoice_rows(store, upload):
                     value = 0
                 if value > 0:
                     fees += 1
-                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee])
+                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee, ""])
                 else:
                     skipped += 1
                 continue
@@ -75,7 +96,7 @@ def invoice_rows(store, upload):
                 except ValueError:
                     discount = ""
             out.append([number, name, date, due, row["item:item no"], qty, _amount(price), _amount(discount),
-                        "", "", "", ""])
+                        "", "", "", "", ""])
         if unknown:
             shown = ", ".join(unknown[:10]) + (" …" if len(unknown) > 10 else "")
             raise ValueError(f"Nomor pelanggan {shown} belum ada di Pelanggan. Impor pelanggan dulu "
@@ -92,7 +113,7 @@ def invoice_rows(store, upload):
         if not need.issubset(headers) or not ({"customer name", "pelanggan"} & set(headers)):
             raise ValueError("Kolom wajib: Date, SKU, Qty, Customer Name. Gunakan template yang bisa diunduh di "
                              "halaman ini.")
-        left, own_template = 0, "net sales" not in headers
+        left, cut = 0, 0
         for row in rows:
             status = row.get("status", "").lower()
             if status and status not in {"sales", "penjualan", "selesai", "lunas"}:
@@ -101,24 +122,32 @@ def invoice_rows(store, upload):
             qty = row.get("qty", "") or "1"
             price = _first(row, "unit price", "harga satuan", "harga")
             if not price and row.get("sales"):
-                try:
-                    total = float(_amount(row["sales"]).replace(".", "").replace(",", ".") or 0)
-                    price = str(round(total / float(qty.replace(",", ".") or 1), 2)).rstrip("0").rstrip(".")
-                except ValueError:
-                    price = row["sales"]
-            place = ", ".join(x for x in (row.get("address", ""), row.get("district", ""), row.get("province", ""))
-                              if x)
+                total, count = _number(row["sales"]), _number(qty)
+                price = _paste_number(total / count) if total is not None and count else row["sales"]
+            discount = _first(row, "discount", "diskon")
+            net = row.get("net sales", "")
+            if not discount and net and row.get("sales"):
+                gross_total, net_total = _number(row["sales"]), _number(net)
+                if gross_total is not None and net_total is not None and 0 <= net_total < gross_total:
+                    discount = _paste_number(gross_total - net_total)
+                    cut += 1
+            address = row.get("address", "")
+            place = ", ".join([address] + [x for x in (row.get("district", ""), row.get("province", ""))
+                                           if x and x.lower() not in address.lower()]).strip(", ")
             out.append([_first(row, "ref", "no. ref", "referensi"), _first(row, "customer name", "pelanggan"),
                         _first(row, "date", "tanggal"), _first(row, "due date", "jatuh tempo"),
-                        _first(row, "sku", "barang"), qty, price, _first(row, "discount", "diskon"),
+                        _first(row, "sku", "barang"), qty, price, discount,
                         _first(row, "phone number", "telepon", "phone"), place,
-                        _first(row, "sales channel", "saluran"),
-                        _first(row, "ongkir", "ongkos kirim", "shipping") if own_template else ""])
+                        _first(row, "sales channel", "saluran"), _first(row, "ongkir ditagih"),
+                        _first(row, "ongkir", "ongkos kirim", "ongkir dibayar")])
         if left:
             notes.append(f"{left} baris dengan Status selain Sales dilewati.")
-        if not own_template:
-            notes.append("Ongkir dan Net Sales tidak dibuat menjadi invoice (Net Sales adalah hasil setelah "
-                         "potongan marketplace).")
+        if cut:
+            notes.append(f"{cut} baris: selisih Sales dan Net Sales dicatat sebagai diskon baris, jadi invoice "
+                         "bernilai Net Sales dan harga jualnya tetap terlihat.")
+        if any(row.get("ongkir") or row.get("ongkos kirim") for row in rows):
+            notes.append("Ongkir dicatat sebagai biaya ongkos kirim yang dibayar perusahaan (akun 6700), tidak "
+                         "ditagihkan ke pembeli. Pilih rekening pembayarnya sebelum membuat invoice.")
     if not out:
         raise ValueError("Tidak ada baris penjualan yang bisa dibaca di file ini.")
     return "\n".join("\t".join(_clean(cell) for cell in line) for line in out), notes
