@@ -60,8 +60,21 @@ def _tracking(store):
     return tracking_config(store)
 
 
+def asset_version():
+    """Changes whenever the shared back-office CSS or script changes, so a browser never keeps an old copy.
+    Production already serves hashed file names (ManifestStaticFilesStorage); this covers local runs too."""
+    from pathlib import Path
+    total = 0
+    for name in ("css/merchant-shell.css", "js/merchant-ui.js"):
+        try:
+            total += int((Path(settings.BASE_DIR) / "static" / name).stat().st_mtime)
+        except OSError:
+            pass
+    return str(total)
+
+
 def platform_context(request):
-    return {"storefront_enabled": settings.STOREFRONT_ENABLED, "platform_name": settings.PLATFORM_NAME,
+    return {"asset_version": asset_version(), "storefront_enabled": settings.STOREFRONT_ENABLED, "platform_name": settings.PLATFORM_NAME,
         "platform_tagline": settings.PLATFORM_TAGLINE, "platform_home_url": platform_url("/"),
         "platform_company_name": settings.PLATFORM_COMPANY_NAME,
         "platform_company_url": settings.PLATFORM_COMPANY_URL,

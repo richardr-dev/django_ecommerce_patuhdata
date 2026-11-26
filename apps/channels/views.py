@@ -389,8 +389,11 @@ def merchant_sales_invoices(request):
         return billed - paid - credited
     outstanding = _owed(open_invoices)
     overdue_total = _owed(open_invoices.filter(status=_Inv.STATUS_OVERDUE))
-    paid_total = _Inv.objects.filter(store=store, order__in=qs, status=_Inv.STATUS_PAID
-        ).aggregate(t=Sum("total"))["t"] or Decimal(0)
+    # Paid invoices less what credit notes took off them, so a sale that came back is not counted as paid.
+    paid_invoices = _Inv.objects.filter(store=store, order__in=qs, status=_Inv.STATUS_PAID)
+    from apps.tax.models import CreditNote as _CreditNote
+    paid_total = (paid_invoices.aggregate(t=Sum("total"))["t"] or Decimal(0)) - (_CreditNote.objects.filter(
+        invoice__in=paid_invoices).exclude(status=_CreditNote.STATUS_VOID).aggregate(t=Sum("applied"))["t"] or Decimal(0))
 
     rev_qs = qs.filter(status__in=REVENUE_STATUSES)
     totals = rev_qs.aggregate(revenue=Sum("total"), orders=Count("id"))

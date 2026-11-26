@@ -116,22 +116,20 @@
   </div>
 
   <aside class="grid gap-5 lg:sticky lg:top-20">
-    <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 to-sky-500 p-5 text-white shadow-xl shadow-blue-600/25">
-      <span class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10"></span>
-      <span class="pointer-events-none absolute -bottom-12 left-6 h-28 w-28 rounded-full bg-white/10"></span>
-      <p class="relative text-xs font-bold uppercase tracking-wider text-blue-100">Total invoice</p>
-      <p class="relative mt-1 text-3xl font-extrabold tracking-tight" id="s-total">Rp0</p>
-      <div class="relative mt-4 grid gap-2 text-sm">
-        <div class="flex justify-between text-blue-50"><span>Subtotal</span><span id="s-sub" class="font-semibold">Rp0</span></div>
-        <div class="flex items-center justify-between gap-3 text-blue-50"><span>Diskon invoice</span>
-          {% if locks %}<span class="font-semibold">{{ initial.discount|default:"0" }}</span>{% else %}<input name="discount" id="i-disc" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.discount }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
-        {% if vat_rate %}<div class="flex justify-between text-blue-50"><span>PPN {{ vat_rate|floatformat:"-2" }}%<span id="s-vat-incl" hidden> (termasuk)</span></span><span id="s-vat" class="font-semibold">Rp0</span></div>{% endif %}
-        <div class="flex items-center justify-between gap-3 text-blue-50"><span>Ongkos kirim</span>
-          {% if locks %}<span class="font-semibold">{{ initial.shipping|default:"0" }}</span>{% else %}<input name="shipping" id="i-ship" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.shipping }}" class="h-8 w-32 rounded-full border-0 bg-white/15 px-3 text-right text-sm font-semibold text-white placeholder:text-blue-100/70 ring-1 ring-white/25 focus:bg-white/25 focus:ring-2 focus:ring-white">{% endif %}</div>
+    <section class="if-total">
+      <p class="if-total-label">Total invoice</p>
+      <p class="if-total-figure" id="s-total">Rp0</p>
+      <div class="if-total-rows">
+        <div class="flex justify-between"><span>Subtotal</span><span id="s-sub" class="font-semibold">Rp0</span></div>
+        <div class="flex items-center justify-between gap-3"><span>Diskon invoice</span>
+          {% if locks %}<span class="font-semibold">{{ initial.discount|default:"0" }}</span>{% else %}<input name="discount" id="i-disc" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.discount }}" class="if-total-input">{% endif %}</div>
+        {% if vat_rate %}<div class="flex justify-between"><span>PPN {{ vat_rate|floatformat:"-2" }}%<span id="s-vat-incl" hidden> (termasuk)</span></span><span id="s-vat" class="font-semibold">Rp0</span></div>{% endif %}
+        <div class="flex items-center justify-between gap-3"><span>Ongkos kirim</span>
+          {% if locks %}<span class="font-semibold">{{ initial.shipping|default:"0" }}</span>{% else %}<input name="shipping" id="i-ship" inputmode="decimal" data-rupiah placeholder="0" value="{{ initial.shipping }}" class="if-total-input">{% endif %}</div>
       </div>
     </section>
 
-    <section class="rounded-3xl bg-white p-5 shadow-[0_10px_30px_-18px_rgba(11,111,184,.35)] ring-1 ring-slate-900/5">
+    <section class="if-rail">
       <div class="grid gap-4">
         {% if partners %}
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Jual ke mitra <span class="font-normal text-slate-400">(opsional)</span></span>
@@ -178,9 +176,9 @@
         <label class="grid gap-1.5 text-xs font-semibold text-slate-600"><span>Catatan di invoice <span class="font-normal text-slate-400">(opsional)</span></span><input name="notes" maxlength="500" value="{{ initial.notes }}" placeholder="mis. Pembayaran ke BCA 123-456-7890" class="h-11 rounded-xl border-0 bg-slate-50 px-3.5 text-sm font-normal ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500"></label>
       </div>
       <div class="mt-5 grid gap-2">
-        <button type="submit" class="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-b from-blue-500 to-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 hover:shadow-xl"><span class="[&>svg]:h-4 [&>svg]:w-4">{% icon "check" %}</span>{% if mode == 'edit' %}Simpan perubahan{% else %}Simpan invoice{% endif %}</button>
-        {% if mode != 'edit' %}<button type="submit" name="next" value="new" class="h-11 rounded-full bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100">Simpan & buat lagi</button>{% endif %}
-        <a href="{% if source and mode == 'edit' %}{% url 'merchant-invoice-detail' source.id %}{% else %}{% url 'merchant-sales-invoices' %}{% endif %}" class="grid h-10 place-items-center rounded-full text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-800">Batal</a>
+        <button type="submit" class="btn-primary if-save">{% icon "check" %}{% if mode == 'edit' %}Simpan perubahan{% else %}Simpan invoice{% endif %}</button>
+        {% if mode != 'edit' %}<button type="submit" name="next" value="new" class="btn if-save">Simpan & buat lagi</button>{% endif %}
+        <a href="{% if source and mode == 'edit' %}{% url 'merchant-invoice-detail' source.id %}{% else %}{% url 'merchant-sales-invoices' %}{% endif %}" class="if-cancel">Batal</a>
       </div>
     </section>
   </aside>
@@ -532,4 +530,16 @@
 })();
 </script>
 {% include "merchant/_dialog_js.html" %}
+<style>
+.if-total,.if-rail{background:#fff;border:1px solid var(--ds-line,#d6e6f0);border-radius:14px;padding:20px}
+.if-total{border-top:3px solid var(--ds-primary,#0b6fb8)}
+.if-total-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ds-muted,#5b7186);margin:0}
+.if-total-figure{margin:4px 0 0;font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--ds-primary,#0b6fb8);font-variant-numeric:tabular-nums}
+.if-total-rows{display:grid;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--ds-line,#d6e6f0);font-size:14px;color:var(--ds-ink,#012441)}
+.if-total-input{height:34px;width:128px;border:0;border-radius:8px;padding:0 10px;text-align:right;font-weight:600;background:#fff;box-shadow:inset 0 0 0 1px var(--ds-line-strong,#9fbfd6)}
+.if-total-input:focus{outline:none;box-shadow:inset 0 0 0 1px var(--ds-primary,#0b6fb8),0 0 0 3px rgba(11,111,184,.18)}
+.if-save{width:100%;justify-content:center;height:44px!important}
+.if-cancel{display:grid;place-items:center;height:40px;font-size:14px;font-weight:600;color:var(--ds-muted,#5b7186)}
+.if-cancel:hover{color:var(--ds-ink,#012441)}
+</style>
 {% endblock %}

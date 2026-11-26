@@ -77,11 +77,12 @@
         <td class="whitespace-nowrap px-3 py-3.5">
           {% if inv %}
           <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1
-            {% if inv.status == 'paid' %}bg-emerald-50 text-emerald-700 ring-emerald-600/15
+            {% if inv.fully_returned %}bg-slate-100 text-slate-600 ring-slate-300/40
+            {% elif inv.status == 'paid' %}bg-emerald-50 text-emerald-700 ring-emerald-600/15
             {% elif inv.status == 'partial' %}bg-amber-50 text-amber-700 ring-amber-600/15
             {% elif inv.status == 'overdue' %}bg-rose-50 text-rose-700 ring-rose-600/15
             {% elif inv.status == 'void' or inv.status == 'draft' %}bg-slate-100 text-slate-500 ring-slate-300/40
-            {% else %}bg-blue-50 text-blue-700 ring-blue-600/15{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>{{ inv.get_status_display }}</span>
+            {% else %}bg-blue-50 text-blue-700 ring-blue-600/15{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>{% if inv.fully_returned %}Diretur{% else %}{{ inv.get_status_display }}{% endif %}</span>
           {% else %}<span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">Belum diterbitkan</span>{% endif %}
         </td>
         <td class="whitespace-nowrap py-3.5 pr-5 text-right">

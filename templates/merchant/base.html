@@ -18,7 +18,7 @@
     brand:{'50':'#eaf7fe','100':'#d6eefb','500':'#2c8ed0','600':'#0b6fb8','700':'#095f9e','900':'#012441'},
     indigo:{'50':'#eaf7fe','100':'#d6eefb','200':'#bfe8fb','300':'#7cc4ee','400':'#4aaae3','500':'#2c8ed0','600':'#0b6fb8','700':'#095f9e','800':'#07518a','900':'#012441'}}}}}</script>
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
-  <link rel="stylesheet" href="{% static 'css/merchant-shell.css' %}">
+  <link rel="stylesheet" href="{% static 'css/merchant-shell.css' %}?v={{ asset_version }}">
 </head>
 <body class="pd-body font-sans antialiased"{% if merchant_stores|length > 1 %} data-store="{{ merchant_store.id }}"{% endif %}{% if book_currency %} data-currency="{{ book_currency.code }}" data-currency-symbol="{{ book_currency.symbol }}" data-currency-decimals="{{ book_currency.decimals }}" data-currency-thousands="{{ book_currency.thousands }}" data-currency-decimal="{{ book_currency.decimal_mark }}"{% endif %}>
 <div id="pd-progress" aria-hidden="true"></div>
@@ -119,7 +119,7 @@
     <footer><button type="submit" value="cancel" class="btn">Batal</button><button type="submit" value="ok" data-confirm-ok>Ya, lanjutkan</button></footer>
   </form>
 </dialog>
-<script src="{% static 'js/merchant-ui.js' %}" defer></script>
+<script src="{% static 'js/merchant-ui.js' %}?v={{ asset_version }}" defer></script>
 <script>
 (function () {
   var body = document.body;

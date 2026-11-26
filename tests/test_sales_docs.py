@@ -559,7 +559,7 @@ class OneWayToCreateTests(Base):
         self.assertNotIn("Buat invoice", nav)
         self.assertNotIn("Buat pesanan", nav)
         self.assertNotIn("Invoice massal", html)
-        header = html.split('<section class="relative overflow-hidden')[1].split("</section>")[0]
+        header = html.split('<section class="pg-head">')[1].split("</section>")[0]
         self.assertEqual(header.count(f'href="{reverse("merchant-invoice-new")}"'), 1)
         self.assertContains(page, reverse("merchant-invoice-new"))
 

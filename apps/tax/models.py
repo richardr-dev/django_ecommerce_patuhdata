@@ -138,6 +138,13 @@ class Invoice(models.Model):
             if note.status != CreditNote.STATUS_VOID), Decimal(0))
 
     @property
+    def fully_returned(self):
+        """Settled by credit notes alone (everything came back), with no money received: shown as "Diretur",
+        never as "Lunas"."""
+        return (self.status == self.STATUS_PAID and self.credited >= self.total
+            and not any(p.method != "writeoff" for p in self.payments.all()))
+
+    @property
     def has_line_discount(self):
         """True when any line carries its own discount: documents then show a Diskon column."""
         return any(item.discount for item in self.items.all())

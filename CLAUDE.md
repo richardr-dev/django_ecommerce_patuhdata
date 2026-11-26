@@ -729,6 +729,19 @@ tetap and akumulasi, 2100 PPN keluaran, 2200 belum teridentifikasi, 2300 utang u
   customers, products, bills, suppliers and journals; add a record type there.
 - Beranda's "Perlu tindakan" gets finance rows from `accounting/todo.py`; add one there.
 
+### Clean white layer (decided 2026-11-26, overrides the bubble look below where they differ)
+
+The user asked for a simpler, SAP-like screen: **white page background** and buttons the eye can tell apart. The
+"Clean white layer" at the very end of `merchant-shell.css` does it centrally: canvas `#fff`; cards white with a 1px
+`#d6e6f0` line, 14px radius, almost no shadow; **page headers (`pg-head`, `bo-heading`, `bb-hero`) are a plain title row
+on white** with a bottom line (no blue banner, no circles); three button kinds: primary solid `#0b6fb8` with white text
+(one per page), secondary white with a 1px blue outline (`.btn`), danger white with a red outline; buttons 8px radius;
+tabs are an underline, never a filled pill; tables have a light grey header row `#f4f8fb` and straight rows; inputs
+white with a visible `#9fbfd6` outline. New pages: use the shell classes and never hand-build a gradient header
+(`sales_invoices.html` and `invoice_form.html` were rebuilt for this). The blue band on the invoice paper is the
+company's own invoice colour (Tampilan invoice) and stays. Where the bubble rules below conflict (ice canvas, blue
+header, pill buttons, floating shadows), this layer wins.
+
 ### Bubble style (the look every back-office page must share)
 
 Reference pages: `templates/merchant/sales_invoices.html` (list) and `invoice_form.html` (form).

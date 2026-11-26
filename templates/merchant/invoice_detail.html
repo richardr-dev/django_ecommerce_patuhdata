@@ -8,7 +8,7 @@
 
 <div class="dp-head">
   <div>
-    <h1 class="dp-title">{{ invoice.number }} <span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span></h1>
+    <h1 class="dp-title">{{ invoice.number }} {% if invoice.fully_returned %}<span class="pill pill-void">Diretur</span>{% else %}<span class="pill pill-{{ invoice.status }}">{{ invoice.get_status_display }}</span>{% endif %}</h1>
     <p class="dp-sub">
       Kepada <b>{{ invoice.buyer_name }}</b>
       {% if invoice.status != 'void' %} · Sisa tagihan <b>{{ amount_due|rp }}</b>{% endif %}

@@ -133,6 +133,13 @@ class InvoiceSheetTests(Base):
         self.assertEqual((note.total, note.issued_on, note.reason), (D(66600), made[3].issued_on, "return"))
         made[3].refresh_from_db()
         self.assertEqual(made[3].amount_due, 0)
+        self.assertTrue(made[3].fully_returned)                       # shown as "Diretur", never "Lunas"
+        self.assertEqual(made[3].order.status, "returned")
+        self.assertFalse(made[0].fully_returned)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("merchant-sales-invoices"))
+        self.assertContains(page, "Diretur")
+        self.assertEqual(page.context["paid_total"], 0)               # the returned sale is not counted as paid
         self.assertEqual(self.on_hand(self.kabel), before - 2)        # Budi and Aidil keep theirs; Sari's came back
         self.assertEqual(sorted(int(e.amount) for e in Expense.objects.all()), [18500, 19000, 21000, 26996])
 

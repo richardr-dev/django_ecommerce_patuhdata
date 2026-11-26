@@ -4,7 +4,7 @@
 <link rel="icon" href="{% static 'img/brand/favicon.ico' %}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="{% static 'css/merchant-shell.css' %}">
+<link rel="stylesheet" href="{% static 'css/merchant-shell.css' %}?v={{ asset_version }}">
 <link rel="stylesheet" href="{% static 'css/pos.css' %}">
 <style>
 body.pd-body{font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;overflow:auto;height:auto;min-height:100vh}
@@ -77,5 +77,5 @@ body.pd-body{font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif;ov
   <form method="dialog"><div class="body"><h2 id="pd-confirm-title">Konfirmasi</h2><p data-confirm-text></p></div>
     <footer><button type="submit" value="cancel" class="btn">Batal</button><button type="submit" value="ok" data-confirm-ok>Ya, lanjutkan</button></footer></form>
 </dialog>
-<script src="{% static 'js/merchant-ui.js' %}" defer></script>
+<script src="{% static 'js/merchant-ui.js' %}?v={{ asset_version }}" defer></script>
 </body></html>

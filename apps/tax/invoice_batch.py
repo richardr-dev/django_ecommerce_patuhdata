@@ -331,8 +331,14 @@ def _credit_returns(invoice, indexes, actor):
     lines = [{"item": items[i], "quantity": items[i].quantity, "restock": bool(items[i].product_id),
         "unit_price": _credit_price({"qty": items[i].quantity, "unit_price": items[i].unit_price,
             "discount": items[i].discount})} for i in indexes]
-    return create_credit_note(invoice, lines=lines, issued_on=invoice.issued_on, reason="return",
+    note = create_credit_note(invoice, lines=lines, issued_on=invoice.issued_on, reason="return",
         notes="Retur dari impor penjualan", actor=actor)
+    if len(indexes) == len(items):   # everything came back: the order is a return, not a sale
+        from apps.orders.models import Order, OrderStatusEvent
+        Order.objects.filter(pk=invoice.order_id).update(status="returned")
+        OrderStatusEvent.objects.create(order=invoice.order, status="returned",
+            note=f"Diretur (nota kredit {note.number}, impor penjualan)")
+    return note
 
 
 def _shipping_expense(store, invoice, amount, cost_account, actor):
