@@ -81,6 +81,7 @@
       <div><span>Siap dibuat</span><b>{{ summary.ready }}</b></div>
       {% if summary.bad %}<div class="bad"><span>Perlu diperbaiki</span><b>{{ summary.bad }}</b></div>{% endif %}
       <div class="total"><span>Total tagihan</span><b>{{ summary.total|rp }}</b></div>
+      {% if summary.returns %}<div><span>Retur (nota kredit)</span><b>{{ summary.returns }} · −{{ summary.returned_total|rp }}</b></div>{% endif %}
       {% if summary.shipping_cost %}<div><span>Biaya ongkir dibayar</span><b>{{ summary.shipping_cost|rp }}</b></div>{% endif %}
     </div>{% endif %}
     <button class="btn{% if not summary or summary.bad %}-primary{% endif %}" name="action" value="preview" id="ib-check">{% icon "search" %} Periksa</button>
@@ -99,7 +100,7 @@
       <td><b>{{ p.buyer_name|default:"—" }}</b>{% if p.new_customer %} <span class="pill pill-info">baru</span>{% endif %}{% if p.partner %}<div class="ib-item">Mitra {{ p.partner.name }}{% if p.channel_text %} · {{ p.channel_text }}{% endif %}</div>{% elif p.channel_text %}<div class="ib-item">{{ p.channel_text }}</div>{% endif %}</td>
       <td>{{ p.issued_on|date:"d M Y" }}</td>
       <td>{{ p.due_date|date:"d M Y"|default:"Saat diterima" }}</td>
-      <td>{% for line in p.lines %}<div class="ib-item">{{ line.qty|floatformat:"-2" }} × {% if line.product %}{{ line.product.name }}{% else %}{{ line.description }}{% endif %}{% if line.discount %} · diskon {{ line.discount|rp }}{% endif %}</div>{% endfor %}{% if p.shipping %}<div class="ib-item">Ongkir ditagih {{ p.shipping|rp }}</div>{% endif %}{% if p.shipping_cost %}<div class="ib-item">Ongkir dibayar {{ p.shipping_cost|rp }} (biaya)</div>{% endif %}</td>
+      <td>{% for line in p.lines %}<div class="ib-item">{{ line.qty|floatformat:"-2" }} × {% if line.product %}{{ line.product.name }}{% else %}{{ line.description }}{% endif %}{% if line.discount %} · diskon {{ line.discount|rp }}{% endif %}</div>{% endfor %}{% if p.shipping %}<div class="ib-item">Ongkir ditagih {{ p.shipping|rp }}</div>{% endif %}{% if p.shipping_cost %}<div class="ib-item">Ongkir dibayar {{ p.shipping_cost|rp }} (biaya)</div>{% endif %}{% if p.returned %}<div class="ib-item"><span class="pill pill-warn">retur</span> nota kredit {{ p.returned_total|rp }}, barang kembali ke stok</div>{% endif %}</td>
       <td class="num">{% if p.ok %}{{ p.subtotal|rp }}{% endif %}</td>
       <td class="num">{% if p.ok %}{{ p.tax|rp }}{% endif %}</td>
       <td class="num"><b>{% if p.ok %}{{ p.total|rp }}{% endif %}</b></td>

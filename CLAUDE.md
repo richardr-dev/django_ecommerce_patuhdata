@@ -102,7 +102,9 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
   company paid: one `Expense` 6700 per invoice from the "Ongkir dibayar dari" account (approval as any expense); a row
   with only ongkir adds to the invoice above; a Saluran text containing a mitra's name passes `partner=` (the text goes
   to notes). The upload template (`template-penjualan.xlsx`, sheet Penjualan + Petunjuk) is the owner's own sales sheet:
-  Sales = line total at retail, Net Sales → line discount (invoice worth Net Sales), Ongkir → ongkir dibayar.
+  Sales = line total at retail, Net Sales → line discount (invoice worth Net Sales), Ongkir → ongkir dibayar. A Status
+  "Retur" row is invoiced and then credited (: one credit note, restocked, on the invoice date; paste
+  column 14 "Status"); other non-Sales statuses are skipped. Rows sharing a No. Pesanan are one invoice (user decision).
   "Harga sudah termasuk PPN" applies to the whole paste, rows sharing a ref are one invoice, the ref becomes Referensi; a SKU is a goods
   line, other text a service line that needs a price; empty price = customer's price list else retail; empty due = the
   customer's terms), or the same lines ticked to many customers. "Periksa" plans without writing (`parse_paste` /

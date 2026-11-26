@@ -39,15 +39,17 @@ class InvoiceSheetTests(Base):
              240000, 150000, ""],
             ["04/08/2026", "LMP", 1, "Marulak", "Jl. Cut Mutia", "082115", "Lampung", "Lampung", "Mitra", "Retur",
              50000, 30000, 5000],
+            ["04/08/2026", "LMP", 1, "Joko", "", "", "", "", "Manual", "Batal", 50000, "", ""],
             ["05/08/2026", "LMP", 1, "Sari", "", "", "", "", "Manual", "Sales", 50000, "", ""]]))
-        self.assertEqual(len(text.splitlines()), 2)                 # the Retur row is left out
-        self.assertTrue(any("Status selain Sales" in n for n in notes))
+        self.assertEqual(len(text.splitlines()), 3)                 # the Retur row is invoiced and credited
+        self.assertTrue(any("Retur" in n for n in notes) and any("selain Sales" in n for n in notes))
         plans = batch.parse_paste(self.store, text)
-        self.assertEqual([(p.buyer_name, p.channel, p.phone, p.ok) for p in plans],
-            [("Budi Baru", "shopee", "08123", True), ("Sari", "manual", "", True)])
+        self.assertEqual([(p.buyer_name, p.channel, p.phone, p.ok, bool(p.returned)) for p in plans],
+            [("Budi Baru", "shopee", "08123", True, False), ("Marulak", "manual", "082115", True, True),
+             ("Sari", "manual", "", True, False)])
         self.assertEqual(plans[0].lines[0]["unit_price"], D(120000))   # Sales / Qty
         made = batch.create_all(self.store, plans)
-        self.assertEqual([i.order.channel for i in made], ["shopee", "manual"])
+        self.assertEqual([i.order.channel for i in made], ["shopee", "manual", "manual"])
         self.assertEqual(Customer.objects.get(name="Budi Baru").address, "Jl. Pakan 29, Hulu, Kalsel")
 
     def test_accurate_invoice_file_continues_rows_and_needs_known_customers(self):
@@ -108,6 +110,31 @@ class InvoiceSheetTests(Base):
         plans = batch.parse_paste(self.store, text)
         self.assertEqual((len(plans), plans[0].reference, len(plans[0].lines), plans[0].subtotal,
             plans[0].shipping_cost), (1, "SHP-2", 2, D(90000), D(21000)))
+
+    def test_the_sample_file_gives_four_invoices_and_a_credit_note_for_the_retur(self):
+        """contoh-penjualan-abshop.xlsx: 5 rows, two share an order number, one is Retur."""
+        from apps.accounting.models import Expense
+        from apps.tax.models import CreditNote
+        head = ["Date", "No. Pesanan", "SKU", "Qty", "Customer Name", "Status", "Sales", "Net Sales", "Ongkir"]
+        text, notes = sheet_import.invoice_rows(self.store, xlsx([head,
+            ["03/08/2026", "S-1", "KBL", 1, "Budi", "Sales", 100000, 60000, 18500],
+            ["04/08/2026", "S-2", "LMP", 1, "Marulak", "Sales", 50000, 30000, 26996],
+            ["05/08/2026", "S-3", "KBL", 1, "Aidil", "Sales", 100000, 60000, 21000],
+            ["05/08/2026", "S-3", "LMP", 1, "Aidil", "Sales", 50000, 30000, ""],
+            ["06/08/2026", "S-4", "KBL", 1, "Sari", "Retur", 100000, 60000, 19000]]))
+        self.assertTrue(any("Retur" in n for n in notes))
+        plans = batch.parse_paste(self.store, text)
+        self.assertEqual([len(p.lines) for p in plans], [1, 1, 2, 1])
+        self.assertEqual((plans[3].returned, plans[3].returned_total), ([0], D(66600)))   # 60.000 + PPN
+        before = self.on_hand(self.kabel)
+        made = batch.create_all(self.store, plans)
+        self.assertEqual(len(made), 4)
+        note = CreditNote.objects.get(invoice=made[3])
+        self.assertEqual((note.total, note.issued_on, note.reason), (D(66600), made[3].issued_on, "return"))
+        made[3].refresh_from_db()
+        self.assertEqual(made[3].amount_due, 0)
+        self.assertEqual(self.on_hand(self.kabel), before - 2)        # Budi and Aidil keep theirs; Sari's came back
+        self.assertEqual(sorted(int(e.amount) for e in Expense.objects.all()), [18500, 19000, 21000, 26996])
 
     def test_the_template_downloads_as_a_workbook_with_help(self):
         from openpyxl import load_workbook

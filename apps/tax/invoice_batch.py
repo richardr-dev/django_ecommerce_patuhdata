@@ -4,12 +4,15 @@ price, tax, take stock and post exactly like an invoice made on the form.
 Two ways in, one plan:
 
 - **Paste from Excel**: one row per line, ``no. ref; pelanggan; tanggal; jatuh tempo; barang atau jasa; jumlah;
-  harga; diskon; telepon; alamat; saluran; ongkir ditagih; ongkir dibayar`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
+  harga; diskon; telepon; alamat; saluran; ongkir ditagih; ongkir dibayar; status`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
   invoice's Referensi. "Barang atau jasa" is a product SKU (stock and HPP) or else the text of a service line.
   An empty price takes the customer's price list, else the product's price.
   "Saluran" naming a mitra (its name inside the text, e.g. "Shopee ABShop") records the sale under that mitra.
   "Ongkir ditagih" is charged to the buyer (4200); "ongkir dibayar" is the courier cost the company paid: an
   Expense (6700 Transportasi & ongkos kirim) from the account chosen on the page, one per invoice.
+  "Status" ``retur`` marks a line that came back: the invoice is made as usual, then one credit note
+  ("Barang diretur", restocked) for those lines on the invoice date, so the sale and its return are both on the
+  books and the stock is back.
 - **The same lines to many customers** (a monthly fee, a rent): the lines once, the customers ticked.
 
 ``plan`` reads the input and prices every invoice without writing anything, naming what is wrong per invoice,
@@ -17,7 +20,7 @@ so the page can show a preview. ``create_all`` makes every planned invoice or no
 invoice that fails rolls back the ones before it, and the gapless numbers with them)."""
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from django.db import transaction
 from django.utils import timezone
@@ -27,15 +30,17 @@ from apps.accounting.opening_paste import parse_amount, parse_date
 from apps.catalog.models import Product, ProductVariant
 from apps.shops.models import Customer
 
+from .credit_notes import CreditNoteError, create_credit_note
 from .pricing import customer_price, due_date_for
 from .sales import clean_lines, create_sales_invoice, from_inclusive, price_lines
-from .services import InvoiceError
+from .services import InvoiceError, vat_for
 
 ZERO = Decimal(0)
 MAX_INVOICES = 300
 HEADER_WORDS = {"no", "no.", "ref", "referensi", "no ref", "no. ref", "nomor", "kelompok"}
 COLUMNS = ["No. ref", "Pelanggan", "Tanggal", "Jatuh tempo", "Barang (SKU) atau jasa", "Jumlah", "Harga",
-    "Diskon", "Telepon", "Alamat", "Saluran", "Ongkir ditagih", "Ongkir dibayar"]
+    "Diskon", "Telepon", "Alamat", "Saluran", "Ongkir ditagih", "Ongkir dibayar", "Status"]
+RETURN_WORDS = ("retur", "return", "dikembalikan", "refund")
 SHIPPING_COST_CATEGORY = "6700"   # Transportasi & ongkos kirim
 # Order.channel for the words a sales sheet uses ("Shopee Toko Mitra", "Tokopedia", "TikTok"...).
 CHANNEL_WORDS = (("shopee", "shopee"), ("tokopedia", "tokopedia"), ("tiktok", "tiktok_shop"), ("lazada", "lazada"),
@@ -73,6 +78,8 @@ class Planned:
     shipping_cost: Decimal = ZERO                  # ongkir the company paid the courier (an Expense)
     partner: object = None                         # the mitra the sale went through
     channel_text: str = ""
+    returned: list = field(default_factory=list)   # indexes of lines that came back (credit note)
+    returned_total: Decimal = ZERO                 # what the credit note will take off, PPN included
     inclusive: bool = False                        # prices typed with PPN in them
     phone: str = ""                                # optional: for a customer that is not in the CRM yet
     address: str = ""
@@ -168,6 +175,9 @@ def _price(store, planned, *, inclusive):
     planned.subtotal, planned.tax, total = price_lines(lines, discount, planned.shipping, store=store)
     planned.total = total + rounding
     planned.rounding, planned.discount, planned.inclusive = rounding, discount, inclusive
+    if planned.returned:
+        back = sum((_credit_price(line) * line["qty"] for i, line in enumerate(lines) if i in planned.returned), ZERO)
+        planned.returned_total = back + (vat_for(store, back)[1] if planned.tax else ZERO)
 
 
 def parse_paste(store, text, *, inclusive=False):
@@ -179,8 +189,8 @@ def parse_paste(store, text, *, inclusive=False):
         cells = [c.strip() for c in (raw.split("\t") if "\t" in raw else raw.split(";"))]
         if not order and cells and cells[0].lower() in HEADER_WORDS:
             continue
-        cells += [""] * (13 - len(cells))
-        ref, name, issued, due, item, qty, price, discount, phone, address, channel, ongkir, paid = cells[:13]
+        cells += [""] * (14 - len(cells))
+        ref, name, issued, due, item, qty, price, discount, phone, address, channel, ongkir, paid, status = cells[:14]
         key = ref or f"baris-{number}"   # a row without a reference is an invoice of its own
         planned = plans.get(key)
         if planned is None:
@@ -216,6 +226,8 @@ def parse_paste(store, text, *, inclusive=False):
         if error:
             planned.errors.append(f"baris {number}: {error}")
         else:
+            if any(word in status.lower() for word in RETURN_WORDS):
+                planned.returned.append(len(planned.lines))
             planned.lines.append(line)
     found = [plans[key] for key in order]
     _finish(store, found, inclusive=inclusive)
@@ -259,6 +271,7 @@ def summary(plans):
     good = [p for p in plans if p.ok]
     return {"count": len(plans), "ready": len(good), "bad": len(plans) - len(good),
         "shipping_cost": sum((p.shipping_cost for p in good), ZERO),
+        "returns": sum(1 for p in good if p.returned), "returned_total": sum((p.returned_total for p in good), ZERO),
         "total": sum((p.total for p in good), ZERO), "new_customers": sorted({p.buyer_name for p in plans
             if p.new_customer})}
 
@@ -298,9 +311,28 @@ def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True, c
                 notes=notes))
             if planned.shipping_cost:
                 _shipping_expense(store, created[-1], planned.shipping_cost, cost_account, actor)
-        except (InvoiceError, LedgerError) as error:
+            if planned.returned:
+                _credit_returns(created[-1], planned.returned, actor)
+        except (InvoiceError, LedgerError, CreditNoteError) as error:
             raise BatchError(f"{_label(planned)}: {error}") from error
     return created
+
+
+def _credit_price(line):
+    """The unit price a returned line is credited at: what the buyer was charged per unit, after its discount."""
+    qty = Decimal(line["qty"])
+    net = qty * Decimal(line["unit_price"]) - Decimal(line.get("discount") or 0)
+    return (net / qty).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+
+def _credit_returns(invoice, indexes, actor):
+    """One credit note for the lines that came back, restocked, dated with the invoice."""
+    items = list(invoice.items.order_by("id"))
+    lines = [{"item": items[i], "quantity": items[i].quantity, "restock": bool(items[i].product_id),
+        "unit_price": _credit_price({"qty": items[i].quantity, "unit_price": items[i].unit_price,
+            "discount": items[i].discount})} for i in indexes]
+    return create_credit_note(invoice, lines=lines, issued_on=invoice.issued_on, reason="return",
+        notes="Retur dari impor penjualan", actor=actor)
 
 
 def _shipping_expense(store, invoice, amount, cost_account, actor):

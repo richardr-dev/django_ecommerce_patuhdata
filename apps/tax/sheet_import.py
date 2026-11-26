@@ -60,7 +60,8 @@ def invoice_rows(store, upload):
       the line total at the retail price, so the price is Sales / Qty; ``Net Sales`` (what the company keeps
       after the mitra or marketplace cut) makes the rest a line discount, so the invoice shows both. ``Ongkir``
       is the courier cost the company paid (an expense, not billed). A Sales Channel naming a mitra puts the
-      sale under that mitra. Rows whose Status is not Sales are left out and counted."""
+      sale under that mitra. A Retur row is invoiced and credited back
+      (``status`` column); rows with any other Status than Sales are left out and counted."""
     headers, rows = read_rows(upload)
     notes, out = [], []
     if "item:item no" in headers:
@@ -83,7 +84,7 @@ def invoice_rows(store, upload):
                     value = 0
                 if value > 0:
                     fees += 1
-                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee, ""])
+                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee, "", ""])
                 else:
                     skipped += 1
                 continue
@@ -96,7 +97,7 @@ def invoice_rows(store, upload):
                 except ValueError:
                     discount = ""
             out.append([number, name, date, due, row["item:item no"], qty, _amount(price), _amount(discount),
-                        "", "", "", "", ""])
+                        "", "", "", "", "", ""])
         if unknown:
             shown = ", ".join(unknown[:10]) + (" …" if len(unknown) > 10 else "")
             raise ValueError(f"Nomor pelanggan {shown} belum ada di Pelanggan. Impor pelanggan dulu "
@@ -113,12 +114,14 @@ def invoice_rows(store, upload):
         if not need.issubset(headers) or not ({"customer name", "pelanggan"} & set(headers)):
             raise ValueError("Kolom wajib: Date, SKU, Qty, Customer Name. Gunakan template yang bisa diunduh di "
                              "halaman ini.")
-        left, cut = 0, 0
+        left, cut, returned = 0, 0, 0
         for row in rows:
             status = row.get("status", "").lower()
-            if status and status not in {"sales", "penjualan", "selesai", "lunas"}:
+            is_return = any(word in status for word in ("retur", "return", "dikembalikan", "refund"))
+            if status and not is_return and status not in {"sales", "penjualan", "selesai", "lunas"}:
                 left += 1
                 continue
+            returned += is_return
             qty = row.get("qty", "") or "1"
             price = _first(row, "unit price", "harga satuan", "harga")
             if not price and row.get("sales"):
@@ -140,9 +143,12 @@ def invoice_rows(store, upload):
                         _first(row, "sku", "barang"), qty, price, discount,
                         _first(row, "phone number", "telepon", "phone"), place,
                         _first(row, "sales channel", "saluran"), _first(row, "ongkir ditagih"),
-                        _first(row, "ongkir", "ongkos kirim", "ongkir dibayar")])
+                        _first(row, "ongkir", "ongkos kirim", "ongkir dibayar"), "retur" if is_return else ""])
         if left:
-            notes.append(f"{left} baris dengan Status selain Sales dilewati.")
+            notes.append(f"{left} baris dengan Status selain Sales atau Retur dilewati.")
+        if returned:
+            notes.append(f"{returned} baris Retur: penjualannya dibuat lalu langsung dibuatkan nota kredit (barang "
+                         "kembali ke stok, ongkirnya tetap dicatat sebagai biaya).")
         if cut:
             notes.append(f"{cut} baris: selisih Sales dan Net Sales dicatat sebagai diskon baris, jadi invoice "
                          "bernilai Net Sales dan harga jualnya tetap terlihat.")
