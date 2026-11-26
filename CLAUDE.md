@@ -97,7 +97,9 @@ The full suite passes (1615 tests, 2026-11-23); the four files that used to fail
 - **Buat banyak invoice** (`tax/invoice_batch.py`, page `/books/sales/invoices/banyak/`, `tax/batch_views.py`,
   `templates/merchant/invoice_batch.html`; tests `tests/test_invoice_batch.py`; built 2026-11-22). Not a second invoice
   form: it has no pricing or posting of its own. Two ways in: paste from Excel (`No. ref; pelanggan; tanggal; jatuh tempo;
-  SKU atau jasa; jumlah; harga; diskon`, "Harga sudah termasuk PPN" applies to the whole paste, rows sharing a ref are one invoice, the ref becomes Referensi; a SKU is a goods
+  SKU atau jasa; jumlah; harga; diskon; telepon; alamat; saluran; ongkir` (ongkir summed per invoice → `shipping`, 4200,
+  outside PPN; a row with only ongkir adds to the invoice above; Accurate's expense rows and our template's Ongkir column
+  fill it, a hand-kept sales sheet's Ongkir (it has Net Sales) does not), "Harga sudah termasuk PPN" applies to the whole paste, rows sharing a ref are one invoice, the ref becomes Referensi; a SKU is a goods
   line, other text a service line that needs a price; empty price = customer's price list else retail; empty due = the
   customer's terms), or the same lines ticked to many customers. "Periksa" plans without writing (`parse_paste` /
   `for_customers` → `Planned` with errors per invoice); "Buat" plans again on the server and `create_all` makes every

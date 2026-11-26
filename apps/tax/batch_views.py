@@ -58,13 +58,13 @@ def merchant_invoice_batch_template(request):
     response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(["Date", "Ref", "SKU", "Qty", "Customer Name", "Phone Number", "Address", "District",
-                     "Province", "Sales Channel", "Status", "Sales"])
+                     "Province", "Sales Channel", "Status", "Sales", "Ongkir"])
     writer.writerow(["03/08/2026", "", "M2601-41-Black", 1, "Budi", "081234567890", "Jl. Pakan Dalam 29",
-                     "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee", "Sales", 1198000])
+                     "Hulu Sungai Selatan", "Kalimantan Selatan", "Shopee", "Sales", 1198000, ""])
     writer.writerow(["04/08/2026", "INV-A", "W2601-38-White", 2, "Marulak Purba", "082115108880",
-                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1996000])
+                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1996000, 25000])
     writer.writerow(["04/08/2026", "INV-A", "M2601-41-Black", 1, "Marulak Purba", "082115108880",
-                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1198000])
+                     "Jl. Cut Mutia 42", "Bandar Lampung", "Lampung", "Manual", "Sales", 1198000, ""])
     return response
 
 

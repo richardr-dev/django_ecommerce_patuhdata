@@ -32,26 +32,39 @@ def invoice_rows(store, upload):
     Three layouts, told apart by their headers:
     - **Accurate** ``sales-invoice-import-file``: CUSTOMER NO, NUMBER, DATE, ITEM:ITEM NO, ITEM:QUANTITY... A row
       without customer number continues the invoice above it. Customer numbers must already be in Pelanggan.
+      A row with no item but an EXPENSE:EXPENSE VALUE (Accurate's "biaya lain") becomes the invoice's ongkir
+      (4200, outside PPN); a negative one is left out and counted.
     - **Sales sheet** (Date, SKU, Qty, Customer Name, Address, Phone Number, District, Province, Sales Channel,
       Status, Sales, Net Sales, Ongkir): one invoice per row. ``Sales`` is the line total, so the price is
       Sales / Qty. Rows whose Status is not Sales are left out and counted.
-    - Our template has the same columns as the sales sheet plus an optional Ref."""
+      Its Ongkir is not invoiced (on a marketplace the buyer pays it to the marketplace).
+    - Our template has the same columns plus an optional Ref and an Ongkir charged to the buyer; told from the
+      sales sheet by having no Net Sales column."""
     headers, rows = read_rows(upload)
     notes, out = [], []
     if "item:item no" in headers:
-        names, unknown, skipped = _customer_names(store), [], 0
+        names, unknown, skipped, fees = _customer_names(store), [], 0, 0
         code = number = date = due = ""
         for index, row in enumerate(rows, 2):
             if row.get("customer no"):
                 code, number = row["customer no"], row.get("number") or f"XLS-{index}"
                 date, due = row.get("date", ""), row.get("due date", "")
-            if not row.get("item:item no"):
-                skipped += 1
-                continue
             name = names.get(code.lower())
             if not name:
                 if code not in unknown:
                     unknown.append(code)
+                continue
+            if not row.get("item:item no"):
+                fee = _amount(row.get("expense:expense value", ""))
+                try:
+                    value = float(fee.replace(",", ".") or 0)
+                except ValueError:
+                    value = 0
+                if value > 0:
+                    fees += 1
+                    out.append([number, name, date, due, "", "", "", "", "", "", "", fee])
+                else:
+                    skipped += 1
                 continue
             qty, price = row.get("item:quantity", ""), row.get("item:unitprice", "")
             discount = row.get("item:item discount (rp)", "")
@@ -62,13 +75,16 @@ def invoice_rows(store, upload):
                 except ValueError:
                     discount = ""
             out.append([number, name, date, due, row["item:item no"], qty, _amount(price), _amount(discount),
-                        "", "", ""])
+                        "", "", "", ""])
         if unknown:
             shown = ", ".join(unknown[:10]) + (" …" if len(unknown) > 10 else "")
             raise ValueError(f"Nomor pelanggan {shown} belum ada di Pelanggan. Impor pelanggan dulu "
                              "(Pelanggan › Impor pelanggan), lalu unggah file ini lagi.")
         if skipped:
-            notes.append(f"{skipped} baris tanpa kode barang (biaya tambahan / expense Accurate) dilewati.")
+            notes.append(f"{skipped} baris tanpa kode barang dan tanpa biaya positif dilewati.")
+        if fees:
+            notes.append(f"{fees} baris biaya lain (expense Accurate) dicatat sebagai ongkir invoice (akun 4200, "
+                         "tanpa PPN). Periksa bila biaya itu bukan ongkos kirim.")
         if any(row.get("total including vat", "").lower() in {"yes", "ya"} for row in rows):
             notes.append("File menyebut total sudah termasuk PPN: centang “Harga sudah termasuk PPN” bila benar.")
     else:
@@ -76,7 +92,7 @@ def invoice_rows(store, upload):
         if not need.issubset(headers) or not ({"customer name", "pelanggan"} & set(headers)):
             raise ValueError("Kolom wajib: Date, SKU, Qty, Customer Name. Gunakan template yang bisa diunduh di "
                              "halaman ini.")
-        left = 0
+        left, own_template = 0, "net sales" not in headers
         for row in rows:
             status = row.get("status", "").lower()
             if status and status not in {"sales", "penjualan", "selesai", "lunas"}:
@@ -96,11 +112,13 @@ def invoice_rows(store, upload):
                         _first(row, "date", "tanggal"), _first(row, "due date", "jatuh tempo"),
                         _first(row, "sku", "barang"), qty, price, _first(row, "discount", "diskon"),
                         _first(row, "phone number", "telepon", "phone"), place,
-                        _first(row, "sales channel", "saluran")])
+                        _first(row, "sales channel", "saluran"),
+                        _first(row, "ongkir", "ongkos kirim", "shipping") if own_template else ""])
         if left:
             notes.append(f"{left} baris dengan Status selain Sales dilewati.")
-        notes.append("Ongkir dan Net Sales tidak dibuat menjadi invoice (Net Sales adalah hasil setelah potongan "
-                     "marketplace).")
+        if not own_template:
+            notes.append("Ongkir dan Net Sales tidak dibuat menjadi invoice (Net Sales adalah hasil setelah "
+                         "potongan marketplace).")
     if not out:
         raise ValueError("Tidak ada baris penjualan yang bisa dibaca di file ini.")
     return "\n".join("\t".join(_clean(cell) for cell in line) for line in out), notes

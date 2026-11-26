@@ -4,7 +4,7 @@ price, tax, take stock and post exactly like an invoice made on the form.
 Two ways in, one plan:
 
 - **Paste from Excel**: one row per line, ``no. ref; pelanggan; tanggal; jatuh tempo; barang atau jasa; jumlah;
-  harga; diskon`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
+  harga; diskon; telepon; alamat; saluran; ongkir`` (tab or ``;``). Rows that share a reference are one invoice; the reference is kept as the
   invoice's Referensi. "Barang atau jasa" is a product SKU (stock and HPP) or else the text of a service line.
   An empty price takes the customer's price list, else the product's price.
 - **The same lines to many customers** (a monthly fee, a rent): the lines once, the customers ticked.
@@ -32,7 +32,7 @@ ZERO = Decimal(0)
 MAX_INVOICES = 300
 HEADER_WORDS = {"no", "no.", "ref", "referensi", "no ref", "no. ref", "nomor", "kelompok"}
 COLUMNS = ["No. ref", "Pelanggan", "Tanggal", "Jatuh tempo", "Barang (SKU) atau jasa", "Jumlah", "Harga",
-    "Diskon", "Telepon", "Alamat", "Saluran"]
+    "Diskon", "Telepon", "Alamat", "Saluran", "Ongkir"]
 # Order.channel for the words a sales sheet uses ("Shopee Toko Mitra", "Tokopedia", "TikTok"...).
 CHANNEL_WORDS = (("shopee", "shopee"), ("tokopedia", "tokopedia"), ("tiktok", "tiktok_shop"), ("lazada", "lazada"),
     ("pos", "pos"), ("kasir", "pos"), ("web", "web"), ("tv", "tv"))
@@ -65,6 +65,7 @@ class Planned:
     total: Decimal = ZERO
     discount: Decimal = ZERO
     rounding: Decimal = ZERO
+    shipping: Decimal = ZERO                       # ongkir charged to the buyer (4200, no PPN)
     inclusive: bool = False                        # prices typed with PPN in them
     phone: str = ""                                # optional: for a customer that is not in the CRM yet
     address: str = ""
@@ -133,7 +134,7 @@ def _price(store, planned, *, inclusive):
     if inclusive:
         lines, discount, rounding = from_inclusive(store, lines, discount)
     planned.lines = lines
-    planned.subtotal, planned.tax, total = price_lines(lines, discount, 0, store=store)
+    planned.subtotal, planned.tax, total = price_lines(lines, discount, planned.shipping, store=store)
     planned.total = total + rounding
     planned.rounding, planned.discount, planned.inclusive = rounding, discount, inclusive
 
@@ -147,8 +148,8 @@ def parse_paste(store, text, *, inclusive=False):
         cells = [c.strip() for c in (raw.split("\t") if "\t" in raw else raw.split(";"))]
         if not order and cells and cells[0].lower() in HEADER_WORDS:
             continue
-        cells += [""] * (11 - len(cells))
-        ref, name, issued, due, item, qty, price, discount, phone, address, channel = cells[:11]
+        cells += [""] * (12 - len(cells))
+        ref, name, issued, due, item, qty, price, discount, phone, address, channel, ongkir = cells[:12]
         key = ref or f"baris-{number}"   # a row without a reference is an invoice of its own
         planned = plans.get(key)
         if planned is None:
@@ -170,6 +171,14 @@ def parse_paste(store, text, *, inclusive=False):
                 if planned.customer else "")}:
             planned.errors.append(f"baris {number}: pelanggan berbeda dari baris pertama ref {ref}")
         planned.rows.append(number)
+        if ongkir:
+            fee = parse_amount(ongkir)
+            if fee is None or fee < 0:
+                planned.errors.append(f"baris {number}: ongkir “{ongkir}” tidak terbaca")
+            else:
+                planned.shipping += fee
+        if not item and ongkir:
+            continue        # a row carrying only the ongkir of the invoice above
         if not item:
             planned.errors.append(f"baris {number}: isi barang (SKU) atau nama jasa")
             continue
@@ -206,6 +215,8 @@ def for_customers(store, customers, *, items, issued_on, due_date=None, referenc
 
 def _finish(store, plans, *, inclusive):
     for planned in plans:
+        if not planned.lines and not planned.errors:
+            planned.errors.append("tidak ada baris barang atau jasa")
         if planned.due_date is None and planned.customer is not None:
             planned.due_date = due_date_for(planned.customer, planned.issued_on)
         if planned.due_date and planned.due_date < planned.issued_on:
@@ -248,7 +259,7 @@ def create_all(store, plans, *, actor=None, warehouse=None, credit_check=True):
                 phone=customer.phone or planned.phone or "-", address=customer.address or planned.address or "-",
                 channel=planned.channel, issued_on=planned.issued_on,
                 due_date=planned.due_date, on_credit=True, external_order_id=planned.reference,
-                discount=planned.discount, rounding=planned.rounding, warehouse=warehouse, actor=actor,
+                discount=planned.discount, shipping=planned.shipping, rounding=planned.rounding, warehouse=warehouse, actor=actor,
                 credit_check=credit_check, prices_include_tax=planned.inclusive))
         except (InvoiceError, LedgerError) as error:
             raise BatchError(f"{_label(planned)}: {error}") from error

@@ -11,7 +11,7 @@
 <div class="tabs" aria-label="Cara membuat">{% for key, label in modes %}<a href="?cara={{ key }}" class="{% if mode == key %}on{% endif %}">{{ label }}</a>{% endfor %}</div>
 
 {% if mode == "tempel" %}<form method="post" enctype="multipart/form-data" class="panel" style="margin-bottom:16px">{% csrf_token %}<input type="hidden" name="cara" value="tempel">
-  <header><div><h2><span class="bb-bubble step">A</span> Unggah file Excel atau CSV</h2><p>Paling mudah: isi template (kolom Date, SKU, Qty, Customer Name, Phone Number, Address, District, Province, Sales Channel, Status, Sales), atau unggah file impor faktur penjualan Accurate. Baris diperiksa dulu di bawah; belum ada yang disimpan.</p></div>
+  <header><div><h2><span class="bb-bubble step">A</span> Unggah file Excel atau CSV</h2><p>Paling mudah: isi template (kolom Date, SKU, Qty, Customer Name, Phone Number, Address, District, Province, Sales Channel, Status, Sales, Ongkir), atau unggah file impor faktur penjualan Accurate. Baris diperiksa dulu di bawah; belum ada yang disimpan.</p></div>
     <a class="btn" href="{% url 'merchant-invoice-batch-template' %}" data-no-soft>{% icon "download" %} Template</a></header>
   <div class="dp-card-body"><label class="field"><span>File .xlsx atau .csv</span><input type="file" name="file" accept=".csv,.xlsx" required><small><b>Sales</b> adalah total harga baris itu (harga satuan = Sales ÷ Qty). Baris dengan <b>Ref</b> yang sama menjadi satu invoice; tanpa Ref, satu baris satu invoice. Baris dengan Status selain Sales dilewati.</small></label></div>
   <footer><button class="btn-primary" name="action" value="upload">{% icon "upload" %} Unggah dan periksa</button></footer></form>
@@ -97,7 +97,7 @@
       <td><b>{{ p.buyer_name|default:"—" }}</b>{% if p.new_customer %} <span class="pill pill-info">baru</span>{% endif %}</td>
       <td>{{ p.issued_on|date:"d M Y" }}</td>
       <td>{{ p.due_date|date:"d M Y"|default:"Saat diterima" }}</td>
-      <td>{% for line in p.lines %}<div class="ib-item">{{ line.qty|floatformat:"-2" }} × {% if line.product %}{{ line.product.name }}{% else %}{{ line.description }}{% endif %}</div>{% endfor %}</td>
+      <td>{% for line in p.lines %}<div class="ib-item">{{ line.qty|floatformat:"-2" }} × {% if line.product %}{{ line.product.name }}{% else %}{{ line.description }}{% endif %}</div>{% endfor %}{% if p.shipping %}<div class="ib-item">Ongkir {{ p.shipping|rp }}</div>{% endif %}</td>
       <td class="num">{% if p.ok %}{{ p.subtotal|rp }}{% endif %}</td>
       <td class="num">{% if p.ok %}{{ p.tax|rp }}{% endif %}</td>
       <td class="num"><b>{% if p.ok %}{{ p.total|rp }}{% endif %}</b></td>

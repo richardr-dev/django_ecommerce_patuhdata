@@ -62,7 +62,28 @@ class InvoiceSheetTests(Base):
         plans = batch.parse_paste(self.store, text)
         self.assertEqual(len(plans), 1)
         self.assertEqual((plans[0].reference, plans[0].buyer_name, len(plans[0].lines)), ("SI.1", "PT Cipta", 2))
-        self.assertTrue(any("expense" in n for n in notes))
+        self.assertEqual(plans[0].shipping, D(1000000))          # the expense row is the invoice's ongkir
+        self.assertTrue(any("ongkir" in n for n in notes))
+        made = batch.create_all(self.store, plans)[0]
+        self.assertEqual(made.shipping, D(1000000))
+        self.assertEqual(made.total, made.subtotal - made.discount + made.tax + D(1000000))
+
+    def test_our_template_invoices_the_ongkir_and_a_sales_sheet_does_not(self):
+        head = ["Date", "Ref", "SKU", "Qty", "Customer Name", "Status", "Sales", "Ongkir"]
+        text, notes = sheet_import.invoice_rows(self.store, xlsx([head,
+            ["03/08/2026", "A", "KBL", 1, "Budi", "Sales", 100000, 15000],
+            ["03/08/2026", "A", "LMP", 1, "Budi", "Sales", 50000, ""]]))
+        plans = batch.parse_paste(self.store, text)
+        self.assertEqual((len(plans), plans[0].shipping, len(plans[0].lines)), (1, D(15000), 2))
+        self.assertFalse(any("Ongkir dan Net Sales" in n for n in notes))
+        text, notes = sheet_import.invoice_rows(self.store, xlsx([SALES_HEAD,
+            ["03/08/2026", "KBL", 1, "Budi", "", "", "", "", "Shopee", "Sales", 100000, 90000, 15000]]))
+        self.assertEqual(batch.parse_paste(self.store, text)[0].shipping, 0)
+        self.assertTrue(any("Ongkir dan Net Sales" in n for n in notes))
+
+    def test_a_pasted_ongkir_that_is_not_a_number_is_named(self):
+        plans = batch.parse_paste(self.store, "A;Budi;03/08/2026;;KBL;1;100000;;;;;abc")
+        self.assertIn("ongkir “abc” tidak terbaca", plans[0].errors[0])
 
     def test_the_page_checks_an_upload_then_creates(self):
         self.client.force_login(self.owner)
